@@ -7,12 +7,20 @@ const nextConfig = {
     JWT_SECRET: process.env.JWT_SECRET,
   },
   images: {
-    domains: ['placehold.co','localhost'],
+    domains: ['placehold.co', 'localhost', 'vercel.app', 'vercel.com'],
     dangerouslyAllowSVG: true,
   },
   experimental: {
     serverActions: {
-      allowedOrigins: ['localhost:3000', 'localhost:3001', 'localhost:3002', 'localhost:3003', 'localhost:3004'],
+      allowedOrigins: [
+        'localhost:3000', 
+        'localhost:3001', 
+        'localhost:3002', 
+        'localhost:3003', 
+        'localhost:3004',
+        '*.vercel.app',
+        '*.vercel.com'
+      ],
     },
   },
   serverExternalPackages: ['sharp', 'fs-extra'],
