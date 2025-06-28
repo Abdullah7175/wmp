@@ -5,6 +5,7 @@ import jwt from 'jsonwebtoken';
 import fs from 'fs/promises';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
+import { actionLogger, ENTITY_TYPES } from '@/lib/actionLogger';
 
 // Configure upload directory
 const uploadDir = path.join(process.cwd(), 'public/uploads/users');
@@ -165,6 +166,14 @@ export async function POST(req) {
         
         const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '1h' });
         
+        // Log the user creation action
+        await actionLogger.create(req, ENTITY_TYPES.USER, newUser[0].id, newUser[0].name, {
+            email: newUser[0].email,
+            role: newUser[0].role,
+            contact: newUser[0].contact_number,
+            hasImage: !!imageUrl
+        });
+        
         return NextResponse.json({
             message: 'User added successfully',
             user: newUser[0],
@@ -241,6 +250,15 @@ export async function PUT(req) {
             return NextResponse.json({ error: 'User not found' }, { status: 404 });
         }
 
+        // Log the user update action
+        await actionLogger.update(req, ENTITY_TYPES.USER, updatedUser[0].id, updatedUser[0].name, {
+            email: updatedUser[0].email,
+            role: updatedUser[0].role,
+            contact: updatedUser[0].contact_number,
+            hasImage: !!imageUrl,
+            passwordChanged: !!password
+        });
+
         return NextResponse.json({ 
             message: 'User updated successfully', 
             user: updatedUser[0] 
@@ -285,6 +303,14 @@ export async function DELETE(req) {
         if (imageUrl) {
             await deleteFile(imageUrl);
         }
+
+        // Log the user deletion action
+        await actionLogger.delete(req, ENTITY_TYPES.USER, deletedUser[0].id, deletedUser[0].name, {
+            email: deletedUser[0].email,
+            role: deletedUser[0].role,
+            contact: deletedUser[0].contact_number,
+            hadImage: !!imageUrl
+        });
 
         return NextResponse.json({ 
             message: 'User deleted successfully', 

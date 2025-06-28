@@ -56,6 +56,7 @@ import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { connectToDatabase } from "@/lib/db";
 import jwt from "jsonwebtoken";
+import { actionLogger, ACTION_TYPES } from "@/lib/actionLogger";
 
 export async function POST(req) {
   const { email, password } = await req.json();
@@ -109,6 +110,18 @@ export async function POST(req) {
       process.env.JWT_SECRET,
       { expiresIn: "1h" }
     );
+
+    // Log the login action
+    await actionLogger.login(req, {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      userType: userType
+    }, {
+      loginMethod: 'email_password',
+      userType: userType
+    });
 
     return NextResponse.json({
       message: "Login successful",

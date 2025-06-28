@@ -4,6 +4,7 @@ import bcrypt from 'bcryptjs';
 import fs from 'fs/promises';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
+import { actionLogger, ENTITY_TYPES } from '@/lib/actionLogger';
 
 const uploadDir = path.join(process.cwd(), 'public/uploads/agents');
 async function ensureUploadDir() {
@@ -130,6 +131,18 @@ export async function POST(req) {
             hashedPassword,
             imageUrl,
         ]);
+        
+        // Log the agent creation action
+        await actionLogger.create(req, ENTITY_TYPES.AGENT, newAgent[0].id, newAgent[0].name, {
+            email: newAgent[0].email,
+            designation: newAgent[0].designation,
+            department: newAgent[0].department,
+            role: newAgent[0].role,
+            town_id: newAgent[0].town_id,
+            complaint_type_id: newAgent[0].complaint_type_id,
+            hasImage: !!imageUrl
+        });
+        
         return NextResponse.json({ message: 'Agent added successfully', agent: newAgent[0] }, { status: 201 });
     } catch (error) {
         console.error('Error saving agent:', error);
@@ -189,6 +202,19 @@ export async function PUT(req) {
         if (updatedAgent.length === 0) {
             return NextResponse.json({ error: 'Agent not found' }, { status: 404 });
         }
+        
+        // Log the agent update action
+        await actionLogger.update(req, ENTITY_TYPES.AGENT, updatedAgent[0].id, updatedAgent[0].name, {
+            email: updatedAgent[0].email,
+            designation: updatedAgent[0].designation,
+            department: updatedAgent[0].department,
+            role: updatedAgent[0].role,
+            town_id: updatedAgent[0].town_id,
+            complaint_type_id: updatedAgent[0].complaint_type_id,
+            hasImage: !!imageUrl,
+            passwordChanged: !!password
+        });
+        
         return NextResponse.json({ message: 'Agent updated successfully', agent: updatedAgent[0] }, { status: 200 });
     } catch (error) {
         console.error('Error updating agent:', error);
@@ -223,6 +249,16 @@ export async function DELETE(req) {
         if (deletedAgent.length === 0) {
             return NextResponse.json({ error: 'Agent not found' }, { status: 404 });
         }
+
+        // Log the agent deletion action
+        await actionLogger.delete(req, ENTITY_TYPES.AGENT, deletedAgent[0].id, deletedAgent[0].name, {
+            email: deletedAgent[0].email,
+            designation: deletedAgent[0].designation,
+            department: deletedAgent[0].department,
+            role: deletedAgent[0].role,
+            town_id: deletedAgent[0].town_id,
+            complaint_type_id: deletedAgent[0].complaint_type_id
+        });
 
         return NextResponse.json({ message: 'Agent deleted successfully', user: deletedAgent[0] }, { status: 200 });
 

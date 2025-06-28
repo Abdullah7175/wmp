@@ -4,6 +4,7 @@ import bcrypt from 'bcryptjs';
 import fs from 'fs/promises';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
+import { actionLogger, ENTITY_TYPES } from '@/lib/actionLogger';
 
 const uploadDir = path.join(process.cwd(), 'public/uploads/socialmediaagents');
 async function ensureUploadDir() {
@@ -115,6 +116,16 @@ export async function POST(req) {
             hashedPassword,
             imageUrl,
         ]);
+        
+        // Log the social media person creation action
+        await actionLogger.create(req, ENTITY_TYPES.SOCIALMEDIAPERSON, newAgent[0].id, newAgent[0].name, {
+            email: newAgent[0].email,
+            contact: newAgent[0].contact_number,
+            address: newAgent[0].address,
+            role: newAgent[0].role,
+            hasImage: !!imageUrl
+        });
+        
         return NextResponse.json({ message: 'Videographer added successfully', agent: newAgent[0] }, { status: 201 });
     } catch (error) {
         console.error('Error saving Videographer:', error);
@@ -161,6 +172,14 @@ export async function PUT(req) {
             return NextResponse.json({ error: 'Videographer not found' }, { status: 404 });
         }
 
+        // Log the social media person update action
+        await actionLogger.update(req, ENTITY_TYPES.SOCIALMEDIAPERSON, updatedSocialagent[0].id, updatedSocialagent[0].name, {
+            email: updatedSocialagent[0].email,
+            contact: updatedSocialagent[0].contact_number,
+            address: updatedSocialagent[0].address,
+            role: updatedSocialagent[0].role
+        });
+
         return NextResponse.json({ message: 'Videographer updated successfully', agent: updatedSocialagent[0] }, { status: 200 });
 
     } catch (error) {
@@ -196,6 +215,14 @@ export async function DELETE(req) {
         if (deletedSocialagent.length === 0) {
             return NextResponse.json({ error: 'Videographer not found' }, { status: 404 });
         }
+
+        // Log the social media person deletion action
+        await actionLogger.delete(req, ENTITY_TYPES.SOCIALMEDIAPERSON, deletedSocialagent[0].id, deletedSocialagent[0].name, {
+            email: deletedSocialagent[0].email,
+            contact: deletedSocialagent[0].contact_number,
+            address: deletedSocialagent[0].address,
+            role: deletedSocialagent[0].role
+        });
 
         return NextResponse.json({ message: 'Videographer deleted successfully', user: deletedSocialagent[0] }, { status: 200 });
 

@@ -2,6 +2,7 @@ import path from 'path';
 import { promises as fs } from 'fs';
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/db';
+import { actionLogger, ENTITY_TYPES } from '@/lib/actionLogger';
 
 export async function GET(request) {
     const { searchParams } = new URL(request.url);
@@ -160,6 +161,16 @@ export async function POST(req) {
             ]);
             uploadedImages.push(rows[0]);
         }
+        
+        // Log the image upload action
+        await actionLogger.upload(req, ENTITY_TYPES.IMAGE, workRequestId, `Images for Request #${workRequestId}`, {
+            imageCount: uploadedImages.length,
+            workRequestId,
+            creatorId,
+            creatorType,
+            hasLocation: true
+        });
+        
         // Notify all managers (role=1 or 2)
         try {
             const client2 = await connectToDatabase();
@@ -213,6 +224,12 @@ export async function PUT(req) {
             return NextResponse.json({ error: 'Image not found' }, { status: 404 });
         }
 
+        // Log the image update action
+        await actionLogger.update(req, ENTITY_TYPES.IMAGE, updatedImage[0].id, `Image #${updatedImage[0].id}`, {
+            workRequestId,
+            description: updatedImage[0].description
+        });
+
         return NextResponse.json({ message: 'Image updated successfully', image: updatedImage[0] }, { status: 200 });
 
     } catch (error) {
@@ -259,10 +276,16 @@ export async function DELETE(req) {
 
         const { rows: deletedImage } = await client.query(deleteQuery, [id]);
 
+        // Log the image deletion action
+        await actionLogger.delete(req, ENTITY_TYPES.IMAGE, deletedImage[0].id, `Image #${deletedImage[0].id}`, {
+            workRequestId: deletedImage[0].work_request_id,
+            hadFile: !!image.link
+        });
+
         return NextResponse.json({ message: 'Image deleted successfully', image: deletedImage[0] }, { status: 200 });
 
     } catch (error) {
         console.error('Error deleting image:', error);
         return NextResponse.json({ error: 'Error deleting image' }, { status: 500 });
     }
-}
+} 

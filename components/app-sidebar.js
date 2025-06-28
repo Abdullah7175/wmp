@@ -1,7 +1,7 @@
 "use client"
 import { UserProvider, useUserContext } from "@/context/UserContext";
 import { usePathname } from "next/navigation";
-import { Users, Home, Signature, LogOut, ChevronDown, Map, ChartPie, Archive, CircleCheck, Bolt, UserIcon, GalleryThumbnails, NotebookText } from "lucide-react";
+import { Users, Home, Signature, LogOut, ChevronDown, Map, ChartPie, Archive, CircleCheck, Bolt, UserIcon, GalleryThumbnails, NotebookText, Activity } from "lucide-react";
 import Image from "next/image";
 import {
     Sidebar,
@@ -286,6 +286,16 @@ export function AppSidebar() {
                                                         <span>Media Cell Agents</span>
                                                     </Link>
                                                 </SidebarMenuSubItem>
+                                                {role === 1 && (
+                                                    <SidebarMenuSubItem
+                                                        className={`py-2 text-base ml-2 text-gray-500 underline ${pathname === "/dashboard/user-actions" ? "font-bold text-blue-950" : ""
+                                                            }`}
+                                                    >
+                                                        <Link href="/dashboard/user-actions">
+                                                            <span>User Actions</span>
+                                                        </Link>
+                                                    </SidebarMenuSubItem>
+                                                )}
                                             </SidebarMenuSub>
                                         </CollapsibleContent>
                                     </SidebarMenuItem>

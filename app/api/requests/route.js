@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/db';
+import { actionLogger, ENTITY_TYPES } from '@/lib/actionLogger';
 
 export async function GET(request) {
     const { searchParams } = new URL(request.url);
@@ -378,6 +379,20 @@ export async function POST(req) {
             }
         }
         await client.query('COMMIT');
+        
+        // Log the request creation action
+        await actionLogger.create(req, ENTITY_TYPES.REQUEST, workRequestId, `Request #${workRequestId}`, {
+            town_id,
+            complaint_type_id,
+            complaint_subtype_id,
+            creator_type,
+            creator_id,
+            hasLocation: !!(latitude && longitude),
+            subtownCount: Array.isArray(subtown_ids) ? subtown_ids.length : 0,
+            executive_engineer_id: final_executive_engineer_id,
+            contractor_id: final_contractor_id
+        });
+        
         // Insert notifications for relevant users
         try {
             // Get creator info
@@ -551,6 +566,19 @@ export async function PUT(req) {
         }
 
         await client.query('COMMIT');
+
+        // Log the request update action
+        await actionLogger.update(req, ENTITY_TYPES.REQUEST, id, `Request #${id}`, {
+            assigned_to: finalAssignedTo,
+            status_id: finalStatusId,
+            shoot_date,
+            executive_engineer_id,
+            contractor_id,
+            budget_code,
+            file_type,
+            nature_of_work,
+            smAgentsAssigned: assigned_sm_agents ? assigned_sm_agents.length : 0
+        });
 
         return NextResponse.json({ 
             message: 'Work request updated successfully', 
