@@ -492,12 +492,7 @@ export async function PUT(req) {
         await client.query('BEGIN');
 
         // If shoot_date is present, update it
-        if (shoot_date) {
-            await client.query(
-                'UPDATE work_requests SET shoot_date = $1 WHERE id = $2',
-                [shoot_date, id]
-            );
-        }
+        // shoot_date is UI-only and not stored in the database
 
         // Update extra fields
         const updateFields = [];

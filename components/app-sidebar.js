@@ -1,7 +1,7 @@
 "use client"
 import { UserProvider, useUserContext } from "@/context/UserContext";
 import { usePathname } from "next/navigation";
-import { Users, Home, Signature, LogOut, ChevronDown, Map, ChartPie, Archive, CircleCheck, Bolt, UserIcon, GalleryThumbnails, NotebookText, Activity } from "lucide-react";
+import { Users, Home, Signature, LogOut, ChevronDown, Map, ChartPie, Archive, CircleCheck, Bolt, UserIcon, GalleryThumbnails, NotebookText, Activity, PlusCircle } from "lucide-react";
 import Image from "next/image";
 import {
     Sidebar,
@@ -35,6 +35,12 @@ const items = [
         icon: Home,
         visible: [1, 2, 3, 4]
     },
+    // {
+    //     title: "Add Request",
+    //     url: "/dashboard/requests/new",
+    //     icon: PlusCircle,
+    //     visible: [1, 2, 3, 4]
+    // },
     
     {
         title: "Reports",
@@ -79,8 +85,8 @@ export function AppSidebar() {
                                 <CardContent className="p-0 flex items-center gap-3 px-4 py-2">
                                     {/* <Image src="/avatar.png" className="rounded-xl" width="40" height="40" alt="profile" />
                                     <p className="text-muted-foreground">User Name</p> */}
-                                     <Image 
-                                        src={user?.image || '/avatar.png'} 
+                                     {/* <Image 
+                                        src={user?.image  || '/avatar.png'} 
                                         className="rounded-xl" 
                                         width="40" 
                                         height="40" 
@@ -89,7 +95,18 @@ export function AppSidebar() {
                                             e.target.onerror = null;
                                             e.target.src = "/avatar.png";
                                         }}
-                                    />
+                                    /> */}
+                                    <img
+                                        src={user?.image || "/avatar.png"}
+                                        alt="profile"
+                                        width={40}
+                                        height={40}
+                                        className="rounded-xl"
+                                        onError={(e) => {
+                                            e.target.onerror = null;
+                                            e.target.src = "/avatar.png";
+                                        }}
+                                        />
                                     <p className="text-muted-foreground">
                                         {user?.name || 'Guest'}
                                     </p>
@@ -170,7 +187,7 @@ export function AppSidebar() {
                                         <CollapsibleTrigger asChild>
                                             <SidebarMenuButton className={`text-base gap-2 py-6`}>
                                                 <Bolt className="w-5 h-5" />
-                                                <span>complaint Control</span>
+                                                <span>Type Control</span>
                                                 <ChevronDown />
                                             </SidebarMenuButton>
                                         </CollapsibleTrigger>
@@ -182,7 +199,7 @@ export function AppSidebar() {
                                                         }`}
                                                 >
                                                     <Link href="/dashboard/complaints/types">
-                                                        <span>Add Complaint Type</span>
+                                                        <span>Complaint Type</span>
                                                     </Link>
                                                 </SidebarMenuSubItem>
                                                 <SidebarMenuSubItem
@@ -190,7 +207,7 @@ export function AppSidebar() {
                                                         }`}
                                                 >
                                                     <Link href="/dashboard/complaints/sub-types">
-                                                        <span>Add New Subtype</span>
+                                                        <span>Complaint Subtype</span>
                                                     </Link>
                                                 </SidebarMenuSubItem>
                                             </SidebarMenuSub>
@@ -216,7 +233,15 @@ export function AppSidebar() {
                                                         }`}
                                                 >
                                                     <Link href="/dashboard/requests">
-                                                        <span>List All Requests</span>
+                                                        <span>Requests</span>
+                                                    </Link>
+                                                </SidebarMenuSubItem>
+                                                <SidebarMenuSubItem
+                                                    className={`py-2 text-base ml-2 text-gray-500 underline ${pathname === "/dashboard/requests" ? "font-bold text-blue-950" : ""
+                                                        }`}
+                                                >
+                                                    <Link href="/dashboard/requests/new">
+                                                        <span>Add Requests</span>
                                                     </Link>
                                                 </SidebarMenuSubItem>
                                                 <SidebarMenuSubItem
