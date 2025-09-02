@@ -1,7 +1,8 @@
 import { getToken } from "next-auth/jwt";
 import { NextResponse } from "next/server";
+import { efilingAuthMiddleware } from "./middleware/efilingAuth";
 
-const PUBLIC_PATHS = ["/login", "/unauthorized", "/_next", "/api", "/favicon.ico", "/public"];
+const PUBLIC_PATHS = ["/elogin", "/login", "/unauthorized", "/_next", "/api", "/favicon.ico", "/public"];
 
 // Allowed roles for smagent
 const smagentRolesA = [1, 2, 3, 6]; // CAMERA MAN, ASSISTANT, PHOTOGRAPHER, CONTENT CREATOR
@@ -101,13 +102,18 @@ export async function middleware(req) {
         return NextResponse.next();
     }
 
+    // Handle e-filing authentication for efiling and efilinguser routes
+    if (pathname.startsWith('/efiling') || pathname.startsWith('/efilinguser') || pathname === '/elogin') {
+        return await efilingAuthMiddleware(req);
+    }
+
     try {
         const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
         
         if (!token) {
-            // Redirect to login if no token and trying to access protected routes
+            // Redirect to main page if no token and trying to access protected routes
             if (pathname !== '/login' && pathname !== '/' && !pathname.startsWith('/public')) {
-                return NextResponse.redirect(new URL('/login', req.url));
+                return NextResponse.redirect(new URL('/', req.url));
             }
             return NextResponse.next();
         }
@@ -127,7 +133,7 @@ export async function middleware(req) {
         if (userType === 'user') {
             // Admin/Manager access
             if (userRole === 1 || userRole === 2) {
-                const allowedPaths = ['/dashboard', '/dashboard/requests', '/dashboard/users', '/dashboard/agents', '/dashboard/socialmediaagent', '/dashboard/complaints', '/dashboard/towns', '/dashboard/districts', '/dashboard/subtowns', '/dashboard/images', '/dashboard/videos', '/dashboard/final-videos', '/dashboard/reports', '/dashboard/roles'];
+                const allowedPaths = ['/dashboard', '/dashboard/requests', '/dashboard/users', '/dashboard/agents', '/dashboard/socialmediaagent', '/dashboard/complaints', '/dashboard/towns', '/dashboard/districts', '/dashboard/subtowns', '/dashboard/images', '/dashboard/videos', '/dashboard/final-videos', '/dashboard/reports', '/dashboard/roles','/efiling', '/efiling/files', '/efiling/assignments', '/efiling/departments', '/efiling/tools', '/efiling/reports', '/efiling/settings'];
                 if (!isAllowed(pathname, allowedPaths)) {
                     return NextResponse.redirect(new URL('/unauthorized', req.url));
                 }
@@ -150,15 +156,23 @@ export async function middleware(req) {
             if (!isAllowed(pathname, allowedPaths)) {
                 return NextResponse.redirect(new URL('/unauthorized', req.url));
             }
-        }
+        } 
+        
+        // else if (userType === 'efiling') {
+        //     // E-Filing user access
+        //     const allowedPaths = ['/efiling', '/efiling/files', '/efiling/assignments', '/efiling/departments', '/efiling/tools', '/efiling/reports', '/efiling/settings'];
+        //     if (!isAllowed(pathname, allowedPaths)) {
+        //         return NextResponse.redirect(new URL('/unauthorized', req.url));
+        //     }
+        // }
 
         return NextResponse.next();
     } catch (error) {
         console.error('Middleware error:', error);
-        return NextResponse.redirect(new URL('/login', req.url));
+        return NextResponse.redirect(new URL('/', req.url));
     }
 }
 
 export const config = {
-  matcher: ["/smagent/:path*", "/agent/:path*", "/dashboard/:path*"],
+  matcher: ["/smagent/:path*", "/agent/:path*", "/dashboard/:path*", "/efiling/:path*", "/efilinguser/:path*", "/elogin"],
 }; 

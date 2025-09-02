@@ -134,7 +134,50 @@ export function AppSidebar() {
                                 return null;
                             })}
 
-                            {/* Town Control Section */}
+                            {/* Town Control Section
+                            {role && (
+                                <Collapsible className="group/collapsible">
+                                    <SidebarMenuItem>
+                                        <CollapsibleTrigger asChild>
+                                            <SidebarMenuButton className={`text-base gap-2 py-6`}>
+                                                <Map className="w-5 h-5" />
+                                                <span>E-Filling</span>
+                                                <ChevronDown />
+                                            </SidebarMenuButton>
+                                        </CollapsibleTrigger>
+                                        <CollapsibleContent>
+                                            <SidebarMenuSub>
+                                                <SidebarMenuSubItem
+                                                    className={`py-2 text-base ml-2 text-gray-500 underline ${pathname === "/efiling" ? "font-bold text-blue-950" : ""
+                                                        }`}
+                                                >
+                                                    <Link href="/efiling">
+                                                        <span>Dashboard</span>
+                                                    </Link>
+                                                </SidebarMenuSubItem>
+                                                <SidebarMenuSubItem
+                                                    className={`py-2 text-base ml-2 text-gray-500 underline ${pathname === "/efiling/files" ? "font-bold text-blue-950" : ""
+                                                        }`}
+                                                >
+                                                    <Link href="/efiling/files">
+                                                        <span>Manage Files</span>
+                                                    </Link>
+                                                </SidebarMenuSubItem>
+                                                <SidebarMenuSubItem
+                                                    className={`py-2 text-base ml-2 text-gray-500 underline ${pathname === "/efiling/new" ? "font-bold text-blue-950" : ""
+                                                        }`}
+                                                >
+                                                    <Link href="/efiling/new">
+                                                        <span>Create New File</span>
+                                                    </Link>
+                                                </SidebarMenuSubItem>
+                                            </SidebarMenuSub>
+                                        </CollapsibleContent>
+                                    </SidebarMenuItem>
+                                </Collapsible>
+                            )} */}
+
+
                             {role && (
                                 <Collapsible className="group/collapsible">
                                     <SidebarMenuItem>
@@ -176,7 +219,6 @@ export function AppSidebar() {
                                     </SidebarMenuItem>
                                 </Collapsible>
                             )}
-
                             
                             
 

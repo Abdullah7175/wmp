@@ -12,6 +12,9 @@ import { useToast } from "@/hooks/use-toast";
 import { signIn } from "next-auth/react";
 import { useSession } from "next-auth/react";
 import React from "react";
+import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
+
 
 const validationSchema = Yup.object({
   email: Yup.string().email("Invalid email format").required("Email is required"),
@@ -100,12 +103,13 @@ export default function LoginPage() {
         backgroundRepeat: "no-repeat",
       }}
     >
+
       {/* Overlay */}
       <div className="flex items-center justify-center gap-0">
          <Image src="/logo.png" className="py-0 px-1" width="150" height="150" alt="logo" />
        </div>
        <div className="flex gap-4 items-center mb-8">
-         <h1 className="text-2xl font-semibold">Works Management Portal</h1>
+         <h1 className="text-2xl font-semibold">Video Archiving Portal</h1>
        </div>
 
       <motion.div
@@ -114,6 +118,16 @@ export default function LoginPage() {
         animate={{ opacity: 1, scale: 1, y: 0 }}
         transition={{ duration: 0.6, ease: "easeOut" }}
       >
+        <div className="mb-6">
+          <Link 
+            href="/"
+            className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-700 transition-colors"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            <span>Back to Portal Selection</span>
+          </Link>
+        </div>
+
 
         <Card className="shadow-lg backdrop-blur-lg bg-white/90 border border-blue-100">
           <CardHeader className="text-center">

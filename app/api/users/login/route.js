@@ -57,6 +57,7 @@ import bcrypt from "bcryptjs";
 import { connectToDatabase } from "@/lib/db";
 import jwt from "jsonwebtoken";
 import { actionLogger, ACTION_TYPES } from "@/lib/actionLogger";
+import { eFilingLoginLogger } from "@/lib/efilingLoginLogger";
 
 export async function POST(req) {
   const { email, password } = await req.json();
@@ -84,6 +85,9 @@ export async function POST(req) {
     }
 
     if (!user) {
+      // Log failed login attempt
+      await eFilingLoginLogger.authAttempt(req, null, false, { email });
+      
       return NextResponse.json(
         { error: "Invalid email or password" },
         { status: 401 }
@@ -93,6 +97,9 @@ export async function POST(req) {
     // Verify password
     const isValid = await bcrypt.compare(password, user.password);
     if (!isValid) {
+      // Log failed password attempt
+      await eFilingLoginLogger.authAttempt(req, null, false, { email });
+      
       return NextResponse.json(
         { error: "Invalid email or password" },
         { status: 401 }
@@ -111,17 +118,32 @@ export async function POST(req) {
       { expiresIn: "1h" }
     );
 
-    // Log the login action
-    await actionLogger.login(req, {
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      userType: userType
-    }, {
-      loginMethod: 'email_password',
-      userType: userType
-    });
+    // Log the login action - use e-filing logger for e-filing users
+    if (userType === 'users') {
+      // This is likely an e-filing user, log to efiling_user_actions
+      await eFilingLoginLogger.login(req, {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        userType: userType
+      }, {
+        loginMethod: 'email_password',
+        userType: userType
+      });
+    } else {
+      // Log to general user_actions for other user types
+      await actionLogger.login(req, {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        userType: userType
+      }, {
+        loginMethod: 'email_password',
+        userType: userType
+      });
+    }
 
     return NextResponse.json({
       message: "Login successful",
