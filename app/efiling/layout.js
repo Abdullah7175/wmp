@@ -5,7 +5,7 @@ import { Bell, LogOut, FileText, Users, Settings } from "lucide-react"
 import { Button } from "@/components/ui/button";
 import { Toaster } from "@/components/ui/toaster"
 import { useRouter } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { signOut } from 'next-auth/react';
 import { useUserContext } from "@/context/UserContext";
 import { EfilingRouteGuard } from "@/components/EfilingRouteGuard";
@@ -16,6 +16,7 @@ export default function EFileLayout({ children }) {
     const { setUser } = useUserContext();
     const [notifications, setNotifications] = useState([]);
     const [showDropdown, setShowDropdown] = useState(false);
+    const dropdownRef = useRef(null);
     const router = useRouter();
 
     useEffect(() => {
@@ -35,17 +36,40 @@ export default function EFileLayout({ children }) {
 
     useEffect(() => {
         if (!efilingUser?.id) return;
-        // Fetch e-filing specific notifications
+        let mappedEfilingUserId = null;
         const fetchNotifications = async () => {
-            const res = await fetch("/api/notifications?type=efiling");
-            if (res.ok) {
-                const data = await res.json();
-                const filtered = (data.data || []).filter(n => n.user_id === efilingUser.id);
-                setNotifications(filtered);
+            try {
+                if (!mappedEfilingUserId) {
+                    const mapRes = await fetch(`/api/efiling/users/profile?userId=${efilingUser.id}`);
+                    if (mapRes.ok) {
+                        const map = await mapRes.json();
+                        mappedEfilingUserId = map?.efiling_user_id || null;
+                    }
+                }
+                const targetId = mappedEfilingUserId || efilingUser.id;
+                const res = await fetch(`/api/efiling/notifications?user_id=${targetId}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    setNotifications(data.notifications || []);
+                }
+            } catch (e) {
+                console.error('Admin notifications fetch error:', e);
             }
         };
         fetchNotifications();
     }, [efilingUser?.id]);
+
+    useEffect(() => {
+        const onClickOutside = (e) => {
+            if (showDropdown && dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+                setShowDropdown(false);
+            }
+        };
+        document.addEventListener('mousedown', onClickOutside);
+        return () => document.removeEventListener('mousedown', onClickOutside);
+    }, [showDropdown]);
+
+    const unreadCount = notifications.filter(n => !n.is_read && !n.is_dismissed).length;
 
     // const handleLogout = () => {
     //     setLoading(true);
@@ -66,19 +90,12 @@ export default function EFileLayout({ children }) {
       };
 
     const handleNotificationClick = async (notif) => {
-        // Mark notification as read
-        await fetch("/api/notifications", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ id: notif.id })
-        });
+        try {
+            await fetch(`/api/efiling/notifications/${notif.id}/read`, { method: 'PUT' });
+        } catch {}
         setNotifications(notifications.filter(n => n.id !== notif.id));
-        
-        // Navigate based on notification type
-        if (notif.type === 'efiling_file' && notif.entity_id) {
-            router.push(`/efiling/files/${notif.entity_id}`);
-        } else if (notif.type === 'efiling_assignment' && notif.entity_id) {
-            router.push(`/efiling/assignments/${notif.entity_id}`);
+        if (notif.file_id) {
+            router.push(`/efiling/files/${notif.file_id}`);
         }
     };
 
@@ -123,12 +140,12 @@ export default function EFileLayout({ children }) {
                             </div>
                             
                             {/* Notification Bell */}
-                            <div className="relative">
+                            <div className="relative" ref={dropdownRef}>
                                 <button onClick={() => setShowDropdown(v => !v)} className="relative">
                                     <Bell className="w-6 h-6" />
-                                    {notifications.length > 0 && (
+                                    {unreadCount > 0 && (
                                         <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full px-1">
-                                            {notifications.length}
+                                            {unreadCount}
                                         </span>
                                     )}
                                 </button>

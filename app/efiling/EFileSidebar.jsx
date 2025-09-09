@@ -40,10 +40,7 @@ const links = [
         icon: <FileText className="w-5 h-5 mr-2" />,
         subItems: [
             { href: "/efiling/files", label: "Files", icon: <FileText className="w-4 h-4" /> },
-            { href: "/efiling/files/new", label: "Create New File", icon: <FileText className="w-4 h-4" /> },
-            { href: "/efiling/files/incoming", label: "Incoming Files", icon: <FolderOpen className="w-4 h-4" /> },
-            { href: "/efiling/files/outgoing", label: "Outgoing Files", icon: <Archive className="w-4 h-4" /> },
-            { href: "/efiling/files/internal", label: "Internal Files", icon: <BookOpen className="w-4 h-4" /> },
+            { href: "/efiling/files/new", label: "Create New File", icon: <FileText className="w-4 h-4" /> }
         ]
     },
     {
@@ -74,12 +71,30 @@ const links = [
         ]
     },
     {
+        href: "/efiling/role-groups",
+        label: "Role Groups",
+        icon: <Users className="w-5 h-5 mr-2" />,
+        subItems: [
+            { href: "/efiling/role-groups", label: "Manage Role Groups", icon: <Settings className="w-4 h-4" /> },
+            { href: "/efiling/role-groups/create", label: "Create Role Group", icon: <FileEdit className="w-4 h-4" /> },
+        ]
+    },
+    {
         href: "/efiling/file-types",
         label: "File Types",
         icon: <FileEdit className="w-5 h-5 mr-2" />,
         subItems: [
             { href: "/efiling/file-types", label: "Manage File Types", icon: <Settings className="w-4 h-4" /> },
             { href: "/efiling/file-types/create", label: "Create File Type", icon: <FileText className="w-4 h-4" /> },
+        ]
+    },
+    {
+        href: "/efiling/categories",
+        label: "Categories",
+        icon: <FolderOpen className="w-5 h-5 mr-2" />,
+        subItems: [
+            { href: "/efiling/categories", label: "Manage Categories", icon: <Settings className="w-4 h-4" /> },
+            { href: "/efiling/categories/create", label: "Create Category", icon: <FileEdit className="w-4 h-4" /> },
         ]
     },
     // {
@@ -246,14 +261,14 @@ export function EFileSidebar() {
             </nav>
             
             <div className="mt-auto p-2 border-t border-blue-800">
-                <Button 
+                {/* <Button 
                     variant="ghost" 
                     onClick={handleLogout}
                     className="w-full text-blue-300 hover:text-white hover:bg-blue-800 mb-2"
                 >
                     <LogOut className="w-4 h-4 mr-2" />
                     {!collapsed && <span>Logout</span>}
-                </Button>
+                </Button> */}
                 <Button variant="ghost" size="icon" onClick={toggleSidebar} className="text-blue-300 hover:text-white w-full">
                     {collapsed ? <ChevronRight /> : <ChevronLeft />}
                 </Button>

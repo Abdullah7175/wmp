@@ -177,7 +177,7 @@ export default function AttachmentManager({ fileId, canEdit = true }) {
     };
 
     const handleDeleteAttachment = async (attachmentId, fileName) => {
-        if (!confirm(`Are you sure you want to delete "${fileName}"?`)) {
+        if (!confirm(`Are you sure you want to delete \"${fileName}\"?`)) {
             return;
         }
 
@@ -258,7 +258,7 @@ export default function AttachmentManager({ fileId, canEdit = true }) {
                         <Paperclip className="w-12 h-12 mx-auto mb-4 text-gray-300" />
                         <p>No attachments yet</p>
                         {canEdit && (
-                            <p className="text-sm">Click "Add Files" to upload documents</p>
+                            <p className="text-sm">Click &quot;Add Files&quot; to upload documents</p>
                         )}
                     </div>
                 ) : (

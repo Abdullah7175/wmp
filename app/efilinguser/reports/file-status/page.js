@@ -61,11 +61,25 @@ export default function FileStatusReport() {
 
     const loadFiles = async () => {
         try {
-            const response = await fetch('/api/efiling/files');
-            if (response.ok) {
-                const data = await response.json();
-                setFiles(Array.isArray(data) ? data : []);
-            }
+            // Map Users.id -> efiling_users.id
+            let efilingUserId = session?.user?.id;
+            try {
+                const mapRes = await fetch(`/api/efiling/users/profile?userId=${session?.user?.id}`);
+                if (mapRes.ok) {
+                    const map = await mapRes.json();
+                    if (map?.efiling_user_id) efilingUserId = map.efiling_user_id;
+                }
+            } catch {}
+
+            const [createdRes, assignedRes] = await Promise.all([
+                fetch(`/api/efiling/files?created_by=${efilingUserId}`),
+                fetch(`/api/efiling/files?assigned_to=${efilingUserId}`)
+            ]);
+            const created = createdRes.ok ? await createdRes.json() : { files: [] };
+            const assigned = assignedRes.ok ? await assignedRes.json() : { files: [] };
+            const all = [...(created.files || []), ...(assigned.files || [])];
+            const unique = all.filter((f, i, arr) => i === arr.findIndex(x => x.id === f.id));
+            setFiles(unique);
         } catch (error) {
             console.error('Error loading files:', error);
         }

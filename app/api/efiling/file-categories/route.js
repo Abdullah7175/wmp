@@ -200,3 +200,81 @@ export async function POST(request) {
         }
     }
 }
+
+export async function PUT(request) {
+    let client;
+    try {
+        const body = await request.json();
+        const { id, name, description, is_active = true, updatedBy, ipAddress, userAgent } = body;
+        if (!id) {
+            return NextResponse.json({ error: 'Category id is required' }, { status: 400 });
+        }
+        client = await connectToDatabase();
+        const existing = await client.query('SELECT * FROM efiling_file_categories WHERE id = $1', [id]);
+        if (existing.rows.length === 0) {
+            return NextResponse.json({ error: 'Category not found' }, { status: 404 });
+        }
+        const result = await client.query(`
+            UPDATE efiling_file_categories
+            SET name = COALESCE($2, name),
+                description = COALESCE($3, description),
+                is_active = COALESCE($4, is_active),
+                updated_at = NOW()
+            WHERE id = $1
+            RETURNING *
+        `, [id, name, description, is_active]);
+        const cat = result.rows[0];
+        await eFileActionLogger.logAction({
+            entityType: EFILING_ENTITY_TYPES.EFILING_CATEGORY,
+            entityId: id,
+            action: EFILING_ACTION_TYPES.FILE_TYPE_UPDATED,
+            userId: updatedBy || 'system',
+            details: { name: cat.name, is_active: cat.is_active },
+            ipAddress,
+            userAgent
+        });
+        return NextResponse.json({ success: true, category: cat });
+    } catch (error) {
+        console.error('Error updating file category:', error);
+        return NextResponse.json({ error: 'Failed to update file category' }, { status: 500 });
+    } finally {
+        if (client) await client.release();
+    }
+}
+
+export async function DELETE(request) {
+    let client;
+    try {
+        const { searchParams } = new URL(request.url);
+        const id = searchParams.get('id');
+        const userId = searchParams.get('userId') || 'system';
+        if (!id) {
+            return NextResponse.json({ error: 'Category id is required' }, { status: 400 });
+        }
+        client = await connectToDatabase();
+        const existing = await client.query('SELECT * FROM efiling_file_categories WHERE id = $1', [id]);
+        if (existing.rows.length === 0) {
+            return NextResponse.json({ error: 'Category not found' }, { status: 404 });
+        }
+        // Soft delete by inactivating if referenced by file_types
+        const refs = await client.query('SELECT COUNT(*)::int AS cnt FROM efiling_file_types WHERE category_id = $1', [id]);
+        if (refs.rows[0].cnt > 0) {
+            await client.query('UPDATE efiling_file_categories SET is_active = false, updated_at = NOW() WHERE id = $1', [id]);
+        } else {
+            await client.query('DELETE FROM efiling_file_categories WHERE id = $1', [id]);
+        }
+        await eFileActionLogger.logAction({
+            entityType: EFILING_ENTITY_TYPES.EFILING_CATEGORY,
+            entityId: id,
+            action: EFILING_ACTION_TYPES.FILE_TYPE_DELETED,
+            userId,
+            details: { softDeleted: refs.rows[0].cnt > 0 }
+        });
+        return NextResponse.json({ success: true });
+    } catch (error) {
+        console.error('Error deleting file category:', error);
+        return NextResponse.json({ error: 'Failed to delete file category' }, { status: 500 });
+    } finally {
+        if (client) await client.release();
+    }
+}

@@ -8,12 +8,33 @@ export async function GET(request) {
         const { searchParams } = new URL(request.url);
         const userId = searchParams.get('user_id');
         const actionType = searchParams.get('action_type');
-        const limit = searchParams.get('limit') || '50';
-        const offset = searchParams.get('offset') || '0';
+        const page = parseInt(searchParams.get('page') || '1', 10);
+        const limit = parseInt(searchParams.get('limit') || '50', 10);
+        const offset = (page - 1) * limit;
 
         client = await connectToDatabase();
         
-        let query = `
+        let baseWhere = 'WHERE 1=1';
+        const whereParams = [];
+        let p = 0;
+        if (userId) {
+            p++; baseWhere += ` AND ua.user_id = $${p}::VARCHAR`; whereParams.push(userId.toString());
+        }
+        if (actionType) {
+            p++; baseWhere += ` AND ua.action_type = $${p}`; whereParams.push(actionType);
+        }
+        
+        // Count total
+        const countRes = await client.query(`
+            SELECT COUNT(*)::int AS total
+            FROM efiling_user_actions ua
+            ${baseWhere}
+        `, whereParams);
+        const total = countRes.rows[0]?.total || 0;
+        const totalPages = Math.ceil(total / limit) || 1;
+        
+        // Data query
+        const dataRes = await client.query(`
             SELECT 
                 ua.id,
                 ua.file_id,
@@ -35,30 +56,19 @@ export async function GET(request) {
                 COALESCE(ef.subject, 'N/A') as file_subject
             FROM efiling_user_actions ua
             LEFT JOIN efiling_files ef ON (ua.file_id IS NOT NULL AND ua.file_id = ef.id::VARCHAR)
-            WHERE 1=1
-        `;
+            ${baseWhere}
+            ORDER BY ua.timestamp DESC
+            LIMIT $${p + 1} OFFSET $${p + 2}
+        `, [...whereParams, limit, offset]);
         
-        const queryParams = [];
-        let paramCount = 0;
-
-        if (userId) {
-            paramCount++;
-            query += ` AND ua.user_id = $${paramCount}::VARCHAR`;
-            queryParams.push(userId.toString());
-        }
-
-        if (actionType) {
-            paramCount++;
-            query += ` AND ua.action_type = $${paramCount}`;
-            queryParams.push(actionType);
-        }
-
-        query += ` ORDER BY ua.timestamp DESC LIMIT $${paramCount + 1} OFFSET $${paramCount + 2}`;
-        queryParams.push(parseInt(limit), parseInt(offset));
-        
-        const result = await client.query(query, queryParams);
-        
-        return NextResponse.json(result.rows);
+        return NextResponse.json({
+            success: true,
+            data: dataRes.rows,
+            page,
+            limit,
+            total,
+            totalPages
+        });
     } catch (error) {
         console.error('Error fetching user actions:', error);
         return NextResponse.json(

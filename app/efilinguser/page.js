@@ -15,7 +15,8 @@ import {
     Calendar,
     ArrowRight,
     Filter,
-    Search
+    Search,
+    Plus
 } from 'lucide-react';
 import { logEfilingUserAction, getUserInfoFromSession, EFILING_ACTIONS } from '@/lib/efilingUserActionLogger';
 import { useSession } from 'next-auth/react';
@@ -36,6 +37,9 @@ export default function EFileUserDashboard() {
         completedFiles: 0,
         overdueFiles: 0
     });
+    const [createdCount, setCreatedCount] = useState(0);
+    const [assignedCount, setAssignedCount] = useState(0);
+    const [nowTick, setNowTick] = useState(Date.now());
     const { toast } = useToast();
 
     useEffect(() => {
@@ -43,9 +47,15 @@ export default function EFileUserDashboard() {
     }, []);
 
     useEffect(() => {
+        // Fallback: if session is available but userData not set, derive minimal userData
+        if (!userData && session?.user?.id) {
+            setUserData({ id: session.user.id, name: session.user.name || 'User' });
+        }
+    }, [session, userData]);
+
+    useEffect(() => {
         if (userData?.id) {
             loadDashboardData();
-            // Log dashboard access
             if (session?.user?.id) {
                 logEfilingUserAction({
                     user_id: session.user.id,
@@ -58,15 +68,24 @@ export default function EFileUserDashboard() {
         }
     }, [userData, session]);
 
+    useEffect(() => {
+        const interval = setInterval(() => setNowTick(Date.now()), 30000);
+        return () => clearInterval(interval);
+    }, []);
+
     const loadUserData = async () => {
         try {
             const userData = localStorage.getItem('users');
             if (userData) {
                 const user = JSON.parse(userData);
                 setUserData(user);
+            } else {
+                // If no local user data, ensure we don't stay stuck in loading
+                setLoading(false);
             }
         } catch (error) {
             console.error('Error loading user data:', error);
+            setLoading(false);
         }
     };
 
@@ -74,95 +93,44 @@ export default function EFileUserDashboard() {
         try {
             setLoading(true);
             
-            // Check if user data is available
             if (!userData?.id) {
-                console.warn('User data not available, skipping API calls');
                 setAssignedFiles([]);
-                setPendingActions([]);
-                setRecentActivities([]);
-                setStats({
-                    totalFiles: 0,
-                    pendingFiles: 0,
-                    completedFiles: 0,
-                    overdueFiles: 0
-                });
+                setStats({ totalFiles: 0, pendingFiles: 0, completedFiles: 0, overdueFiles: 0 });
                 return;
             }
+
+            // Map users.id to efiling_users.id for accurate filtering
+            let efilingUserId = userData.id;
+            try {
+                const mapRes = await fetch(`/api/efiling/users/profile?userId=${userData.id}`);
+                if (mapRes.ok) {
+                    const profile = await mapRes.json();
+                    if (profile?.efiling_user_id) efilingUserId = profile.efiling_user_id;
+                }
+            } catch {}
             
-            // Load user's created files and assigned files
             const [myFilesRes, assignedFilesRes] = await Promise.all([
-                fetch(`/api/efiling/files?created_by=${userData.id}`),
-                fetch(`/api/efiling/files?assigned_to=${userData.id}`)
+                fetch(`/api/efiling/files?created_by=${efilingUserId}`),
+                fetch(`/api/efiling/files?assigned_to=${efilingUserId}`)
             ]);
 
             const myFiles = myFilesRes.ok ? await myFilesRes.json() : { files: [] };
             const assignedFiles = assignedFilesRes.ok ? await assignedFilesRes.json() : { files: [] };
             
-            console.log('My files API response:', myFiles);
-            console.log('Assigned files API response:', assignedFiles);
+            setCreatedCount((myFiles.files || []).length);
+            setAssignedCount((assignedFiles.files || []).length);
             
-            // Combine and deduplicate files
             const allFiles = [...(myFiles.files || []), ...(assignedFiles.files || [])];
-            const uniqueFiles = allFiles.filter((file, index, self) => 
-                index === self.findIndex(f => f.id === file.id)
-            );
-            
+            const uniqueFiles = allFiles.filter((file, index, self) => index === self.findIndex(f => f.id === file.id));
             setAssignedFiles(uniqueFiles);
 
-            // Load pending actions
-            const actionsResponse = await fetch('/api/efiling/workflows?userId=' + userData.id);
-            if (actionsResponse.ok) {
-                const actionsData = await actionsResponse.json();
-                console.log('Pending actions API response:', actionsData);
-                setPendingActions(Array.isArray(actionsData) ? actionsData : []);
-            } else {
-                console.error('Failed to load pending actions:', actionsResponse.status);
-                setPendingActions([]);
-            }
-
-            // Load recent activities
-            const activitiesResponse = await fetch('/api/efiling/user-actions?userId=' + userData.id);
-            if (actionsResponse.ok) {
-                const activitiesData = await activitiesResponse.json();
-                console.log('Recent activities API response:', activitiesData);
-                setRecentActivities(Array.isArray(activitiesData) ? activitiesData.slice(0, 10) : []);
-            } else {
-                console.error('Failed to load recent activities:', actionsResponse.status);
-                setRecentActivities([]);
-            }
-
-            // Calculate stats
-            if (Array.isArray(uniqueFiles) && uniqueFiles.length > 0) {
                 const pending = uniqueFiles.filter(f => f.status_code === 'PENDING' || f.status_code === 'DRAFT').length;
                 const completed = uniqueFiles.filter(f => f.status_code === 'COMPLETED' || f.status_code === 'APPROVED').length;
-                const overdue = uniqueFiles.filter(f => {
-                    if (!f.due_date) return false;
-                    return new Date(f.due_date) < new Date() && f.status_code !== 'COMPLETED';
-                }).length;
-                
-                setStats({
-                    totalFiles: uniqueFiles.length,
-                    pendingFiles: pending,
-                    completedFiles: completed,
-                    overdueFiles: overdue
-                });
-            } else {
-                setStats({
-                    totalFiles: 0,
-                    pendingFiles: 0,
-                    completedFiles: 0,
-                    overdueFiles: 0
-                });
-            }
-
+            const overdue = uniqueFiles.filter(f => f.sla_deadline && new Date(f.sla_deadline) < new Date() && f.status_code !== 'COMPLETED').length;
+            setStats({ totalFiles: uniqueFiles.length, pendingFiles: pending, completedFiles: completed, overdueFiles: overdue });
         } catch (error) {
-            console.error('Error loading dashboard data:', error);
             setDataError(true);
-            toast({
-                title: "Error",
-                description: "Failed to load dashboard data",
-                variant: "destructive"
-            });
+            toast({ title: 'Error', description: 'Failed to load dashboard data', variant: 'destructive' });
         } finally {
             setLoading(false);
         }
@@ -213,6 +181,19 @@ export default function EFileUserDashboard() {
             hour: '2-digit',
             minute: '2-digit'
         });
+    };
+
+    const formatTimeRemaining = (deadline) => {
+        if (!deadline) return '—';
+        const diffMs = new Date(deadline).getTime() - nowTick;
+        if (diffMs <= 0) return 'Breached';
+        const mins = Math.floor(diffMs / 60000);
+        const days = Math.floor(mins / 1440);
+        const hours = Math.floor((mins % 1440) / 60);
+        const minutes = mins % 60;
+        if (days > 0) return `${days}d ${hours}h`;
+        if (hours > 0) return `${hours}h ${minutes}m`;
+        return `${minutes}m`;
     };
 
     const handleFileAction = (fileId, action) => {
@@ -281,6 +262,9 @@ export default function EFileUserDashboard() {
                 </div>
             </div>
 
+            {/* Quick counts */}
+            
+
             {/* Error Display */}
             {dataError && (
                 <Card className="border-red-200 bg-red-50">
@@ -311,67 +295,29 @@ export default function EFileUserDashboard() {
                 </Card>
             )}
 
-            {/* Debug Information */}
-            {process.env.NODE_ENV === 'development' && (
-                <Card className="border-gray-200 bg-gray-50">
-                    <CardHeader>
-                        <CardTitle className="text-gray-800 text-sm">Debug Information</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="grid grid-cols-2 gap-4 text-xs">
-                            <div>
-                                <p><strong>Assigned Files:</strong> {Array.isArray(assignedFiles) ? `${assignedFiles.length} items` : typeof assignedFiles}</p>
-                                <p><strong>Pending Actions:</strong> {Array.isArray(pendingActions) ? `${pendingActions.length} items` : typeof pendingActions}</p>
-                                <p><strong>Recent Activities:</strong> {Array.isArray(recentActivities) ? `${recentActivities.length} items` : typeof recentActivities}</p>
-                            </div>
-                            <div>
-                                <p><strong>User Data:</strong> {userData ? 'Loaded' : 'Not loaded'}</p>
-                                <p><strong>Loading:</strong> {loading ? 'Yes' : 'No'}</p>
-                                <p><strong>Data Error:</strong> {dataError ? 'Yes' : 'No'}</p>
-                            </div>
-                        </div>
-                    </CardContent>
-                </Card>
-            )}
+            
 
             {/* Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">My Files</CardTitle>
+                        <CardTitle className="text-sm font-medium">Assigned to You</CardTitle>
                         <FileText className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">{stats.totalFiles}</div>
-                        <p className="text-xs text-muted-foreground">
-                            Files I created or assigned to me
-                        </p>
+                        <div className="text-2xl font-bold">{assignedCount}</div>
+                        <p className="text-xs text-muted-foreground">Files you need to process</p>
                     </CardContent>
                 </Card>
 
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Pending Action</CardTitle>
+                        <CardTitle className="text-sm font-medium">Pending</CardTitle>
                         <Clock className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
                         <div className="text-2xl font-bold">{stats.pendingFiles}</div>
-                        <p className="text-xs text-muted-foreground">
-                            Files requiring my attention
-                        </p>
-                    </CardContent>
-                </Card>
-
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Completed</CardTitle>
-                        <CheckCircle className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">{stats.completedFiles}</div>
-                        <p className="text-xs text-muted-foreground">
-                            Files I've completed
-                        </p>
+                        <p className="text-xs text-muted-foreground">Awaiting your action</p>
                     </CardContent>
                 </Card>
 
@@ -382,9 +328,7 @@ export default function EFileUserDashboard() {
                     </CardHeader>
                     <CardContent>
                         <div className="text-2xl font-bold">{stats.overdueFiles}</div>
-                        <p className="text-xs text-muted-foreground">
-                            My overdue files
-                        </p>
+                        <p className="text-xs text-muted-foreground">Past SLA</p>
                     </CardContent>
                 </Card>
             </div>
@@ -394,7 +338,6 @@ export default function EFileUserDashboard() {
                 <TabsList>
                     <TabsTrigger value="assigned">My Files</TabsTrigger>
                     <TabsTrigger value="pending">Pending Actions</TabsTrigger>
-                    <TabsTrigger value="activities">My Activities</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="assigned" className="space-y-4">
@@ -421,6 +364,9 @@ export default function EFileUserDashboard() {
                                                     <h3 className="font-semibold">{file.file_number}</h3>
                                                     {getStatusBadge(file.status_code, file.sla_breached)}
                                                     {getPriorityBadge(file.priority)}
+                                                    {file.assigned_to_role_name && (
+                                                        <Badge variant="secondary">{file.assigned_to_role_name}</Badge>
+                                                    )}
                                                 </div>
                                                 <p className="text-sm text-muted-foreground mb-2">
                                                     {file.subject}
@@ -487,7 +433,7 @@ export default function EFileUserDashboard() {
                                                     <span>Started: {formatDate(workflow.started_at)}</span>
                                                     {workflow.sla_deadline && (
                                                         <span className={workflow.sla_breached ? 'text-red-500' : ''}>
-                                                            Deadline: {formatDate(workflow.sla_deadline)}
+                                                            SLA: {formatTimeRemaining(workflow.sla_deadline)}
                                                         </span>
                                                     )}
                                                 </div>
@@ -515,47 +461,7 @@ export default function EFileUserDashboard() {
                     </Card>
                 </TabsContent>
 
-                <TabsContent value="activities" className="space-y-4">
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Recent Activities</CardTitle>
-                            <CardDescription>
-                                Your recent actions and file activities
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            {recentActivities.length === 0 ? (
-                                <div className="text-center py-8 text-muted-foreground">
-                                    <User className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                                    <p>No recent activities found.</p>
-                                </div>
-                            ) : (
-                                <div className="space-y-4">
-                                    {recentActivities.map((activity) => (
-                                        <div key={activity.id} className="flex items-center space-x-4 p-3 border rounded-lg">
-                                            <div className="flex-shrink-0">
-                                                <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                                                    <FileText className="h-4 w-4 text-blue-600" />
-                                                </div>
-                                            </div>
-                                            <div className="flex-1 min-w-0">
-                                                <p className="text-sm font-medium text-gray-900">
-                                                    {activity.action_type}
-                                                </p>
-                                                <p className="text-sm text-gray-500">
-                                                    {activity.description}
-                                                </p>
-                                            </div>
-                                            <div className="flex-shrink-0 text-sm text-gray-500">
-                                                {formatDate(activity.timestamp)}
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                        </CardContent>
-                    </Card>
-                </TabsContent>
+                {/* Remove activities tab */}
             </Tabs>
         </div>
     );

@@ -5,10 +5,11 @@ import { Bell, LogOut, FileText, Users, Settings } from "lucide-react"
 import { Button } from "@/components/ui/button";
 import { Toaster } from "@/components/ui/toaster"
 import { useRouter } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { signOut } from 'next-auth/react';
 import { useUserContext } from "@/context/UserContext";
 import { EfilingRouteGuard } from "@/components/EfilingRouteGuard";
+import { useSession } from 'next-auth/react';
 
 export default function EFileLayout({ children }) {
     const [loading, setLoading] = useState(false);
@@ -16,47 +17,77 @@ export default function EFileLayout({ children }) {
     const { setUser } = useUserContext();
     const [notifications, setNotifications] = useState([]);
     const [showDropdown, setShowDropdown] = useState(false);
+    const dropdownRef = useRef(null);
     const router = useRouter();
+    const { data: session } = useSession();
 
     useEffect(() => {
-        // Get e-filing user from localStorage
-        const userData = localStorage.getItem('users');
-        if (userData) {
-            try {
-                const user = JSON.parse(userData);
-                setEfilingUser(user);
-            } catch (error) {
-                console.error('Error parsing user data:', error);
-                localStorage.removeItem('users');
-                router.push('/elogin');
-            }
+        if (session?.user?.id) {
+            setEfilingUser({
+                id: session.user.id,
+                name: session.user.name,
+                email: session.user.email,
+                userType: 'efiling_user'
+            });
         }
-    }, [router]);
+    }, [session]);
 
     useEffect(() => {
         if (!efilingUser?.id) return;
-        // Fetch e-filing specific notifications
+        let mappedEfilingUserId = null;
         const fetchNotifications = async () => {
-            const res = await fetch("/api/notifications?type=efiling");
-            if (res.ok) {
-                const data = await res.json();
-                const filtered = (data.data || []).filter(n => n.user_id === efilingUser.id);
-                setNotifications(filtered);
+            try {
+                // Map Users.id -> efiling_users.id for notifications
+                if (!mappedEfilingUserId) {
+                    const mapRes = await fetch(`/api/efiling/users/profile?userId=${efilingUser.id}`);
+                    if (mapRes.ok) {
+                        const map = await mapRes.json();
+                        mappedEfilingUserId = map?.efiling_user_id || null;
+                    }
+                }
+                const targetId = mappedEfilingUserId || efilingUser.id;
+                const res = await fetch(`/api/efiling/notifications?user_id=${targetId}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    setNotifications(data.notifications || []);
+                }
+            } catch (error) {
+                console.error('Error fetching notifications:', error);
             }
         };
         fetchNotifications();
+        const interval = setInterval(fetchNotifications, 30000);
+        return () => clearInterval(interval);
     }, [efilingUser?.id]);
 
-    // const handleLogout = () => {
-    //     setLoading(true);
-    //     try {
-    //         localStorage.removeItem('efiling_user');
-    //         router.push('/elogin');
-    //     } catch (error) {
-    //         console.error('Logout error:', error);
-    //         setLoading(false);
-    //     }
-    // };
+    // Close dropdown on outside click
+    useEffect(() => {
+        const onClickOutside = (e) => {
+            if (showDropdown && dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+                setShowDropdown(false);
+            }
+        };
+        document.addEventListener('mousedown', onClickOutside);
+        return () => document.removeEventListener('mousedown', onClickOutside);
+    }, [showDropdown]);
+
+    const unreadCount = notifications.filter(n => !n.is_read && !n.is_dismissed).length;
+
+    const toggleDropdown = async () => {
+        const next = !showDropdown;
+        setShowDropdown(next);
+        // When opening, mark all unread as read
+        if (next) {
+            const unread = notifications.filter(n => !n.is_read && !n.is_dismissed);
+            if (unread.length > 0) {
+                try {
+                    await Promise.all(unread.map(n => fetch(`/api/efiling/notifications/${n.id}/read`, { method: 'PUT' })));
+                    setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+                } catch {}
+            }
+        }
+    };
+
     const handleLogout = async () => {
         await signOut({ redirect: false });
         localStorage.removeItem('jwtToken');
@@ -66,19 +97,12 @@ export default function EFileLayout({ children }) {
       };
 
     const handleNotificationClick = async (notif) => {
-        // Mark notification as read
-        await fetch("/api/notifications", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ id: notif.id })
-        });
+        try {
+            await fetch(`/api/efiling/notifications/${notif.id}/read`, { method: 'PUT' });
+        } catch {}
         setNotifications(notifications.filter(n => n.id !== notif.id));
-        
-        // Navigate based on notification type
-        if (notif.type === 'efiling_file' && notif.entity_id) {
-            router.push(`/efilinguser/files/${notif.entity_id}`);
-        } else if (notif.type === 'efiling_assignment' && notif.entity_id) {
-            router.push(`/efilinguser/files/${notif.entity_id}`);
+        if (notif.file_id) {
+            router.push(`/efilinguser/files/${notif.file_id}`);
         }
     };
 
@@ -95,12 +119,10 @@ export default function EFileLayout({ children }) {
                                 <div>
                                     <h1 className="text-2xl font-semibold hidden md:block">KW&SC | E-Filing User Portal</h1>
                                     <h1 className="text-2xl font-bold block md:hidden">E-File User</h1>
-                                    <p className="text-sm text-blue-200 hidden md:block">Personal E-Filing Dashboard</p>
                                 </div>
                             </div>
                         </div>
                         <div className="flex gap-4 items-center">
-                            {/* Quick Actions */}
                             <div className="hidden md:flex gap-2">
                                 <Button 
                                     onClick={() => router.push('/efilinguser/files/new')}
@@ -121,14 +143,12 @@ export default function EFileLayout({ children }) {
                                     My Files
                                 </Button>
                             </div>
-                            
-                            {/* Notification Bell */}
-                            <div className="relative">
-                                <button onClick={() => setShowDropdown(v => !v)} className="relative">
+                            <div className="relative" ref={dropdownRef}>
+                                <button onClick={toggleDropdown} className="relative">
                                     <Bell className="w-6 h-6" />
-                                    {notifications.length > 0 && (
+                                    {unreadCount > 0 && (
                                         <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full px-1">
-                                            {notifications.length}
+                                            {unreadCount}
                                         </span>
                                     )}
                                 </button>
@@ -151,8 +171,6 @@ export default function EFileLayout({ children }) {
                                     </div>
                                 )}
                             </div>
-                            
-                            {/* User Menu */}
                             <div className="flex items-center gap-2">
                                 <div className="hidden md:block text-right">
                                     <div className="text-sm font-medium">{efilingUser?.name || 'User'}</div>

@@ -4,7 +4,7 @@ import { connectToDatabase } from '@/lib/db';
 export async function GET(request, { params }) {
     let client;
     try {
-        const { id } = params;
+        const { id } = await params;
         
         if (!id) {
             return NextResponse.json(
@@ -23,6 +23,7 @@ export async function GET(request, { params }) {
                 file_name,
                 file_size,
                 file_type,
+                file_url,
                 uploaded_by,
                 uploaded_at,
                 is_active

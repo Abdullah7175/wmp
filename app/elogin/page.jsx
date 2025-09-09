@@ -26,14 +26,16 @@ export default function EFileLoginPage() {
   const { toast } = useToast();
   const { data: session, status } = useSession();
   const [showPassword, setShowPassword] = React.useState(false);
+  const [hasRedirected, setHasRedirected] = React.useState(false);
 
   // Redirect authenticated users away from /elogin based on their role
   React.useEffect(() => {
-    if (status === "authenticated" && session?.user) {
+    if (status === "authenticated" && session?.user && !hasRedirected) {
+      setHasRedirected(true);
       // Check user role and redirect accordingly
       checkUserRoleAndRedirect(session.user);
     }
-  }, [session, status]);
+  }, [session, status, hasRedirected]);
 
   const checkUserRoleAndRedirect = async (user) => {
     try {
@@ -90,7 +92,10 @@ export default function EFileLoginPage() {
         if (result?.ok) {
           // After successful login, check user role and redirect accordingly
           setTimeout(() => {
-            checkUserRoleAndRedirect(result.user || session?.user);
+            if (!hasRedirected) {
+              setHasRedirected(true);
+              checkUserRoleAndRedirect(result.user || session?.user);
+            }
           }, 1000);
         }
       } catch (error) {
@@ -265,4 +270,4 @@ export default function EFileLoginPage() {
     </div>
     </div>
   );
-} 
+}

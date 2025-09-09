@@ -169,14 +169,14 @@ export function EFileSidebar() {
             </nav>
             
             <div className="mt-auto p-2 border-t border-blue-800">
-                <Button 
+                {/* <Button 
                     variant="ghost" 
                     onClick={handleLogout}
                     className="w-full text-blue-300 hover:text-white hover:bg-blue-800 mb-2"
                 >
                     <LogOut className="w-4 h-4 mr-2" />
                     {!collapsed && <span>Logout</span>}
-                </Button>
+                </Button> */}
                 <Button variant="ghost" size="icon" onClick={toggleSidebar} className="text-blue-300 hover:text-white w-full">
                     {collapsed ? <ChevronRight /> : <ChevronLeft />}
                 </Button>

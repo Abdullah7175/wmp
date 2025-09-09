@@ -19,6 +19,8 @@ export default function EditFileType() {
     const [loading, setLoading] = useState(false);
     const [initialLoading, setInitialLoading] = useState(true);
     const [departments, setDepartments] = useState([]);
+    const [roles, setRoles] = useState([]);
+    const [selectedCreators, setSelectedCreators] = useState([]);
 
     const [formData, setFormData] = useState({
         name: '',
@@ -40,7 +42,7 @@ export default function EditFileType() {
 
     const loadDependencies = async () => {
         try {
-            await loadDepartments();
+            await Promise.all([loadDepartments(), loadRoles()]);
         } catch (error) {
             console.error('Error loading dependencies:', error);
         }
@@ -65,6 +67,8 @@ export default function EditFileType() {
                     workflow_template_id: fileType.workflow_template_id || '',
                     is_active: fileType.is_active !== undefined ? fileType.is_active : true
                 });
+                const cr = Array.isArray(fileType.can_create_roles) ? fileType.can_create_roles : (()=>{ try { return JSON.parse(fileType.can_create_roles||'[]'); } catch { return []; }})();
+                setSelectedCreators(cr);
             } else {
                 throw new Error('Failed to load file type');
             }
@@ -91,6 +95,18 @@ export default function EditFileType() {
             }
         } catch (error) {
             console.error('Error loading departments:', error);
+        }
+    };
+
+    const loadRoles = async () => {
+        try {
+            const response = await fetch('/api/efiling/roles?is_active=true');
+            if (response.ok) {
+                const data = await response.json();
+                setRoles(data.roles || []);
+            }
+        } catch (error) {
+            console.error('Error loading roles:', error);
         }
     };
 
@@ -140,7 +156,8 @@ export default function EditFileType() {
         try {
             const requestBody = {
                 ...formData,
-                id: params.id
+                id: params.id,
+                can_create_roles: selectedCreators
             };
             console.log('Submitting form data:', requestBody);
             
@@ -283,6 +300,24 @@ export default function EditFileType() {
                                 placeholder="Enter file type description"
                                 rows={3}
                             />
+                        </div>
+
+                        {/* Creator roles */}
+                        <div>
+                            <Label>Who can create (select roles)</Label>
+                            <div className="max-h-64 overflow-y-auto border rounded p-3 grid grid-cols-1 md:grid-cols-2 gap-2">
+                                {roles.map((r) => (
+                                    <label key={r.id} className="flex items-center gap-2 text-sm">
+                                        <input
+                                            type="checkbox"
+                                            className="h-4 w-4"
+                                            checked={selectedCreators.includes(r.code)}
+                                            onChange={() => setSelectedCreators(prev => prev.includes(r.code) ? prev.filter(c => c !== r.code) : [...prev, r.code])}
+                                        />
+                                        <span>{r.name} ({r.code})</span>
+                                    </label>
+                                ))}
+                            </div>
                         </div>
 
                         {/* Configuration Options */}

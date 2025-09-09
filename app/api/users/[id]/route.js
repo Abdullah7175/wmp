@@ -5,7 +5,7 @@ import { getServerSession } from 'next-auth/next';
 export async function GET(request, { params }) {
     let client;
     try {
-        const { id } = params;
+        const { id } = await params;
         
         if (!id) {
             return NextResponse.json(

@@ -322,8 +322,8 @@ export default function UserProfile() {
                         </CardHeader>
                         <CardContent>
                             {recentActivities.length === 0 ? (
-                                <div className="text-center py-8 text-gray-500">
-                                    <Activity className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+                            <div className="text-center py-8 text-gray-500">
+                                <Activity className="w-12 h-12 mx-auto mb-4 text-gray-300" />
                                     <p>No recent activity found</p>
                                     <p className="text-sm">Your actions will appear here as you use the system</p>
                                 </div>
@@ -359,7 +359,7 @@ export default function UserProfile() {
                                             </div>
                                         </div>
                                     ))}
-                                </div>
+                            </div>
                             )}
                         </CardContent>
                     </Card>

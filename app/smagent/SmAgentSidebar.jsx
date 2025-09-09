@@ -2,6 +2,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { List, Image as ImageIcon, Video, Download, Upload, Home } from "lucide-react";
 import { useSession } from "next-auth/react";
+import { useEffect } from "react";
 
 // Role mapping function (same as in page.js)
 const getRoleDisplay = (roleId) => {
@@ -27,13 +28,17 @@ export function SmAgentSidebar() {
   const { data: session, status } = useSession();
   
   // Get user role from session with better debugging
-  const userRole = session?.user?.role;
+  // const userRole = session?.user?.role;
+  const userRole = status === "authenticated" ? session?.user?.role : null;
   
   // Debug logging
-  console.log("Session status:", status);
-  console.log("Full session:", session);
-  console.log("Session user:", session?.user);
-  console.log("userRole in SmAgentSidebar:", userRole, typeof userRole);
+  useEffect(() => {
+    if (status === "loading") return;
+    const debugEnabled = process.env.NODE_ENV !== 'production' || typeof window !== 'undefined' && window.localStorage?.getItem('DEBUG') === '1';
+    if (!debugEnabled) return;
+    // eslint-disable-next-line no-console
+    console.log("SmAgentSidebar session status:", status, "user:", session?.user, "role:", userRole);
+  }, [status, session, userRole]);
   
   // Base links for all social media agents
   const baseLinks = [
@@ -87,7 +92,8 @@ export function SmAgentSidebar() {
   const links = isSpecialRole(userRole) ? [...baseLinks, ...specialLinks] : baseLinks;
 
   const getRoleDisplayText = () => {
-    if (!userRole) return "Loading...";
+    if (status === "loading") return "Loading...";
+    if (status !== "authenticated") return "Not signed in";
     return getRoleDisplay(userRole);
   };
 

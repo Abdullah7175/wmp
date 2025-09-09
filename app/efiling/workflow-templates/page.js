@@ -155,7 +155,7 @@ export default function WorkflowTemplates() {
                                             <TableCell>
                                                 <div className="flex items-center">
                                                     <Clock className="w-4 h-4 mr-1" />
-                                                    {template.stages_count || 0} stages
+                                                    {template.stage_count || 0} stages
                                                 </div>
                                             </TableCell>
                                             <TableCell className="max-w-xs truncate">

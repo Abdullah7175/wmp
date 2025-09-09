@@ -96,6 +96,33 @@ export async function POST(request, { params }) {
             RETURNING *
         `, [id, user_id, user_name, user_role, type, content, position, font]);
 
+        // Notify creator and current assignee
+        try {
+            const meta = await client.query(`
+                SELECT f.created_by, wf.current_assignee_id
+                FROM efiling_files f
+                LEFT JOIN efiling_file_workflows wf ON wf.file_id = f.id
+                WHERE f.id = $1
+            `, [id]);
+            const createdBy = meta.rows[0]?.created_by;
+            const currentAssignee = meta.rows[0]?.current_assignee_id;
+            const message = `${user_name} added a ${type} signature`;
+            if (createdBy) {
+                await client.query(`
+                    INSERT INTO efiling_notifications (user_id, file_id, type, message, priority, action_required, created_at)
+                    VALUES ($1, $2, $3, $4, 'low', false, NOW())
+                `, [createdBy, id, 'signature_added', message]);
+            }
+            if (currentAssignee && currentAssignee !== createdBy && currentAssignee !== user_id) {
+                await client.query(`
+                    INSERT INTO efiling_notifications (user_id, file_id, type, message, priority, action_required, created_at)
+                    VALUES ($1, $2, $3, $4, 'low', false, NOW())
+                `, [currentAssignee, id, 'signature_added', message]);
+            }
+        } catch (e) {
+            console.warn('Signature notify failed', e);
+        }
+
         // Log the action
         await logAction({
             user_id,

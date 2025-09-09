@@ -20,30 +20,6 @@ export const metadata = {
   description: "Karachi Water & Sewerage Corporation",
 };
 
-// export default function RootLayout({ children }) {
-//   return (
-//     <html lang="en">
-//       <body
-//         className={`${poppins.variable} ${poppins.variable} antialiased`}
-//       >
-//         {children}
-//       </body>
-//     </html>
-//   );
-// }
-// export default function RootLayout({ children }) {
-//   return (
-//     <html lang="en">
-//       <body className={`${poppins.variable} antialiased`}>
-//         <UserProvider>
-//           <ToastProvider>
-//             {children}
-//           </ToastProvider>
-//         </UserProvider>
-//       </body>
-//     </html>
-//   );
-// }
 export default function RootLayout({ children }) {
   return (
     <html lang="en">

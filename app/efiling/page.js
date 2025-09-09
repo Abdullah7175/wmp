@@ -38,6 +38,9 @@ export default function EFileDashboard() {
     });
     const [recentFiles, setRecentFiles] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [createdCount, setCreatedCount] = useState(0);
+    const [assignedCount, setAssignedCount] = useState(0);
+    const [recentActivity, setRecentActivity] = useState([]);
 
     useEffect(() => {
         if (session?.user?.id) {
@@ -68,6 +71,22 @@ export default function EFileDashboard() {
                 setRecentFiles(filesArray.slice(0, 5));
             }
 
+            // Created vs Assigned counts for current user
+            if (session?.user?.id) {
+                try {
+                    const [createdRes, assignedRes] = await Promise.all([
+                        fetch(`/api/efiling/files?created_by=${session.user.id}`),
+                        fetch(`/api/efiling/files?assigned_to=${session.user.id}`)
+                    ]);
+                    const createdData = createdRes.ok ? await createdRes.json() : { files: [] };
+                    const assignedData = assignedRes.ok ? await assignedRes.json() : { files: [] };
+                    setCreatedCount((createdData.files || []).length);
+                    setAssignedCount((assignedData.files || []).length);
+                } catch (e) {
+                    console.warn('Could not load created/assigned counts');
+                }
+            }
+
             // Fetch users count
             try {
                 const usersResponse = await fetch('/api/efiling/users?is_active=true');
@@ -88,6 +107,17 @@ export default function EFileDashboard() {
                 }
             } catch (error) {
                 console.error('Error fetching departments:', error);
+            }
+                
+            // Fetch recent activity
+            try {
+                const actRes = await fetch('/api/efiling/user-actions?limit=10');
+                if (actRes.ok) {
+                    const actions = await actRes.json();
+                    setRecentActivity(actions || []);
+                }
+            } catch (e) {
+                console.warn('Could not load recent activity');
             }
                 
             } catch (error) {
@@ -149,6 +179,12 @@ export default function EFileDashboard() {
             <div className="mb-8">
                 <h1 className="text-4xl font-bold text-gray-900 mb-2">E-Filing Dashboard</h1>
                 <p className="text-xl text-gray-600">Welcome to the Karachi Water and Sewerage Corporation E-Filing System</p>
+                {session?.user?.id && (
+                    <div className="flex items-center gap-3 mt-3">
+                        <Badge variant="outline">Created by you: {createdCount}</Badge>
+                        <Badge variant="outline">Assigned to you: {assignedCount}</Badge>
+                    </div>
+                )}
             </div>
 
             {/* Quick Actions */}
@@ -292,23 +328,25 @@ export default function EFileDashboard() {
                         </CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <div className="space-y-3">
-                            <div className="flex items-center space-x-3 text-sm">
-                                <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                                <span className="text-gray-600">New file created</span>
-                                <span className="text-gray-400">2 hours ago</span>
-                            </div>
-                            <div className="flex items-center space-x-3 text-sm">
-                                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                                <span className="text-gray-600">Document signed</span>
-                                <span className="text-gray-400">4 hours ago</span>
-                            </div>
-                            <div className="flex items-center space-x-3 text-sm">
-                                <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
-                                <span className="text-gray-600">File marked for approval</span>
-                                <span className="text-gray-400">6 hours ago</span>
+                        {recentActivity.length === 0 ? (
+                            <div className="text-sm text-gray-500">No recent activity</div>
+                        ) : (
+                            <div className="space-y-3">
+                                {recentActivity.map((a) => (
+                                    <div key={a.id} className="flex items-center justify-between text-sm">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                                            <span className="text-gray-800 font-medium">{a.user_name}</span>
+                                            <span className="text-gray-600">{a.action_type.replace('_', ' ')}</span>
+                                            {a.file_number && (
+                                                <span className="text-gray-500">on {a.file_number}</span>
+                                            )}
+                                        </div>
+                                        <span className="text-gray-400">{new Date(a.timestamp || a.created_at).toLocaleString()}</span>
                                     </div>
-                        </div>
+                                ))}
+                            </div>
+                        )}
                     </CardContent>
                 </Card>
             </div>
@@ -355,6 +393,17 @@ export default function EFileDashboard() {
                                     </div>
                                     <div className="flex items-center space-x-4">
                                         {getStatusBadge(file.status_code)}
+                                        {file.assigned_to_role_name && (
+                                            <Badge variant="secondary">{file.assigned_to_role_name}</Badge>
+                                        )}
+                                        {file.sla_breached && (
+                                            <Badge variant="destructive">Overdue</Badge>
+                                        )}
+                                        {file.sla_deadline && (
+                                            <span className={`text-sm ${file.sla_breached ? 'text-red-600' : 'text-gray-500'}`}>
+                                                Due: {new Date(file.sla_deadline).toLocaleDateString()}
+                                            </span>
+                                        )}
                                         <span className="text-sm text-gray-500">
                                             {new Date(file.created_at).toLocaleDateString()}
                                         </span>

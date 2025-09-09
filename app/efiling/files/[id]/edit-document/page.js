@@ -81,10 +81,13 @@ export default function DocumentEditor() {
             setUserRole(role);
             
             // Determine if user can edit document
-            const canEdit = role === 'superadmin' || 
-                           role === 'CEO' || 
-                           role === 'Chief IT Officer' || 
-                           (file && file.created_by === session.user.id);
+            // Allow editing for admin users (role 1) or file creators
+            // Note: file.created_by is efiling_users.id, session.user.id is users.id
+            // We need to check if the current user is the file creator by mapping the IDs
+            const canEdit = role === 1; // Admin can always edit
+            
+            // For non-admin users, we'll need to check if they're the file creator
+            // This will be handled by the API when we fetch the user's efiling_users.id
             setCanEditDocument(canEdit);
         }
     }, [session, file]);
@@ -102,6 +105,29 @@ export default function DocumentEditor() {
                         ...prev,
                         ...fileData.document_content
                     }));
+                }
+                
+                // Check if current user is the file creator
+                if (session?.user?.id) {
+                    const userMappingRes = await fetch(`/api/efiling/users/profile?userId=${session.user.id}`);
+                    if (userMappingRes.ok) {
+                        const userMapping = await userMappingRes.json();
+                        const efilingUserId = userMapping.efiling_user_id;
+                        
+                        // Update canEditDocument based on whether user is the file creator
+                        const isFileCreator = fileData.created_by === efilingUserId;
+                        const isAdmin = session.user.role === 1;
+                        setCanEditDocument(isAdmin || isFileCreator);
+                        
+                        console.log('Edit access check:', {
+                            userId: session.user.id,
+                            efilingUserId: efilingUserId,
+                            fileCreatedBy: fileData.created_by,
+                            isAdmin: isAdmin,
+                            isFileCreator: isFileCreator,
+                            canEdit: isAdmin || isFileCreator
+                        });
+                    }
                 }
             } else {
                 toast({
@@ -617,257 +643,7 @@ export default function DocumentEditor() {
                 </div>
 
                 {/* Formatting Toolbar */}
-                <div className="border-t border-gray-200 p-2">
-                    <div className="flex items-center space-x-2 flex-wrap">
-                        <Label className="text-sm font-medium">Formatting:</Label>
-                        
-                        {/* Text Formatting */}
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => applyFormatting('bold')}
-                            title="Bold"
-                            className="font-bold"
-                        >
-                            B
-                        </Button>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => applyFormatting('italic')}
-                            title="Italic"
-                            className="italic"
-                        >
-                            I
-                        </Button>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => applyFormatting('underline')}
-                            title="Underline"
-                            className="underline"
-                        >
-                            U
-                        </Button>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => applyFormatting('strikethrough')}
-                            title="Strikethrough"
-                            className="line-through"
-                        >
-                            T
-                        </Button>
-
-                        {/* Font Controls */}
-                        <Select onValueChange={(value) => applyFormatting('font', value)}>
-                            <SelectTrigger className="w-32 h-8">
-                                <SelectValue placeholder="Font" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="Arial">Arial</SelectItem>
-                                <SelectItem value="Times New Roman">Times New Roman</SelectItem>
-                                <SelectItem value="Courier New">Courier New</SelectItem>
-                                <SelectItem value="Georgia">Georgia</SelectItem>
-                                <SelectItem value="Verdana">Verdana</SelectItem>
-                            </SelectContent>
-                        </Select>
-
-                        <Select onValueChange={(value) => applyFormatting('size', value)}>
-                            <SelectTrigger className="w-20 h-8">
-                                <SelectValue placeholder="Size" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="12px">12px</SelectItem>
-                                <SelectItem value="14px">14px</SelectItem>
-                                <SelectItem value="16px">16px</SelectItem>
-                                <SelectItem value="18px">18px</SelectItem>
-                                <SelectItem value="20px">20px</SelectItem>
-                                <SelectItem value="24px">24px</SelectItem>
-                            </SelectContent>
-                        </Select>
-
-                        {/* Color Controls */}
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => applyFormatting('color')}
-                            title="Text Color"
-                        >
-                            🎨
-                        </Button>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => applyFormatting('highlight')}
-                            title="Highlight"
-                        >
-                            🖍️
-                        </Button>
-
-                        {/* Alignment */}
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => applyFormatting('align', 'left')}
-                            title="Left Align"
-                        >
-                            ⬅️
-                        </Button>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => applyFormatting('align', 'center')}
-                            title="Center Align"
-                        >
-                            ↔️
-                        </Button>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => applyFormatting('align', 'right')}
-                            title="Right Align"
-                        >
-                            ➡️
-                        </Button>
-
-                        {/* Lists */}
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => applyFormatting('bullet')}
-                            title="Bullet List"
-                        >
-                            •
-                        </Button>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => applyFormatting('number')}
-                            title="Numbered List"
-                        >
-                            1.
-                        </Button>
-
-                        {/* Indentation */}
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => applyFormatting('indent')}
-                            title="Indent"
-                        >
-                            →
-                        </Button>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => applyFormatting('outdent')}
-                            title="Outdent"
-                        >
-                            ←
-                        </Button>
-
-                        {/* Case Controls */}
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => applyFormatting('capitalize')}
-                            title="Capitalize Words"
-                        >
-                            Aa
-                        </Button>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => applyFormatting('uppercase')}
-                            title="Uppercase"
-                        >
-                            AA
-                        </Button>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => applyFormatting('lowercase')}
-                            title="Lowercase"
-                        >
-                            aa
-                        </Button>
-
-                        {/* Other Tools */}
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => applyFormatting('find')}
-                            title="Find"
-                        >
-                            🔍
-                        </Button>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => applyFormatting('speech')}
-                            title="Speech to Text"
-                        >
-                            🎤
-                        </Button>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => applyFormatting('table')}
-                            title="Insert Table"
-                        >
-                            ⊞
-                        </Button>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => applyFormatting('image')}
-                            title="Insert Image"
-                        >
-                            🖼️
-                        </Button>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => applyFormatting('link')}
-                            title="Insert Link"
-                        >
-                            🔗
-                        </Button>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => applyFormatting('unlink')}
-                            title="Remove Link"
-                        >
-                            🔓
-                        </Button>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => applyFormatting('undo')}
-                            title="Undo"
-                        >
-                            ↩️
-                        </Button>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => applyFormatting('redo')}
-                            title="Redo"
-                        >
-                            ↪️
-                        </Button>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => applyFormatting('clear')}
-                            title="Clear Formatting"
-                        >
-                            T
-                        </Button>
-                    </div>
-                </div>
+                {/*  */}
             </div>
 
             {/* Main Content */}

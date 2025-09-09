@@ -59,6 +59,28 @@ export default function DocumentEditor() {
         logo: ''
     });
 
+    const [pages, setPages] = useState([
+        {
+            id: 1,
+            pageNumber: 1,
+            title: 'Main Document',
+            content: {
+                header: '',
+                title: '',
+                subject: '',
+                date: new Date().toLocaleDateString(),
+                matter: '',
+                regards: '',
+                footer: '',
+                customHeader: '',
+                customRegards: '',
+                logo: ''
+            },
+            type: 'MAIN'
+        }
+    ]);
+    const [currentPageId, setCurrentPageId] = useState(1);
+
     const [documentTemplates] = useState([
         { id: 1, name: 'Official Letter', type: 'letter' },
         { id: 2, name: 'Internal Memo', type: 'memo' },
@@ -76,18 +98,36 @@ export default function DocumentEditor() {
     // Check user permissions
     useEffect(() => {
         if (session?.user) {
-            // Get user role from session or database
             const role = session.user.role || 'user';
             setUserRole(role);
-            
-            // Determine if user can edit document
-            const canEdit = role === 'superadmin' || 
-                           role === 'CEO' || 
-                           role === 'Chief IT Officer' || 
-                           (file && file.created_by === session.user.id);
+            const canEdit = role === 1;
             setCanEditDocument(canEdit);
         }
     }, [session, file]);
+
+    useEffect(() => {
+        if (!loading && file && session?.user?.id) {
+            (async () => {
+                try {
+                    const mapRes = await fetch(`/api/efiling/users/profile?userId=${session.user.id}`);
+                    if (mapRes.ok) {
+                        const map = await mapRes.json();
+                        const efilingUserId = map?.efiling_user_id;
+                        const isAdmin = session.user.role === 1;
+                        const isCreator = file.created_by === efilingUserId;
+                        const allowed = isAdmin || isCreator;
+                        setCanEditDocument(allowed);
+                        if (!allowed) {
+                            router.replace(`/efilinguser/files/${params.id}`);
+                        }
+                    }
+                } catch (e) {
+                    // If mapping fails, be safe and block edit
+                    router.replace(`/efilinguser/files/${params.id}`);
+                }
+            })();
+        }
+    }, [loading, file, session?.user?.id]);
 
     const fetchFile = async () => {
         try {
@@ -96,12 +136,53 @@ export default function DocumentEditor() {
                 const fileData = await response.json();
                 setFile(fileData);
                 
-                // Load existing document content if available
-                if (fileData.document_content) {
+                // Fetch document content and pages
+                const docResponse = await fetch(`/api/efiling/files/${params.id}/document`);
+                if (docResponse.ok) {
+                    const docData = await docResponse.json();
+                    
+                    // Load pages if they exist
+                    if (docData.pages && docData.pages.length > 0) {
+                        const loadedPages = docData.pages.map(page => ({
+                            id: page.id,
+                            pageNumber: page.pageNumber,
+                            title: page.title,
+                            content: page.content,
+                            type: page.type
+                        }));
+                        setPages(loadedPages);
+                        setCurrentPageId(loadedPages[0].id);
+                        console.log('Loaded pages:', loadedPages);
+                    } else if (docData.document_content) {
+                        // Fallback to single page with document content
                     setDocumentContent(prev => ({
                         ...prev,
-                        ...fileData.document_content
-                    }));
+                            ...docData.document_content
+                        }));
+                    }
+                }
+                
+                // Check if current user is the file creator
+                if (session?.user?.id) {
+                    const userMappingRes = await fetch(`/api/efiling/users/profile?userId=${session.user.id}`);
+                    if (userMappingRes.ok) {
+                        const userMapping = await userMappingRes.json();
+                        const efilingUserId = userMapping.efiling_user_id;
+                        
+                        // Update canEditDocument based on whether user is the file creator
+                        const isFileCreator = fileData.created_by === efilingUserId;
+                        const isAdmin = session.user.role === 1;
+                        setCanEditDocument(isAdmin || isFileCreator);
+                        
+                        console.log('Edit access check:', {
+                            userId: session.user.id,
+                            efilingUserId: efilingUserId,
+                            fileCreatedBy: fileData.created_by,
+                            isAdmin: isAdmin,
+                            isFileCreator: isFileCreator,
+                            canEdit: isAdmin || isFileCreator
+                        });
+                    }
                 }
             } else {
                 toast({
@@ -131,21 +212,25 @@ export default function DocumentEditor() {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    file_id: params.id,
-                    content: documentContent,
-                    version: 1
+                    content: getCurrentPage().content,
+                    pages: pages,
+                    template: selectedTemplate
                 }),
             });
 
             if (response.ok) {
+                const result = await response.json();
                 toast({
                     title: "Success",
                     description: "Document saved successfully",
                 });
+                console.log('Document saved:', result);
             } else {
+                const errorData = await response.json();
+                console.error('Save error:', errorData);
                 toast({
                     title: "Error",
-                    description: "Failed to save document",
+                    description: errorData.error || "Failed to save document",
                     variant: "destructive",
                 });
             }
@@ -165,70 +250,146 @@ export default function DocumentEditor() {
         setShowMarkToModal(true);
     };
 
+    const addNewPage = () => {
+        const newPageId = Math.max(...pages.map(p => p.id)) + 1;
+        const newPageNumber = Math.max(...pages.map(p => p.pageNumber)) + 1;
+        
+        const newPage = {
+            id: newPageId,
+            pageNumber: newPageNumber,
+            title: `Page ${newPageNumber}`,
+            content: {
+                header: '',
+                title: '',
+                subject: '',
+                date: new Date().toLocaleDateString(),
+                matter: '',
+                regards: '',
+                footer: '',
+            customHeader: '',
+            customRegards: '',
+                logo: ''
+            },
+            type: 'ATTACHMENT'
+        };
+        
+        setPages(prev => [...prev, newPage]);
+        setCurrentPageId(newPageId);
+        
+        toast({
+            title: "New Page Added",
+            description: `Page ${newPageNumber} has been added to the document`,
+        });
+    };
+
+    const deletePage = (pageId) => {
+        if (pages.length <= 1) {
+            toast({
+                title: "Cannot Delete",
+                description: "At least one page must remain in the document",
+                variant: "destructive",
+            });
+            return;
+        }
+        
+        const pageToDelete = pages.find(p => p.id === pageId);
+        setPages(prev => prev.filter(p => p.id !== pageId));
+        
+        // If we're deleting the current page, switch to the first remaining page
+        if (currentPageId === pageId) {
+            const remainingPages = pages.filter(p => p.id !== pageId);
+            setCurrentPageId(remainingPages[0].id);
+        }
+        
+        toast({
+            title: "Page Deleted",
+            description: `${pageToDelete.title} has been removed from the document`,
+        });
+    };
+
+    const updatePageTitle = (pageId, newTitle) => {
+        setPages(prev => prev.map(p => 
+            p.id === pageId ? { ...p, title: newTitle } : p
+        ));
+    };
+
+    const getCurrentPage = () => {
+        return pages.find(p => p.id === currentPageId) || pages[0];
+    };
+
+    const updateCurrentPageContent = (content) => {
+        setPages(prev => prev.map(p => 
+            p.id === currentPageId ? { ...p, content: { ...p.content, ...content } } : p
+        ));
+    };
+
     const selectTemplate = (templateId) => {
         setSelectedTemplate(templateId);
         
-        // Clear custom fields when template changes
-        setDocumentContent(prev => ({
-            ...prev,
-            customHeader: '',
-            customRegards: '',
-            logo: '' // Clear logo when template changes
-        }));
+        const currentPage = getCurrentPage();
         
-        // Apply template-specific content
+        // Apply template-specific content to current page
+        let templateContent = {};
+        
         switch (templateId) {
             case 1: // Official Letter
-                setDocumentContent(prev => ({
-                    ...prev,
+                templateContent = {
                     header: 'Karachi Water and Sewerage Corporation',
                     title: 'Official Letter',
                     subject: '',
                     date: new Date().toLocaleDateString(),
                     matter: '',
                     regards: 'Yours faithfully,',
-                    footer: 'KWSC - Official Communication'
-                }));
+                    footer: 'KWSC - Official Communication',
+                    customHeader: '',
+                    customRegards: '',
+                    logo: ''
+                };
                 break;
             case 2: // Internal Memo
-                setDocumentContent(prev => ({
-                    ...prev,
+                templateContent = {
                     header: 'KWSC Internal Memorandum',
                     title: 'Internal Memo',
                     subject: '',
                     date: new Date().toLocaleDateString(),
                     matter: '',
                     regards: 'Best regards,',
-                    footer: 'KWSC Internal Communication'
-                }));
+                    footer: 'KWSC Internal Communication',
+                    customHeader: '',
+                    customRegards: '',
+                    logo: ''
+                };
                 break;
             case 3: // Project Proposal
-                setDocumentContent(prev => ({
-                    ...prev,
+                templateContent = {
                     header: 'KWSC Project Proposal',
                     title: 'Project Proposal',
                     subject: '',
                     date: new Date().toLocaleDateString(),
                     matter: '',
                     regards: 'Sincerely,',
-                    footer: 'KWSC Project Management'
-                }));
+                    footer: 'KWSC Project Management',
+                    customHeader: '',
+                    customRegards: '',
+                    logo: ''
+                };
                 break;
             case 4: // Work Order
-                setDocumentContent(prev => ({
-                    ...prev,
+                templateContent = {
                     header: 'KWSC Work Order',
                     title: 'Work Order',
                     subject: '',
                     date: new Date().toLocaleDateString(),
                     matter: '',
                     regards: 'Authorized by,',
-                    footer: 'KWSC Engineering Department'
-                }));
+                    footer: 'KWSC Engineering Department',
+                    customHeader: '',
+                    customRegards: '',
+                    logo: ''
+                };
                 break;
             case 5: // Custom Document
-                setDocumentContent(prev => ({
-                    ...prev,
+                templateContent = {
                     header: 'Custom Header',
                     title: '',
                     subject: '',
@@ -236,16 +397,21 @@ export default function DocumentEditor() {
                     matter: '',
                     regards: 'Custom Regards',
                     footer: '',
-                    logo: '' // Clear logo for custom document
-                }));
+                    customHeader: '',
+                    customRegards: '',
+                    logo: ''
+                };
                 break;
             default:
-                break;
+                return;
         }
+        
+        // Update current page content
+        updateCurrentPageContent(templateContent);
         
         toast({
             title: "Template Applied",
-            description: "Document template has been applied successfully",
+            description: "Document template has been applied to current page",
         });
     };
 
@@ -569,9 +735,46 @@ export default function DocumentEditor() {
                     </div>
                 </div>
 
-                {/* Template Buttons */}
+                {/* Page Tabs */}
                 <div className="border-t border-gray-200 p-2">
+                    <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-2 flex-wrap">
+                            <Label className="text-sm font-medium">Pages:</Label>
+                            {pages.map((page) => (
+                                <div key={page.id} className="flex items-center space-x-1">
+                                    <Button
+                                        variant={currentPageId === page.id ? "default" : "outline"}
+                                        size="sm"
+                                        onClick={() => setCurrentPageId(page.id)}
+                                        className="flex items-center space-x-1"
+                                    >
+                                        <span>{page.title}</span>
+                                    </Button>
+                                    {pages.length > 1 && (
+                                        <button
+                                            onClick={() => deletePage(page.id)}
+                                            className="ml-1 text-red-500 hover:text-red-700 text-sm font-bold w-5 h-5 flex items-center justify-center rounded-full hover:bg-red-100"
+                                            disabled={!canEditDocument}
+                                            title="Delete page"
+                                        >
+                                            ×
+                                        </button>
+                                    )}
+                                </div>
+                            ))}
+                            {canEditDocument && (
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={addNewPage}
+                                    className="text-green-600 border-green-600 hover:bg-green-50"
+                                >
+                                    + Add Page
+                                </Button>
+                            )}
+                        </div>
+                        
+                        <div className="flex items-center space-x-2">
                         <Label className="text-sm font-medium">Templates:</Label>
                         <Button
                             variant={selectedTemplate === 1 ? "default" : "outline"}
@@ -613,261 +816,12 @@ export default function DocumentEditor() {
                         >
                             📋 Custom
                         </Button>
+                        </div>
                     </div>
                 </div>
 
                 {/* Formatting Toolbar */}
-                <div className="border-t border-gray-200 p-2">
-                    <div className="flex items-center space-x-2 flex-wrap">
-                        <Label className="text-sm font-medium">Formatting:</Label>
-                        
-                        {/* Text Formatting */}
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => applyFormatting('bold')}
-                            title="Bold"
-                            className="font-bold"
-                        >
-                            B
-                        </Button>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => applyFormatting('italic')}
-                            title="Italic"
-                            className="italic"
-                        >
-                            I
-                        </Button>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => applyFormatting('underline')}
-                            title="Underline"
-                            className="underline"
-                        >
-                            U
-                        </Button>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => applyFormatting('strikethrough')}
-                            title="Strikethrough"
-                            className="line-through"
-                        >
-                            T
-                        </Button>
-
-                        {/* Font Controls */}
-                        <Select onValueChange={(value) => applyFormatting('font', value)}>
-                            <SelectTrigger className="w-32 h-8">
-                                <SelectValue placeholder="Font" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="Arial">Arial</SelectItem>
-                                <SelectItem value="Times New Roman">Times New Roman</SelectItem>
-                                <SelectItem value="Courier New">Courier New</SelectItem>
-                                <SelectItem value="Georgia">Georgia</SelectItem>
-                                <SelectItem value="Verdana">Verdana</SelectItem>
-                            </SelectContent>
-                        </Select>
-
-                        <Select onValueChange={(value) => applyFormatting('size', value)}>
-                            <SelectTrigger className="w-20 h-8">
-                                <SelectValue placeholder="Size" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="12px">12px</SelectItem>
-                                <SelectItem value="14px">14px</SelectItem>
-                                <SelectItem value="16px">16px</SelectItem>
-                                <SelectItem value="18px">18px</SelectItem>
-                                <SelectItem value="20px">20px</SelectItem>
-                                <SelectItem value="24px">24px</SelectItem>
-                            </SelectContent>
-                        </Select>
-
-                        {/* Color Controls */}
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => applyFormatting('color')}
-                            title="Text Color"
-                        >
-                            🎨
-                        </Button>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => applyFormatting('highlight')}
-                            title="Highlight"
-                        >
-                            🖍️
-                        </Button>
-
-                        {/* Alignment */}
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => applyFormatting('align', 'left')}
-                            title="Left Align"
-                        >
-                            ⬅️
-                        </Button>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => applyFormatting('align', 'center')}
-                            title="Center Align"
-                        >
-                            ↔️
-                        </Button>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => applyFormatting('align', 'right')}
-                            title="Right Align"
-                        >
-                            ➡️
-                        </Button>
-
-                        {/* Lists */}
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => applyFormatting('bullet')}
-                            title="Bullet List"
-                        >
-                            •
-                        </Button>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => applyFormatting('number')}
-                            title="Numbered List"
-                        >
-                            1.
-                        </Button>
-
-                        {/* Indentation */}
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => applyFormatting('indent')}
-                            title="Indent"
-                        >
-                            →
-                        </Button>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => applyFormatting('outdent')}
-                            title="Outdent"
-                        >
-                            ←
-                        </Button>
-
-                        {/* Case Controls */}
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => applyFormatting('capitalize')}
-                            title="Capitalize Words"
-                        >
-                            Aa
-                        </Button>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => applyFormatting('uppercase')}
-                            title="Uppercase"
-                        >
-                            AA
-                        </Button>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => applyFormatting('lowercase')}
-                            title="Lowercase"
-                        >
-                            aa
-                        </Button>
-
-                        {/* Other Tools */}
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => applyFormatting('find')}
-                            title="Find"
-                        >
-                            🔍
-                        </Button>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => applyFormatting('speech')}
-                            title="Speech to Text"
-                        >
-                            🎤
-                        </Button>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => applyFormatting('table')}
-                            title="Insert Table"
-                        >
-                            ⊞
-                        </Button>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => applyFormatting('image')}
-                            title="Insert Image"
-                        >
-                            🖼️
-                        </Button>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => applyFormatting('link')}
-                            title="Insert Link"
-                        >
-                            🔗
-                        </Button>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => applyFormatting('unlink')}
-                            title="Remove Link"
-                        >
-                            🔓
-                        </Button>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => applyFormatting('undo')}
-                            title="Undo"
-                        >
-                            ↩️
-                        </Button>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => applyFormatting('redo')}
-                            title="Redo"
-                        >
-                            ↪️
-                        </Button>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => applyFormatting('clear')}
-                            title="Clear Formatting"
-                        >
-                            T
-                        </Button>
-                    </div>
-                </div>
+                
             </div>
 
             {/* Main Content */}
@@ -880,7 +834,14 @@ export default function DocumentEditor() {
                             <Card className="min-h-[800px]">
                                 <CardHeader>
                                     <CardTitle className="flex items-center justify-between">
-                                        <span>Document Content</span>
+                                        <span>Document Content - {getCurrentPage().title}</span>
+                                        <div className="flex items-center space-x-2">
+                                            <Input
+                                                value={getCurrentPage().title}
+                                                onChange={(e) => updatePageTitle(currentPageId, e.target.value)}
+                                                className="w-48"
+                                                disabled={!canEditDocument}
+                                            />
                                         <Select value={selectedTemplate.toString()} onValueChange={(value) => selectTemplate(parseInt(value))}>
                                             <SelectTrigger className="w-48">
                                                 <SelectValue placeholder="Select Template" />
@@ -893,6 +854,7 @@ export default function DocumentEditor() {
                                                 ))}
                                             </SelectContent>
                                         </Select>
+                                        </div>
                                     </CardTitle>
                                 </CardHeader>
                                 <CardContent className="space-y-6">
@@ -904,10 +866,10 @@ export default function DocumentEditor() {
                                                 <div
                                                     id="logo"
                                                     contentEditable={canEditDocument}
-                                                    dangerouslySetInnerHTML={{ __html: documentContent.logo || '' }}
-                                                    onBlur={(e) => setDocumentContent(prev => ({ ...prev, logo: e.target.innerHTML }))}
+                                                    dangerouslySetInnerHTML={{ __html: getCurrentPage().content.logo || '' }}
+                                                    onBlur={(e) => updateCurrentPageContent({ logo: e.target.innerHTML })}
                                                     onInput={(e) => {
-                                                        setDocumentContent(prev => ({ ...prev, logo: e.target.innerHTML }));
+                                                        updateCurrentPageContent({ logo: e.target.innerHTML });
                                                     }}
                                                     className="w-32 h-20 border border-gray-300 rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent flex items-center justify-center"
                                                     data-placeholder="Click to add logo"
@@ -927,7 +889,7 @@ export default function DocumentEditor() {
                                                                     const reader = new FileReader();
                                                                     reader.onload = (event) => {
                                                                         const logoUrl = event.target.result;
-                                                                        setDocumentContent(prev => ({ ...prev, logo: `<img src="${logoUrl}" alt="Logo" class="max-w-full max-h-full object-contain" />` }));
+                                                                        updateCurrentPageContent({ logo: `<img src="${logoUrl}" alt="Logo" class="max-w-full max-h-full object-contain" />` });
                                                                     };
                                                                     reader.readAsDataURL(file);
                                                                 }
@@ -938,11 +900,11 @@ export default function DocumentEditor() {
                                                     >
                                                         Upload Logo
                                                     </Button>
-                                                    {documentContent.logo && (
+                                                    {getCurrentPage().content.logo && (
                                                         <Button
                                                             variant="outline"
                                                             size="sm"
-                                                            onClick={() => setDocumentContent(prev => ({ ...prev, logo: '' }))}
+                                                            onClick={() => updateCurrentPageContent({ logo: '' })}
                                                             disabled={!canEditDocument}
                                                         >
                                                             Remove Logo
@@ -958,11 +920,11 @@ export default function DocumentEditor() {
                                         <div>
                                             <Label htmlFor="header">Header</Label>
                                             <Select 
-                                                value={documentContent.header} 
-                                                onValueChange={(value) => setDocumentContent(prev => ({ ...prev, header: value }))}
+                                                value={(getCurrentPage().content.header) || ''} 
+                                                onValueChange={(value) => updateCurrentPageContent({ header: value })}
                                                 disabled={!canEditDocument}
                                             >
-                                                <SelectTrigger>
+                                                <SelectTrigger id="header">
                                                     <SelectValue placeholder="Select header" />
                                                 </SelectTrigger>
                                                 <SelectContent>
@@ -973,14 +935,14 @@ export default function DocumentEditor() {
                                                     <SelectItem value="Custom">Custom</SelectItem>
                                                 </SelectContent>
                                             </Select>
-                                            {documentContent.header === 'Custom' && (
+                                            {getCurrentPage().content.header === 'Custom' && (
                                                 <div
                                                     id="customHeader"
                                                     contentEditable={canEditDocument}
-                                                    dangerouslySetInnerHTML={{ __html: documentContent.customHeader }}
-                                                    onBlur={(e) => setDocumentContent(prev => ({ ...prev, customHeader: e.target.innerHTML }))}
+                                                    dangerouslySetInnerHTML={{ __html: (getCurrentPage().content.customHeader) || '' }}
+                                                    onBlur={(e) => updateCurrentPageContent({ customHeader: e.target.innerHTML })}
                                                     onInput={(e) => {
-                                                        setDocumentContent(prev => ({ ...prev, customHeader: e.target.innerHTML }));
+                                                        updateCurrentPageContent({ customHeader: e.target.innerHTML });
                                                     }}
                                                     className="w-full p-2 border border-gray-300 rounded-md min-h-[40px] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent mt-2"
                                                     data-placeholder="Enter custom header"
@@ -993,11 +955,10 @@ export default function DocumentEditor() {
                                             <div
                                                 id="title"
                                                 contentEditable={canEditDocument}
-                                                dangerouslySetInnerHTML={{ __html: documentContent.title }}
-                                                onBlur={(e) => setDocumentContent(prev => ({ ...prev, title: e.target.innerHTML }))}
+                                                dangerouslySetInnerHTML={{ __html: (getCurrentPage().content.title) || '' }}
+                                                onBlur={(e) => updateCurrentPageContent({ title: e.target.innerHTML })}
                                                 onInput={(e) => {
-                                                    // Update state as user types
-                                                    setDocumentContent(prev => ({ ...prev, title: e.target.innerHTML }));
+                                                    updateCurrentPageContent({ title: e.target.innerHTML });
                                                 }}
                                                 className="w-full p-2 border border-gray-300 rounded-md min-h-[40px] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                                 data-placeholder="Enter document title"
@@ -1009,10 +970,10 @@ export default function DocumentEditor() {
                                             <div
                                                 id="subject"
                                                 contentEditable={canEditDocument}
-                                                dangerouslySetInnerHTML={{ __html: documentContent.subject }}
-                                                onBlur={(e) => setDocumentContent(prev => ({ ...prev, subject: e.target.innerHTML }))}
+                                                dangerouslySetInnerHTML={{ __html: (getCurrentPage().content.subject) || '' }}
+                                                onBlur={(e) => updateCurrentPageContent({ subject: e.target.innerHTML })}
                                                 onInput={(e) => {
-                                                    setDocumentContent(prev => ({ ...prev, subject: e.target.innerHTML }));
+                                                    updateCurrentPageContent({ subject: e.target.innerHTML });
                                                 }}
                                                 className="w-full p-2 border border-gray-300 rounded-md min-h-[40px] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                                 data-placeholder="Enter document subject"
@@ -1024,10 +985,10 @@ export default function DocumentEditor() {
                                             <div
                                                 id="date"
                                                 contentEditable={canEditDocument}
-                                                dangerouslySetInnerHTML={{ __html: documentContent.date }}
-                                                onBlur={(e) => setDocumentContent(prev => ({ ...prev, date: e.target.innerHTML }))}
+                                                dangerouslySetInnerHTML={{ __html: (getCurrentPage().content.date) || '' }}
+                                                onBlur={(e) => updateCurrentPageContent({ date: e.target.innerHTML })}
                                                 onInput={(e) => {
-                                                    setDocumentContent(prev => ({ ...prev, date: e.target.innerHTML }));
+                                                    updateCurrentPageContent({ date: e.target.innerHTML });
                                                 }}
                                                 className="w-full p-2 border border-gray-300 rounded-md min-h-[40px] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                                 data-placeholder="Enter date"
@@ -1037,8 +998,8 @@ export default function DocumentEditor() {
                                         <div>
                                             <Label htmlFor="matter">Main Matter</Label>
                                             <TipTapEditor
-                                                value={documentContent.matter}
-                                                onChange={(value) => setDocumentContent(prev => ({ ...prev, matter: value }))}
+                                                value={(getCurrentPage().content.matter) || ''}
+                                                onChange={(value) => updateCurrentPageContent({ matter: value })}
                                                 placeholder="Enter main content..."
                                                 className="min-h-[200px]"
                                                 readOnly={!canEditDocument}
@@ -1052,11 +1013,11 @@ export default function DocumentEditor() {
                                         <div>
                                             <Label htmlFor="regards">Regards</Label>
                                             <Select 
-                                                value={documentContent.regards} 
-                                                onValueChange={(value) => setDocumentContent(prev => ({ ...prev, regards: value }))}
+                                                value={(getCurrentPage().content.regards) || ''} 
+                                                onValueChange={(value) => updateCurrentPageContent({ regards: value })}
                                                 disabled={!canEditDocument}
                                             >
-                                                <SelectTrigger>
+                                                <SelectTrigger id="regards">
                                                     <SelectValue placeholder="Select regards" />
                                                 </SelectTrigger>
                                                 <SelectContent>
@@ -1066,14 +1027,14 @@ export default function DocumentEditor() {
                                                     <SelectItem value="Custom">Custom</SelectItem>
                                                 </SelectContent>
                                             </Select>
-                                            {documentContent.regards === 'Custom' && (
+                                            {getCurrentPage().content.regards === 'Custom' && (
                                                 <div
                                                     id="customRegards"
                                                     contentEditable={canEditDocument}
-                                                    dangerouslySetInnerHTML={{ __html: documentContent.customRegards }}
-                                                    onBlur={(e) => setDocumentContent(prev => ({ ...prev, customRegards: e.target.innerHTML }))}
+                                                    dangerouslySetInnerHTML={{ __html: (getCurrentPage().content.customRegards) || '' }}
+                                                    onBlur={(e) => updateCurrentPageContent({ customRegards: e.target.innerHTML })}
                                                     onInput={(e) => {
-                                                        setDocumentContent(prev => ({ ...prev, customRegards: e.target.innerHTML }));
+                                                        updateCurrentPageContent({ customRegards: e.target.innerHTML });
                                                     }}
                                                     className="w-full p-2 border border-gray-300 rounded-md min-h-[40px] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent mt-2"
                                                     data-placeholder="Enter custom regards"
@@ -1086,10 +1047,10 @@ export default function DocumentEditor() {
                                             <div
                                                 id="footer"
                                                 contentEditable={canEditDocument}
-                                                dangerouslySetInnerHTML={{ __html: documentContent.footer }}
-                                                onBlur={(e) => setDocumentContent(prev => ({ ...prev, footer: e.target.innerHTML }))}
+                                                dangerouslySetInnerHTML={{ __html: (getCurrentPage().content.footer) || '' }}
+                                                onBlur={(e) => updateCurrentPageContent({ footer: e.target.innerHTML })}
                                                 onInput={(e) => {
-                                                    setDocumentContent(prev => ({ ...prev, footer: e.target.innerHTML }));
+                                                    updateCurrentPageContent({ footer: e.target.innerHTML });
                                                 }}
                                                 className="w-full p-2 border border-gray-300 rounded-md min-h-[40px] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                                 data-placeholder="Enter footer text"
@@ -1220,6 +1181,7 @@ export default function DocumentEditor() {
                             <AttachmentManager
                                 fileId={params.id}
                                 canEdit={canEditDocument}
+                                viewOnly={!canEditDocument}
                             />
 
                             {/* Document Signature System */}

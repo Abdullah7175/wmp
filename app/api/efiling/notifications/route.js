@@ -25,9 +25,23 @@ export async function GET(request) {
         let paramCount = 0;
 
         if (userId) {
+            // Translate users.id to efiling_users.id if needed
+            let targetId = userId;
+            try {
+                const map = await client.query(`
+                    SELECT eu.id AS efiling_user_id
+                    FROM efiling_users eu
+                    JOIN users u ON eu.user_id = u.id
+                    WHERE u.id = $1
+                `, [userId]);
+                if (map.rows[0]?.efiling_user_id) {
+                    targetId = map.rows[0].efiling_user_id.toString();
+                }
+            } catch {}
+
             paramCount++;
             query += ` AND n.user_id = $${paramCount}`;
-            queryParams.push(userId);
+            queryParams.push(targetId);
         }
 
         query += ` ORDER BY n.created_at DESC LIMIT $${paramCount + 1} OFFSET $${paramCount + 2}`;

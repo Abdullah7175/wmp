@@ -20,17 +20,21 @@ export default function CreateFileType() {
     
     const [loading, setLoading] = useState(false);
     const [categories, setCategories] = useState([]);
+    const [roles, setRoles] = useState([]);
+    const [selectedCreators, setSelectedCreators] = useState([]);
     const [formData, setFormData] = useState({
         name: '',
         description: '',
         categoryId: '',
         code: '',
-        requiresApproval: true
+        requiresApproval: true,
+        can_create_roles: ''
     });
 
     useEffect(() => {
         if (session?.user) {
             loadCategories();
+            loadRoles();
         }
     }, [session]);
 
@@ -48,6 +52,18 @@ export default function CreateFileType() {
             }
         } catch (error) {
             console.error('Error loading categories:', error);
+        }
+    };
+
+    const loadRoles = async () => {
+        try {
+            const response = await fetch('/api/efiling/roles?is_active=true');
+            if (response.ok) {
+                const data = await response.json();
+                setRoles(data.roles || []);
+            }
+        } catch (error) {
+            console.error('Error loading roles:', error);
         }
     };
 
@@ -81,6 +97,7 @@ export default function CreateFileType() {
                 },
                 body: JSON.stringify({
                     ...formData,
+                    can_create_roles: selectedCreators,
                     createdBy: session.user.id,
                     ipAddress: '127.0.0.1',
                     userAgent: navigator.userAgent
@@ -199,6 +216,23 @@ export default function CreateFileType() {
                                 placeholder="Describe the purpose and scope of this file type..."
                                 rows={3}
                             />
+                        </div>
+
+                        <div>
+                            <Label>Who can create (select roles)</Label>
+                            <div className="max-h-64 overflow-y-auto border rounded p-3 grid grid-cols-1 md:grid-cols-2 gap-2">
+                                {roles.map((r) => (
+                                    <label key={r.id} className="flex items-center gap-2 text-sm">
+                                        <input
+                                            type="checkbox"
+                                            className="h-4 w-4"
+                                            checked={selectedCreators.includes(r.code)}
+                                            onChange={() => setSelectedCreators(prev => prev.includes(r.code) ? prev.filter(c => c !== r.code) : [...prev, r.code])}
+                                        />
+                                        <span>{r.name} ({r.code})</span>
+                                    </label>
+                                ))}
+                            </div>
                         </div>
 
                         <div className="flex items-center space-x-2">

@@ -34,6 +34,9 @@ export default function UserActivityActions() {
     const [userFilter, setUserFilter] = useState('all');
     const [dateFilter, setDateFilter] = useState('all');
     const [users, setUsers] = useState([]);
+    const [page, setPage] = useState(1);
+    const [limit, setLimit] = useState(25);
+    const [totalPages, setTotalPages] = useState(1);
 
     useEffect(() => {
         if (!session?.user?.id) return;
@@ -44,9 +47,12 @@ export default function UserActivityActions() {
         setLoading(true);
         try {
             // Fetch user actions
-            const actionsRes = await fetch('/api/efiling/user-actions');
+            const url = `/api/efiling/user-actions?page=${page}&limit=${limit}`;
+            const actionsRes = await fetch(url);
             const actionsData = await actionsRes.json();
-            setActions(Array.isArray(actionsData) ? actionsData : []);
+            const arr = Array.isArray(actionsData?.data) ? actionsData.data : (Array.isArray(actionsData) ? actionsData : []);
+            setActions(arr);
+            setTotalPages(actionsData?.totalPages || 1);
 
             // Fetch users for filter
             const usersRes = await fetch('/api/efiling/users?is_active=true');
@@ -268,6 +274,7 @@ export default function UserActivityActions() {
                             <p>No user actions found</p>
                         </div>
                     ) : (
+                        <>
                         <div className="overflow-x-auto">
                             <Table>
                                 <TableHeader>
@@ -341,6 +348,23 @@ export default function UserActivityActions() {
                                 </TableBody>
                             </Table>
                         </div>
+                        <div className="flex items-center justify-between mt-4">
+                            <div className="text-sm text-gray-600">Page {page} of {totalPages}</div>
+                            <div className="flex items-center gap-2">
+                                <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>Prev</Button>
+                                <Select value={String(limit)} onValueChange={(v) => { setLimit(parseInt(v)); setPage(1); }}>
+                                    <SelectTrigger className="w-24"><SelectValue /></SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="10">10</SelectItem>
+                                        <SelectItem value="25">25</SelectItem>
+                                        <SelectItem value="50">50</SelectItem>
+                                        <SelectItem value="100">100</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                                <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>Next</Button>
+                            </div>
+                        </div>
+                        </>
                     )}
                 </CardContent>
             </Card>

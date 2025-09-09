@@ -7,6 +7,7 @@ export async function GET(request) {
     const id = searchParams.get('id');
     const department_id = searchParams.get('department_id');
     const is_active = searchParams.get('is_active');
+    const role_prefix = searchParams.get('role_prefix');
     
     let client;
     try {
@@ -51,7 +52,7 @@ export async function GET(request) {
             return NextResponse.json(result.rows[0]);
         } else {
             let query = `
-                SELECT u.*, d.name as department_name, r.name as role_name
+                SELECT u.*, d.name as department_name, r.name as role_name, r.code as role_code
                 FROM efiling_users u
                 LEFT JOIN efiling_departments d ON u.department_id = d.id
                 LEFT JOIN efiling_roles r ON u.efiling_role_id = r.id
@@ -69,6 +70,12 @@ export async function GET(request) {
             if (is_active !== null && is_active !== undefined) {
                 conditions.push(`u.is_active = $${paramIndex}`);
                 params.push(is_active === 'true');
+                paramIndex++;
+            }
+
+            if (role_prefix) {
+                conditions.push(`r.code ILIKE $${paramIndex}`);
+                params.push(`${role_prefix}%`);
                 paramIndex++;
             }
             

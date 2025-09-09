@@ -77,6 +77,8 @@ const smagentAllowedB = [
 
 function getDashboardForUser(token) {
   if (!token) return "/login";
+  // Route admins/managers directly to e-filing admin
+  if (token.user?.role === 1 || token.user?.role === 2) return "/efiling";
   if (token.user?.userType === "agent") return "/agent";
   if (token.user?.userType === "socialmedia") return "/smagent";
   if (token.user?.userType === "user") return "/dashboard";

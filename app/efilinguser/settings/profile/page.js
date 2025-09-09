@@ -42,7 +42,7 @@ export default function ProfileSettings() {
 
     const fetchProfile = async () => {
         try {
-            const response = await fetch(`/api/efiling/users/${session.user.id}`);
+            const response = await fetch(`/api/efiling/users/profile?userId=${session.user.id}`);
             if (response.ok) {
                 const data = await response.json();
                 setProfile({

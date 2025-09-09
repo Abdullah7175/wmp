@@ -22,6 +22,7 @@ export default function CreateWorkflowTemplate() {
     const [fileTypes, setFileTypes] = useState([]);
     const [departments, setDepartments] = useState([]);
     const [roles, setRoles] = useState([]);
+    const [roleGroups, setRoleGroups] = useState([]);
     const [formData, setFormData] = useState({
         name: '',
         description: '',
@@ -34,6 +35,7 @@ export default function CreateWorkflowTemplate() {
             loadFileTypes();
             loadDepartments();
             loadRoles();
+            loadRoleGroups();
         }
     }, [session]);
 
@@ -78,13 +80,25 @@ export default function CreateWorkflowTemplate() {
         }
     };
 
+    const loadRoleGroups = async () => {
+        try {
+            const response = await fetch('/api/efiling/role-groups?is_active=true');
+            if (response.ok) {
+                const data = await response.json();
+                setRoleGroups(data.roleGroups || []);
+            }
+        } catch (error) {
+            console.error('Error loading role groups:', error);
+        }
+    };
+
     const addStage = () => {
         const newStage = {
             id: Date.now(), // Temporary ID for frontend
             name: '',
             code: '',
             departmentId: null,
-            roleId: null,
+            roleGroupId: null,
             slaHours: 24,
             requirements: {},
             canAttachFiles: true,
@@ -162,7 +176,7 @@ export default function CreateWorkflowTemplate() {
                     stages: formData.stages.map(stage => ({
                         ...stage,
                         departmentId: stage.departmentId === 'none' ? null : stage.departmentId,
-                        roleId: stage.roleId === 'none' ? null : stage.roleId
+                        roleGroupId: stage.roleGroupId === 'none' ? null : stage.roleGroupId
                     })),
                     createdBy: session.user.id,
                     ipAddress: '127.0.0.1', // In production, get from request
@@ -366,23 +380,23 @@ export default function CreateWorkflowTemplate() {
                                             </div>
 
                                             <div>
-                                                <Label>Role</Label>
-                                                                                                <Select 
-                                                    value={stage.roleId || "none"} 
-                                                    onValueChange={(value) => updateStage(index, 'roleId', value === "none" ? null : value)}
+                                                <Label>Role Group</Label>
+                                                <Select 
+                                                    value={stage.roleGroupId || "none"} 
+                                                    onValueChange={(value) => updateStage(index, 'roleGroupId', value === "none" ? null : parseInt(value))}
                                                 >
                                                     <SelectTrigger>
-                                                        <SelectValue placeholder="Select role">
-                                                            {stage.roleId ? roles.find(r => r.id == stage.roleId)?.name : "No specific role"}
+                                                        <SelectValue placeholder="Select role group">
+                                                            {stage.roleGroupId ? roleGroups.find(g => g.id == stage.roleGroupId)?.name : "No role group"}
                                                         </SelectValue>
                                                     </SelectTrigger>
                                                     <SelectContent>
-                                                        <SelectItem value="none">No specific role</SelectItem>
-                                                        {roles.map((role) => (
-                                                            <SelectItem key={role.id} value={role.id.toString()}>
-                                                                {role.name}
+                                                        <SelectItem value="none">No role group</SelectItem>
+                                                        {roleGroups.map((g) => (
+                                                            <SelectItem key={g.id} value={g.id.toString()}>
+                                                                {g.name} ({g.code})
                                                             </SelectItem>
-                                        ))}
+                                                        ))}
                                                     </SelectContent>
                                                 </Select>
                                             </div>

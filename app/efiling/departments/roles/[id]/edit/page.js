@@ -258,9 +258,7 @@ export default function EditEfilingRole() {
                                 <Label htmlFor="department_id">Department</Label>
                                 <Select value={formData.department_id ? formData.department_id.toString() : "none"} onValueChange={(value) => handleInputChange('department_id', value === "none" ? null : value)}>
                                     <SelectTrigger>
-                                        <SelectValue placeholder="Select department (optional)">
-                                            {formData.department_id ? departments.find(d => d.id == formData.department_id)?.name : "No Department"}
-                                        </SelectValue>
+                                        <SelectValue placeholder="Select department (optional)" />
                                     </SelectTrigger>
                                     <SelectContent>
                                         <SelectItem value="none">No Department</SelectItem>
@@ -271,6 +269,9 @@ export default function EditEfilingRole() {
                                         ))}
                                     </SelectContent>
                                 </Select>
+                                <div className="text-xs text-gray-500 mt-1">
+                                    {formData.department_id ? departments.find(d => d.id == formData.department_id)?.name : "No Department"}
+                                </div>
                             </div>
                             <div>
                                 <Label htmlFor="is_active">Status</Label>

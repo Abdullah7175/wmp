@@ -24,6 +24,7 @@ export default function EditWorkflowTemplate() {
     const [fileTypes, setFileTypes] = useState([]);
     const [departments, setDepartments] = useState([]);
     const [roles, setRoles] = useState([]);
+    const [roleGroups, setRoleGroups] = useState([]);
     const [formData, setFormData] = useState({
         name: '',
         description: '',
@@ -44,7 +45,8 @@ export default function EditWorkflowTemplate() {
                 loadWorkflowTemplate(),
                 loadFileTypes(),
                 loadDepartments(),
-                loadRoles()
+                loadRoles(),
+                loadRoleGroups()
             ]);
         } catch (error) {
             console.error('Error loading data:', error);
@@ -63,11 +65,28 @@ export default function EditWorkflowTemplate() {
             const response = await fetch(`/api/efiling/workflow-templates?id=${params.id}`);
             if (response.ok) {
                 const data = await response.json();
+                const mappedStages = Array.isArray(data.stages)
+                    ? data.stages.map((s) => ({
+                        id: s.id,
+                        name: s.stage_name || '',
+                        code: s.stage_code || '',
+                        departmentId: s.department_id || null,
+                        roleId: s.role_id || null,
+                        roleGroupId: s.role_group_id || null,
+                        slaHours: s.sla_hours ?? 24,
+                        requirements: typeof s.requirements === 'object' && s.requirements !== null
+                            ? s.requirements
+                            : (() => { try { return JSON.parse(s.requirements || '{}'); } catch { return {}; } })(),
+                        canAttachFiles: s.can_attach_files !== false,
+                        canComment: s.can_comment !== false,
+                        canEscalate: s.can_escalate === true,
+                    }))
+                    : [];
                 setFormData({
                     name: data.name || '',
                     description: data.description || '',
                     fileTypeId: data.file_type_id || '',
-                    stages: data.stages || []
+                    stages: mappedStages
                 });
             } else {
                 throw new Error('Failed to load workflow template');
@@ -115,6 +134,18 @@ export default function EditWorkflowTemplate() {
             }
         } catch (error) {
             console.error('Error loading roles:', error);
+        }
+    };
+
+    const loadRoleGroups = async () => {
+        try {
+            const response = await fetch('/api/efiling/role-groups?is_active=true');
+            if (response.ok) {
+                const data = await response.json();
+                setRoleGroups(data.roleGroups || []);
+            }
+        } catch (error) {
+            console.error('Error loading role groups:', error);
         }
     };
 
@@ -200,7 +231,8 @@ export default function EditWorkflowTemplate() {
                     stages: formData.stages.map(stage => ({
                         ...stage,
                         departmentId: stage.departmentId === 'none' ? null : stage.departmentId,
-                        roleId: stage.roleId === 'none' ? null : stage.roleId
+                        roleId: stage.roleId === 'none' ? null : stage.roleId,
+                        roleGroupId: stage.roleGroupId === 'none' ? null : stage.roleGroupId
                     }))
                 }),
             });
@@ -397,21 +429,21 @@ export default function EditWorkflowTemplate() {
                                             </div>
 
                                             <div>
-                                                <Label>Role</Label>
+                                                <Label>Role Group</Label>
                                                 <Select 
-                                                    value={stage.roleId || "none"} 
-                                                    onValueChange={(value) => updateStage(index, 'roleId', value === "none" ? null : value)}
+                                                    value={stage.roleGroupId || "none"} 
+                                                    onValueChange={(value) => updateStage(index, 'roleGroupId', value === "none" ? null : parseInt(value))}
                                                 >
                                                     <SelectTrigger>
-                                                        <SelectValue placeholder="Select role">
-                                                            {stage.roleId ? roles.find(r => r.id == stage.roleId)?.name : "No specific role"}
+                                                        <SelectValue placeholder="Select role group">
+                                                            {stage.roleGroupId ? roleGroups.find(g => g.id == stage.roleGroupId)?.name : "No role group"}
                                                         </SelectValue>
                                                     </SelectTrigger>
                                                     <SelectContent>
-                                                        <SelectItem value="none">No specific role</SelectItem>
-                                                        {roles.map((role) => (
-                                                            <SelectItem key={role.id} value={role.id.toString()}>
-                                                                {role.name}
+                                                        <SelectItem value="none">No role group</SelectItem>
+                                                        {roleGroups.map((g) => (
+                                                            <SelectItem key={g.id} value={g.id.toString()}>
+                                                                {g.name} ({g.code})
                                                             </SelectItem>
                                                         ))}
                                                     </SelectContent>
@@ -461,6 +493,37 @@ export default function EditWorkflowTemplate() {
                                         </div>
                                     </div>
                                 ))}
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Transitions Preview</CardTitle>
+                        <CardDescription>
+                            Linear forward transitions will be created between consecutive stages
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        {formData.stages.length < 2 ? (
+                            <div className="text-sm text-muted-foreground">Add at least two stages to form transitions.</div>
+                        ) : (
+                            <div className="space-y-2">
+                                {formData.stages.map((s, i) => {
+                                    if (i === formData.stages.length - 1) return null;
+                                    const fromLabel = `${i + 1}. ${s.name || s.code || 'Unnamed'}`;
+                                    const t = formData.stages[i + 1];
+                                    const toLabel = `${i + 2}. ${t.name || t.code || 'Unnamed'}`;
+                                    return (
+                                        <div key={`${s.id}-${i}`} className="flex items-center text-sm">
+                                            <span className="font-medium">{fromLabel}</span>
+                                            <span className="mx-2 text-muted-foreground">→</span>
+                                            <span className="font-medium">{toLabel}</span>
+                                            <span className="ml-2 px-2 py-0.5 text-xs rounded bg-blue-100 text-blue-700">FORWARD</span>
+                                        </div>
+                                    );
+                                })}
                             </div>
                         )}
                     </CardContent>

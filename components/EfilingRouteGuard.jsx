@@ -2,76 +2,78 @@
 
 import { useEffect, useState } from 'react';
 import { useSession } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 
-export function EfilingRouteGuard({ children, allowedRoles = [1] }) {
+export function EfilingRouteGuard({ children, allowedRoles = [4] }) {
     const { data: session, status } = useSession();
     const router = useRouter();
+    const pathname = usePathname();
     const { toast } = useToast();
     const [isAuthorized, setIsAuthorized] = useState(false);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        const checkAuthorization = async () => {
-            if (status === "loading") return;
-            
+        const controller = new AbortController();
+        const safety = setTimeout(() => setLoading(false), 6000);
+
+        async function checkAuth() {
+            if (status === 'loading') return;
             if (!session?.user?.id) {
                 router.push('/elogin');
+                setLoading(false);
                 return;
             }
 
-            try {
-                // Fetch user details to get role
-                const response = await fetch(`/api/users/${session.user.id}`);
-                if (response.ok) {
-                    const userData = await response.json();
-                    const userRole = userData.role;
-                    
-                    // Check if user role is in allowed roles
-                    if (allowedRoles.includes(userRole)) {
-                        setIsAuthorized(true);
-                    } else {
-                        // User not authorized for this page
-                        toast({
-                            title: "Access Denied",
-                            description: "You don't have permission to access this page.",
-                            variant: "destructive",
-                        });
-                        
-                        // Redirect based on role
-                        if (userRole === 4) {
-                            router.push('/efilinguser');
-                        } else {
-                            router.push('/elogin');
-                        }
-                    }
-                } else {
-                    // Error fetching user data
-                    toast({
-                        title: "Error",
-                        description: "Unable to verify your permissions.",
-                        variant: "destructive",
-                    });
-                    router.push('/elogin');
-                }
-            } catch (error) {
-                console.error('Error checking authorization:', error);
-                toast({
-                    title: "Error",
-                    description: "An error occurred while checking permissions.",
-                    variant: "destructive",
-                });
-                router.push('/elogin');
-            } finally {
+            // Fast-path: for efilinguser area, any authenticated user can enter (feature-level checks in pages)
+            if (pathname?.startsWith('/efilinguser')) {
+                setIsAuthorized(true);
                 setLoading(false);
+                return;
             }
+
+            // Coerce role to number if possible
+            const rawRole = session?.user?.role;
+            const roleNum = typeof rawRole === 'number' ? rawRole : Number(rawRole);
+
+            if (!Number.isNaN(roleNum)) {
+                if (allowedRoles.includes(roleNum)) {
+                    setIsAuthorized(true);
+                    setLoading(false);
+                    return;
+                }
+                toast({ title: 'Access Denied', description: "You don't have permission to access this page.", variant: 'destructive' });
+                router.push('/elogin');
+                setLoading(false);
+                return;
+            }
+
+            // Fallback: fetch e-filing profile to decide
+            try {
+                const res = await fetch('/api/efiling/users/profile', { signal: controller.signal });
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data?.id) {
+                        setIsAuthorized(true);
+                        setLoading(false);
+                        return;
+                    }
+                }
+            } catch {}
+
+            toast({ title: 'Access Denied', description: "Unable to verify your permissions.", variant: 'destructive' });
+            router.push('/elogin');
+            setLoading(false);
+        }
+
+        checkAuth();
+        return () => {
+            clearTimeout(safety);
+            controller.abort();
         };
+    }, [session, status, router, pathname, allowedRoles, toast]);
 
-        checkAuthorization();
-    }, [session, status, router, allowedRoles, toast]);
-
-    if (status === "loading" || loading) {
+    if (status === 'loading' || loading) {
         return (
             <div className="flex items-center justify-center min-h-screen">
                 <div className="text-center">
@@ -88,7 +90,7 @@ export function EfilingRouteGuard({ children, allowedRoles = [1] }) {
                 <div className="text-center">
                     <div className="text-red-500 text-6xl mb-4">🚫</div>
                     <h1 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h1>
-                    <p className="text-gray-600">You don't have permission to access this page.</p>
+                    <p className="text-gray-600">You don&apos;t have permission to access this page.</p>
                 </div>
             </div>
         );

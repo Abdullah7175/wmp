@@ -23,12 +23,14 @@ export default function MarkToModal({ showMarkToModal, onClose, fileId, fileNumb
         if (showMarkToModal) {
             fetchUsers();
             fetchDepartments();
+            if (departmentFilter === 'all') setDepartmentFilter('6');
         }
     }, [showMarkToModal]);
 
     const fetchUsers = async () => {
         try {
-            const response = await fetch('/api/efiling/users?is_active=true');
+            const dept = departmentFilter === 'all' ? '' : `&department_id=${departmentFilter}`;
+            const response = await fetch(`/api/efiling/users?is_active=true&role_prefix=SE_${dept}`);
             if (response.ok) {
                 const data = await response.json();
                 setUsers(data);

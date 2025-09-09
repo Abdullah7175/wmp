@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/db';
 import { eFileActionLogger } from '@/lib/efilingActionLogger';
+import { getToken } from 'next-auth/jwt';
 
 export async function GET(request) {
     let client;
@@ -37,17 +38,18 @@ export async function GET(request) {
 
             // Log the action
             try {
-                            await eFileActionLogger.logAction({
-                entityId: null,
-                userId: 'system',
-                action: 'FILE_TYPE_VIEWED',
-                entityType: 'efiling_file_type',
-                details: { 
-                    fileTypeId: id, 
-                    name: result.rows[0].name,
-                    description: `File type "${result.rows[0].name}" viewed`
-                }
-            });
+                const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
+                await eFileActionLogger.logAction({
+                    entityId: null,
+                    userId: token?.user?.id || 'system',
+                    action: 'FILE_TYPE_VIEWED',
+                    entityType: 'efiling_file_type',
+                    details: { 
+                        fileTypeId: id, 
+                        name: result.rows[0].name,
+                        description: `File type "${result.rows[0].name}" viewed`
+                    }
+                });
             } catch (logError) {
                 console.error('Error logging file type view action:', logError);
             }
@@ -86,16 +88,17 @@ export async function GET(request) {
 
             // Log the action
             try {
-                            await eFileActionLogger.logAction({
-                entityId: null,
-                userId: 'system',
-                action: 'FILE_TYPES_LISTED',
-                entityType: 'efiling_file_type',
-                details: { 
-                    count: result.rows.length,
-                    description: `File types list viewed (${result.rows.length} types)`
-                }
-            });
+                const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
+                await eFileActionLogger.logAction({
+                    entityId: null,
+                    userId: token?.user?.id || 'system',
+                    action: 'FILE_TYPES_LISTED',
+                    entityType: 'efiling_file_type',
+                    details: { 
+                        count: result.rows.length,
+                        description: `File types list viewed (${result.rows.length} types)`
+                    }
+                });
             } catch (logError) {
                 console.error('Error logging file types list action:', logError);
             }
@@ -122,6 +125,10 @@ export async function GET(request) {
 export async function POST(request) {
     let client;
     try {
+        const token = await getToken({ req: { headers: Object.fromEntries(request.headers) }, secret: process.env.NEXTAUTH_SECRET });
+        if (!token?.user?.role || ![1,2].includes(token.user.role)) {
+            return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        }
         const body = await request.json();
         const { 
             name, 
@@ -131,7 +138,8 @@ export async function POST(request) {
             requiresApproval, 
             createdBy, 
             ipAddress, 
-            userAgent 
+            userAgent,
+            can_create_roles
         } = body;
 
         // Input validation
@@ -162,15 +170,16 @@ export async function POST(request) {
         const result = await client.query(`
             INSERT INTO efiling_file_types (
                 name, description, category_id, code, requires_approval, 
-                created_at
-            ) VALUES ($1, $2, $3, $4, $5, NOW())
+                created_at, can_create_roles
+            ) VALUES ($1, $2, $3, $4, $5, NOW(), $6)
             RETURNING *
         `, [
             name,
             description,
             categoryId,
             code,
-            requiresApproval !== false
+            requiresApproval !== false,
+            Array.isArray(can_create_roles) ? JSON.stringify(can_create_roles) : (typeof can_create_roles === 'string' ? can_create_roles : null)
         ]);
 
         const fileType = result.rows[0];
@@ -202,7 +211,8 @@ export async function POST(request) {
                 description: fileType.description,
                 code: fileType.code,
                 categoryId: fileType.category_id,
-                requiresApproval: fileType.requires_approval
+                requiresApproval: fileType.requires_approval,
+                can_create_roles: fileType.can_create_roles
             }
         }, { status: 201 });
 
@@ -222,8 +232,12 @@ export async function POST(request) {
 export async function PUT(request) {
     let client;
     try {
+        const token = await getToken({ req: { headers: Object.fromEntries(request.headers) }, secret: process.env.NEXTAUTH_SECRET });
+        if (!token?.user?.role || ![1,2].includes(token.user.role)) {
+            return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        }
         const body = await request.json();
-        const { id, name, description, code, requires_approval, department_id } = body;
+        const { id, name, description, code, requires_approval, department_id, can_create_roles } = body;
         const ipAddress = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip');
         const userAgent = request.headers.get('user-agent');
 
@@ -256,8 +270,9 @@ export async function PUT(request) {
                 code = $3,
                 requires_approval = $4,
                 department_id = $5,
+                can_create_roles = COALESCE($6, can_create_roles),
                 updated_at = NOW()
-            WHERE id = $6
+            WHERE id = $7
             RETURNING *
         `, [
             name,
@@ -265,6 +280,7 @@ export async function PUT(request) {
             code,
             requires_approval,
             department_id,
+            Array.isArray(can_create_roles) ? JSON.stringify(can_create_roles) : (typeof can_create_roles === 'string' ? can_create_roles : null),
             id
         ]);
 
@@ -317,6 +333,10 @@ export async function PUT(request) {
 export async function DELETE(request) {
     let client;
     try {
+        const token = await getToken({ req: { headers: Object.fromEntries(request.headers) }, secret: process.env.NEXTAUTH_SECRET });
+        if (!token?.user?.role || ![1,2].includes(token.user.role)) {
+            return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        }
         const { searchParams } = new URL(request.url);
         const id = searchParams.get('id');
         const ipAddress = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip');

@@ -34,7 +34,16 @@ export default function Notifications() {
     const fetchNotifications = async () => {
         try {
             setLoading(true);
-            const response = await fetch(`/api/efiling/notifications?user_id=${session?.user?.id}`);
+            // Map Users.id -> efiling_users.id
+            let targetId = session?.user?.id;
+            try {
+                const mapRes = await fetch(`/api/efiling/users/profile?userId=${session?.user?.id}`);
+                if (mapRes.ok) {
+                    const map = await mapRes.json();
+                    if (map?.efiling_user_id) targetId = map.efiling_user_id;
+                }
+            } catch {}
+            const response = await fetch(`/api/efiling/notifications?user_id=${targetId}`);
             if (response.ok) {
                 const data = await response.json();
                 setNotifications(data.notifications || []);
