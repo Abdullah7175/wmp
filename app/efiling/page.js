@@ -59,16 +59,16 @@ export default function EFileDashboard() {
                 
                 setStats({
                     totalFiles: filesArray.length,
-                    draftFiles: filesArray.filter(f => f.status_code === 'DRAFT').length,
-                    inProgressFiles: filesArray.filter(f => f.status_code === 'IN_PROGRESS').length,
-                    pendingApprovalFiles: filesArray.filter(f => f.status_code === 'PENDING_APPROVAL').length,
-                    approvedFiles: filesArray.filter(f => f.status_code === 'APPROVED').length,
+                    draftFiles: filesArray.filter(f => f?.status_code === 'DRAFT').length,
+                    inProgressFiles: filesArray.filter(f => f?.status_code === 'IN_PROGRESS').length,
+                    pendingApprovalFiles: filesArray.filter(f => f?.status_code === 'PENDING_APPROVAL').length,
+                    approvedFiles: filesArray.filter(f => f?.status_code === 'APPROVED').length,
                     totalUsers: 0, // Will be fetched separately
                     totalDepartments: 0 // Will be fetched separately
                 });
 
                 // Get recent files
-                setRecentFiles(filesArray.slice(0, 5));
+                setRecentFiles(Array.isArray(filesArray) ? filesArray.slice(0, 5) : []);
             }
 
             // Created vs Assigned counts for current user
@@ -114,7 +114,7 @@ export default function EFileDashboard() {
                 const actRes = await fetch('/api/efiling/user-actions?limit=10');
                 if (actRes.ok) {
                     const actions = await actRes.json();
-                    setRecentActivity(actions || []);
+                    setRecentActivity(actions.data || []);
                 }
             } catch (e) {
                 console.warn('Could not load recent activity');
@@ -328,7 +328,7 @@ export default function EFileDashboard() {
                         </CardTitle>
                     </CardHeader>
                     <CardContent>
-                        {recentActivity.length === 0 ? (
+                        {!Array.isArray(recentActivity) || recentActivity.length === 0 ? (
                             <div className="text-sm text-gray-500">No recent activity</div>
                         ) : (
                             <div className="space-y-3">
@@ -366,7 +366,7 @@ export default function EFileDashboard() {
                     </CardTitle>
                 </CardHeader>
                 <CardContent>
-                    {recentFiles.length === 0 ? (
+                    {!Array.isArray(recentFiles) || recentFiles.length === 0 ? (
                         <div className="text-center py-8 text-gray-500">
                             <FileText className="w-16 h-16 mx-auto mb-4 text-gray-300" />
                             <h3 className="text-lg font-medium mb-2">No files yet</h3>
