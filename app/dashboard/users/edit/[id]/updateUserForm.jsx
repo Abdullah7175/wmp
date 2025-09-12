@@ -7,6 +7,7 @@ import { useUserContext } from './UserContext';
 import { useToast } from "@/hooks/use-toast"
 import { useRouter, useParams } from 'next/navigation';
 import Image from 'next/image';
+import { Eye, EyeOff } from 'lucide-react';
 
 const validationSchema = Yup.object({
     name: Yup.string()
@@ -39,6 +40,7 @@ const UserForm = () => {
         image: null
     });
     const [previewImage, setPreviewImage] = useState(null);
+    const [showPassword, setShowPassword] = useState(false);
     const router = useRouter();
 
     useEffect(() => {
@@ -231,15 +233,28 @@ const UserForm = () => {
                 {/* Password Field */}
                 <div>
                     <label htmlFor="password" className="block text-gray-700 text-sm font-medium">Password</label>
-                    <input
-                        id="password"
-                        name="password"
-                        type="password"
-                        onChange={formik.handleChange}
-                        value={formik.values.password}
-                        placeholder="Leave blank to keep current password"
-                        className="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                    />
+                    <div className="relative">
+                        <input
+                            id="password"
+                            name="password"
+                            type={showPassword ? "text" : "password"}
+                            onChange={formik.handleChange}
+                            value={formik.values.password}
+                            placeholder="Leave blank to keep current password"
+                            className="mt-1 block w-full px-4 py-2 pr-10 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                        />
+                        <button
+                            type="button"
+                            onClick={() => setShowPassword(!showPassword)}
+                            className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 mt-1"
+                        >
+                            {showPassword ? (
+                                <EyeOff className="w-4 h-4" />
+                            ) : (
+                                <Eye className="w-4 h-4" />
+                            )}
+                        </button>
+                    </div>
                     {formik.errors.password && formik.touched.password && <div className="text-red-600 text-sm mt-2">{formik.errors.password}</div>}
                 </div>
 

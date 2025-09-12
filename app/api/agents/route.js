@@ -23,6 +23,7 @@ export async function GET(request) {
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
     const role = searchParams.get('role');
+    const work_request_id = searchParams.get('work_request_id');
     const page = parseInt(searchParams.get('page') || '1', 10);
     const limit = parseInt(searchParams.get('limit') || '20', 10);
     const offset = (page - 1) * limit;
@@ -39,6 +40,17 @@ export async function GET(request) {
                 return NextResponse.json({ error: 'Agent not found' }, { status: 404 });
             }
             return NextResponse.json(result.rows[0], { status: 200 });
+        } else if (work_request_id) {
+            // Fetch agents assigned to a specific work request
+            const query = `
+                SELECT DISTINCT a.*
+                FROM agents a
+                LEFT JOIN work_requests wr ON (wr.executive_engineer_id = a.id OR wr.contractor_id = a.id)
+                WHERE wr.id = $1
+                ORDER BY a.name
+            `;
+            const result = await client.query(query, [work_request_id]);
+            return NextResponse.json({ data: result.rows }, { status: 200 });
         } else {
             let countQuery = 'SELECT COUNT(*) FROM agents';
             let dataQuery = 'SELECT * FROM agents';

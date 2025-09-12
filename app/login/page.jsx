@@ -13,7 +13,7 @@ import { signIn } from "next-auth/react";
 import { useSession } from "next-auth/react";
 import React from "react";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Eye, EyeOff } from "lucide-react";
 
 
 const validationSchema = Yup.object({
@@ -25,6 +25,7 @@ export default function LoginPage() {
   const router = useRouter();
   const { toast } = useToast();
   const { data: session, status } = useSession();
+  const [showPassword, setShowPassword] = React.useState(false);
 
   // Redirect authenticated users away from /login
   React.useEffect(() => {
@@ -156,15 +157,29 @@ export default function LoginPage() {
 
               <div className="grid gap-2">
                 <Label htmlFor="password">Password</Label>
-                <Input
-                  id="password"
-                  name="password"
-                  type="password"
-                  value={formik.values.password}
-                  onChange={formik.handleChange}
-                  onBlur={formik.handleBlur}
-                  required
-                />
+                <div className="relative">
+                  <Input
+                    id="password"
+                    name="password"
+                    type={showPassword ? "text" : "password"}
+                    value={formik.values.password}
+                    onChange={formik.handleChange}
+                    onBlur={formik.handleBlur}
+                    required
+                    className="pr-10"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+                  >
+                    {showPassword ? (
+                      <EyeOff className="w-4 h-4" />
+                    ) : (
+                      <Eye className="w-4 h-4" />
+                    )}
+                  </button>
+                </div>
                 {formik.touched.password && formik.errors.password && (
                   <p className="text-sm text-red-600">{formik.errors.password}</p>
                 )}

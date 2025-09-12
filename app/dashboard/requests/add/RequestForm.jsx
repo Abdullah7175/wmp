@@ -45,6 +45,7 @@ export const RequestForm = ({ isPublic = false, initialValues, onSubmit, isEditM
     const [contractors, setContractors] = useState([]);
     const [agentInfo, setAgentInfo] = useState(null);
     const [loadingAgent, setLoadingAgent] = useState(false);
+    const [additionalLocations, setAdditionalLocations] = useState([]);
 
     const formik = useFormik({
         initialValues: initialValues || {
@@ -71,8 +72,10 @@ export const RequestForm = ({ isPublic = false, initialValues, onSubmit, isEditM
         validateOnBlur: true,
         enableReinitialize: true,
         onSubmit: async (values) => {
+            // Add additional locations to submit values
+            const submitValues = { ...values, additional_locations: additionalLocations };
             if (onSubmit) {
-                await onSubmit(values);
+                await onSubmit(submitValues);
             } else {
             try {
                 const response = await fetch('/api/requests', {
@@ -80,7 +83,7 @@ export const RequestForm = ({ isPublic = false, initialValues, onSubmit, isEditM
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify(values),
+                        body: JSON.stringify(submitValues),
                 });
 
                 if (response.ok) {
@@ -285,6 +288,49 @@ export const RequestForm = ({ isPublic = false, initialValues, onSubmit, isEditM
         setFilteredSubTypes(filtered);
         formik.setFieldValue('complaint_type_id', selectedOption ? selectedOption.value : '');
         formik.setFieldValue('complaint_subtype_id', '');
+    };
+
+    const addAdditionalLocation = () => {
+        setAdditionalLocations([...additionalLocations, { latitude: '', longitude: '', description: '' }]);
+    };
+
+    const removeAdditionalLocation = (index) => {
+        setAdditionalLocations(additionalLocations.filter((_, i) => i !== index));
+    };
+
+    const updateAdditionalLocation = (index, field, value) => {
+        const updated = [...additionalLocations];
+        updated[index][field] = value;
+        setAdditionalLocations(updated);
+    };
+
+    const getCurrentLocationForAdditional = (index) => {
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    updateAdditionalLocation(index, 'latitude', position.coords.latitude);
+                    updateAdditionalLocation(index, 'longitude', position.coords.longitude);
+                    toast({
+                        title: "Location captured successfully",
+                        variant: 'success',
+                    });
+                },
+                (error) => {
+                    console.error('Error getting location:', error);
+                    toast({
+                        title: "Location access denied",
+                        description: 'Please enter coordinates manually or try again.',
+                        variant: 'destructive',
+                    });
+                }
+            );
+        } else {
+            toast({
+                title: "Geolocation not supported",
+                description: 'Please enter coordinates manually.',
+                variant: 'destructive',
+            });
+        }
     };
 
     // Options for select components
@@ -573,6 +619,93 @@ export const RequestForm = ({ isPublic = false, initialValues, onSubmit, isEditM
                             <p className="mt-2 text-sm text-green-600">Location access granted</p>
                         )}
                     </div>
+                </div>
+
+                {/* Additional Locations Section */}
+                <div className="md:col-span-2">
+                    <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-lg font-medium">Additional Locations</h3>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            onClick={addAdditionalLocation}
+                            className="flex items-center gap-2"
+                        >
+                            <span>+ Add Location</span>
+                        </Button>
+                    </div>
+                    
+                    {additionalLocations.map((location, index) => (
+                        <div key={index} className="border border-gray-200 rounded-lg p-4 mb-4 bg-gray-50">
+                            <div className="flex items-center justify-between mb-3">
+                                <h4 className="font-medium text-gray-700">Location {index + 1}</h4>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => removeAdditionalLocation(index)}
+                                    className="text-red-600 hover:text-red-700"
+                                >
+                                    Remove
+                                </Button>
+                            </div>
+                            
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        Latitude
+                                    </label>
+                                    <input
+                                        type="number"
+                                        step="any"
+                                        value={location.latitude}
+                                        onChange={(e) => updateAdditionalLocation(index, 'latitude', e.target.value)}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                                        placeholder="Enter latitude"
+                                    />
+                                </div>
+                                
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        Longitude
+                                    </label>
+                                    <input
+                                        type="number"
+                                        step="any"
+                                        value={location.longitude}
+                                        onChange={(e) => updateAdditionalLocation(index, 'longitude', e.target.value)}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                                        placeholder="Enter longitude"
+                                    />
+                                </div>
+                            </div>
+                            
+                            <div className="mb-3">
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Description/Comment
+                                </label>
+                                <textarea
+                                    value={location.description}
+                                    onChange={(e) => updateAdditionalLocation(index, 'description', e.target.value)}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                                    rows={2}
+                                    placeholder="Describe this location..."
+                                />
+                            </div>
+                            
+                            <div className="flex justify-end">
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => getCurrentLocationForAdditional(index)}
+                                    className="flex items-center gap-2"
+                                >
+                                    <span>Get Current Location</span>
+                                </Button>
+                            </div>
+                        </div>
+                    ))}
                 </div>
 
                 <div>

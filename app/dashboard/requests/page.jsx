@@ -57,6 +57,10 @@ const RequestsPage = () => {
         router.push(`/dashboard/requests/performa/${requestId}`);
     };
 
+    const handleView = (requestId) => {
+        router.push(`/dashboard/requests/${requestId}/view`);
+    };
+
     if (loading) {
         return (
             <div className="container mx-auto px-4 py-10">
@@ -117,6 +121,7 @@ const RequestsPage = () => {
                         onEdit: handleEdit,
                         onAssign: handleAssign,
                         onGeneratePerforma: handleGeneratePerforma,
+                        onView: handleView,
                         userRole: session?.user?.role
                     }}
                 />

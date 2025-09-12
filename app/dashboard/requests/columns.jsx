@@ -2,7 +2,7 @@
 
 import { ColumnDef } from "@tanstack/react-table"
 import { format } from "date-fns"
-import { ArrowUpDown , MapPin  } from "lucide-react"
+import { ArrowUpDown , MapPin, Eye } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { useRouter } from "next/navigation"
@@ -134,12 +134,24 @@ export const columns = [
   {
     id: "actions",
     cell: ({ row, table }) => {
-      const { onEdit, onAssign, onGeneratePerforma, userRole } = table.options.meta || {};
+      const { onEdit, onAssign, onGeneratePerforma, onView, userRole } = table.options.meta || {};
       const status = row.original.status_name;
       const requestId = row.original.id;
       const canGeneratePerforma = (status === 'Completed') && (userRole === 1 || userRole === 2);
+      const isAdmin = (userRole === 1 || userRole === 2);
       return (
         <div className="flex space-x-2">
+          {isAdmin && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onView && onView(requestId)}
+              className="flex items-center gap-1"
+            >
+              <Eye className="h-4 w-4" />
+              View
+            </Button>
+          )}
           <Button
             variant="outline"
             size="sm"

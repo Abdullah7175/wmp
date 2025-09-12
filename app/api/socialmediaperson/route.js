@@ -22,6 +22,7 @@ async function saveUploadedFile(file) {
 export async function GET(request) {
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
+    const work_request_id = searchParams.get('work_request_id');
     const page = parseInt(searchParams.get('page') || '1', 10);
     const limit = parseInt(searchParams.get('limit') || '20', 10);
     const offset = (page - 1) * limit;
@@ -38,6 +39,17 @@ export async function GET(request) {
                 return NextResponse.json({ error: 'Videographer not found' }, { status: 404 });
             }
             return NextResponse.json(result.rows[0], { status: 200 });
+        } else if (work_request_id) {
+            // Fetch social media agents assigned to a specific work request
+            const query = `
+                SELECT DISTINCT sm.*
+                FROM socialmediaperson sm
+                JOIN request_assign_smagent ras ON sm.id = ras.socialmedia_agent_id
+                WHERE ras.work_requests_id = $1
+                ORDER BY sm.name
+            `;
+            const result = await client.query(query, [work_request_id]);
+            return NextResponse.json({ data: result.rows }, { status: 200 });
         } else {
             let countQuery = 'SELECT COUNT(*) FROM socialmediaperson';
             let dataQuery = 'SELECT * FROM socialmediaperson';

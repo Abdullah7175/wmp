@@ -49,7 +49,17 @@ export async function GET(request) {
                     (
                         SELECT link FROM final_videos WHERE work_request_id = wr.id LIMIT 1
                     ) as final_video_link,
-                    wr.updated_date as completion_date
+                    wr.updated_date as completion_date,
+                    (
+                        SELECT json_agg(
+                            json_build_object(
+                                'id', wrl.id,
+                                'latitude', wrl.latitude,
+                                'longitude', wrl.longitude,
+                                'description', wrl.description
+                            )
+                        ) FROM work_request_locations wrl WHERE wrl.work_request_id = wr.id
+                    ) as additional_locations
                 FROM work_requests wr
                 LEFT JOIN town t ON wr.town_id = t.id
                 LEFT JOIN subtown st ON wr.subtown_id = st.id
@@ -251,7 +261,8 @@ export async function POST(req) {
             contractor_id,
             nature_of_work,
             budget_code,
-            file_type
+            file_type,
+            additional_locations // array of additional locations
         } = body;
         // Validate required fields
         if (!town_id || !complaint_type_id || !contact_number || !address || !description || !creator_id || !creator_type) {
@@ -378,6 +389,19 @@ export async function POST(req) {
                 );
             }
         }
+
+        // Insert additional locations if present
+        if (Array.isArray(additional_locations) && additional_locations.length > 0) {
+            for (const location of additional_locations) {
+                if (location.latitude && location.longitude) {
+                    await client.query(
+                        'INSERT INTO work_request_locations (work_request_id, latitude, longitude, description) VALUES ($1, $2, $3, $4)',
+                        [workRequestId, location.latitude, location.longitude, location.description || '']
+                    );
+                }
+            }
+        }
+
         await client.query('COMMIT');
         
         // Log the request creation action
@@ -389,6 +413,7 @@ export async function POST(req) {
             creator_id,
             hasLocation: !!(latitude && longitude),
             subtownCount: Array.isArray(subtown_ids) ? subtown_ids.length : 0,
+            additionalLocationsCount: Array.isArray(additional_locations) ? additional_locations.length : 0,
             executive_engineer_id: final_executive_engineer_id,
             contractor_id: final_contractor_id
         });
