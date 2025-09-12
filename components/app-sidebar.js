@@ -229,7 +229,7 @@ export function AppSidebar() {
                                         <CollapsibleTrigger asChild>
                                             <SidebarMenuButton className={`text-base gap-2 py-6`}>
                                                 <Bolt className="w-5 h-5" />
-                                                <span>Type Control</span>
+                                                <span>Department Control</span>
                                                 <ChevronDown />
                                             </SidebarMenuButton>
                                         </CollapsibleTrigger>
@@ -241,7 +241,7 @@ export function AppSidebar() {
                                                         }`}
                                                 >
                                                     <Link href="/dashboard/complaints/types">
-                                                        <span>Complaint Type</span>
+                                                        <span>Departments</span>
                                                     </Link>
                                                 </SidebarMenuSubItem>
                                                 <SidebarMenuSubItem
@@ -249,7 +249,7 @@ export function AppSidebar() {
                                                         }`}
                                                 >
                                                     <Link href="/dashboard/complaints/sub-types">
-                                                        <span>Complaint Subtype</span>
+                                                        <span>Works</span>
                                                     </Link>
                                                 </SidebarMenuSubItem>
                                             </SidebarMenuSub>

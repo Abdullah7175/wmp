@@ -67,7 +67,7 @@ const TypeForm = () => {
 
                 <div className="grid sm:grid-cols-1 md:grid-cols-2 gap-8">
                     <div className="col-span-1 md:col-span-2">
-                        <label htmlFor="type_name" className="block text-gray-700 text-sm font-medium">Name</label>
+                        <label htmlFor="type_name" className="block text-gray-700 text-sm font-medium">Department</label>
                         <input
                             id="type_name"
                             name="type_name"
@@ -99,7 +99,7 @@ const TypeForm = () => {
                         type="submit"
                         className="px-4 py-2 mt-4 bg-indigo-600 text-white font-semibold rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     >
-                        Add Type
+                        Submit
                     </button>
                 </div>
             </form>

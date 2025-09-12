@@ -112,7 +112,7 @@ const TypeForm = () => {
 
                 <div className="grid sm:grid-cols-1 md:grid-cols-2 gap-8">
                     <div className="col-span-1 md:col-span-2">
-                        <label htmlFor="type_name" className="block text-gray-700 text-sm font-medium">Name</label>
+                        <label htmlFor="type_name" className="block text-gray-700 text-sm font-medium">Department</label>
                         <input
                             id="type_name"
                             name="type_name"

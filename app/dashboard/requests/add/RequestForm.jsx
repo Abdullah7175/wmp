@@ -369,7 +369,7 @@ export const RequestForm = ({ isPublic = false, initialValues, onSubmit, isEditM
                     {/* Complaint Type */}
                     {isAgentRole1 ? (
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Complaint Type *</label>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Department *</label>
                             <input
                                 type="text"
                                 value={fixedComplaintType?.type_name || ''}
@@ -381,7 +381,7 @@ export const RequestForm = ({ isPublic = false, initialValues, onSubmit, isEditM
                     ) : (
                         <div>
                             <label htmlFor="complaint_type_id" className="block text-sm font-medium text-gray-700 mb-1">
-                                Complaint Type *
+                                Department *
                             </label>
                             <Select
                                 id="complaint_type_id"
@@ -401,7 +401,7 @@ export const RequestForm = ({ isPublic = false, initialValues, onSubmit, isEditM
                     {/* Complaint Sub Type */}
                     <div>
                         <label htmlFor="complaint_subtype_id" className="block text-sm font-medium text-gray-700 mb-1">
-                            Complaint Sub Type (Optional)
+                            Work
                         </label>
                         <Select
                             id="complaint_subtype_id"

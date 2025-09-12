@@ -24,7 +24,7 @@ const validationSchema = Yup.object({
         .required('Email is required'),
     town_id: Yup.number().required('Town is required'),
     password: Yup.string().required('Password is required').min(6, 'Password must be at least 6 characters'),
-    complaint_type_id: Yup.number().required('Complaint type is required'),
+    complaint_type_id: Yup.number().required('Department is required'),
     role: Yup.number().required('Role is required'),
     image: Yup.mixed(), // optional
 });
@@ -259,7 +259,7 @@ const AgentForm = () => {
                 </div>
 
                 <div>
-                    <label htmlFor="complaint_type_id" className="block text-gray-700 text-sm font-medium">Complaint Type</label>
+                    <label htmlFor="complaint_type_id" className="block text-gray-700 text-sm font-medium">Department</label>
                     <select
                         id="complaint_type_id"
                         name="complaint_type_id"
@@ -267,7 +267,7 @@ const AgentForm = () => {
                         value={formik.values.complaint_type_id}
                         className="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md"
                     >
-                        <option value="">Select a complaint type...</option>
+                        <option value="">Select...</option>
                         {complaintTypes.map((type) => (
                             <option key={type.id} value={type.id}>
                                 {type.type_name || type.name}

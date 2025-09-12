@@ -45,15 +45,15 @@ const TypeForm = () => {
                         });
                     } else {
                         toast({
-                            title: "Failed to fetch subtype data",
+                            title: "Failed to fetch Work data",
                             description: '',
                             variant: 'destructive'
                         });
                     }
                 } catch (error) {
-                    console.error('Error fetching subtype data:', error);
+                    console.error('Error fetching Work data:', error);
                     toast({
-                        title: "Error fetching subtype data",
+                        title: "Error fetching Work data",
                         description: '',
                         variant: 'destructive'
                     });
@@ -69,7 +69,7 @@ const TypeForm = () => {
             try {
                 const res = await fetch('/api/complaints/getalltypes', { method: 'GET' });
                 if (!res.ok) {
-                    throw new Error('Failed to fetch complaint types');
+                    throw new Error('Failed to fetch Department types');
                 }
                 const data = await res.json();
                 setComplaintType(data)
@@ -111,14 +111,14 @@ const TypeForm = () => {
 
                 if (response.ok) {
                     toast({
-                        title: subtypeId ? "Subtype updated successfully" : "Subtype added successfully",
+                        title: subtypeId ? "Work updated successfully" : "Work added successfully",
                         description: '',
                         variant: 'success',
                     });
                     router.push('/dashboard/complaints/sub-types');
                 } else {
                     toast({
-                        title: subtypeId ? "Failed to update subtype" : "Failed to add subtype",
+                        title: subtypeId ? "Failed to update Work" : "Failed to add Work",
                         description: '',
                         variant: 'destructive',
                     });
@@ -126,7 +126,7 @@ const TypeForm = () => {
             } catch (error) {
                 console.error('Error submitting form:', error);
                 toast({
-                    title: "An error occurred while processing the subtype",
+                    title: "An error occurred while processing the Work",
                     description: '',
                     variant: 'destructive'
                 });
@@ -140,7 +140,7 @@ const TypeForm = () => {
 
                 <div className="grid sm:grid-cols-1 md:grid-cols-2 gap-8">
                     <div>
-                        <label htmlFor="complaintTypeName" className="block text-gray-700 text-sm font-medium">Name</label>
+                        <label htmlFor="complaintTypeName" className="block text-gray-700 text-sm font-medium">Work</label>
                         <input
                             id="subtype_name"
                             name="subtype_name"
@@ -153,7 +153,7 @@ const TypeForm = () => {
                     </div>
 
                     <div>
-                        <label htmlFor="complaint_type_id" className="block text-gray-700 text-sm font-medium">Complaint Type</label>
+                        <label htmlFor="complaint_type_id" className="block text-gray-700 text-sm font-medium">Department</label>
                         <Select
                             id="complaint_type_id"
                             name="complaint_type_id"
@@ -188,7 +188,7 @@ const TypeForm = () => {
                         type="submit"
                         className="px-4 py-2 mt-4 bg-indigo-600 text-white font-semibold rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     >
-                        Add SubType
+                        Submit
                     </button>
                 </div>
             </form>

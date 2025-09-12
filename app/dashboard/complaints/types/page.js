@@ -48,13 +48,13 @@ export default function Page() {
   return (
     <div className="container mx-auto px-4 py-10">
       <DataTable columns={columns} data={types}>
-        <h1 className="text-3xl font-semibold">Types</h1>
-        <input
+        <h1 className="text-3xl font-semibold">Departments</h1>
+        {/* <input
           placeholder="Filter types..."
           value={filter}
           onChange={e => { setPage(1); setFilter(e.target.value); }}
           className="max-w-sm bg-gray-100 shadow-sm border px-2 py-1 rounded ml-4"
-        />
+        /> */}
       </DataTable>
       <div className="flex justify-center mt-6 gap-2">
         <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className="px-3 py-1 border rounded disabled:opacity-50">Previous</button>

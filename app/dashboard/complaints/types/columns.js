@@ -17,7 +17,7 @@ import Link from "next/link"
 export const columns = [
   {
     accessorKey: "type_name",
-    header: "Type",
+    header: "Department",
   },
   {
     accessorKey: "description",
@@ -39,11 +39,11 @@ export const columns = [
           <DropdownMenuContent align="end">
             <DropdownMenuLabel>Actions</DropdownMenuLabel>
             <DropdownMenuItem>
-              <Link href={`/dashboard/complaints/types/edit/${agent.id}`}>Edit Types</Link>
+              <Link href={`/dashboard/complaints/types/edit/${agent.id}`}>Edit Department</Link>
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem>
-            <Link className="text-red-700" href={`/dashboard/complaints/types/delete/${agent.id}`}>Delete Types</Link>
+            <Link className="text-red-700" href={`/dashboard/complaints/types/delete/${agent.id}`}>Delete Department</Link>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

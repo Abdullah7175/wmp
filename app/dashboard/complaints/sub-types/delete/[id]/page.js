@@ -21,7 +21,7 @@ const DeleteSubtypePage = () => {
       })
 
       if (!response.ok) {
-        throw new Error('Failed to delete subtype')
+        throw new Error('Failed to delete Work')
       }
 
       window.location.href = '/dashboard/complaints/sub-types';
@@ -34,7 +34,7 @@ const DeleteSubtypePage = () => {
   return (
     <div className="flex justify-center items-center">
       <div className="space-y-4 border container max-w-2xl p-10 shadow-md mt-20">
-        <h1 className="text-2xl">Are you sure you want to delete this subtype?</h1>
+        <h1 className="text-2xl">Are you sure you want to delete this Work?</h1>
         <p>This action cannot be undone.</p>
 
         {error && <div className="text-red-600">{error}</div>}
@@ -48,7 +48,7 @@ const DeleteSubtypePage = () => {
             onClick={handleDelete}
             disabled={loading}
           >
-            {loading ? 'Deleting...' : 'Delete Subtype'}
+            {loading ? 'Deleting...' : 'Delete Work'}
           </Button>
         </div>
       </div>

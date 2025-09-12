@@ -21,7 +21,7 @@ const DeleteTypePage = () => {
       })
 
       if (!response.ok) {
-        throw new Error('Failed to delete type')
+        throw new Error('Failed to delete Department')
       }
 
       window.location.href = '/dashboard/complaints/types';
@@ -34,7 +34,7 @@ const DeleteTypePage = () => {
   return (
     <div className="flex justify-center items-center">
       <div className="space-y-4 border container max-w-2xl p-10 shadow-md mt-20">
-        <h1 className="text-2xl">Are you sure you want to delete this type?</h1>
+        <h1 className="text-2xl">Are you sure you want to delete this Department?</h1>
         <p>This action cannot be undone.</p>
 
         {error && <div className="text-red-600">{error}</div>}
@@ -48,7 +48,7 @@ const DeleteTypePage = () => {
             onClick={handleDelete}
             disabled={loading}
           >
-            {loading ? 'Deleting...' : 'Delete Type'}
+            {loading ? 'Deleting...' : 'Delete Department'}
           </Button>
         </div>
       </div>

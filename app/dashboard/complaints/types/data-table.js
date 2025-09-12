@@ -44,7 +44,7 @@ export function DataTable({ columns, data, children }) {
                 <div className="flex gap-3 items-center justify-end flex-1">
                 <Link href={"/dashboard/complaints/types/add"}>
                 <Button variant="primary" className="border px-3">
-                    <Plus/> Add New Type
+                    <Plus/> Add New Department
                 </Button>
                 </Link>
                 <Input

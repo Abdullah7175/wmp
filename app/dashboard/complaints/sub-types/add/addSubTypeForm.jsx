@@ -47,14 +47,14 @@ const SubtypeForm = () => {
 
                 if (response.ok) {
                     toast({
-                        title: "SubType added successfully",
+                        title: "Work added successfully",
                         description: '',
                         variant: 'success',
                     });
                     setIsSuccess(true);
                 } else {
                     toast({
-                        title: "Failed to add type",
+                        title: "Failed to add Work",
                         description: '',
                         variant: 'destructive',
                     });
@@ -62,7 +62,7 @@ const SubtypeForm = () => {
             } catch (error) {
                 console.error('Error submitting form:', error);
                 toast({
-                    title: "An error occurred while adding the type",
+                    title: "An error occurred while adding the Work",
                     description: '',
                     variant: 'destructive',
                 });
@@ -79,10 +79,10 @@ const SubtypeForm = () => {
                     const data = await response.json();
                     setTypes(data);
                 } else {
-                    setError('Failed to fetch subtypes');
+                    setError('Failed to fetch Works');
                 }
             } catch (error) {
-                setError('Error fetching subtypes');
+                setError('Error fetching Works');
             } finally {
                 setLoading(false);
             }
@@ -95,7 +95,7 @@ const SubtypeForm = () => {
             try {
                 const res = await fetch('/api/complaints/getalltypes', { method: 'GET' });
                 if (!res.ok) {
-                    throw new Error('Failed to fetch complaint types');
+                    throw new Error('Failed to fetch Department');
                 }
                 const data = await res.json();
                 setComplaintType(data)
@@ -119,7 +119,7 @@ const SubtypeForm = () => {
 
                 <div className="grid sm:grid-cols-1 md:grid-cols-2 gap-8">
                     <div>
-                        <label htmlFor="complaintTypeName" className="block text-gray-700 text-sm font-medium">Name</label>
+                        <label htmlFor="complaintTypeName" className="block text-gray-700 text-sm font-medium">Work</label>
                         <input
                             id="subtype_name"
                             name="subtype_name"
@@ -132,7 +132,7 @@ const SubtypeForm = () => {
                     </div>
 
                     <div>
-                        <label htmlFor="complaint_type_id" className="block text-gray-700 text-sm font-medium">Complaint Type</label>
+                        <label htmlFor="complaint_type_id" className="block text-gray-700 text-sm font-medium">Department</label>
                         <Select
                             id="complaint_type_id"
                             name="complaint_type_id"
@@ -166,7 +166,7 @@ const SubtypeForm = () => {
                         type="submit"
                         className="px-4 py-2 mt-4 bg-indigo-600 text-white font-semibold rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     >
-                        Add SubType
+                        Submit
                     </button>
                 </div>
             </form>

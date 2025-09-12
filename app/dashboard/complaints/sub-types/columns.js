@@ -17,11 +17,11 @@ import Link from "next/link"
 export const columns = [
   {
     accessorKey: "subtype_name",
-    header: "Name",
+    header: "Work",
   },
   {
     accessorKey: "complaint_type",
-    header: "Complaint Type",
+    header: "Department",
   },
   {
     accessorKey: "description",
@@ -42,11 +42,11 @@ export const columns = [
           <DropdownMenuContent align="end">
             <DropdownMenuLabel>Actions</DropdownMenuLabel>
             <DropdownMenuItem>
-              <Link href={`/dashboard/complaints/sub-types/edit/${subtype.id}`}>Edit Types</Link>
+              <Link href={`/dashboard/complaints/sub-types/edit/${subtype.id}`}>Edit Work</Link>
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem>
-            <Link className="text-red-700" href={`/dashboard/complaints/sub-types/delete/${subtype.id}`}>Delete Types</Link>
+            <Link className="text-red-700" href={`/dashboard/complaints/sub-types/delete/${subtype.id}`}>Delete Work</Link>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

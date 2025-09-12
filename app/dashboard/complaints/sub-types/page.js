@@ -30,10 +30,10 @@ export default function Page() {
               setTotal(result.length || 0);
             }
           } else {
-            setError('Failed to fetch subtypes');
+            setError('Failed to fetch Works');
           }
         } catch (error) {
-          setError('Error fetching subtypes');
+          setError('Error fetching Works');
         } finally {
           setLoading(false);
         }
@@ -48,13 +48,13 @@ export default function Page() {
   return (
     <div className="container mx-auto px-4 py-10">
       <DataTable columns={columns} data={subtypes}>
-        <h1 className="text-3xl font-semibold">Add Subtypes</h1>
-        <input
+        <h1 className="text-3xl font-semibold">Works</h1>
+        {/* <input
           placeholder="Filter subtypes..."
           value={filter}
           onChange={e => { setPage(1); setFilter(e.target.value); }}
           className="max-w-sm bg-gray-100 shadow-sm border px-2 py-1 rounded ml-4"
-        />
+        /> */}
       </DataTable>
       <div className="flex justify-center mt-6 gap-2">
         <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className="px-3 py-1 border rounded disabled:opacity-50">Previous</button>

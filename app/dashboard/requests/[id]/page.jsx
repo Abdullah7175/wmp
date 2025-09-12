@@ -153,7 +153,7 @@ const RequestDetailPage = () => {
                             <p><span className="font-medium">Date:</span> {new Date(request.request_date).toLocaleDateString()}</p>
                             <p><span className="font-medium">Town:</span> {request.town_name}</p>
                             {request.subtown_name && <p><span className="font-medium">Sub Town:</span> {request.subtown_name}</p>}
-                            <p><span className="font-medium">Complaint Type:</span> {request.complaint_type}</p>
+                            <p><span className="font-medium">Department:</span> {request.complaint_type}</p>
                             {request.complaint_subtype && <p><span className="font-medium">Nature of Work:</span> {request.complaint_subtype}</p>}
                         </div>
                     </div>
