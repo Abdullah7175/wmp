@@ -134,7 +134,7 @@ export default function AgentDashboard() {
 
             <div className="flex flex-col lg:flex-row w-full gap-8 mt-10">
                 <div className="w-full xl:w-1/2 bg-white rounded-lg shadow p-6">
-                    <h2 className="text-lg font-semibold mb-4">Requests by Complaint Subtype</h2>
+                    <h2 className="text-lg font-semibold mb-4">Requests by Works</h2>
                     <div className="w-full h-72">
                         <ChartContainer config={{}}>
                             {chartData.length <= 6 ? (
@@ -173,7 +173,7 @@ export default function AgentDashboard() {
                             <tr>
                                 <th className="px-4 py-2 border">Request ID</th>
                                 <th className="px-4 py-2 border">Date</th>
-                                <th className="px-4 py-2 border">Complaint Subtype</th>
+                                <th className="px-4 py-2 border">Works</th>
                                 <th className="px-4 py-2 border"># Images</th>
                                 <th className="px-4 py-2 border"># Videos</th>
                             </tr>

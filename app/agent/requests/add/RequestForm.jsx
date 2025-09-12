@@ -14,7 +14,7 @@ const validationSchema = Yup.object({
     town_id: Yup.string().required('Town is required'),
     subtown_id: Yup.string().nullable(),
     subtown_ids: Yup.array().of(Yup.number()),
-    complaint_type_id: Yup.string().required('Complaint type is required'),
+    complaint_type_id: Yup.string().required('Department is required'),
     complaint_subtype_id: Yup.string().nullable(),
     contact_number: Yup.string()
         .required('Contact number is required')

@@ -38,7 +38,7 @@ export function getAgentRequestColumns({ onAddImage, onAddVideo }) {
     },
     {
       accessorKey: "complaint_type",
-      header: "Complaint Type",
+      header: "Department",
     },
     {
     accessorKey: "location", // dummy, not used in display
