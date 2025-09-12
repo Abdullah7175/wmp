@@ -7,15 +7,43 @@ import {
     CardHeader,
     CardTitle,
 } from "@/components/ui/card"
-import { MessageCircleWarning, Activity, CheckCheck, Plus } from "lucide-react"
+import { MessageCircleWarning, Activity, CheckCheck, Plus, Clock } from "lucide-react"
 import { LineChartWithValues } from "@/components/lineChart"
 import { PieChartWithValues } from "@/components/pieChart"
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { QuestionMarkCircledIcon, QuestionMarkIcon } from "@radix-ui/react-icons";
+import { useState, useEffect } from "react";
 const MapComponent = dynamic(() => import("@/components/MapComponent"), { ssr: false });
 
 const page = () => {
+    const [stats, setStats] = useState({
+        totalRequests: 0,
+        activeRequests: 0,
+        completedRequests: 0,
+        pendingRequests: 0,
+        recentRequests: 0
+    });
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const fetchStats = async () => {
+            try {
+                const response = await fetch('/api/dashboard/stats');
+                if (response.ok) {
+                    const data = await response.json();
+                    setStats(data);
+                }
+            } catch (error) {
+                console.error('Error fetching dashboard stats:', error);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchStats();
+    }, []);
+
     return (
         <div className="container mx-auto px-4 py-3">
             <div className="py-4">
@@ -35,7 +63,7 @@ const page = () => {
                                 Total Requests
                             </p>
                             <p className="text-sm text-muted-foreground">
-                                1200
+                                {loading ? '...' : stats.totalRequests.toLocaleString()}
                             </p>
                         </div>
                     </div>
@@ -46,10 +74,10 @@ const page = () => {
                         <Activity className="text-red-700" />
                         <div className="flex-1 space-y-1">
                             <p className="text-md font-medium leading-none">
-                                Active Request
+                                Active Requests
                             </p>
                             <p className="text-sm text-muted-foreground">
-                                500
+                                {loading ? '...' : stats.activeRequests.toLocaleString()}
                             </p>
                         </div>
                     </div>
@@ -60,10 +88,10 @@ const page = () => {
                         <CheckCheck className="text-green-700" />
                         <div className="flex-1 space-y-1">
                             <p className="text-md font-medium leading-none">
-                                Completed Request
+                                Completed Requests
                             </p>
                             <p className="text-sm text-muted-foreground">
-                                700
+                                {loading ? '...' : stats.completedRequests.toLocaleString()}
                             </p>
                         </div>
                     </div>
@@ -71,13 +99,13 @@ const page = () => {
 
                 <Card className="w-full lg:w-1/3 bg-slate-50 border-2 shadow-md">
                     <div className="flex items-center space-x-4 rounded-md p-6">
-                        <QuestionMarkIcon className="text-green-700" />
+                        <Clock className="text-blue-700" />
                         <div className="flex-1 space-y-1">
                             <p className="text-md font-medium leading-none">
-                                Pending Request
+                                Pending Requests
                             </p>
                             <p className="text-sm text-muted-foreground">
-                                700
+                                {loading ? '...' : stats.pendingRequests.toLocaleString()}
                             </p>
                         </div>
                     </div>
