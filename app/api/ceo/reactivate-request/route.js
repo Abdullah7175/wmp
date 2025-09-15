@@ -37,7 +37,7 @@ export async function POST(request) {
       WHERE wr.id = $1 AND wra.approval_status = 'rejected'
     `, [workRequestId]);
 
-    if (existingRequest.length === 0) {
+    if (!existingRequest.rows || existingRequest.rows.length === 0) {
       return NextResponse.json(
         { success: false, message: "Rejected request not found" },
         { status: 404 }
@@ -57,7 +57,7 @@ export async function POST(request) {
       RETURNING *
     `, [workRequestId]);
 
-    if (result.length === 0) {
+    if (!result.rows || result.rows.length === 0) {
       return NextResponse.json(
         { success: false, message: "Failed to reactivate request" },
         { status: 500 }

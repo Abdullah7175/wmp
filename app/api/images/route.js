@@ -149,11 +149,11 @@ export async function POST(req) {
             WHERE wr.id = $1
         `, [workRequestId]);
 
-        if (approvalStatus.length === 0) {
+        if (!approvalStatus.rows || approvalStatus.rows.length === 0) {
             return NextResponse.json({ error: 'Work request not found' }, { status: 404 });
         }
 
-        const request = approvalStatus[0];
+        const request = approvalStatus.rows[0];
         const isApproved = request.approval_status === 'approved';
         const isRejected = request.approval_status === 'rejected';
         const isPending = request.approval_status === 'pending';
