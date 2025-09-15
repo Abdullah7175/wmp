@@ -19,6 +19,13 @@ const nextConfig = {
     },
   },
   serverExternalPackages: ['sharp', 'fs-extra'],
+  // Increase body size limit for large video uploads
+  api: {
+    bodyParser: {
+      sizeLimit: '500mb',
+    },
+    responseLimit: false,
+  },
   webpack: (config) => {
     config.resolve.fallback = { 
       fs: false, 

@@ -118,10 +118,10 @@ export default async function RequestViewPage({ params }) {
   }
 
   return (
-    <div className="p-6">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Request Details</h1>
-        <p className="text-gray-600 mt-2">
+    <div className="p-4 lg:p-6">
+      <div className="mb-6 lg:mb-8">
+        <h1 className="text-2xl lg:text-3xl font-bold text-gray-900">Request Details</h1>
+        <p className="text-sm lg:text-base text-gray-600 mt-2">
           View work request #{requestData.request.id} and add CEO comments
         </p>
       </div>

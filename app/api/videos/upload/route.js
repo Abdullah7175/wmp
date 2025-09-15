@@ -73,9 +73,25 @@ export async function POST(req) {
         const latitudes = formData.getAll('latitude');
         const longitudes = formData.getAll('longitude');
 
+        // Increased limits: up to 15 videos, 500MB each
+        const MAX_VIDEOS = 15;
+        const MAX_FILE_SIZE = 500 * 1024 * 1024; // 500MB
+
         if (!workRequestId || files.length === 0) {
             return NextResponse.json({ error: 'Work Request ID and at least one video are required' }, { status: 400 });
         }
+
+        if (files.length > MAX_VIDEOS) {
+            return NextResponse.json({ error: `Maximum ${MAX_VIDEOS} videos allowed per upload` }, { status: 400 });
+        }
+
+        // Check file sizes
+        for (const file of files) {
+            if (file.size > MAX_FILE_SIZE) {
+                return NextResponse.json({ error: `File ${file.name} exceeds 500MB limit` }, { status: 400 });
+            }
+        }
+
         if (files.length !== descriptions.length || files.length !== latitudes.length || files.length !== longitudes.length) {
             return NextResponse.json({ error: 'Each video must have a description, latitude, and longitude' }, { status: 400 });
         }

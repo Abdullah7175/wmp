@@ -15,10 +15,12 @@ import {
   LogOut,
   BarChart3,
   List,
-  RefreshCw
+  RefreshCw,
+  Menu,
+  X
 } from "lucide-react";
 
-export default function CeoSidebar() {
+export default function CeoSidebar({ isOpen, onClose }) {
   const pathname = usePathname();
   const { data: session, update } = useSession();
   const [imageError, setImageError] = useState(false);
@@ -120,69 +122,94 @@ export default function CeoSidebar() {
   ];
 
   return (
-    <div className="w-64 bg-white shadow-lg flex flex-col h-full">
-      {/* CEO Header */}
-      <div className="p-6 border-b border-gray-200">
-        <div className="flex items-center space-x-3">
-          <div className="w-16 h-16 bg-gradient-to-br from-blue-600 to-blue-800 rounded-lg flex items-center justify-center">
-          {(ceoImage || session?.user?.image) && !imageError ? (
-              <Image 
-                src={ceoImage || session.user.image} 
-                alt={session?.user?.name || 'CEO'} 
-                width={45}  
-                height={45} 
-                className="object-cover w-full h-full"
-                unoptimized
-                onLoad={() => {
-                  console.log('Image loaded successfully:', ceoImage || session?.user?.image);
-                  setImageError(false);
-                }}
-                onError={(e) => {
-                  console.log('Image failed to load:', ceoImage || session?.user?.image);
-                  console.log('Error event:', e);
-                  setImageError(true);
-                }}
-              />
-            ) : (
-              <div className="w-full h-full bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center">
-                <User className="w-5 h-5 text-white" />
+    <>
+      {/* Mobile Overlay */}
+      {isOpen && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
+          onClick={onClose}
+        />
+      )}
+      
+      {/* Sidebar */}
+      <div className={`
+        fixed lg:static inset-y-0 left-0 z-50 w-64 bg-white shadow-lg flex flex-col h-full
+        transform transition-transform duration-300 ease-in-out
+        ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+      `}>
+        {/* CEO Header */}
+        <div className="p-6 border-b border-gray-200">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <div className="w-16 h-16 bg-gradient-to-br from-blue-600 to-blue-800 rounded-lg flex items-center justify-center">
+              {(ceoImage || session?.user?.image) && !imageError ? (
+                  <Image 
+                    src={ceoImage || session.user.image} 
+                    alt={session?.user?.name || 'CEO'} 
+                    width={45}  
+                    height={45} 
+                    className="object-cover w-full h-full"
+                    unoptimized
+                    onLoad={() => {
+                      console.log('Image loaded successfully:', ceoImage || session?.user?.image);
+                      setImageError(false);
+                    }}
+                    onError={(e) => {
+                      console.log('Image failed to load:', ceoImage || session?.user?.image);
+                      console.log('Error event:', e);
+                      setImageError(true);
+                    }}
+                  />
+                ) : (
+                  <div className="w-full h-full bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center">
+                    <User className="w-5 h-5 text-white" />
+                  </div>
+                )} 
               </div>
-            )} 
-          </div>
-          <div>
-            <h1 className="text-xl font-bold text-gray-900">CEO Portal</h1>
-            <p className="text-sm text-gray-600">KW&SC Water Corporation</p>
+              <div>
+                <h1 className="text-xl font-bold text-gray-900">CEO Portal</h1>
+                <p className="text-sm text-gray-600">KW&SC Water Corporation</p>
+              </div>
+            </div>
+            
+            {/* Mobile Close Button */}
+            <button
+              onClick={onClose}
+              className="lg:hidden p-2 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+            >
+              <X className="w-6 h-6" />
+            </button>
           </div>
         </div>
-      </div>
 
-      {/* Navigation */}
-      <nav className="mt-6 flex-1">
-        {navigation.map((item) => {
-          const Icon = item.icon;
-          const isActive = pathname === item.href;
-          
-          return (
-            <Link
-              key={item.name}
-              href={item.href}
-              className={`flex items-center px-6 py-3 text-sm font-medium transition-colors duration-200 ${
-                isActive
-                  ? "bg-blue-50 text-blue-700 border-r-2 border-blue-700"
-                  : "text-gray-700 hover:bg-gray-50 hover:text-gray-900"
-              }`}
-            >
-              <Icon className="w-5 h-5 mr-3" />
-              {item.name}
-              {item.badge && (
-                <span className="ml-auto bg-red-100 text-red-800 text-xs font-medium px-2 py-1 rounded-full">
-                  {item.badge}
-                </span>
-              )}
-            </Link>
-          );
-        })}
-      </nav>
+        {/* Navigation */}
+        <nav className="mt-6 flex-1">
+          {navigation.map((item) => {
+            const Icon = item.icon;
+            const isActive = pathname === item.href;
+            
+            return (
+              <Link
+                key={item.name}
+                href={item.href}
+                onClick={onClose} // Close sidebar on mobile when link is clicked
+                className={`flex items-center px-6 py-3 text-sm font-medium transition-colors duration-200 ${
+                  isActive
+                    ? "bg-blue-50 text-blue-700 border-r-2 border-blue-700"
+                    : "text-gray-700 hover:bg-gray-50 hover:text-gray-900"
+                }`}
+              >
+                <Icon className="w-5 h-5 mr-3" />
+                {item.name}
+                {item.badge && (
+                  <span className="ml-auto bg-red-100 text-red-800 text-xs font-medium px-2 py-1 rounded-full">
+                    {item.badge}
+                  </span>
+                )}
+              </Link>
+            );
+          })}
+        </nav>
 
       {/* Logout Button */}
       <div className="mt-auto px-6 py-4">
@@ -247,6 +274,7 @@ export default function CeoSidebar() {
           </button>
         </div>
       </div>
-    </div>
+      </div>
+    </>
   );
 }

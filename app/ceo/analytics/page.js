@@ -111,11 +111,11 @@ const CeoAnalyticsPage = () => {
     }
 
     return (
-        <div className="container mx-auto px-4 py-3">
+        <div className="container mx-auto px-4 py-3 lg:px-6">
             {/* Header */}
-            <div className="mb-8">
-                <h1 className="text-3xl font-bold text-gray-900 mb-2">Analytics Dashboard</h1>
-                <p className="text-gray-600">Comprehensive overview of KW&SC Water Corporation operations</p>
+            <div className="mb-6 lg:mb-8">
+                <h1 className="text-2xl lg:text-3xl font-bold text-gray-900 mb-2">Analytics Dashboard</h1>
+                <p className="text-sm lg:text-base text-gray-600">Comprehensive overview of KW&SC Water Corporation operations</p>
             </div>
 
             {/* Quick Actions */}
@@ -143,18 +143,18 @@ const CeoAnalyticsPage = () => {
             </div> */}
 
             {/* Main Statistics Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6 mb-6 lg:mb-8">
                 <Card className="bg-gradient-to-r from-blue-50 to-blue-100 border-2 shadow-md">
-                    <div className="flex items-center space-x-4 rounded-md p-6">
-                        <MessageCircleWarning className="text-blue-700 w-8 h-8" />
-                        <div className="flex-1 space-y-1">
-                            <p className="text-lg font-semibold leading-none text-blue-900">
+                    <div className="flex items-center space-x-3 lg:space-x-4 rounded-md p-4 lg:p-6">
+                        <MessageCircleWarning className="text-blue-700 w-6 h-6 lg:w-8 lg:h-8 flex-shrink-0" />
+                        <div className="flex-1 space-y-1 min-w-0">
+                            <p className="text-sm lg:text-lg font-semibold leading-none text-blue-900 truncate">
                                 Total Requests
                             </p>
-                            <p className="text-2xl font-bold text-blue-800">
+                            <p className="text-xl lg:text-2xl font-bold text-blue-800">
                                 {stats.totalRequests.toLocaleString()}
                             </p>
-                            <p className="text-sm text-blue-600">
+                            <p className="text-xs lg:text-sm text-blue-600">
                                 All time requests
                             </p>
                         </div>
@@ -162,16 +162,16 @@ const CeoAnalyticsPage = () => {
                 </Card>
 
                 <Card className="bg-gradient-to-r from-purple-50 to-purple-100 border-2 shadow-md">
-                    <div className="flex items-center space-x-4 rounded-md p-6">
-                        <Activity className="text-purple-700 w-8 h-8" />
-                        <div className="flex-1 space-y-1">
-                            <p className="text-lg font-semibold leading-none text-purple-900">
+                    <div className="flex items-center space-x-3 lg:space-x-4 rounded-md p-4 lg:p-6">
+                        <Activity className="text-purple-700 w-6 h-6 lg:w-8 lg:h-8 flex-shrink-0" />
+                        <div className="flex-1 space-y-1 min-w-0">
+                            <p className="text-sm lg:text-lg font-semibold leading-none text-purple-900 truncate">
                                 Active Requests
                             </p>
-                            <p className="text-2xl font-bold text-purple-800">
+                            <p className="text-xl lg:text-2xl font-bold text-purple-800">
                                 {stats.activeRequests.toLocaleString()}
                             </p>
-                            <p className="text-sm text-purple-600">
+                            <p className="text-xs lg:text-sm text-purple-600">
                                 Currently in progress
                             </p>
                         </div>
@@ -179,16 +179,16 @@ const CeoAnalyticsPage = () => {
                 </Card>
 
                 <Card className="bg-gradient-to-r from-indigo-50 to-indigo-100 border-2 shadow-md">
-                    <div className="flex items-center space-x-4 rounded-md p-6">
-                        <Users className="text-indigo-700 w-8 h-8" />
-                        <div className="flex-1 space-y-1">
-                            <p className="text-lg font-semibold leading-none text-indigo-900">
+                    <div className="flex items-center space-x-3 lg:space-x-4 rounded-md p-4 lg:p-6">
+                        <Users className="text-indigo-700 w-6 h-6 lg:w-8 lg:h-8 flex-shrink-0" />
+                        <div className="flex-1 space-y-1 min-w-0">
+                            <p className="text-sm lg:text-lg font-semibold leading-none text-indigo-900 truncate">
                                 Total Users
                             </p>
-                            <p className="text-2xl font-bold text-indigo-800">
+                            <p className="text-xl lg:text-2xl font-bold text-indigo-800">
                                 {stats.totalUsers.toLocaleString()}
                             </p>
-                            <p className="text-sm text-indigo-600">
+                            <p className="text-xs lg:text-sm text-indigo-600">
                                 System users
                             </p>
                         </div>
@@ -196,16 +196,16 @@ const CeoAnalyticsPage = () => {
                 </Card>
 
                 <Card className="bg-gradient-to-r from-teal-50 to-teal-100 border-2 shadow-md">
-                    <div className="flex items-center space-x-4 rounded-md p-6">
-                        <Building2 className="text-teal-700 w-8 h-8" />
-                        <div className="flex-1 space-y-1">
-                            <p className="text-lg font-semibold leading-none text-teal-900">
+                    <div className="flex items-center space-x-3 lg:space-x-4 rounded-md p-4 lg:p-6">
+                        <Building2 className="text-teal-700 w-6 h-6 lg:w-8 lg:h-8 flex-shrink-0" />
+                        <div className="flex-1 space-y-1 min-w-0">
+                            <p className="text-sm lg:text-lg font-semibold leading-none text-teal-900 truncate">
                                 Field Agents
                             </p>
-                            <p className="text-2xl font-bold text-teal-800">
+                            <p className="text-xl lg:text-2xl font-bold text-teal-800">
                                 {stats.totalAgents.toLocaleString()}
                             </p>
-                            <p className="text-sm text-teal-600">
+                            <p className="text-xs lg:text-sm text-teal-600">
                                 Active agents
                             </p>
                         </div>
@@ -269,19 +269,19 @@ const CeoAnalyticsPage = () => {
             </div> */}
 
             {/* Map Component */}
-            <div className="mb-8">
+            <div className="mb-6 lg:mb-8">
                 <Card className="shadow-lg">
-                    <CardHeader>
+                    <CardHeader className="p-4 lg:p-6">
                         <div className="flex items-center space-x-2">
-                            <Map className="w-6 h-6 text-blue-600" />
-                            <CardTitle className="text-xl font-semibold">Geographic Distribution</CardTitle>
+                            <Map className="w-5 h-5 lg:w-6 lg:h-6 text-blue-600" />
+                            <CardTitle className="text-lg lg:text-xl font-semibold">Geographic Distribution</CardTitle>
                         </div>
-                        <CardDescription>
+                        <CardDescription className="text-sm lg:text-base">
                             Real-time map view of all work requests and their locations
                         </CardDescription>
                     </CardHeader>
-                    <CardContent>
-                        <div className="h-[600px] w-full rounded shadow">
+                    <CardContent className="p-4 lg:p-6 pt-0 lg:pt-0">
+                        <div className="h-[300px] lg:h-[600px] w-full rounded shadow">
                             <MapComponent />
                         </div>
                     </CardContent>
@@ -289,19 +289,19 @@ const CeoAnalyticsPage = () => {
             </div>
 
             {/* Charts Section */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-8 mb-6 lg:mb-8">
                 <div className="lg:col-span-2">
                     <Card className="shadow-lg">
-                        <CardHeader>
+                        <CardHeader className="p-4 lg:p-6">
                             <div className="flex items-center space-x-2">
-                                <BarChart3 className="w-6 h-6 text-blue-600" />
-                                <CardTitle className="text-xl font-semibold">Request Trends</CardTitle>
+                                <BarChart3 className="w-5 h-5 lg:w-6 lg:h-6 text-blue-600" />
+                                <CardTitle className="text-lg lg:text-xl font-semibold">Request Trends</CardTitle>
                             </div>
-                            <CardDescription>
+                            <CardDescription className="text-sm lg:text-base">
                                 Monthly trends of work requests over time
                             </CardDescription>
                         </CardHeader>
-                        <CardContent>
+                        <CardContent className="p-4 lg:p-6 pt-0 lg:pt-0">
                             <LineChartWithValues />
                         </CardContent>
                     </Card>
@@ -309,16 +309,16 @@ const CeoAnalyticsPage = () => {
                 
                 <div>
                     <Card className="shadow-lg">
-                        <CardHeader>
+                        <CardHeader className="p-4 lg:p-6">
                             <div className="flex items-center space-x-2">
-                                <PieChart className="w-6 h-6 text-green-600" />
-                                <CardTitle className="text-xl font-semibold">Request Distribution</CardTitle>
+                                <PieChart className="w-5 h-5 lg:w-6 lg:h-6 text-green-600" />
+                                <CardTitle className="text-lg lg:text-xl font-semibold">Request Distribution</CardTitle>
                             </div>
-                            <CardDescription>
+                            <CardDescription className="text-sm lg:text-base">
                                 Breakdown by request types and status
                             </CardDescription>
                         </CardHeader>
-                        <CardContent>
+                        <CardContent className="p-4 lg:p-6 pt-0 lg:pt-0">
                             <PieChartWithValues />
                         </CardContent>
                     </Card>
@@ -327,29 +327,29 @@ const CeoAnalyticsPage = () => {
 
             {/* Recent Activity */}
             <Card className="shadow-lg min-h-[300px]">
-                <CardHeader>
-                    <div className="flex items-center justify-between">
+                <CardHeader className="p-4 lg:p-6">
+                    <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-2 lg:space-y-0">
                         <div className="flex items-center space-x-2">
-                            <FileText className="w-6 h-6 text-purple-600" />
-                            <CardTitle className="text-xl font-semibold">Recent Activity</CardTitle>
+                            <FileText className="w-5 h-5 lg:w-6 lg:h-6 text-purple-600" />
+                            <CardTitle className="text-lg lg:text-xl font-semibold">Recent Activity</CardTitle>
                         </div>
-                        <div className="flex items-center space-x-2">
-                            <span className="text-sm text-gray-500">
+                        <div className="flex flex-col lg:flex-row lg:items-center space-y-2 lg:space-y-0 lg:space-x-2">
+                            <span className="text-xs lg:text-sm text-gray-500">
                                 {stats.recentRequests.length} total requests
                             </span>
                             {stats.recentRequests.length > recentRequestsPerPage && (
                                 <button
                                     onClick={() => setShowAllRecent(!showAllRecent)}
-                                    className="text-sm text-blue-600 hover:text-blue-800 flex items-center space-x-1"
+                                    className="text-xs lg:text-sm text-blue-600 hover:text-blue-800 flex items-center space-x-1"
                                 >
                                     {showAllRecent ? (
                                         <>
-                                            <ChevronUp className="w-4 h-4" />
+                                            <ChevronUp className="w-3 h-3 lg:w-4 lg:h-4" />
                                             <span>Show Less</span>
                                         </>
                                     ) : (
                                         <>
-                                            <ChevronDown className="w-4 h-4" />
+                                            <ChevronDown className="w-3 h-3 lg:w-4 lg:h-4" />
                                             <span>Show All</span>
                                         </>
                                     )}
@@ -357,31 +357,31 @@ const CeoAnalyticsPage = () => {
                             )}
                         </div>
                     </div>
-                    <CardDescription>
+                    <CardDescription className="text-sm lg:text-base">
                         Latest work requests requiring attention
                     </CardDescription>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="p-4 lg:p-6 pt-0 lg:pt-0">
                     {stats.recentRequests && stats.recentRequests.length > 0 ? (
-                        <div className="space-y-4">
+                        <div className="space-y-3 lg:space-y-4">
                             {/* Fixed height container with scroll */}
-                            <div className="max-h-96 overflow-y-auto space-y-4 pr-2">
+                            <div className="max-h-80 lg:max-h-96 overflow-y-auto space-y-3 lg:space-y-4 pr-1 lg:pr-2">
                                 {getPaginatedRecentRequests().map((request) => (
-                                    <div key={request.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
-                                        <div className="flex items-center space-x-4">
-                                            <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                                                <FileText className="w-5 h-5 text-blue-600" />
+                                    <div key={request.id} className="flex flex-col lg:flex-row lg:items-center lg:justify-between p-3 lg:p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors space-y-2 lg:space-y-0">
+                                        <div className="flex items-center space-x-3 lg:space-x-4">
+                                            <div className="w-8 h-8 lg:w-10 lg:h-10 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
+                                                <FileText className="w-4 h-4 lg:w-5 lg:h-5 text-blue-600" />
                                             </div>
-                                            <div>
-                                                <p className="font-medium text-gray-900">Request #{request.id}</p>
-                                                <p className="text-sm text-gray-600">{request.complaint_type}</p>
-                                                <p className="text-xs text-gray-500">
+                                            <div className="min-w-0 flex-1">
+                                                <p className="text-sm lg:text-base font-medium text-gray-900 truncate">Request #{request.id}</p>
+                                                <p className="text-xs lg:text-sm text-gray-600 truncate">{request.complaint_type}</p>
+                                                <p className="text-xs text-gray-500 truncate">
                                                     {request.town} • {new Date(request.request_date).toLocaleDateString()}
                                                 </p>
                                             </div>
                                         </div>
-                                        <div className="text-right">
-                                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                        <div className="flex justify-end lg:text-right">
+                                            <span className={`inline-flex items-center px-2 lg:px-2.5 py-0.5 rounded-full text-xs font-medium ${
                                                 request.approval_status === 'pending' 
                                                     ? 'bg-yellow-100 text-yellow-800' 
                                                     : request.approval_status === 'approved'
@@ -398,25 +398,25 @@ const CeoAnalyticsPage = () => {
 
                             {/* Pagination Controls */}
                             {!showAllRecent && stats.recentRequests.length > recentRequestsPerPage && (
-                                <div className="flex items-center justify-between pt-4 border-t border-gray-200">
-                                    <div className="text-sm text-gray-500">
+                                <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between pt-3 lg:pt-4 border-t border-gray-200 space-y-2 lg:space-y-0">
+                                    <div className="text-xs lg:text-sm text-gray-500 text-center lg:text-left">
                                         Showing {((recentRequestsPage - 1) * recentRequestsPerPage) + 1} to {Math.min(recentRequestsPage * recentRequestsPerPage, stats.recentRequests.length)} of {stats.recentRequests.length} requests
                                     </div>
-                                    <div className="flex items-center space-x-2">
+                                    <div className="flex items-center justify-center space-x-2">
                                         <button
                                             onClick={() => setRecentRequestsPage(prev => Math.max(1, prev - 1))}
                                             disabled={!hasPreviousPages}
-                                            className="px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed rounded-md transition-colors"
+                                            className="px-2 lg:px-3 py-1 text-xs lg:text-sm bg-gray-100 hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed rounded-md transition-colors"
                                         >
                                             Previous
                                         </button>
-                                        <span className="text-sm text-gray-600">
+                                        <span className="text-xs lg:text-sm text-gray-600">
                                             Page {recentRequestsPage} of {totalPages}
                                         </span>
                                         <button
                                             onClick={() => setRecentRequestsPage(prev => Math.min(totalPages, prev + 1))}
                                             disabled={!hasMorePages}
-                                            className="px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed rounded-md transition-colors"
+                                            className="px-2 lg:px-3 py-1 text-xs lg:text-sm bg-gray-100 hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed rounded-md transition-colors"
                                         >
                                             Next
                                         </button>

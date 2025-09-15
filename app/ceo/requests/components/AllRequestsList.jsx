@@ -97,10 +97,10 @@ export default function AllRequestsList() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 lg:space-y-6">
       {/* Filter Tabs */}
       <div className="border-b border-gray-200">
-        <nav className="-mb-px flex space-x-8">
+        <nav className="-mb-px flex flex-wrap lg:flex-nowrap space-x-2 lg:space-x-8 overflow-x-auto">
           {[
             { key: 'all', label: 'All Requests', count: requests.length },
             { key: 'pending', label: 'Pending', count: requests.filter(r => r.approval_status === 'pending').length },
@@ -110,7 +110,7 @@ export default function AllRequestsList() {
             <button
               key={tab.key}
               onClick={() => setFilter(tab.key)}
-              className={`py-2 px-1 border-b-2 font-medium text-sm ${
+              className={`py-2 px-1 border-b-2 font-medium text-xs lg:text-sm whitespace-nowrap ${
                 filter === tab.key
                   ? 'border-blue-500 text-blue-600'
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
@@ -134,14 +134,14 @@ export default function AllRequestsList() {
           </div>
         ) : (
           filteredRequests.map((request) => (
-            <div key={request.id} className="bg-white rounded-lg shadow-md border border-gray-200 p-6 hover:shadow-lg transition-shadow">
-              <div className="flex items-start justify-between">
+            <div key={request.id} className="bg-white rounded-lg shadow-md border border-gray-200 p-4 lg:p-6 hover:shadow-lg transition-shadow">
+              <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between space-y-4 lg:space-y-0">
                 <div className="flex-1">
-                  <div className="flex items-center space-x-3 mb-3">
-                    <h3 className="text-lg font-semibold text-gray-900">
+                  <div className="flex flex-col lg:flex-row lg:items-center space-y-2 lg:space-y-0 lg:space-x-3 mb-3">
+                    <h3 className="text-base lg:text-lg font-semibold text-gray-900">
                       Request #{request.id}
                     </h3>
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(request.approval_status)}`}>
+                    <span className={`inline-flex items-center px-2 lg:px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(request.approval_status)} w-fit`}>
                       {getStatusIcon(request.approval_status)}
                       <span className="ml-1">
                         {request.approval_status === 'pending' ? 'Pending Review' : 
@@ -151,78 +151,78 @@ export default function AllRequestsList() {
                     </span>
                   </div>
                   
-                  <h4 className="text-md font-medium text-gray-900 mb-2">
+                  <h4 className="text-sm lg:text-base font-medium text-gray-900 mb-2">
                     {request.complaint_type}
                     {request.complaint_subtype && (
                       <span className="text-gray-600 font-normal"> - {request.complaint_subtype}</span>
                     )}
                   </h4>
                   
-                  <p className="text-gray-700 mb-4 line-clamp-2">{request.description}</p>
+                  <p className="text-sm lg:text-base text-gray-700 mb-4 line-clamp-2">{request.description}</p>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 lg:gap-4 mb-4">
                     <div className="flex items-start space-x-3">
-                      <MapPin className="w-5 h-5 text-gray-400 mt-0.5" />
-                      <div>
-                        <p className="text-sm font-medium text-gray-900">Location</p>
-                        <p className="text-sm text-gray-600">{request.district} - {request.town}</p>
+                      <MapPin className="w-4 h-4 lg:w-5 lg:h-5 text-gray-400 mt-0.5 flex-shrink-0" />
+                      <div className="min-w-0">
+                        <p className="text-xs lg:text-sm font-medium text-gray-900">Location</p>
+                        <p className="text-xs lg:text-sm text-gray-600 truncate">{request.district} - {request.town}</p>
                         {request.subtown && (
-                          <p className="text-sm text-gray-600">{request.subtown}</p>
+                          <p className="text-xs lg:text-sm text-gray-600 truncate">{request.subtown}</p>
                         )}
-                        <p className="text-sm text-gray-600">{request.address}</p>
+                        <p className="text-xs lg:text-sm text-gray-600 truncate">{request.address}</p>
                       </div>
                     </div>
                     
                     <div className="flex items-start space-x-3">
-                      <User className="w-5 h-5 text-gray-400 mt-0.5" />
-                      <div>
-                        <p className="text-sm font-medium text-gray-900">Created By</p>
-                        <p className="text-sm text-gray-600">{request.creator_name}</p>
-                        <p className="text-sm text-gray-500">{request.creator_email}</p>
+                      <User className="w-4 h-4 lg:w-5 lg:h-5 text-gray-400 mt-0.5 flex-shrink-0" />
+                      <div className="min-w-0">
+                        <p className="text-xs lg:text-sm font-medium text-gray-900">Created By</p>
+                        <p className="text-xs lg:text-sm text-gray-600 truncate">{request.creator_name}</p>
+                        <p className="text-xs lg:text-sm text-gray-500 truncate">{request.creator_email}</p>
                       </div>
                     </div>
                   </div>
 
-                  <div className="flex items-center space-x-6 text-sm text-gray-500">
+                  <div className="flex flex-wrap items-center gap-3 lg:gap-6 text-xs lg:text-sm text-gray-500">
                     <div className="flex items-center space-x-1">
-                      <Calendar className="w-4 h-4" />
+                      <Calendar className="w-3 h-3 lg:w-4 lg:h-4" />
                       <span>{new Date(request.request_date).toLocaleDateString()}</span>
                     </div>
                     <div className="flex items-center space-x-1">
-                      <Phone className="w-4 h-4" />
-                      <span>{request.contact_number}</span>
+                      <Phone className="w-3 h-3 lg:w-4 lg:h-4" />
+                      <span className="truncate">{request.contact_number}</span>
                     </div>
                     {request.nature_of_work && (
                       <div className="flex items-center space-x-1">
-                        <Wrench className="w-4 h-4" />
-                        <span>{request.nature_of_work}</span>
+                        <Wrench className="w-3 h-3 lg:w-4 lg:h-4" />
+                        <span className="truncate">{request.nature_of_work}</span>
                       </div>
                     )}
                   </div>
 
                   {/* Media Count */}
-                  <div className="flex items-center space-x-4 mt-4 text-sm text-gray-500">
+                  <div className="flex flex-wrap items-center gap-3 lg:gap-4 mt-3 lg:mt-4 text-xs lg:text-sm text-gray-500">
                     {request.before_images_count > 0 && (
                       <div className="flex items-center space-x-1">
-                        <Image className="w-4 h-4" />
+                        <Image className="w-3 h-3 lg:w-4 lg:h-4" />
                         <span>{request.before_images_count} Before Images</span>
                       </div>
                     )}
                     {request.images_count > 0 && (
                       <div className="flex items-center space-x-1">
-                        <Image className="w-4 h-4" />
+                        <Image className="w-3 h-3 lg:w-4 lg:h-4" />
                         <span>{request.images_count} Images</span>
                       </div>
                     )}
                     {request.videos_count > 0 && (
                       <div className="flex items-center space-x-1">
-                        <Video className="w-4 h-4" />
+                        <Video className="w-3 h-3 lg:w-4 lg:h-4" />
                         <span>{request.videos_count} Videos</span>
                       </div>
                     )}
                     {request.final_videos_count > 0 && (
                       <div className="flex items-center space-x-1">
-                        <Video className="w-4 h-4" />
+                        <Video className="w-3 h-3 lg:w-4 lg:h-4" />
                         <span>{request.final_videos_count} Final Videos</span>
                       </div>
                     )}
@@ -230,30 +230,30 @@ export default function AllRequestsList() {
 
                   {/* CEO Comments */}
                   {request.ceo_comments && (
-                    <div className="mt-4 p-3 bg-blue-50 rounded-lg">
+                    <div className="mt-3 lg:mt-4 p-3 bg-blue-50 rounded-lg">
                       <div className="flex items-center space-x-2 mb-2">
-                        <MessageSquare className="w-4 h-4 text-blue-600" />
-                        <span className="text-sm font-medium text-blue-900">CEO Comment</span>
+                        <MessageSquare className="w-3 h-3 lg:w-4 lg:h-4 text-blue-600" />
+                        <span className="text-xs lg:text-sm font-medium text-blue-900">CEO Comment</span>
                       </div>
-                      <p className="text-sm text-blue-800">{request.ceo_comments}</p>
+                      <p className="text-xs lg:text-sm text-blue-800">{request.ceo_comments}</p>
                     </div>
                   )}
                 </div>
 
-                <div className="ml-6 flex flex-col space-y-2">
+                <div className="flex flex-col lg:flex-col space-y-2 lg:ml-6">
                   <Link
                     href={`/ceo/requests/${request.id}`}
-                    className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                    className="inline-flex items-center justify-center px-3 lg:px-4 py-2 border border-gray-300 rounded-md shadow-sm text-xs lg:text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                   >
-                    <Eye className="w-4 h-4 mr-2" />
+                    <Eye className="w-3 h-3 lg:w-4 lg:h-4 mr-1 lg:mr-2" />
                     View Details
                   </Link>
                   
                   <Link
                     href={`/ceo/requests/${request.id}`}
-                    className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                    className="inline-flex items-center justify-center px-3 lg:px-4 py-2 border border-transparent rounded-md shadow-sm text-xs lg:text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                   >
-                    <MessageSquare className="w-4 h-4 mr-2" />
+                    <MessageSquare className="w-3 h-3 lg:w-4 lg:h-4 mr-1 lg:mr-2" />
                     Add Comment
                   </Link>
                 </div>

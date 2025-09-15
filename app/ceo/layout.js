@@ -1,7 +1,7 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/pages/api/auth/[...nextauth]";
 import { redirect } from "next/navigation";
-import CeoSidebar from "./CeoSidebar";
+import CeoLayoutClient from "./CeoLayoutClient";
 
 export default async function CeoLayout({ children }) {
   const session = await getServerSession(authOptions);
@@ -11,12 +11,5 @@ export default async function CeoLayout({ children }) {
     redirect('/unauthorized');
   }
 
-  return (
-    <div className="flex h-screen bg-gray-100">
-      <CeoSidebar />
-      <main className="flex-1 overflow-auto">
-        {children}
-      </main>
-    </div>
-  );
+  return <CeoLayoutClient>{children}</CeoLayoutClient>;
 }

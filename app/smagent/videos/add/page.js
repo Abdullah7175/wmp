@@ -70,6 +70,33 @@ function AddVideoPage() {
     
     fileInput.onchange = (e) => {
       const files = Array.from(e.target.files);
+      
+      // Check total file count limit (increased to 15 videos)
+      const MAX_VIDEOS = 15;
+      const currentCount = formData.videos.length;
+      
+      if (currentCount + files.length > MAX_VIDEOS) {
+        toast({
+          title: "Too many videos",
+          description: `You can upload up to ${MAX_VIDEOS} videos at once. Currently have ${currentCount}, trying to add ${files.length} more.`,
+          variant: "destructive"
+        });
+        return;
+      }
+      
+      // Check individual file size (increased to 500MB per file)
+      const MAX_FILE_SIZE = 500 * 1024 * 1024; // 500MB
+      const oversizedFiles = files.filter(file => file.size > MAX_FILE_SIZE);
+      
+      if (oversizedFiles.length > 0) {
+        toast({
+          title: "File too large",
+          description: `Some files exceed 500MB limit: ${oversizedFiles.map(f => f.name).join(', ')}`,
+          variant: "destructive"
+        });
+        return;
+      }
+      
       const newVideos = files.map(file => ({
         file,
         id: Date.now() + Math.random(),
@@ -82,6 +109,12 @@ function AddVideoPage() {
         ...prev,
         videos: [...prev.videos, ...newVideos]
       }));
+      
+      toast({
+        title: "Videos added",
+        description: `Added ${files.length} video(s). Total: ${currentCount + files.length}/${MAX_VIDEOS}`,
+        variant: "success"
+      });
     };
     
     fileInput.click();
@@ -291,7 +324,7 @@ function AddVideoPage() {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Video Files * ({formData.videos.length} selected)
+              Video Files * ({formData.videos.length}/15 selected)
             </label>
             <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
               <Upload className="mx-auto h-12 w-12 text-gray-400 mb-4" />
@@ -303,7 +336,10 @@ function AddVideoPage() {
                 Click to select video files
               </button>
               <p className="text-sm text-gray-500 mt-2">
-                MP4, AVI, MOV, or other video formats (multiple files supported)
+                MP4, AVI, MOV, or other video formats (up to 15 files, 500MB each)
+              </p>
+              <p className="text-xs text-gray-400 mt-1">
+                You can upload up to 15 videos at once with a maximum size of 500MB per file
               </p>
             </div>
             
