@@ -119,7 +119,7 @@ const CeoAnalyticsPage = () => {
             </div>
 
             {/* Quick Actions */}
-            <div className="py-4 mb-6">
+            {/* <div className="py-4 mb-6">
                 <div className="flex flex-wrap gap-4">
                     <Link href="/ceo/requests">
                         <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2">
@@ -140,7 +140,7 @@ const CeoAnalyticsPage = () => {
                         </button>
                     </Link>
                 </div>
-            </div>
+            </div> */}
 
             {/* Main Statistics Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
