@@ -16,77 +16,59 @@ export async function POST(request) {
       );
     }
 
-    const { workRequestId, approvalStatus, comments, rejectionReason } = await request.json();
+    const { workRequestId, comments } = await request.json();
 
-    if (!workRequestId || !approvalStatus) {
+    if (!workRequestId || !comments?.trim()) {
       return NextResponse.json(
-        { success: false, message: "Work request ID and approval status are required" },
+        { success: false, message: "Work request ID and comments are required" },
         { status: 400 }
       );
     }
 
-    if (!['approved', 'rejected'].includes(approvalStatus)) {
-      return NextResponse.json(
-        { success: false, message: "Invalid approval status" },
-        { status: 400 }
-      );
-    }
-
-    if (approvalStatus === 'rejected' && !rejectionReason?.trim()) {
-      return NextResponse.json(
-        { success: false, message: "Rejection reason is required when rejecting a request" },
-        { status: 400 }
-      );
-    }
-
-    // Check if request exists and is pending approval
-    const existingApproval = await query(`
-      SELECT * FROM work_request_approvals 
-      WHERE work_request_id = $1 AND approval_status = 'pending'
+    // Check if request exists
+    const existingRequest = await query(`
+      SELECT id FROM work_requests WHERE id = $1
     `, [workRequestId]);
 
-    if (!existingApproval.rows || existingApproval.rows.length === 0) {
+    if (!existingRequest.rows || existingRequest.rows.length === 0) {
       return NextResponse.json(
-        { success: false, message: "Request not found or already processed" },
+        { success: false, message: "Request not found" },
         { status: 404 }
       );
     }
 
-    // Update the approval record
-    const updateQuery = `
-      UPDATE work_request_approvals 
-      SET 
-        approval_status = $1,
-        approval_date = CURRENT_TIMESTAMP,
-        rejection_reason = $2,
+    // Insert or update CEO comment in work_request_approvals table
+    const upsertQuery = `
+      INSERT INTO work_request_approvals (work_request_id, ceo_id, approval_status, ceo_comments, created_at, updated_at)
+      VALUES ($1, $2, 'pending', $3, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      ON CONFLICT (work_request_id) 
+      DO UPDATE SET 
         ceo_comments = $3,
         updated_at = CURRENT_TIMESTAMP
-      WHERE work_request_id = $4 AND approval_status = 'pending'
       RETURNING *
     `;
 
-    const result = await query(updateQuery, [
-      approvalStatus,
-      approvalStatus === 'rejected' ? rejectionReason : null,
-      comments || null,
-      workRequestId
+    const result = await query(upsertQuery, [
+      workRequestId,
+      session.user.id,
+      comments.trim()
     ]);
 
     if (!result.rows || result.rows.length === 0) {
       return NextResponse.json(
-        { success: false, message: "Failed to update approval status" },
+        { success: false, message: "Failed to add comment" },
         { status: 500 }
       );
     }
 
-    // Log CEO approval action
+    // Log CEO comment action
     await logUserAction({
       userId: session.user.id,
       userType: 'ceo',
-      action: approvalStatus === 'approved' ? 'APPROVE_REQUEST' : 'REJECT_REQUEST',
+      action: 'ADD_COMMENT',
       entityType: 'WORK_REQUEST',
       entityId: workRequestId,
-      details: `CEO ${approvalStatus} work request #${workRequestId}. Comments: ${comments || 'None'}. ${approvalStatus === 'rejected' ? `Rejection reason: ${rejectionReason}` : ''}`,
+      details: `CEO added comment to work request #${workRequestId}. Comment: ${comments.trim()}`,
       ipAddress: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown'
     });
 
@@ -113,9 +95,9 @@ export async function POST(request) {
         VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP, false)
       `, [
         request.creator_id,
-        'ceo_approval',
+        'ceo_comment',
         workRequestId,
-        `Your work request #${workRequestId} has been ${approvalStatus} by CEO KW&SC${approvalStatus === 'rejected' ? `. Reason: ${rejectionReason}` : ''}`
+        `CEO KW&SC added a comment to your work request #${workRequestId}`
       ]);
     }
 
@@ -132,26 +114,24 @@ export async function POST(request) {
       5,
       session.user.name || 'CEO',
       session.user.email,
-      approvalStatus === 'approved' ? 'APPROVE' : 'REJECT',
+      'COMMENT',
       'work_request',
       workRequestId,
       `Work Request #${workRequestId}`,
       JSON.stringify({
-        approvalStatus,
-        comments,
-        rejectionReason,
-        requestDescription: requestDetails[0]?.description
+        comments: comments.trim(),
+        requestDescription: requestDetails.rows[0]?.description
       })
     ]);
 
     return NextResponse.json({
       success: true,
-      message: `Request ${approvalStatus} successfully`,
-      data: result[0]
+      message: "Comment added successfully",
+      data: result.rows[0]
     });
 
   } catch (error) {
-    console.error('Error in CEO approval API:', error);
+    console.error('Error in CEO comment API:', error);
     return NextResponse.json(
       { success: false, message: "Internal server error" },
       { status: 500 }

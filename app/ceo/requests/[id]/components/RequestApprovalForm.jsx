@@ -11,8 +11,7 @@ import {
   Wrench,
   FileText,
   Image,
-  CheckCircle,
-  XCircle,
+  MessageSquare,
   AlertCircle
 } from "lucide-react";
 
@@ -20,20 +19,13 @@ export default function RequestApprovalForm({ requestData }) {
   const router = useRouter();
   const { request, beforeImages } = requestData;
   const [isLoading, setIsLoading] = useState(false);
-  const [approvalDecision, setApprovalDecision] = useState("");
   const [comments, setComments] = useState("");
-  const [rejectionReason, setRejectionReason] = useState("");
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    if (!approvalDecision) {
-      alert("Please select an approval decision");
-      return;
-    }
-
-    if (approvalDecision === "rejected" && !rejectionReason.trim()) {
-      alert("Please provide a reason for rejection");
+    if (!comments.trim()) {
+      alert("Please add a comment");
       return;
     }
 
@@ -47,27 +39,25 @@ export default function RequestApprovalForm({ requestData }) {
         },
         body: JSON.stringify({
           workRequestId: request.id,
-          approvalStatus: approvalDecision,
-          comments: comments.trim(),
-          rejectionReason: approvalDecision === "rejected" ? rejectionReason.trim() : null
+          comments: comments.trim()
         }),
       });
 
       if (!response.ok) {
-        throw new Error("Failed to submit approval decision");
+        throw new Error("Failed to submit comment");
       }
 
       const result = await response.json();
       
       if (result.success) {
-        alert(`Request ${approvalDecision === "approved" ? "approved" : "rejected"} successfully`);
+        alert("Comment added successfully");
         router.push("/ceo/requests");
       } else {
-        throw new Error(result.message || "Failed to submit approval decision");
+        throw new Error(result.message || "Failed to submit comment");
       }
     } catch (error) {
-      console.error("Error submitting approval:", error);
-      alert("Error submitting approval decision. Please try again.");
+      console.error("Error submitting comment:", error);
+      alert("Error submitting comment. Please try again.");
     } finally {
       setIsLoading(false);
     }
@@ -82,9 +72,9 @@ export default function RequestApprovalForm({ requestData }) {
             <h2 className="text-xl font-semibold text-gray-900">
               Work Request #{request.id}
             </h2>
-            <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-yellow-100 text-yellow-800">
-              <AlertCircle className="w-4 h-4 mr-1" />
-              Pending CEO Approval
+            <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
+              <MessageSquare className="w-4 h-4 mr-1" />
+              CEO Comments
             </span>
           </div>
           
@@ -195,79 +185,28 @@ export default function RequestApprovalForm({ requestData }) {
         </div>
       )}
 
-      {/* Approval Form */}
+      {/* CEO Comments Form */}
       <div className="bg-white rounded-lg shadow-md p-6">
         <h3 className="text-lg font-semibold text-gray-900 mb-6">
-          CEO Approval Decision
+          Add CEO Comment
         </h3>
         
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Approval Decision */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-3">
-              Decision *
-            </label>
-            <div className="space-y-3">
-              <label className="flex items-center space-x-3 cursor-pointer">
-                <input
-                  type="radio"
-                  name="approvalDecision"
-                  value="approved"
-                  checked={approvalDecision === "approved"}
-                  onChange={(e) => setApprovalDecision(e.target.value)}
-                  className="w-4 h-4 text-green-600"
-                />
-                <CheckCircle className="w-5 h-5 text-green-600" />
-                <span className="text-sm font-medium text-gray-900">Approve Request</span>
-              </label>
-              
-              <label className="flex items-center space-x-3 cursor-pointer">
-                <input
-                  type="radio"
-                  name="approvalDecision"
-                  value="rejected"
-                  checked={approvalDecision === "rejected"}
-                  onChange={(e) => setApprovalDecision(e.target.value)}
-                  className="w-4 h-4 text-red-600"
-                />
-                <XCircle className="w-5 h-5 text-red-600" />
-                <span className="text-sm font-medium text-gray-900">Reject Request</span>
-              </label>
-            </div>
-          </div>
-
           {/* Comments */}
           <div>
             <label htmlFor="comments" className="block text-sm font-medium text-gray-700 mb-2">
-              Comments (Optional)
+              Comment *
             </label>
             <textarea
               id="comments"
               value={comments}
               onChange={(e) => setComments(e.target.value)}
-              rows={3}
+              rows={4}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="Add any additional comments..."
+              placeholder="Add your comment about this work request..."
+              required
             />
           </div>
-
-          {/* Rejection Reason */}
-          {approvalDecision === "rejected" && (
-            <div>
-              <label htmlFor="rejectionReason" className="block text-sm font-medium text-gray-700 mb-2">
-                Reason for Rejection *
-              </label>
-              <textarea
-                id="rejectionReason"
-                value={rejectionReason}
-                onChange={(e) => setRejectionReason(e.target.value)}
-                rows={3}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                placeholder="Please provide a detailed reason for rejecting this request..."
-                required
-              />
-            </div>
-          )}
 
           {/* Submit Buttons */}
           <div className="flex justify-end space-x-4 pt-4 border-t border-gray-200">
@@ -283,13 +222,9 @@ export default function RequestApprovalForm({ requestData }) {
             <button
               type="submit"
               disabled={isLoading}
-              className={`px-6 py-2 text-sm font-medium text-white rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 ${
-                approvalDecision === "approved"
-                  ? "bg-green-600 hover:bg-green-700 focus:ring-green-500"
-                  : "bg-red-600 hover:bg-red-700 focus:ring-red-500"
-              } disabled:opacity-50 disabled:cursor-not-allowed`}
+              className="px-6 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isLoading ? "Processing..." : `${approvalDecision === "approved" ? "Approve" : "Reject"} Request`}
+              {isLoading ? "Adding Comment..." : "Add Comment"}
             </button>
           </div>
         </form>

@@ -136,83 +136,14 @@ export async function POST(req) {
             return NextResponse.json({ error: 'Each image must have a description' }, { status: 400 });
         }
 
-        // Check upload permission for images
+        // Check if work request exists
         const client = await connectToDatabase();
-        const approvalStatus = await client.query(`
-            SELECT 
-                wra.approval_status,
-                wr.id,
-                wr.creator_id,
-                wr.creator_type
-            FROM work_requests wr
-            LEFT JOIN work_request_approvals wra ON wr.id = wra.work_request_id
-            WHERE wr.id = $1
+        const workRequest = await client.query(`
+            SELECT id FROM work_requests WHERE id = $1
         `, [workRequestId]);
 
-        if (!approvalStatus.rows || approvalStatus.rows.length === 0) {
+        if (!workRequest.rows || workRequest.rows.length === 0) {
             return NextResponse.json({ error: 'Work request not found' }, { status: 404 });
-        }
-
-        const request = approvalStatus.rows[0];
-        const isApproved = request.approval_status === 'approved';
-        const isRejected = request.approval_status === 'rejected';
-        const isPending = request.approval_status === 'pending';
-
-        // Check if user is the creator of the request
-        const isCreator = (
-            (session.user.userType === 'user' && request.creator_type === 'user' && session.user.id === request.creator_id) ||
-            (session.user.userType === 'agent' && request.creator_type === 'agent' && session.user.id === request.creator_id) ||
-            (session.user.userType === 'socialmedia' && request.creator_type === 'socialmedia' && session.user.id === request.creator_id)
-        );
-
-        // Check if user is CEO or admin
-        const isCEO = session.user.userType === 'user' && session.user.role === 5;
-        const isAdmin = session.user.userType === 'user' && (session.user.role === 1 || session.user.role === 2);
-        
-        // Check if user is social media agent
-        const isSocialMediaAgent = session.user.userType === 'socialmedia';
-
-        let canUpload = false;
-        let reason = "";
-
-        if (isRejected) {
-            // Rejected requests - only CEO and admin can make them live again
-            if (isCEO || isAdmin) {
-                canUpload = true;
-                reason = "Request can be reactivated by CEO/Admin";
-            } else {
-                canUpload = false;
-                reason = "Request rejected by CEO KW&SC. Only CEO or Admin can reactivate.";
-            }
-        } else if (isPending) {
-            // Pending approval - social media agents can upload images, others can only upload before images
-            if (isSocialMediaAgent) {
-                canUpload = true;
-                reason = "Social media agents can upload images during pending approval";
-            } else {
-                canUpload = false;
-                reason = "Only before images allowed before CEO approval";
-            }
-        } else if (isApproved) {
-            // Approved requests - all media types allowed
-            if (isCreator || isCEO || isAdmin || isSocialMediaAgent) {
-                canUpload = true;
-                reason = "Request approved by CEO - all media uploads allowed";
-            } else {
-                canUpload = false;
-                reason = "Only request creators, CEO, Admin, or Social Media Agents can upload media";
-            }
-        } else {
-            // No approval record found (should not happen for new requests)
-            canUpload = false;
-            reason = "Request approval status unknown";
-        }
-
-        if (!canUpload) {
-            return NextResponse.json({ 
-                error: 'Upload not allowed', 
-                details: reason 
-            }, { status: 403 });
         }
 
         const uploadsDir = path.join(process.cwd(), 'public', 'uploads', 'images');
