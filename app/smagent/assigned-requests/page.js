@@ -3,6 +3,7 @@ import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Activity, CheckCheck, Clock, Image as ImageIcon, Video } from "lucide-react";
+import WorkRequestStatus from "@/components/WorkRequestStatus";
 import Link from "next/link";
 
 const statusColors = {
@@ -36,7 +37,7 @@ export default function AssignedRequestsPage() {
     if (!session?.user?.id) return;
     setLoading(true);
     
-    fetch(`/api/requests?assigned_smagent_id=${session.user.id}&limit=1000`)
+    fetch(`/api/requests?assigned_smagent_id=${session.user.id}&limit=1000&include_approval_status=true`)
       .then(res => res.json())
       .then(({ data }) => {
         if (!Array.isArray(data)) throw new Error("Invalid data");
@@ -97,8 +98,13 @@ export default function AssignedRequestsPage() {
                     <div className="text-lg font-semibold">Request #{req.id}</div>
                     <div className="text-sm text-gray-500">{req.town_name}</div>
                   </div>
-                  <div>
+                  <div className="flex flex-col gap-1">
                     <span className={`px-2 py-1 rounded text-xs font-bold ${isCompleted ? 'bg-green-100 text-green-700' : statusId === 3 ? 'bg-blue-100 text-blue-700' : statusId === 2 ? 'bg-yellow-100 text-yellow-700' : statusId === 1 ? 'bg-gray-100 text-gray-700' : 'bg-red-100 text-red-700'}`}>{displayStatus}</span>
+                    <WorkRequestStatus 
+                      status={req.status_name} 
+                      approvalStatus={req.approval_status}
+                      className="text-xs"
+                    />
                   </div>
                 </div>
                 
@@ -119,6 +125,14 @@ export default function AssignedRequestsPage() {
 
                 <div className="mt-auto pt-4 border-t border-gray-100">
                   <div className="flex gap-2">
+                    <Link href={`/smagent/before-images/add?requestId=${req.id}`} className="flex-1">
+                      <button className="w-full px-3 py-2 bg-orange-600 text-white text-sm rounded hover:bg-orange-700 transition-colors flex items-center justify-center gap-2"
+                        disabled={isCompleted && !isAdminOrManager}
+                      >
+                        <ImageIcon className="w-4 h-4" />
+                        Before Images
+                      </button>
+                    </Link>
                     <Link href={`/smagent/images/add?requestId=${req.id}`} className="flex-1">
                       <button className="w-full px-3 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
                         disabled={isCompleted && !isAdminOrManager}

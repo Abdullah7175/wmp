@@ -112,14 +112,7 @@ function AddVideoPage() {
       return;
     }
 
-    if (!formData.latitude || !formData.longitude) {
-      toast({
-        title: "Location required",
-        description: "Please provide location coordinates (auto or manual).",
-        variant: "destructive"
-      });
-      return;
-    }
+    // Location is now optional - use defaults if not provided
 
     setLoading(true);
     
@@ -129,8 +122,8 @@ function AddVideoPage() {
         data.append("workRequestId", formData.workRequestId);
         data.append("description", formData.description);
         data.append("vid", video.file);
-        data.append("latitude", formData.latitude);
-        data.append("longitude", formData.longitude);
+        data.append("latitude", formData.latitude || '0');
+        data.append("longitude", formData.longitude || '0');
         data.append("creator_id", session.user.id);
         data.append("creator_type", "socialmedia");
 
@@ -233,7 +226,7 @@ function AddVideoPage() {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Location Coordinates *
+                Location Coordinates (Optional)
               </label>
               <div className="flex gap-2">
                 <button
@@ -252,7 +245,7 @@ function AddVideoPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <label htmlFor="latitude" className="block text-sm font-medium text-gray-700 mb-2">
-                Latitude *
+                Latitude (Optional)
               </label>
               <input
                 type="number"
@@ -261,14 +254,13 @@ function AddVideoPage() {
                 value={formData.latitude}
                 onChange={(e) => setFormData(prev => ({ ...prev, latitude: e.target.value }))}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Enter latitude"
-                required
+                placeholder="Enter latitude (optional)"
               />
             </div>
 
             <div>
               <label htmlFor="longitude" className="block text-sm font-medium text-gray-700 mb-2">
-                Longitude *
+                Longitude (Optional)
               </label>
               <input
                 type="number"
@@ -277,8 +269,7 @@ function AddVideoPage() {
                 value={formData.longitude}
                 onChange={(e) => setFormData(prev => ({ ...prev, longitude: e.target.value }))}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Enter longitude"
-                required
+                placeholder="Enter longitude (optional)"
               />
             </div>
           </div>

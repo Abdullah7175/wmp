@@ -47,6 +47,16 @@ const dashboardAllowed = [
   "/dashboard/socialmediaagent",
   "/dashboard/socialmediaagent/add",
   "/dashboard/socialmediaagent/edit",
+  "/dashboard/user-actions",
+  "/dashboard/user-actions/add",
+  "/dashboard/user-actions/edit",
+  "/dashboard/user-actions/delete",
+  "/dashboard/ceo-users",
+  "/dashboard/ceo-users/add",
+  "/dashboard/ceo-users/edit",
+  "/dashboard/ceo-users/delete",
+  "/dashboard/before-images",
+  "/dashboard/before-images/add",
   "/dashboard/reports"
 ];
 
@@ -55,14 +65,18 @@ const agentAllowed = [
   "/agent/requests",
   "/agent/requests/new",
   "/agent/videos",
-  "/agent/images"
+  "/agent/images",
+  "/agent/before-images",
+  "/agent/before-images/add"
 ];
 
 const smagentAllowedA = [
   "/smagent",
   "/smagent/assigned-requests",
   "/smagent/videos/add",
-  "/smagent/images/add"
+  "/smagent/images/add",
+  "/smagent/before-images",
+  "/smagent/before-images/add"
 ];
 const smagentAllowedB = [
   "/smagent",
@@ -72,11 +86,24 @@ const smagentAllowedB = [
   "/smagent/images/download",
   "/smagent/videos/download",
   "/smagent/images/add",
-  "/smagent/videos/add"
+  "/smagent/videos/add",
+  "/smagent/before-images",
+  "/smagent/before-images/add"
+];
+
+// CEO allowed routes (role 5)
+const ceoAllowed = [
+  "/ceo",
+  "/ceo/requests",
+  "/ceo/approved",
+  "/ceo/rejected",
+  "/ceo/notifications"
 ];
 
 function getDashboardForUser(token) {
   if (!token) return "/login";
+  // Route CEO to CEO portal
+  if (token.user?.role === 5 && token.user?.userType === "user") return "/ceo";
   // Route admins/managers directly to e-filing admin
   if (token.user?.role === 1 || token.user?.role === 2) return "/efiling";
   if (token.user?.userType === "agent") return "/agent";
@@ -133,10 +160,15 @@ export async function middleware(req) {
         const userRole = token.user?.role;
 
         if (userType === 'user') {
-            // Admin/Manager access
-            if (userRole === 1 || userRole === 2) {
-                const allowedPaths = ['/dashboard', '/dashboard/requests', '/dashboard/users', '/dashboard/agents', '/dashboard/socialmediaagent', '/dashboard/complaints', '/dashboard/towns', '/dashboard/districts', '/dashboard/subtowns', '/dashboard/images', '/dashboard/videos', '/dashboard/final-videos', '/dashboard/reports', '/dashboard/roles','/efiling', '/efiling/files', '/efiling/assignments', '/efiling/departments', '/efiling/tools', '/efiling/reports', '/efiling/settings'];
-                if (!isAllowed(pathname, allowedPaths)) {
+            // CEO access (role 5)
+            if (userRole === 5) {
+                if (!isAllowed(pathname, ceoAllowed)) {
+                    return NextResponse.redirect(new URL('/unauthorized', req.url));
+                }
+            }
+            // Admin/Manager access (role 1, 2)
+            else if (userRole === 1 || userRole === 2) {
+                if (!isAllowed(pathname, dashboardAllowed)) {
                     return NextResponse.redirect(new URL('/unauthorized', req.url));
                 }
             } else {
@@ -148,13 +180,20 @@ export async function middleware(req) {
             }
         } else if (userType === 'agent') {
             // Agent access
-            const allowedPaths = ['/agent', '/agent/requests', '/agent/images', '/agent/videos'];
-            if (!isAllowed(pathname, allowedPaths)) {
+            if (!isAllowed(pathname, agentAllowed)) {
                 return NextResponse.redirect(new URL('/unauthorized', req.url));
             }
         } else if (userType === 'socialmedia') {
-            // Social media agent access
-            const allowedPaths = ['/smagent', '/smagent/assigned-requests', '/smagent/images', '/smagent/videos', '/smagent/final-videos'];
+            // Social media agent access - check role for different permissions
+            let allowedPaths;
+            if ([4, 5].includes(userRole)) {
+                // Video Editor or Manager - full access
+                allowedPaths = smagentAllowedB;
+            } else {
+                // Other roles - basic access
+                allowedPaths = smagentAllowedA;
+            }
+            
             if (!isAllowed(pathname, allowedPaths)) {
                 return NextResponse.redirect(new URL('/unauthorized', req.url));
             }
@@ -176,5 +215,5 @@ export async function middleware(req) {
 }
 
 export const config = {
-  matcher: ["/smagent/:path*", "/agent/:path*", "/dashboard/:path*", "/efiling/:path*", "/efilinguser/:path*", "/elogin"],
+  matcher: ["/smagent/:path*", "/agent/:path*", "/dashboard/:path*", "/efiling/:path*", "/efilinguser/:path*", "/elogin", "/ceo/:path*"],
 }; 

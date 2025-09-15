@@ -3,6 +3,7 @@ import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Activity, Video, Download, Upload } from "lucide-react";
+import WorkRequestStatus from "@/components/WorkRequestStatus";
 import Link from "next/link";
 
 // Role mapping function
@@ -67,7 +68,7 @@ export default function SmAgentDashboard() {
     const fetchData = async () => {
       try {
         // Fetch assigned requests
-        const requestsRes = await fetch(`/api/requests?assigned_smagent_id=${session.user.id}&limit=1000`);
+        const requestsRes = await fetch(`/api/requests?assigned_smagent_id=${session.user.id}&limit=1000&include_approval_status=true`);
         const requestsData = await requestsRes.json();
         if (requestsData.data) {
           setRequests(requestsData.data);
@@ -215,6 +216,11 @@ export default function SmAgentDashboard() {
                     <Card key={req.id} className="p-6 flex flex-col gap-2 bg-slate-50 border-2 shadow-md">
                       <div className="flex items-center gap-2 mb-2">
                         <span className={`px-2 py-1 rounded text-xs font-bold ${isCompleted ? 'bg-green-100 text-green-700' : statusId === 3 ? 'bg-blue-100 text-blue-700' : statusId === 2 ? 'bg-yellow-100 text-yellow-700' : statusId === 1 ? 'bg-gray-100 text-gray-700' : 'bg-red-100 text-red-700'}`}>{displayStatus}</span>
+                        <WorkRequestStatus 
+                          status={req.status_name} 
+                          approvalStatus={req.approval_status}
+                          className="text-xs"
+                        />
                       </div>
                       <div className="font-medium text-lg">{req.address || "No address"}</div>
                       <div className="text-sm text-gray-600">Type: {req.complaint_type || "-"}</div>

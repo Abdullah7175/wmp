@@ -52,6 +52,11 @@ export function SmAgentSidebar() {
       label: "Assigned Requests",
       icon: <List className="w-5 h-5" />,
     },
+    {
+      href: "/smagent/before-images",
+      label: "Before Images",
+      icon: <ImageIcon className="w-5 h-5" />,
+    },
     // {
     //   href: "/smagent/images/add",
     //   label: "Upload Images",

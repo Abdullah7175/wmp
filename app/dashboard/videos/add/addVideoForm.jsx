@@ -37,10 +37,12 @@ const VideoForm = () => {
     useEffect(() => {
         const fetchWorkRequests = async () => {
             try {
-                const response = await fetch('/api/videos/work-request');
+                const response = await fetch('/api/requests');
                 if (response.ok) {
                     const data = await response.json();
-                    setWorkRequests(data.map(request => ({
+                    // Handle both array and object responses
+                    const requestsArray = Array.isArray(data) ? data : (data.data || []);
+                    setWorkRequests(requestsArray.map(request => ({
                         value: Number(request.id),
                         label: `${request.id}`
                     })));
@@ -73,9 +75,10 @@ const VideoForm = () => {
                     const userType = session?.user?.userType;
                     const role = Number(session?.user?.role);
                     if (data.status_name === 'Completed') {
+                        // Allow uploads for admins (role 1), managers (role 2), and Media Cell editors
                         if (
                             (userType === 'user' && (role === 1 || role === 2)) ||
-                            (userType === 'socialmediaperson' && session?.user?.role === 'editor')
+                            (userType === 'socialmedia' && session?.user?.role === 'editor')
                         ) {
                             setIsUploadAllowed(true);
                         } else {

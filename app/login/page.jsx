@@ -26,12 +26,43 @@ export default function LoginPage() {
   const { toast } = useToast();
   const { data: session, status } = useSession();
   const [showPassword, setShowPassword] = React.useState(false);
+  const [failedAttempts, setFailedAttempts] = React.useState(0);
+  const [isLocked, setIsLocked] = React.useState(false);
+  const [lockoutTime, setLockoutTime] = React.useState(null);
+
+  // Check for lockout on component mount
+  React.useEffect(() => {
+    const storedAttempts = localStorage.getItem('loginFailedAttempts');
+    const storedLockout = localStorage.getItem('loginLockoutTime');
+    
+    if (storedAttempts) {
+      setFailedAttempts(parseInt(storedAttempts));
+    }
+    
+    if (storedLockout) {
+      const lockoutEndTime = new Date(storedLockout);
+      const now = new Date();
+      
+      if (now < lockoutEndTime) {
+        setIsLocked(true);
+        setLockoutTime(lockoutEndTime);
+      } else {
+        // Lockout expired, clear stored data
+        localStorage.removeItem('loginFailedAttempts');
+        localStorage.removeItem('loginLockoutTime');
+        setFailedAttempts(0);
+        setIsLocked(false);
+        setLockoutTime(null);
+      }
+    }
+  }, []);
 
   // Redirect authenticated users away from /login
   React.useEffect(() => {
     if (status === "authenticated" && session?.user) {
       if (session.user.userType === "agent") window.location.href = "/agent";
       else if (session.user.userType === "socialmedia" || session.user.userType === "socialmediaperson") window.location.href = "/smagent";
+      else if (session.user.userType === "user" && parseInt(session.user.role) === 5) window.location.href = "/ceo";
       else if (session.user.userType === "user") window.location.href = "/dashboard";
     }
   }, [session, status]);
@@ -43,6 +74,17 @@ export default function LoginPage() {
     },
     validationSchema,
     onSubmit: async (values) => {
+      // Check if account is locked
+      if (isLocked) {
+        const remainingTime = Math.ceil((lockoutTime - new Date()) / 1000 / 60);
+        toast({
+          title: "Account Temporarily Locked",
+          description: `Too many failed attempts. Please try again in ${remainingTime} minutes.`,
+          variant: "destructive",
+        });
+        return;
+      }
+
       try {
         const result = await signIn("credentials", {
           redirect: false,
@@ -51,15 +93,59 @@ export default function LoginPage() {
         });
 
         if (result?.error) {
+          const newAttempts = failedAttempts + 1;
+          setFailedAttempts(newAttempts);
+          localStorage.setItem('loginFailedAttempts', newAttempts.toString());
+
+          let errorMessage = "Invalid email or password";
+          let title = "Login Failed";
+
+          if (newAttempts >= 3) {
+            // Lock account for 15 minutes
+            const lockoutEndTime = new Date(Date.now() + 15 * 60 * 1000);
+            setIsLocked(true);
+            setLockoutTime(lockoutEndTime);
+            localStorage.setItem('loginLockoutTime', lockoutEndTime.toISOString());
+            
+            title = "Account Locked";
+            errorMessage = "Too many failed attempts. Your account has been locked for 15 minutes.";
+            
+            toast({
+              title: title,
+              description: errorMessage,
+              variant: "destructive",
+            });
+            return;
+          } else if (newAttempts === 2) {
+            title = "Warning: Last Attempt";
+            errorMessage = "Invalid credentials. One more failed attempt will lock your account for 15 minutes.";
+          } else if (newAttempts === 1) {
+            title = "Login Failed";
+            errorMessage = "Invalid email or password. Please check your credentials and try again.";
+          }
+
           toast({
-            title: "Login Failed",
-            description: result.error,
+            title: title,
+            description: errorMessage,
             variant: "destructive",
           });
           return;
         }
 
         if (result?.ok) {
+          // Reset failed attempts on successful login
+          setFailedAttempts(0);
+          setIsLocked(false);
+          setLockoutTime(null);
+          localStorage.removeItem('loginFailedAttempts');
+          localStorage.removeItem('loginLockoutTime');
+
+          toast({
+            title: "Login Successful",
+            description: "Welcome back! Redirecting...",
+            variant: "success",
+          });
+
           setTimeout(async () => {
             try {
               const sessionRes = await fetch("/api/auth/session");
@@ -77,6 +163,9 @@ export default function LoginPage() {
                 default:
                   window.location.href = "/dashboard";
                   break;
+                case "ceo":
+                  window.location.href = "/ceo";
+                  break;
               }
             } catch (error) {
               window.location.href = "/dashboard";
@@ -87,7 +176,7 @@ export default function LoginPage() {
         console.error("Login error:", error);
         toast({
           title: "Login Failed",
-          description: "An unexpected error occurred",
+          description: "An unexpected error occurred. Please try again.",
           variant: "destructive",
         });
       }
@@ -137,6 +226,46 @@ export default function LoginPage() {
           </CardHeader>
 
           <CardContent>
+            {isLocked && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md">
+                <div className="flex items-center">
+                  <div className="flex-shrink-0">
+                    <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M10 1.944A11.954 11.954 0 012.166 5C2.056 5.649 2 6.319 2 7c0 5.225 3.34 9.67 8 11.317C14.66 16.67 18 12.225 18 7c0-.682-.057-1.35-.166-2.001A11.954 11.954 0 0110 1.944zM11 14a1 1 0 11-2 0 1 1 0 012 0zm0-7a1 1 0 10-2 0v3a1 1 0 102 0V7z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                  <div className="ml-3">
+                    <h3 className="text-sm font-medium text-red-800">
+                      Account Temporarily Locked
+                    </h3>
+                    <div className="mt-1 text-sm text-red-700">
+                      <p>Too many failed login attempts. Please try again in {Math.ceil((lockoutTime - new Date()) / 1000 / 60)} minutes.</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            {failedAttempts > 0 && !isLocked && (
+              <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+                <div className="flex items-center">
+                  <div className="flex-shrink-0">
+                    <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                  <div className="ml-3">
+                    <h3 className="text-sm font-medium text-yellow-800">
+                      Warning: {failedAttempts} Failed Attempt{failedAttempts > 1 ? 's' : ''}
+                    </h3>
+                    <div className="mt-1 text-sm text-yellow-700">
+                      <p>{failedAttempts === 2 ? 'One more failed attempt will lock your account for 15 minutes.' : 'Please check your credentials and try again.'}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <form onSubmit={formik.handleSubmit} className="grid gap-4 mt-4">
               <div className="grid gap-2">
                 <Label htmlFor="email">Email</Label>
@@ -187,9 +316,10 @@ export default function LoginPage() {
 
               <Button
                 type="submit"
-                className="w-full bg-blue-800 hover:bg-blue-900 transition"
+                disabled={isLocked || formik.isSubmitting}
+                className="w-full bg-blue-800 hover:bg-blue-900 transition disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Login
+                {isLocked ? "Account Locked" : formik.isSubmitting ? "Signing In..." : "Login"}
               </Button>
             </form>
           </CardContent>

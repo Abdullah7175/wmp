@@ -7,8 +7,9 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { useRouter } from "next/navigation"
 import Router from "next/router"
+import WorkRequestStatus from "@/components/WorkRequestStatus"
 
-export function getAgentRequestColumns({ onAddImage, onAddVideo }) {
+export function getAgentRequestColumns({ onAddImage, onAddVideo, onAddBeforeImage }) {
   return [
     {
       accessorKey: "id",
@@ -39,6 +40,18 @@ export function getAgentRequestColumns({ onAddImage, onAddVideo }) {
     {
       accessorKey: "complaint_type",
       header: "Department",
+    },
+    {
+      accessorKey: "address",
+      header: "Address",
+      cell: ({ row }) => {
+        const address = row.getValue("address");
+        return (
+          <div className="max-w-xs truncate" title={address}>
+            {address || 'No address'}
+          </div>
+        );
+      },
     },
     {
     accessorKey: "location", // dummy, not used in display
@@ -88,14 +101,37 @@ export function getAgentRequestColumns({ onAddImage, onAddVideo }) {
       },
     },
     {
+      accessorKey: "approval_status",
+      header: "CEO Approval",
+      cell: ({ row }) => {
+        const approvalStatus = row.original.approval_status;
+        return (
+          <WorkRequestStatus 
+            approvalStatus={approvalStatus}
+            status={row.original.status_name}
+            className="text-xs"
+          />
+        );
+      },
+    },
+    {
       id: "actions",
       cell: ({ row, table }) => {
-        const { onAddImage, onAddVideo } = table.options.meta || {};
+        const { onAddImage, onAddVideo, onAddBeforeImage } = table.options.meta || {};
         const status = row.original.status_name;
         const isCompleted = status === 'Completed';
         const canUpload = !isCompleted;
         return (
           <div className="flex space-x-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onAddBeforeImage && onAddBeforeImage(row.original.id)}
+              disabled={!canUpload}
+              className="bg-orange-50 border-orange-200 text-orange-700 hover:bg-orange-100"
+            >
+              Before Images
+            </Button>
             <Button
               variant="outline"
               size="sm"

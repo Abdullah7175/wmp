@@ -40,6 +40,18 @@ export const columns = [
     header: "Department",
   },
   {
+    accessorKey: "address",
+    header: "Address",
+    cell: ({ row }) => {
+      const address = row.getValue("address");
+      return (
+        <div className="max-w-xs truncate" title={address}>
+          {address || 'No address'}
+        </div>
+      );
+    },
+  },
+  {
   accessorKey: "location", // dummy, not used in display
   header: "Location",
   cell: ({ row }) => {

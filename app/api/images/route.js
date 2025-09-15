@@ -3,6 +3,8 @@ import { promises as fs } from 'fs';
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/db';
 import { actionLogger, ENTITY_TYPES } from '@/lib/actionLogger';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/pages/api/auth/[...nextauth]';
 
 export async function GET(request) {
     const { searchParams } = new URL(request.url);
@@ -113,6 +115,11 @@ export async function GET(request) {
 
 export async function POST(req) {
     try {
+        const session = await getServerSession(authOptions);
+        if (!session?.user) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
         const formData = await req.formData();
         const workRequestId = formData.get('workRequestId');
         const creatorId = formData.get('creator_id');
@@ -125,20 +132,90 @@ export async function POST(req) {
         if (!workRequestId || files.length === 0) {
             return NextResponse.json({ error: 'Work Request ID and at least one image are required' }, { status: 400 });
         }
-        if (files.length !== descriptions.length || files.length !== latitudes.length || files.length !== longitudes.length) {
-            return NextResponse.json({ error: 'Each image must have a description, latitude, and longitude' }, { status: 400 });
+        if (files.length !== descriptions.length) {
+            return NextResponse.json({ error: 'Each image must have a description' }, { status: 400 });
+        }
+
+        // Check upload permission for images
+        const client = await connectToDatabase();
+        const approvalStatus = await client.query(`
+            SELECT 
+                wra.approval_status,
+                wr.id,
+                wr.creator_id,
+                wr.creator_type
+            FROM work_requests wr
+            LEFT JOIN work_request_approvals wra ON wr.id = wra.work_request_id
+            WHERE wr.id = $1
+        `, [workRequestId]);
+
+        if (approvalStatus.length === 0) {
+            return NextResponse.json({ error: 'Work request not found' }, { status: 404 });
+        }
+
+        const request = approvalStatus[0];
+        const isApproved = request.approval_status === 'approved';
+        const isRejected = request.approval_status === 'rejected';
+        const isPending = request.approval_status === 'pending';
+
+        // Check if user is the creator of the request
+        const isCreator = (
+            (session.user.userType === 'user' && request.creator_type === 'user' && session.user.id === request.creator_id) ||
+            (session.user.userType === 'agent' && request.creator_type === 'agent' && session.user.id === request.creator_id) ||
+            (session.user.userType === 'socialmedia' && request.creator_type === 'socialmedia' && session.user.id === request.creator_id)
+        );
+
+        // Check if user is CEO or admin
+        const isCEO = session.user.userType === 'user' && session.user.role === 5;
+        const isAdmin = session.user.userType === 'user' && (session.user.role === 1 || session.user.role === 2);
+
+        let canUpload = false;
+        let reason = "";
+
+        if (isRejected) {
+            // Rejected requests - only CEO and admin can make them live again
+            if (isCEO || isAdmin) {
+                canUpload = true;
+                reason = "Request can be reactivated by CEO/Admin";
+            } else {
+                canUpload = false;
+                reason = "Request rejected by CEO KW&SC. Only CEO or Admin can reactivate.";
+            }
+        } else if (isPending) {
+            // Pending approval - only before images allowed, not regular images
+            canUpload = false;
+            reason = "Only before images allowed before CEO approval";
+        } else if (isApproved) {
+            // Approved requests - all media types allowed
+            if (isCreator || isCEO || isAdmin) {
+                canUpload = true;
+                reason = "Request approved by CEO - all media uploads allowed";
+            } else {
+                canUpload = false;
+                reason = "Only request creators, CEO, or Admin can upload media";
+            }
+        } else {
+            // No approval record found (should not happen for new requests)
+            canUpload = false;
+            reason = "Request approval status unknown";
+        }
+
+        if (!canUpload) {
+            return NextResponse.json({ 
+                error: 'Upload not allowed', 
+                details: reason 
+            }, { status: 403 });
         }
 
         const uploadsDir = path.join(process.cwd(), 'public', 'uploads', 'images');
         await fs.mkdir(uploadsDir, { recursive: true });
-        const client = await connectToDatabase();
         const uploadedImages = [];
         for (let i = 0; i < files.length; i++) {
             const file = files[i];
             const description = descriptions[i];
-            const latitude = latitudes[i];
-            const longitude = longitudes[i];
-            if (!description || !latitude || !longitude) {
+            const latitude = latitudes[i] || '0';
+            const longitude = longitudes[i] || '0';
+            if (!description) {
                 continue;
             }
             const buffer = await file.arrayBuffer();

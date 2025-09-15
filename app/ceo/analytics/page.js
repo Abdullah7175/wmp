@@ -1,0 +1,439 @@
+"use client";
+import {
+    Card,
+    CardContent,
+    CardDescription,
+    CardFooter,
+    CardHeader,
+    CardTitle,
+} from "@/components/ui/card"
+import { 
+    MessageCircleWarning, 
+    Activity, 
+    CheckCheck, 
+    Plus, 
+    Clock,
+    Users,
+    Building2,
+    TrendingUp,
+    AlertTriangle,
+    FileText,
+    MapPin,
+    Calendar,
+    DollarSign
+} from "lucide-react"
+import { LineChartWithValues } from "@/components/lineChart"
+import { PieChartWithValues } from "@/components/pieChart"
+import dynamic from "next/dynamic";
+import Link from "next/link";
+import { useState, useEffect } from "react";
+import { AlertCircle, Eye, BarChart3, PieChart, Map, ChevronDown, ChevronUp } from "lucide-react";
+
+const MapComponent = dynamic(() => import("@/components/MapComponent"), { ssr: false });
+
+const CeoAnalyticsPage = () => {
+    const [stats, setStats] = useState({
+        totalRequests: 0,
+        activeRequests: 0,
+        completedRequests: 0,
+        pendingRequests: 0,
+        pendingApprovals: 0,
+        approvedRequests: 0,
+        rejectedRequests: 0,
+        totalUsers: 0,
+        totalAgents: 0,
+        totalBudget: 0,
+        recentRequests: []
+    });
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+    const [recentRequestsPage, setRecentRequestsPage] = useState(1);
+    const [recentRequestsPerPage] = useState(5);
+    const [showAllRecent, setShowAllRecent] = useState(false);
+
+    useEffect(() => {
+        const fetchStats = async () => {
+            try {
+                const response = await fetch('/api/ceo/analytics');
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.success) {
+                        setStats(data.data);
+                    } else {
+                        setError(data.message || 'Failed to fetch analytics data');
+                    }
+                } else {
+                    setError('Failed to fetch analytics data');
+                }
+            } catch (error) {
+                console.error('Error fetching CEO analytics:', error);
+                setError('Failed to fetch analytics data');
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchStats();
+    }, []);
+
+    // Pagination logic for recent requests
+    const getPaginatedRecentRequests = () => {
+        if (showAllRecent) {
+            return stats.recentRequests;
+        }
+        
+        const startIndex = (recentRequestsPage - 1) * recentRequestsPerPage;
+        const endIndex = startIndex + recentRequestsPerPage;
+        return stats.recentRequests.slice(startIndex, endIndex);
+    };
+
+    const totalPages = Math.ceil(stats.recentRequests.length / recentRequestsPerPage);
+    const hasMorePages = recentRequestsPage < totalPages;
+    const hasPreviousPages = recentRequestsPage > 1;
+
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center h-64">
+                <div className="text-gray-500">Loading CEO Analytics...</div>
+            </div>
+        );
+    }
+
+    if (error) {
+        return (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                <div className="flex items-center space-x-3">
+                    <AlertTriangle className="w-5 h-5 text-red-600" />
+                    <p className="text-sm font-medium text-red-800">{error}</p>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="container mx-auto px-4 py-3">
+            {/* Header */}
+            <div className="mb-8">
+                <h1 className="text-3xl font-bold text-gray-900 mb-2">Analytics Dashboard</h1>
+                <p className="text-gray-600">Comprehensive overview of KW&SC Water Corporation operations</p>
+            </div>
+
+            {/* Quick Actions */}
+            <div className="py-4 mb-6">
+                <div className="flex flex-wrap gap-4">
+                    <Link href="/ceo/requests">
+                        <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2">
+                            <Eye className="w-4 h-4" />
+                            Review Pending Approvals
+                        </button>
+                    </Link>
+                    <Link href="/ceo/approved">
+                        <button className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2">
+                            <CheckCheck className="w-4 h-4" />
+                            View Approved Requests
+                        </button>
+                    </Link>
+                    <Link href="/ceo/rejected">
+                        <button className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center gap-2">
+                            <AlertCircle className="w-4 h-4" />
+                            Review Rejected Requests
+                        </button>
+                    </Link>
+                </div>
+            </div>
+
+            {/* Main Statistics Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                <Card className="bg-gradient-to-r from-blue-50 to-blue-100 border-2 shadow-md">
+                    <div className="flex items-center space-x-4 rounded-md p-6">
+                        <MessageCircleWarning className="text-blue-700 w-8 h-8" />
+                        <div className="flex-1 space-y-1">
+                            <p className="text-lg font-semibold leading-none text-blue-900">
+                                Total Requests
+                            </p>
+                            <p className="text-2xl font-bold text-blue-800">
+                                {stats.totalRequests.toLocaleString()}
+                            </p>
+                            <p className="text-sm text-blue-600">
+                                All time requests
+                            </p>
+                        </div>
+                    </div>
+                </Card>
+
+                <Card className="bg-gradient-to-r from-purple-50 to-purple-100 border-2 shadow-md">
+                    <div className="flex items-center space-x-4 rounded-md p-6">
+                        <Activity className="text-purple-700 w-8 h-8" />
+                        <div className="flex-1 space-y-1">
+                            <p className="text-lg font-semibold leading-none text-purple-900">
+                                Active Requests
+                            </p>
+                            <p className="text-2xl font-bold text-purple-800">
+                                {stats.activeRequests.toLocaleString()}
+                            </p>
+                            <p className="text-sm text-purple-600">
+                                Currently in progress
+                            </p>
+                        </div>
+                    </div>
+                </Card>
+
+                <Card className="bg-gradient-to-r from-indigo-50 to-indigo-100 border-2 shadow-md">
+                    <div className="flex items-center space-x-4 rounded-md p-6">
+                        <Users className="text-indigo-700 w-8 h-8" />
+                        <div className="flex-1 space-y-1">
+                            <p className="text-lg font-semibold leading-none text-indigo-900">
+                                Total Users
+                            </p>
+                            <p className="text-2xl font-bold text-indigo-800">
+                                {stats.totalUsers.toLocaleString()}
+                            </p>
+                            <p className="text-sm text-indigo-600">
+                                System users
+                            </p>
+                        </div>
+                    </div>
+                </Card>
+
+                <Card className="bg-gradient-to-r from-teal-50 to-teal-100 border-2 shadow-md">
+                    <div className="flex items-center space-x-4 rounded-md p-6">
+                        <Building2 className="text-teal-700 w-8 h-8" />
+                        <div className="flex-1 space-y-1">
+                            <p className="text-lg font-semibold leading-none text-teal-900">
+                                Field Agents
+                            </p>
+                            <p className="text-2xl font-bold text-teal-800">
+                                {stats.totalAgents.toLocaleString()}
+                            </p>
+                            <p className="text-sm text-teal-600">
+                                Active agents
+                            </p>
+                        </div>
+                    </div>
+                </Card>
+            </div>
+
+            {/* Secondary Statistics */}
+            {/* <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <Card className="bg-gradient-to-r from-yellow-50 to-yellow-100 border-2 shadow-md">
+                    <div className="flex items-center space-x-4 rounded-md p-6">
+                        <Clock className="text-yellow-700 w-8 h-8" />
+                        <div className="flex-1 space-y-1">
+                            <p className="text-lg font-semibold leading-none text-yellow-900">
+                                Pending Approvals
+                            </p>
+                            <p className="text-2xl font-bold text-yellow-800">
+                                {stats.pendingApprovals.toLocaleString()}
+                            </p>
+                            <p className="text-sm text-yellow-600">
+                                Awaiting CEO decision
+                            </p>
+                        </div>
+                    </div>
+                </Card>
+
+                <Card className="bg-gradient-to-r from-green-50 to-green-100 border-2 shadow-md">
+                    <div className="flex items-center space-x-4 rounded-md p-6">
+                        <CheckCheck className="text-green-700 w-8 h-8" />
+                        <div className="flex-1 space-y-1">
+                            <p className="text-lg font-semibold leading-none text-green-900">
+                                Approved Requests
+                            </p>
+                            <p className="text-2xl font-bold text-green-800">
+                                {stats.approvedRequests.toLocaleString()}
+                            </p>
+                            <p className="text-sm text-green-600">
+                                CEO approved (30 days)
+                            </p>
+                        </div>
+                    </div>
+                </Card>
+
+                <Card className="bg-gradient-to-r from-red-50 to-red-100 border-2 shadow-md">
+                    <div className="flex items-center space-x-4 rounded-md p-6">
+                        <AlertCircle className="text-red-700 w-8 h-8" />
+                        <div className="flex-1 space-y-1">
+                            <p className="text-lg font-semibold leading-none text-red-900">
+                                Rejected Requests
+                            </p>
+                            <p className="text-2xl font-bold text-red-800">
+                                {stats.rejectedRequests.toLocaleString()}
+                            </p>
+                            <p className="text-sm text-red-600">
+                                CEO rejected (30 days)
+                            </p>
+                        </div>
+                    </div>
+                </Card>
+                
+            </div> */}
+
+            {/* Map Component */}
+            <div className="mb-8">
+                <Card className="shadow-lg">
+                    <CardHeader>
+                        <div className="flex items-center space-x-2">
+                            <Map className="w-6 h-6 text-blue-600" />
+                            <CardTitle className="text-xl font-semibold">Geographic Distribution</CardTitle>
+                        </div>
+                        <CardDescription>
+                            Real-time map view of all work requests and their locations
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="h-[600px] w-full rounded shadow">
+                            <MapComponent />
+                        </div>
+                    </CardContent>
+                </Card>
+            </div>
+
+            {/* Charts Section */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+                <div className="lg:col-span-2">
+                    <Card className="shadow-lg">
+                        <CardHeader>
+                            <div className="flex items-center space-x-2">
+                                <BarChart3 className="w-6 h-6 text-blue-600" />
+                                <CardTitle className="text-xl font-semibold">Request Trends</CardTitle>
+                            </div>
+                            <CardDescription>
+                                Monthly trends of work requests over time
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <LineChartWithValues />
+                        </CardContent>
+                    </Card>
+                </div>
+                
+                <div>
+                    <Card className="shadow-lg">
+                        <CardHeader>
+                            <div className="flex items-center space-x-2">
+                                <PieChart className="w-6 h-6 text-green-600" />
+                                <CardTitle className="text-xl font-semibold">Request Distribution</CardTitle>
+                            </div>
+                            <CardDescription>
+                                Breakdown by request types and status
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <PieChartWithValues />
+                        </CardContent>
+                    </Card>
+                </div>
+            </div>
+
+            {/* Recent Activity */}
+            <Card className="shadow-lg min-h-[300px]">
+                <CardHeader>
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-2">
+                            <FileText className="w-6 h-6 text-purple-600" />
+                            <CardTitle className="text-xl font-semibold">Recent Activity</CardTitle>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                            <span className="text-sm text-gray-500">
+                                {stats.recentRequests.length} total requests
+                            </span>
+                            {stats.recentRequests.length > recentRequestsPerPage && (
+                                <button
+                                    onClick={() => setShowAllRecent(!showAllRecent)}
+                                    className="text-sm text-blue-600 hover:text-blue-800 flex items-center space-x-1"
+                                >
+                                    {showAllRecent ? (
+                                        <>
+                                            <ChevronUp className="w-4 h-4" />
+                                            <span>Show Less</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <ChevronDown className="w-4 h-4" />
+                                            <span>Show All</span>
+                                        </>
+                                    )}
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                    <CardDescription>
+                        Latest work requests requiring attention
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    {stats.recentRequests && stats.recentRequests.length > 0 ? (
+                        <div className="space-y-4">
+                            {/* Fixed height container with scroll */}
+                            <div className="max-h-96 overflow-y-auto space-y-4 pr-2">
+                                {getPaginatedRecentRequests().map((request) => (
+                                    <div key={request.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                                        <div className="flex items-center space-x-4">
+                                            <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                                                <FileText className="w-5 h-5 text-blue-600" />
+                                            </div>
+                                            <div>
+                                                <p className="font-medium text-gray-900">Request #{request.id}</p>
+                                                <p className="text-sm text-gray-600">{request.complaint_type}</p>
+                                                <p className="text-xs text-gray-500">
+                                                    {request.town} • {new Date(request.request_date).toLocaleDateString()}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <div className="text-right">
+                                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                                request.approval_status === 'pending' 
+                                                    ? 'bg-yellow-100 text-yellow-800' 
+                                                    : request.approval_status === 'approved'
+                                                    ? 'bg-green-100 text-green-800'
+                                                    : 'bg-red-100 text-red-800'
+                                            }`}>
+                                                {request.approval_status === 'pending' ? 'Pending Approval' : 
+                                                 request.approval_status === 'approved' ? 'Approved' : 'Rejected'}
+                                            </span>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+
+                            {/* Pagination Controls */}
+                            {!showAllRecent && stats.recentRequests.length > recentRequestsPerPage && (
+                                <div className="flex items-center justify-between pt-4 border-t border-gray-200">
+                                    <div className="text-sm text-gray-500">
+                                        Showing {((recentRequestsPage - 1) * recentRequestsPerPage) + 1} to {Math.min(recentRequestsPage * recentRequestsPerPage, stats.recentRequests.length)} of {stats.recentRequests.length} requests
+                                    </div>
+                                    <div className="flex items-center space-x-2">
+                                        <button
+                                            onClick={() => setRecentRequestsPage(prev => Math.max(1, prev - 1))}
+                                            disabled={!hasPreviousPages}
+                                            className="px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed rounded-md transition-colors"
+                                        >
+                                            Previous
+                                        </button>
+                                        <span className="text-sm text-gray-600">
+                                            Page {recentRequestsPage} of {totalPages}
+                                        </span>
+                                        <button
+                                            onClick={() => setRecentRequestsPage(prev => Math.min(totalPages, prev + 1))}
+                                            disabled={!hasMorePages}
+                                            className="px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed rounded-md transition-colors"
+                                        >
+                                            Next
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    ) : (
+                        <div className="text-center py-8 text-gray-500">
+                            <FileText className="w-12 h-12 mx-auto mb-4 text-gray-400" />
+                            <p>No recent activity to display</p>
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
+        </div>
+    );
+};
+
+export default CeoAnalyticsPage;

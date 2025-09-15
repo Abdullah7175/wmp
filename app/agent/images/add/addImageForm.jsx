@@ -31,10 +31,12 @@ const ImageForm = ({ workRequestId: propWorkRequestId, onClose }) => {
     useEffect(() => {
         const fetchWorkRequests = async () => {
             try {
-                const response = await fetch('/api/images/work-request');
+                const response = await fetch('/api/requests');
                 if (response.ok) {
                     const data = await response.json();
-                    setWorkRequests(data.map(request => ({
+                    // Handle both array and object responses
+                    const requestsArray = Array.isArray(data) ? data : (data.data || []);
+                    setWorkRequests(requestsArray.map(request => ({
                         value: Number(request.id),
                         label: `${request.id}`
                     })));
@@ -64,9 +66,10 @@ const ImageForm = ({ workRequestId: propWorkRequestId, onClose }) => {
                     const userType = session?.user?.userType;
                     const role = Number(session?.user?.role);
                     if (data.status_name === 'Completed') {
+                        // Allow uploads for admins (role 1), managers (role 2), and Media Cell editors
                         if (
                             (userType === 'user' && (role === 1 || role === 2)) ||
-                            (userType === 'socialmediaperson' && session?.user?.role === 'editor')
+                            (userType === 'socialmedia' && session?.user?.role === 'editor')
                         ) {
                             setIsUploadAllowed(true);
                         } else {
@@ -104,9 +107,9 @@ const ImageForm = ({ workRequestId: propWorkRequestId, onClose }) => {
             return;
         }
         for (let i = 0; i < fileInputs.length; i++) {
-            const { description, latitude, longitude } = fileInputs[i];
-            if (!description || !latitude || !longitude) {
-                toast({ title: `All fields are required for image #${i + 1}`, variant: 'destructive' });
+            const { description } = fileInputs[i];
+            if (!description) {
+                toast({ title: `Description is required for image #${i + 1}`, variant: 'destructive' });
                 return;
             }
         }
@@ -115,8 +118,8 @@ const ImageForm = ({ workRequestId: propWorkRequestId, onClose }) => {
         fileInputs.forEach((item, idx) => {
             formData.append('img', item.file);
             formData.append('description', item.description);
-            formData.append('latitude', item.latitude);
-            formData.append('longitude', item.longitude);
+            formData.append('latitude', item.latitude || '0');
+            formData.append('longitude', item.longitude || '0');
         });
         if (session?.user?.id) {
             formData.append('creator_id', session.user.id);
@@ -224,25 +227,25 @@ const ImageForm = ({ workRequestId: propWorkRequestId, onClose }) => {
                                             />
                                         </div>
                                         <div>
-                                            <label className="block text-xs text-gray-600">Latitude</label>
+                                            <label className="block text-xs text-gray-600">Latitude (Optional)</label>
                                             <input
                                                 type="number"
                                                 step="any"
                                                 value={item.latitude}
                                                 onChange={e => handleInputChange(idx, 'latitude', e.target.value)}
                                                 className="mt-1 block w-full px-2 py-1 border border-gray-300 rounded-md"
-                                                placeholder="Latitude"
+                                                placeholder="Latitude (optional)"
                                             />
                                         </div>
                                         <div>
-                                            <label className="block text-xs text-gray-600">Longitude</label>
+                                            <label className="block text-xs text-gray-600">Longitude (Optional)</label>
                                             <input
                                                 type="number"
                                                 step="any"
                                                 value={item.longitude}
                                                 onChange={e => handleInputChange(idx, 'longitude', e.target.value)}
                                                 className="mt-1 block w-full px-2 py-1 border border-gray-300 rounded-md"
-                                                placeholder="Longitude"
+                                                placeholder="Longitude (optional)"
                                             />
                                         </div>
                                     </div>

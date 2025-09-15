@@ -311,6 +311,14 @@ export function AppSidebar() {
                                                         <span>Images</span>
                                                     </Link>
                                                 </SidebarMenuSubItem>
+                                                <SidebarMenuSubItem
+                                                    className={`py-2 text-base ml-2 text-gray-500 underline ${pathname === "/dashboard/before-images" ? "font-bold text-blue-950" : ""
+                                                        }`}
+                                                >
+                                                    <Link href="/dashboard/before-images">
+                                                        <span>Before Images</span>
+                                                    </Link>
+                                                </SidebarMenuSubItem>
                                             </SidebarMenuSub>
                                         </CollapsibleContent>
                                     </SidebarMenuItem>
@@ -353,6 +361,16 @@ export function AppSidebar() {
                                                         <span>Media Cell Agents</span>
                                                     </Link>
                                                 </SidebarMenuSubItem>
+                                                {role === 1 && (
+                                                    <SidebarMenuSubItem
+                                                        className={`py-2 text-base ml-2 text-gray-500 underline ${pathname === "/dashboard/ceo-users" ? "font-bold text-blue-950" : ""
+                                                            }`}
+                                                    >
+                                                        <Link href="/dashboard/ceo-users">
+                                                            <span>CEO Users</span>
+                                                        </Link>
+                                                    </SidebarMenuSubItem>
+                                                )}
                                                 {role === 1 && (
                                                     <SidebarMenuSubItem
                                                         className={`py-2 text-base ml-2 text-gray-500 underline ${pathname === "/dashboard/user-actions" ? "font-bold text-blue-950" : ""

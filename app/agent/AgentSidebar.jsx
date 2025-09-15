@@ -18,6 +18,11 @@ const links = [
     icon: <List className="w-5 h-5 mr-2" />,
   },
   {
+    href: "/agent/before-images",
+    label: "Before Images",
+    icon: <ImageIcon className="w-5 h-5 mr-2" />,
+  },
+  {
     href: "/agent/videos",
     label: "Videos",
     icon: <Video className="w-5 h-5 mr-2" />,

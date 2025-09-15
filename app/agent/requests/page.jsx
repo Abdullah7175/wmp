@@ -7,18 +7,21 @@ import { columns, getAgentRequestColumns } from './columns';
 import { useSession } from 'next-auth/react';
 import ImageForm from '../images/add/addImageForm';
 import VideoForm from '../videos/add/addVideoForm';
+import AddBeforeImageForm from '../before-images/add/addBeforeImageForm';
 
 const Modal = ({ children, onClose }) => (
-  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
-    <div className="bg-white rounded-lg shadow-lg p-6 max-w-lg w-full relative">
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40 p-4">
+    <div className="bg-white rounded-lg shadow-lg w-full max-w-4xl max-h-[90vh] relative flex flex-col">
       <button
-        className="absolute top-2 right-2 text-gray-500 hover:text-gray-700"
+        className="absolute top-2 right-2 text-gray-500 hover:text-gray-700 z-10 bg-white rounded-full w-8 h-8 flex items-center justify-center"
         onClick={onClose}
         aria-label="Close"
       >
         ×
       </button>
-      {children}
+      <div className="overflow-y-auto p-6 flex-1 min-h-0">
+        {children}
+      </div>
     </div>
   </div>
 );
@@ -32,12 +35,13 @@ const RequestsPage = () => {
     const [selectedRequestId, setSelectedRequestId] = useState(null);
     const [showImageForm, setShowImageForm] = useState(false);
     const [showVideoForm, setShowVideoForm] = useState(false);
+    const [showBeforeImageForm, setShowBeforeImageForm] = useState(false);
 
     useEffect(() => {
         if (!session?.user?.id) return;
         const fetchRequests = async () => {
             try {
-                const res = await fetch(`/api/requests?creator_id=${session.user.id}&creator_type=agent&limit=1000`);
+                const res = await fetch(`/api/requests?creator_id=${session.user.id}&creator_type=agent&limit=1000&include_approval_status=true`);
                 if (!res.ok) {
                     throw new Error('Failed to fetch requests');
                 }
@@ -91,11 +95,16 @@ const RequestsPage = () => {
             setSelectedRequestId(id);
             setShowVideoForm(true);
         },
+        onAddBeforeImage: (id) => {
+            setSelectedRequestId(id);
+            setShowBeforeImageForm(true);
+        },
     });
 
     const closeForms = () => {
         setShowImageForm(false);
         setShowVideoForm(false);
+        setShowBeforeImageForm(false);
         setSelectedRequestId(null);
     };
 
@@ -120,6 +129,10 @@ const RequestsPage = () => {
                             setSelectedRequestId(id);
                             setShowVideoForm(true);
                         },
+                        onAddBeforeImage: (id) => {
+                            setSelectedRequestId(id);
+                            setShowBeforeImageForm(true);
+                        },
                     }}
                 />
             </div>
@@ -131,6 +144,11 @@ const RequestsPage = () => {
             {showVideoForm && selectedRequestId && (
                 <Modal onClose={closeForms}>
                   <VideoForm workRequestId={selectedRequestId} onClose={closeForms} />
+                </Modal>
+            )}
+            {showBeforeImageForm && selectedRequestId && (
+                <Modal onClose={closeForms}>
+                  <AddBeforeImageForm workRequestId={selectedRequestId} onClose={closeForms} />
                 </Modal>
             )}
         </div>

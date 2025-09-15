@@ -14,6 +14,7 @@ export async function GET(request) {
     const filter = searchParams.get('filter') || '';
     const dateFrom = searchParams.get('date_from');
     const dateTo = searchParams.get('date_to');
+    const includeApprovalStatus = searchParams.get('include_approval_status') === 'true';
     if (id && !Number.isInteger(Number(id))) {
         return NextResponse.json(
             { error: 'Invalid request ID format' },
@@ -41,6 +42,7 @@ export async function GET(request) {
                     exen.name as executive_engineer_name,
                     contractor.name as contractor_name,
                     assistant.name as assistant_name,
+                    ${includeApprovalStatus ? 'wra.approval_status,' : ''}
                     (
                         SELECT name FROM socialmediaperson WHERE id IN (
                             SELECT socialmedia_agent_id FROM request_assign_smagent WHERE work_requests_id = wr.id AND (role = 1 OR role = 3) LIMIT 1
@@ -74,6 +76,7 @@ export async function GET(request) {
                 LEFT JOIN agents exen ON wr.executive_engineer_id = exen.id AND exen.role = 1
                 LEFT JOIN agents contractor ON wr.contractor_id = contractor.id AND contractor.role = 2
                 LEFT JOIN users assistant ON wr.creator_type = 'user' AND wr.creator_id = assistant.id AND assistant.role = 5
+                ${includeApprovalStatus ? 'LEFT JOIN work_request_approvals wra ON wr.id = wra.work_request_id' : ''}
                 WHERE wr.id = $1
             `;
             const result = await client.query(query, [numericId]);
@@ -110,6 +113,7 @@ export async function GET(request) {
                     s.id as status_id,
                     COALESCE(u.name, ag.name, sm.name) as creator_name,
                     wr.creator_type
+                    ${includeApprovalStatus ? ', wra.approval_status' : ''}
                 FROM work_requests wr
                 LEFT JOIN town t ON wr.town_id = t.id
                 LEFT JOIN complaint_types ct ON wr.complaint_type_id = ct.id
@@ -118,6 +122,7 @@ export async function GET(request) {
                 LEFT JOIN users u ON wr.creator_type = 'user' AND wr.creator_id = u.id
                 LEFT JOIN agents ag ON wr.creator_type = 'agent' AND wr.creator_id = ag.id
                 LEFT JOIN socialmediaperson sm ON wr.creator_type = 'socialmedia' AND wr.creator_id = sm.id
+                ${includeApprovalStatus ? 'LEFT JOIN work_request_approvals wra ON wr.id = wra.work_request_id' : ''}
             `;
             
             // Add JOIN for assigned social media agents if filtering by assigned_smagent_id
@@ -400,6 +405,28 @@ export async function POST(req) {
                     );
                 }
             }
+        }
+
+        // Create CEO approval request for all new work requests
+        try {
+            const ceoUsers = await client.query('SELECT id FROM users WHERE role = 5');
+            if (ceoUsers.rows.length > 0) {
+                // Use the first CEO user (in case there are multiple)
+                const ceoId = ceoUsers.rows[0].id;
+                await client.query(`
+                    INSERT INTO work_request_approvals (work_request_id, ceo_id, approval_status, created_at, updated_at)
+                    VALUES ($1, $2, 'pending', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                `, [workRequestId, ceoId]);
+
+                // Notify CEO about new approval request
+                await client.query(`
+                    INSERT INTO notifications (user_id, type, entity_id, message, created_at, read)
+                    VALUES ($1, 'ceo_approval', $2, $3, CURRENT_TIMESTAMP, false)
+                `, [ceoId, workRequestId, `New work request #${workRequestId} requires CEO approval`]);
+            }
+        } catch (approvalErr) {
+            // Log but don't fail request creation
+            console.error('CEO approval request creation failed:', approvalErr);
         }
 
         await client.query('COMMIT');
