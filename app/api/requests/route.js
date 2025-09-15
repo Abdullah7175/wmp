@@ -527,7 +527,16 @@ export async function PUT(req) {
             contractor_id,
             budget_code,
             file_type,
-            nature_of_work
+            nature_of_work,
+            latitude,
+            longitude,
+            town_id,
+            subtown_id,
+            complaint_type_id,
+            complaint_subtype_id,
+            contact_number,
+            address,
+            description
         } = body;
 
         // Fetch current status_id and assigned_to if not provided
@@ -542,6 +551,14 @@ export async function PUT(req) {
         }
 
         await client.query('BEGIN');
+
+        // Handle geolocation update
+        let geoTag = null;
+        if (latitude !== undefined && longitude !== undefined) {
+            if (latitude && longitude) {
+                geoTag = `SRID=4326;POINT(${longitude} ${latitude})`;
+            }
+        }
 
         // If shoot_date is present, update it
         // shoot_date is UI-only and not stored in the database
@@ -569,6 +586,38 @@ export async function PUT(req) {
         if (nature_of_work !== undefined) {
             updateFields.push(`nature_of_work = $${++paramIdx}`);
             updateParams.push(nature_of_work);
+        }
+        if (town_id !== undefined) {
+            updateFields.push(`town_id = $${++paramIdx}`);
+            updateParams.push(town_id);
+        }
+        if (subtown_id !== undefined) {
+            updateFields.push(`subtown_id = $${++paramIdx}`);
+            updateParams.push(subtown_id);
+        }
+        if (complaint_type_id !== undefined) {
+            updateFields.push(`complaint_type_id = $${++paramIdx}`);
+            updateParams.push(complaint_type_id);
+        }
+        if (complaint_subtype_id !== undefined) {
+            updateFields.push(`complaint_subtype_id = $${++paramIdx}`);
+            updateParams.push(complaint_subtype_id);
+        }
+        if (contact_number !== undefined) {
+            updateFields.push(`contact_number = $${++paramIdx}`);
+            updateParams.push(contact_number);
+        }
+        if (address !== undefined) {
+            updateFields.push(`address = $${++paramIdx}`);
+            updateParams.push(address);
+        }
+        if (description !== undefined) {
+            updateFields.push(`description = $${++paramIdx}`);
+            updateParams.push(description);
+        }
+        if (geoTag !== null) {
+            updateFields.push(`geo_tag = $${++paramIdx}`);
+            updateParams.push(geoTag);
         }
 
         let updateQuery = `
@@ -624,6 +673,15 @@ export async function PUT(req) {
             budget_code,
             file_type,
             nature_of_work,
+            latitude,
+            longitude,
+            town_id,
+            subtown_id,
+            complaint_type_id,
+            complaint_subtype_id,
+            contact_number,
+            address,
+            description,
             smAgentsAssigned: assigned_sm_agents ? assigned_sm_agents.length : 0
         });
 
