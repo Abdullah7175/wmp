@@ -78,13 +78,16 @@ export async function PUT(request) {
 
     // Log CEO password change
     await logUserAction({
-      userId: session.user.id,
-      userType: 'ceo',
-      action: 'CHANGE_PASSWORD',
-      entityType: 'USER_PROFILE',
-      entityId: session.user.id,
+      user_id: session.user.id,
+      user_type: 'ceo',
+      user_role: 5,
+      user_name: session.user.name || 'CEO',
+      user_email: session.user.email,
+      action_type: 'CHANGE_PASSWORD',
+      entity_type: 'USER_PROFILE',
+      entity_id: session.user.id,
       details: 'CEO changed account password',
-      ipAddress: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown'
+      ip_address: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown'
     });
 
     return NextResponse.json({

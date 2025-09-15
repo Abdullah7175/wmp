@@ -225,6 +225,11 @@ export default function CeoProfileForm() {
             image: result.user.image
           }
         });
+        
+        // Force a page refresh to ensure sidebar updates
+        setTimeout(() => {
+          window.location.reload();
+        }, 1000);
       }
       
       // Clear image state after successful upload

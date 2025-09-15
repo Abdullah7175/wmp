@@ -11,13 +11,14 @@ import {
   Wrench,
   FileText,
   Image,
+  Video,
   MessageSquare,
   AlertCircle
 } from "lucide-react";
 
 export default function RequestApprovalForm({ requestData }) {
   const router = useRouter();
-  const { request, beforeImages } = requestData;
+  const { request, beforeImages, images, videos, finalVideos } = requestData;
   const [isLoading, setIsLoading] = useState(false);
   const [comments, setComments] = useState("");
 
@@ -177,6 +178,99 @@ export default function RequestApprovalForm({ requestData }) {
                   </p>
                   {image.description && (
                     <p className="mt-1 text-gray-700">{image.description}</p>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Images Section */}
+      {images.length > 0 && (
+        <div className="bg-white rounded-lg shadow-md p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+            <Image className="w-5 h-5 mr-2" />
+            Images ({images.length})
+          </h3>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {images.map((image) => (
+              <div key={image.id} className="border rounded-lg p-4">
+                <img
+                  src={image.link}
+                  alt="Work image"
+                  className="w-full h-48 object-cover rounded-md mb-3"
+                />
+                <div className="text-sm text-gray-600">
+                  <p className="font-medium">Uploaded by: {image.creator_type}</p>
+                  <p className="text-gray-500">
+                    {new Date(image.created_at).toLocaleDateString()}
+                  </p>
+                  {image.description && (
+                    <p className="mt-1 text-gray-700">{image.description}</p>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Videos Section */}
+      {videos.length > 0 && (
+        <div className="bg-white rounded-lg shadow-md p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+            <Video className="w-5 h-5 mr-2" />
+            Videos ({videos.length})
+          </h3>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {videos.map((video) => (
+              <div key={video.id} className="border rounded-lg p-4">
+                <video
+                  src={video.link}
+                  controls
+                  className="w-full h-48 object-cover rounded-md mb-3"
+                />
+                <div className="text-sm text-gray-600">
+                  <p className="font-medium">Uploaded by: {video.creator_type}</p>
+                  <p className="text-gray-500">
+                    {new Date(video.created_at).toLocaleDateString()}
+                  </p>
+                  {video.description && (
+                    <p className="mt-1 text-gray-700">{video.description}</p>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Final Videos Section */}
+      {finalVideos.length > 0 && (
+        <div className="bg-white rounded-lg shadow-md p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+            <Video className="w-5 h-5 mr-2" />
+            Final Videos ({finalVideos.length})
+          </h3>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {finalVideos.map((video) => (
+              <div key={video.id} className="border rounded-lg p-4">
+                <video
+                  src={video.link}
+                  controls
+                  className="w-full h-48 object-cover rounded-md mb-3"
+                />
+                <div className="text-sm text-gray-600">
+                  <p className="font-medium">Created by: {video.creator_type}</p>
+                  <p className="text-gray-500">
+                    {new Date(video.created_at).toLocaleDateString()}
+                  </p>
+                  {video.description && (
+                    <p className="mt-1 text-gray-700">{video.description}</p>
                   )}
                 </div>
               </div>

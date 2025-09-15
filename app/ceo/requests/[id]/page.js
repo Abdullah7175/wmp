@@ -42,29 +42,67 @@ async function getRequestDetails(requestId) {
       LEFT JOIN status s ON wr.status_id = s.id
       LEFT JOIN agents ee ON wr.executive_engineer_id = ee.id
       LEFT JOIN agents c ON wr.contractor_id = c.id
-      WHERE wr.id = $1 AND wra.approval_status = 'pending'
+      WHERE wr.id = $1
     `, [requestId]);
 
     if (!request.rows || request.rows.length === 0) {
       return null;
     }
 
-    // Get before images for this request
-    const beforeImages = await query(`
-      SELECT 
-        id,
-        link,
-        description,
-        created_at,
-        creator_name
-      FROM before_images 
-      WHERE work_request_id = $1
-      ORDER BY created_at DESC
-    `, [requestId]);
+    // Get all media for this request
+    const [beforeImages, images, videos, finalVideos] = await Promise.all([
+      query(`
+        SELECT 
+          id,
+          link,
+          description,
+          created_at,
+          creator_name
+        FROM before_images 
+        WHERE work_request_id = $1
+        ORDER BY created_at DESC
+      `, [requestId]),
+      query(`
+        SELECT 
+          id,
+          link,
+          description,
+          created_at,
+          creator_type
+        FROM images 
+        WHERE work_request_id = $1
+        ORDER BY created_at DESC
+      `, [requestId]),
+      query(`
+        SELECT 
+          id,
+          link,
+          description,
+          created_at,
+          creator_type
+        FROM videos 
+        WHERE work_request_id = $1
+        ORDER BY created_at DESC
+      `, [requestId]),
+      query(`
+        SELECT 
+          id,
+          link,
+          description,
+          created_at,
+          creator_type
+        FROM final_videos 
+        WHERE work_request_id = $1
+        ORDER BY created_at DESC
+      `, [requestId])
+    ]);
 
     return {
       request: request.rows[0],
-      beforeImages: beforeImages.rows || []
+      beforeImages: beforeImages.rows || [],
+      images: images.rows || [],
+      videos: videos.rows || [],
+      finalVideos: finalVideos.rows || []
     };
   } catch (error) {
     console.error('Error fetching request details:', error);
@@ -72,7 +110,7 @@ async function getRequestDetails(requestId) {
   }
 }
 
-export default async function RequestApprovalPage({ params }) {
+export default async function RequestViewPage({ params }) {
   const requestData = await getRequestDetails(params.id);
 
   if (!requestData) {
@@ -82,9 +120,9 @@ export default async function RequestApprovalPage({ params }) {
   return (
     <div className="p-6">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Request Approval</h1>
+        <h1 className="text-3xl font-bold text-gray-900">Request Details</h1>
         <p className="text-gray-600 mt-2">
-          Review work request #{requestData.request.id} and make approval decision
+          View work request #{requestData.request.id} and add CEO comments
         </p>
       </div>
 

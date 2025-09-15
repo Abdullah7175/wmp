@@ -21,13 +21,16 @@ export async function GET(request) {
 
     // Log CEO profile access
     await logUserAction({
-      userId: session.user.id,
-      userType: 'ceo',
-      action: 'VIEW_PROFILE',
-      entityType: 'USER_PROFILE',
-      entityId: session.user.id,
+      user_id: session.user.id,
+      user_type: 'ceo',
+      user_role: 5,
+      user_name: session.user.name || 'CEO',
+      user_email: session.user.email,
+      action_type: 'VIEW_PROFILE',
+      entity_type: 'USER_PROFILE',
+      entity_id: session.user.id,
       details: 'CEO accessed profile page',
-      ipAddress: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown'
+      ip_address: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown'
     });
 
     // Get CEO profile
@@ -107,18 +110,20 @@ export async function PUT(request) {
     let imagePath = null;
     if (imageFile && imageFile.size > 0) {
       // Create uploads directory if it doesn't exist
-      const uploadsDir = path.join(process.cwd(), 'public', 'uploads', 'users');
+      const uploadsDir = path.join(process.cwd(), 'public', 'uploads', 'ceo');
       await fs.mkdir(uploadsDir, { recursive: true });
       
       // Generate unique filename
-      const filename = `${Date.now()}-${imageFile.name}`;
+      const timestamp = Date.now();
+      const fileExtension = path.extname(imageFile.name);
+      const filename = `ceo_${session.user.id}_${timestamp}${fileExtension}`;
       const filePath = path.join(uploadsDir, filename);
       
       // Save file
       const buffer = await imageFile.arrayBuffer();
       await fs.writeFile(filePath, Buffer.from(buffer));
       
-      imagePath = `/uploads/users/${filename}`;
+      imagePath = `/uploads/ceo/${filename}`;
     }
 
     // Update user profile
@@ -156,13 +161,16 @@ export async function PUT(request) {
 
     // Log CEO profile update
     await logUserAction({
-      userId: session.user.id,
-      userType: 'ceo',
-      action: 'UPDATE_PROFILE',
-      entityType: 'USER_PROFILE',
-      entityId: session.user.id,
+      user_id: session.user.id,
+      user_type: 'ceo',
+      user_role: 5,
+      user_name: session.user.name || 'CEO',
+      user_email: session.user.email,
+      action_type: 'UPDATE_PROFILE',
+      entity_type: 'USER_PROFILE',
+      entity_id: session.user.id,
       details: `CEO updated profile: name=${name}, email=${email}, contact=${contact_number}, image=${imagePath ? 'updated' : 'unchanged'}`,
-      ipAddress: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown'
+      ip_address: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown'
     });
 
     return NextResponse.json({

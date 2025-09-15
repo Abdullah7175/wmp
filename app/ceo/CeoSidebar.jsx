@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import Image from "next/image";
 import { 
   LayoutDashboard, 
@@ -10,56 +10,107 @@ import {
   Bell, 
   Users, 
   Settings,
-  CheckCircle,
-  XCircle,
-  Clock,
   Building2,
   User,
   LogOut,
-  BarChart3
+  BarChart3,
+  List,
+  RefreshCw
 } from "lucide-react";
 
 export default function CeoSidebar() {
   const pathname = usePathname();
   const { data: session, update } = useSession();
+  const [imageError, setImageError] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [ceoImage, setCeoImage] = useState(null);
 
   // Debug session changes
   useEffect(() => {
     console.log('CEO Sidebar - Session updated:', session?.user);
+    console.log('CEO Sidebar - Image URL:', session?.user?.image);
+    // Reset image error when session changes
+    setImageError(false);
   }, [session]);
+
+  // Auto-refresh session on mount to get latest image
+  useEffect(() => {
+    if (session?.user?.id && !session?.user?.image) {
+      console.log('No image in session, refreshing...');
+      refreshSession();
+    }
+  }, [session?.user?.id]);
+
+  // Fetch CEO image directly from database
+  const fetchCeoImage = async () => {
+    if (!session?.user?.id) return;
+    
+    try {
+      const response = await fetch('/api/ceo/refresh-session', {
+        method: 'POST',
+      });
+      
+      const result = await response.json();
+      
+      if (result.success && result.data.user.image) {
+        console.log('Setting CEO image from database:', result.data.user.image);
+        setCeoImage(result.data.user.image);
+        setImageError(false);
+      }
+    } catch (error) {
+      console.error('Error fetching CEO image:', error);
+    }
+  };
+
+  // Fetch image on component mount
+  useEffect(() => {
+    if (session?.user?.id) {
+      fetchCeoImage();
+    }
+  }, [session?.user?.id]);
+
+  const refreshSession = async () => {
+    setIsRefreshing(true);
+    try {
+      const response = await fetch('/api/ceo/refresh-session', {
+        method: 'POST',
+      });
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        console.log('Refreshing session with:', result.data.user);
+        await update({
+          user: {
+            ...session.user,
+            name: result.data.user.name,
+            email: result.data.user.email,
+            image: result.data.user.image
+          }
+        });
+        // Also update local image state
+        if (result.data.user.image) {
+          setCeoImage(result.data.user.image);
+        }
+        setImageError(false);
+      }
+    } catch (error) {
+      console.error('Error refreshing session:', error);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   const navigation = [
     {
-      name: "Dashboard",
+      name: "Analytics Dashboard",
       href: "/ceo",
-      icon: LayoutDashboard,
-    },
-    {
-      name: "Analytics",
-      href: "/ceo/analytics",
       icon: BarChart3,
     },
     {
-      name: "Pending Approvals",
+      name: "All Requests",
       href: "/ceo/requests",
-      icon: Clock,
-      badge: "pending"
-    },
-    {
-      name: "Approved Requests",
-      href: "/ceo/approved",
-      icon: CheckCircle,
-    },
-    {
-      name: "Rejected Requests",
-      href: "/ceo/rejected",
-      icon: XCircle,
-    },
-    {
-      name: "Notifications",
-      href: "/ceo/notifications",
-      icon: Bell,
-      badge: "notifications"
+      icon: List,
     },
     {
       name: "Profile",
@@ -73,20 +124,30 @@ export default function CeoSidebar() {
       {/* CEO Header */}
       <div className="p-6 border-b border-gray-200">
         <div className="flex items-center space-x-3">
-          <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-blue-800 rounded-lg flex items-center justify-center">
-            {session?.user?.image ? (
-                <Image 
-                  src={session.user.image} 
-                  alt={session.user.name || 'CEO'} 
-                  width={40}  
-                  height={40} 
-                  className="object-cover w-full h-full"
-                />
-              ) : (
-                <div className="w-full h-full bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center">
-                  <User className="w-5 h-5 text-white" />
-                </div>
-              )}  
+          <div className="w-16 h-16 bg-gradient-to-br from-blue-600 to-blue-800 rounded-lg flex items-center justify-center">
+          {(ceoImage || session?.user?.image) && !imageError ? (
+              <Image 
+                src={ceoImage || session.user.image} 
+                alt={session?.user?.name || 'CEO'} 
+                width={45}  
+                height={45} 
+                className="object-cover w-full h-full"
+                unoptimized
+                onLoad={() => {
+                  console.log('Image loaded successfully:', ceoImage || session?.user?.image);
+                  setImageError(false);
+                }}
+                onError={(e) => {
+                  console.log('Image failed to load:', ceoImage || session?.user?.image);
+                  console.log('Error event:', e);
+                  setImageError(true);
+                }}
+              />
+            ) : (
+              <div className="w-full h-full bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center">
+                <User className="w-5 h-5 text-white" />
+              </div>
+            )} 
           </div>
           <div>
             <h1 className="text-xl font-bold text-gray-900">CEO Portal</h1>
@@ -138,16 +199,22 @@ export default function CeoSidebar() {
       <div className="p-6 border-t border-gray-200">
         <div className="flex items-center space-x-3">
           <div className="w-10 h-10 rounded-full overflow-hidden border border-gray-300">
-            {session?.user?.image ? (
+            {(ceoImage || session?.user?.image) && !imageError ? (
               <Image 
-                src={session.user.image} 
-                alt={session.user.name || 'CEO'} 
+                src={ceoImage || session.user.image} 
+                alt={session?.user?.name || 'CEO'} 
                 width={40}  
                 height={40} 
                 className="object-cover w-full h-full"
                 unoptimized
-                onError={() => {
-                  console.log('Image failed to load:', session.user.image);
+                onLoad={() => {
+                  console.log('Image loaded successfully:', ceoImage || session?.user?.image);
+                  setImageError(false);
+                }}
+                onError={(e) => {
+                  console.log('Image failed to load:', ceoImage || session?.user?.image);
+                  console.log('Error event:', e);
+                  setImageError(true);
                 }}
               />
             ) : (
@@ -156,18 +223,28 @@ export default function CeoSidebar() {
               </div>
             )}
           </div>
-          <div>
+          <div className="flex-1">
             <p className="text-sm font-medium text-gray-900">
               {session?.user?.name || 'CEO'}
             </p>
             <p className="text-xs text-gray-500">Chief Executive Officer</p>
             {/* Debug info - remove this later */}
-            {process.env.NODE_ENV === 'development' && (
-              <p className="text-xs text-gray-400">
-                Image: {session?.user?.image ? 'Yes' : 'No'}
-              </p>
-            )}
+            {/* {process.env.NODE_ENV === 'development' && (
+              <div className="text-xs text-gray-400">
+                <p>Session: {session?.user?.image ? 'Yes' : 'No'}</p>
+                <p>Local: {ceoImage ? 'Yes' : 'No'}</p>
+                <p>Display: {(ceoImage || session?.user?.image) ? 'Yes' : 'No'}</p>
+              </div>
+            )} */}
           </div>
+          <button
+            onClick={refreshSession}
+            disabled={isRefreshing}
+            className="p-1 text-gray-400 hover:text-blue-600 transition-colors"
+            title="Refresh Profile Image"
+          >
+            <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+          </button>
         </div>
       </div>
     </div>

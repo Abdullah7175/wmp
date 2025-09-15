@@ -63,13 +63,16 @@ export async function POST(request) {
 
     // Log CEO comment action
     await logUserAction({
-      userId: session.user.id,
-      userType: 'ceo',
-      action: 'ADD_COMMENT',
-      entityType: 'WORK_REQUEST',
-      entityId: workRequestId,
+      user_id: session.user.id,
+      user_type: 'ceo',
+      user_role: 5,
+      user_name: session.user.name || 'CEO',
+      user_email: session.user.email,
+      action_type: 'ADD_COMMENT',
+      entity_type: 'WORK_REQUEST',
+      entity_id: workRequestId,
       details: `CEO added comment to work request #${workRequestId}. Comment: ${comments.trim()}`,
-      ipAddress: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown'
+      ip_address: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown'
     });
 
     // Get request details for notification

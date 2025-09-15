@@ -1,19 +1,19 @@
 import { Suspense } from "react";
-import PendingRequestsList from "./components/PendingRequestsList";
+import AllRequestsList from "./components/AllRequestsList";
 
-export default function PendingRequestsPage() {
+export default function AllRequestsPage() {
 
   return (
     <div className="p-6">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Pending Approvals</h1>
+        <h1 className="text-3xl font-bold text-gray-900">All Work Requests</h1>
         <p className="text-gray-600 mt-2">
-          Review and approve work requests requiring CEO authorization
+          View all work requests and add CEO comments
         </p>
       </div>
 
       <Suspense fallback={<div>Loading requests...</div>}>
-        <PendingRequestsList />
+        <AllRequestsList />
       </Suspense>
     </div>
   );

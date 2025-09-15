@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { query } from "@/lib/db";
 import bcrypt from "bcryptjs";
+import path from "path";
+import { promises as fs } from "fs";
 
 export async function DELETE(request, { params }) {
   try {
@@ -111,7 +113,25 @@ export async function PUT(request, { params }) {
     }
 
     const { id } = params;
-    const { name, email, contact_number, password } = await request.json();
+    
+    // Handle both JSON and FormData
+    let name, email, contact_number, password, image;
+    
+    const contentType = request.headers.get('content-type');
+    if (contentType && contentType.includes('multipart/form-data')) {
+      const formData = await request.formData();
+      name = formData.get('name');
+      email = formData.get('email');
+      contact_number = formData.get('contact_number');
+      password = formData.get('password');
+      image = formData.get('image');
+    } else {
+      const body = await request.json();
+      name = body.name;
+      email = body.email;
+      contact_number = body.contact_number;
+      password = body.password;
+    }
 
     if (!id) {
       return NextResponse.json(
@@ -170,6 +190,29 @@ export async function PUT(request, { params }) {
       const hashedPassword = await bcrypt.hash(password, 12);
       updates.push(`password = $${paramCount++}`);
       values.push(hashedPassword);
+    }
+
+    // Handle image upload
+    let imagePath = null;
+    if (image && image instanceof File) {
+      const bytes = await image.arrayBuffer();
+      const buffer = Buffer.from(bytes);
+      
+      // Generate unique filename
+      const timestamp = Date.now();
+      const fileExtension = path.extname(image.name);
+      const fileName = `ceo_${id}_${timestamp}${fileExtension}`;
+      imagePath = path.join(process.cwd(), 'public', 'uploads', 'ceo', fileName);
+      
+      // Ensure directory exists
+      await fs.mkdir(path.dirname(imagePath), { recursive: true });
+      
+      // Save file
+      await fs.writeFile(imagePath, buffer);
+      
+      // Update image path in database
+      updates.push(`image = $${paramCount++}`);
+      values.push(`/uploads/ceo/${fileName}`);
     }
 
     if (updates.length === 0) {

@@ -16,38 +16,19 @@ export async function GET(request) {
       );
     }
 
-    const { searchParams } = new URL(request.url);
-    const status = searchParams.get('status') || 'pending';
-
     // Log CEO request list access
     await logUserAction({
-      userId: session.user.id,
-      userType: 'ceo',
-      action: 'VIEW_REQUESTS',
-      entityType: 'WORK_REQUESTS',
-      entityId: null,
-      details: `CEO viewed ${status} requests list`,
-      ipAddress: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown'
+      user_id: session.user.id,
+      user_type: 'ceo',
+      user_role: 5,
+      user_name: session.user.name || 'CEO',
+      user_email: session.user.email,
+      action_type: 'VIEW_REQUESTS',
+      entity_type: 'WORK_REQUESTS',
+      entity_id: null,
+      details: `CEO viewed all requests list`,
+      ip_address: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown'
     });
-
-    let whereClause = '';
-    let orderClause = 'ORDER BY wra.created_at DESC';
-
-    switch (status) {
-      case 'pending':
-        whereClause = "WHERE wra.approval_status = 'pending'";
-        break;
-      case 'approved':
-        whereClause = "WHERE wra.approval_status = 'approved'";
-        orderClause = 'ORDER BY wra.approval_date DESC';
-        break;
-      case 'rejected':
-        whereClause = "WHERE wra.approval_status = 'rejected'";
-        orderClause = 'ORDER BY wra.approval_date DESC';
-        break;
-      default:
-        whereClause = "WHERE wra.approval_status = 'pending'";
-    }
 
     const requests = await query(`
       SELECT 
@@ -72,7 +53,11 @@ export async function GET(request) {
         wra.approval_date,
         wra.ceo_comments,
         wra.rejection_reason,
-        s.name as status_name
+        s.name as status_name,
+        COALESCE(bi_count.count, 0) as before_images_count,
+        COALESCE(img_count.count, 0) as images_count,
+        COALESCE(vid_count.count, 0) as videos_count,
+        COALESCE(fv_count.count, 0) as final_videos_count
       FROM work_requests wr
       LEFT JOIN work_request_approvals wra ON wr.id = wra.work_request_id
       LEFT JOIN complaint_types ct ON wr.complaint_type_id = ct.id
@@ -82,8 +67,27 @@ export async function GET(request) {
       LEFT JOIN district d ON t.district_id = d.id
       LEFT JOIN users u ON wr.creator_id = u.id
       LEFT JOIN status s ON wr.status_id = s.id
-      ${whereClause}
-      ${orderClause}
+      LEFT JOIN (
+        SELECT work_request_id, COUNT(*) as count 
+        FROM before_images 
+        GROUP BY work_request_id
+      ) bi_count ON wr.id = bi_count.work_request_id
+      LEFT JOIN (
+        SELECT work_request_id, COUNT(*) as count 
+        FROM images 
+        GROUP BY work_request_id
+      ) img_count ON wr.id = img_count.work_request_id
+      LEFT JOIN (
+        SELECT work_request_id, COUNT(*) as count 
+        FROM videos 
+        GROUP BY work_request_id
+      ) vid_count ON wr.id = vid_count.work_request_id
+      LEFT JOIN (
+        SELECT work_request_id, COUNT(*) as count 
+        FROM final_videos 
+        GROUP BY work_request_id
+      ) fv_count ON wr.id = fv_count.work_request_id
+      ORDER BY wr.created_date DESC
     `);
 
     return NextResponse.json({

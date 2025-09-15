@@ -164,7 +164,7 @@ export default function CeoUsersList({ ceoUsers }) {
                   
                   <div className="flex items-center space-x-2">
                     <button
-                      onClick={() => router.push(`/dashboard/ceo-users/${user.id}/edit`)}
+                      onClick={() => router.push(`/dashboard/ceo-users/edit/${user.id}`)}
                       className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors duration-200"
                       title="Edit CEO User"
                     >

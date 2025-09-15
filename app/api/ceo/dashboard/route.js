@@ -18,13 +18,16 @@ export async function GET(request) {
 
     // Log CEO dashboard access
     await logUserAction({
-      userId: session.user.id,
-      userType: 'ceo',
-      action: 'VIEW_DASHBOARD',
-      entityType: 'DASHBOARD',
-      entityId: null,
+      user_id: session.user.id,
+      user_type: 'ceo',
+      user_role: 5,
+      user_name: session.user.name || 'CEO',
+      user_email: session.user.email,
+      action_type: 'VIEW_DASHBOARD',
+      entity_type: 'DASHBOARD',
+      entity_id: null,
       details: 'CEO accessed dashboard overview',
-      ipAddress: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown'
+      ip_address: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown'
     });
 
     // Get pending approvals count
