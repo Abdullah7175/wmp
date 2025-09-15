@@ -112,6 +112,9 @@ export async function POST(req) {
         // Check if user is CEO or admin
         const isCEO = session.user.userType === 'user' && session.user.role === 5;
         const isAdmin = session.user.userType === 'user' && (session.user.role === 1 || session.user.role === 2);
+        
+        // Check if user is social media agent
+        const isSocialMediaAgent = session.user.userType === 'socialmedia';
 
         let canUpload = false;
         let reason = "";
@@ -126,17 +129,22 @@ export async function POST(req) {
                 reason = "Request rejected by CEO KW&SC. Only CEO or Admin can reactivate.";
             }
         } else if (isPending) {
-            // Pending approval - only before images allowed, not videos
-            canUpload = false;
-            reason = "Only before images allowed before CEO approval";
+            // Pending approval - social media agents can upload videos, others can only upload before images
+            if (isSocialMediaAgent) {
+                canUpload = true;
+                reason = "Social media agents can upload videos during pending approval";
+            } else {
+                canUpload = false;
+                reason = "Only before images allowed before CEO approval";
+            }
         } else if (isApproved) {
             // Approved requests - all media types allowed
-            if (isCreator || isCEO || isAdmin) {
+            if (isCreator || isCEO || isAdmin || isSocialMediaAgent) {
                 canUpload = true;
                 reason = "Request approved by CEO - all media uploads allowed";
             } else {
                 canUpload = false;
-                reason = "Only request creators, CEO, or Admin can upload media";
+                reason = "Only request creators, CEO, Admin, or Social Media Agents can upload media";
             }
         } else {
             // No approval record found (should not happen for new requests)
