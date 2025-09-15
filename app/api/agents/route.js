@@ -30,6 +30,8 @@ export async function GET(request) {
     const filter = searchParams.get('filter') || '';
     const dateFrom = searchParams.get('date_from');
     const dateTo = searchParams.get('date_to');
+    const town_id = searchParams.get('town_id');
+    const complaint_type_id = searchParams.get('complaint_type_id');
     let client;
     try {
         client = await connectToDatabase();
@@ -80,6 +82,14 @@ export async function GET(request) {
             if (dateTo) {
                 whereClauses.push('created_at <= $' + (params.length + 1));
                 params.push(dateTo);
+            }
+            if (town_id) {
+                whereClauses.push('town_id = $' + (params.length + 1));
+                params.push(town_id);
+            }
+            if (complaint_type_id) {
+                whereClauses.push('complaint_type_id = $' + (params.length + 1));
+                params.push(complaint_type_id);
             }
             if (whereClauses.length > 0) {
                 countQuery += ' WHERE ' + whereClauses.join(' AND ');

@@ -178,6 +178,7 @@ const EditRequestPage = () => {
                     file_type: requestData.file_type || '',
                     executive_engineer_id: requestData.executive_engineer_id || '',
                     contractor_id: requestData.contractor_id || '',
+                    assigned_sm_agents: requestData.assigned_sm_agents || [],
                 }}
                 onSubmit={handleSubmit}
                 isEditMode={true}

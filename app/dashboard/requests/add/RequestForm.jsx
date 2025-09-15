@@ -46,6 +46,28 @@ export const RequestForm = ({ isPublic = false, initialValues, onSubmit, isEditM
     const [agentInfo, setAgentInfo] = useState(null);
     const [loadingAgent, setLoadingAgent] = useState(false);
     const [additionalLocations, setAdditionalLocations] = useState([]);
+    const [filteredExecutiveEngineers, setFilteredExecutiveEngineers] = useState([]);
+    const [smAgents, setSmAgents] = useState([]);
+    const [selectedSmAgents, setSelectedSmAgents] = useState([]);
+
+    // Fetch filtered agents based on town and complaint type (only for Executive Engineers)
+    const fetchFilteredAgents = async (townId, complaintTypeId) => {
+        if (!townId || !complaintTypeId) {
+            setFilteredExecutiveEngineers([]);
+            return;
+        }
+
+        try {
+            // Fetch Executive Engineers for specific town and complaint type
+            const resExec = await fetch(`/api/agents?role=1&town_id=${townId}&complaint_type_id=${complaintTypeId}`);
+            if (resExec.ok) {
+                const data = await resExec.json();
+                setFilteredExecutiveEngineers(data.data || []);
+            }
+        } catch (error) {
+            console.error('Error fetching filtered agents:', error);
+        }
+    };
 
     const formik = useFormik({
         initialValues: initialValues || {
@@ -66,6 +88,7 @@ export const RequestForm = ({ isPublic = false, initialValues, onSubmit, isEditM
             nature_of_work: '',
             executive_engineer_id: '',
             contractor_id: '',
+            assigned_sm_agents: [],
         },
         validationSchema,
         validateOnChange: true,
@@ -219,11 +242,25 @@ export const RequestForm = ({ isPublic = false, initialValues, onSubmit, isEditM
             }
         };
 
+        // Fetch social media agents
+        const fetchSmAgents = async () => {
+            try {
+                const res = await fetch('/api/socialmediaperson');
+                if (res.ok) {
+                    const data = await res.json();
+                    setSmAgents(data.data || data);
+                }
+            } catch (error) {
+                console.error('Error fetching social media agents:', error);
+            }
+        };
+
         fetchTowns();
         fetchSubtowns();
         fetchComplaintTypes();
         fetchComplaintSubTypes();
         fetchAgents();
+        fetchSmAgents();
     }, []);
 
     // Handle initial values for edit mode
@@ -249,6 +286,40 @@ export const RequestForm = ({ isPublic = false, initialValues, onSubmit, isEditM
                     const filtered = complaintSubTypes.filter(subtype => subtype.complaint_type_id === complaintType.id);
                     setFilteredSubTypes(filtered);
                 }
+            }
+
+            // Pre-populate agent information if request was created by an agent
+            if (initialValues.creator_type === 'agent' && initialValues.creator_id) {
+                // Fetch the creator agent's information
+                fetch(`/api/agents?id=${initialValues.creator_id}`)
+                    .then(res => res.json())
+                    .then(agentData => {
+                        if (agentData && agentData.role) {
+                            if (agentData.role === 1) {
+                                // Creator is an executive engineer, pre-populate executive_engineer_id
+                                formik.setFieldValue('executive_engineer_id', agentData.id);
+                            } else if (agentData.role === 2) {
+                                // Creator is a contractor, pre-populate contractor_id
+                                formik.setFieldValue('contractor_id', agentData.id);
+                            }
+                        }
+                    })
+                    .catch(error => console.error('Error fetching creator agent info:', error));
+            }
+
+            // Fetch filtered agents for the selected town and complaint type
+            if (initialValues.town_id && initialValues.complaint_type_id) {
+                fetchFilteredAgents(initialValues.town_id, initialValues.complaint_type_id);
+            }
+
+            // Handle assigned social media agents
+            if (initialValues.assigned_sm_agents && initialValues.assigned_sm_agents.length > 0) {
+                const smAgentSelections = initialValues.assigned_sm_agents.map(smAgent => ({
+                    value: smAgent.sm_agent_id,
+                    label: smAgent.name,
+                    status: smAgent.status
+                }));
+                setSelectedSmAgents(smAgentSelections);
             }
         }
     }, [initialValues, isEditMode, towns, subtowns, complaintTypes, complaintSubTypes]);
@@ -280,6 +351,17 @@ export const RequestForm = ({ isPublic = false, initialValues, onSubmit, isEditM
         setFilteredSubtowns(filtered);
         formik.setFieldValue('town_id', selectedOption ? selectedOption.value : '');
         formik.setFieldValue('subtown_id', '');
+        
+        // Clear executive engineer selection when town changes (contractors are not filtered)
+        formik.setFieldValue('executive_engineer_id', '');
+        
+        // Fetch filtered agents when town changes
+        if (selectedOption && formik.values.complaint_type_id) {
+            fetchFilteredAgents(selectedOption.value, formik.values.complaint_type_id);
+        } else {
+            // Clear filtered executive engineers if not both town and complaint type are selected
+            setFilteredExecutiveEngineers([]);
+        }
     };
 
     const handleComplaintTypeChange = (selectedOption) => {
@@ -288,10 +370,31 @@ export const RequestForm = ({ isPublic = false, initialValues, onSubmit, isEditM
         setFilteredSubTypes(filtered);
         formik.setFieldValue('complaint_type_id', selectedOption ? selectedOption.value : '');
         formik.setFieldValue('complaint_subtype_id', '');
+        
+        // Clear executive engineer selection when complaint type changes (contractors are not filtered)
+        formik.setFieldValue('executive_engineer_id', '');
+        
+        // Fetch filtered agents when complaint type changes
+        if (selectedOption && formik.values.town_id) {
+            fetchFilteredAgents(formik.values.town_id, selectedOption.value);
+        } else {
+            // Clear filtered executive engineers if not both town and complaint type are selected
+            setFilteredExecutiveEngineers([]);
+        }
     };
 
     const addAdditionalLocation = () => {
         setAdditionalLocations([...additionalLocations, { latitude: '', longitude: '', description: '' }]);
+    };
+
+    const handleSmAgentChange = (selectedOptions) => {
+        setSelectedSmAgents(selectedOptions || []);
+        // Update formik values
+        const smAgentsData = (selectedOptions || []).map(sm => ({
+            sm_agent_id: sm.value,
+            status: sm.status || 1
+        }));
+        formik.setFieldValue('assigned_sm_agents', smAgentsData);
     };
 
     const removeAdditionalLocation = (index) => {
@@ -744,29 +847,30 @@ export const RequestForm = ({ isPublic = false, initialValues, onSubmit, isEditM
                             className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm"
                         >
                             <option value="">Select Executive Engineer...</option>
-                            {executiveEngineers.map(ee => (
-                                <option key={ee.id} value={ee.id}>{ee.name}</option>
+                            {((formik.values.town_id && formik.values.complaint_type_id) ? filteredExecutiveEngineers : executiveEngineers).map(ee => (
+                                <option key={ee.id} value={ee.id}>{ee.name} - {ee.designation || 'Executive Engineer'}</option>
                             ))}
                         </select>
                     </div>
                 )}
                 {session?.user?.userType === 'agent' && Number(session.user.role) === 1 && (
                     <div>
-                        <label htmlFor="contractor_id" className="block text-sm font-medium text-gray-700 mb-1">
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
                             Contractor
                         </label>
-                        <select
-                            id="contractor_id"
-                            name="contractor_id"
-                            value={formik.values.contractor_id || ''}
-                            onChange={e => formik.setFieldValue('contractor_id', e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm"
-                        >
-                            <option value="">Select Contractor...</option>
-                            {contractors.map(c => (
-                                <option key={c.id} value={c.id}>{c.name}</option>
-                            ))}
-                        </select>
+                        <Select
+                            options={contractors.map(c => ({ value: c.id, label: `${c.name} - ${c.designation || 'Contractor'}` }))}
+                            value={contractors.find(c => c.id === formik.values.contractor_id) ? 
+                                { value: formik.values.contractor_id, label: `${contractors.find(c => c.id === formik.values.contractor_id)?.name} - ${contractors.find(c => c.id === formik.values.contractor_id)?.designation || 'Contractor'}` } : 
+                                null
+                            }
+                            onChange={selectedOption => formik.setFieldValue('contractor_id', selectedOption ? selectedOption.value : '')}
+                            className="basic-select"
+                            classNamePrefix="select"
+                            placeholder="Select Contractor..."
+                            isSearchable={true}
+                            isClearable={true}
+                        />
                     </div>
                 )}
                 {session?.user?.userType === 'user' && [1, 2].includes(Number(session.user.role)) && (
@@ -783,32 +887,50 @@ export const RequestForm = ({ isPublic = false, initialValues, onSubmit, isEditM
                             className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm"
                         >
                             <option value="">Select Executive Engineer...</option>
-                            {executiveEngineers.map(ee => (
-                            <option key={ee.id} value={ee.id}>{ee.name}</option>
+                            {((formik.values.town_id && formik.values.complaint_type_id) ? filteredExecutiveEngineers : executiveEngineers).map(ee => (
+                            <option key={ee.id} value={ee.id}>{ee.name} - {ee.designation || 'Executive Engineer'}</option>
                             ))}
                         </select>
                         </div>
 
                         <div className="mt-4">
-                        <label htmlFor="contractor_id" className="block text-sm font-medium text-gray-700 mb-1">
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
                             Contractor
                         </label>
-                        <select
-                            id="contractor_id"
-                            name="contractor_id"
-                            value={formik.values.contractor_id || ''}
-                            onChange={e => formik.setFieldValue('contractor_id', e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm"
-                        >
-                            <option value="">Select Contractor...</option>
-                            {contractors.map(c => (
-                            <option key={c.id} value={c.id}>{c.name}</option>
-                            ))}
-                        </select>
+                        <Select
+                            options={contractors.map(c => ({ value: c.id, label: `${c.name} - ${c.designation || 'Contractor'}` }))}
+                            value={contractors.find(c => c.id === formik.values.contractor_id) ? 
+                                { value: formik.values.contractor_id, label: `${contractors.find(c => c.id === formik.values.contractor_id)?.name} - ${contractors.find(c => c.id === formik.values.contractor_id)?.designation || 'Contractor'}` } : 
+                                null
+                            }
+                            onChange={selectedOption => formik.setFieldValue('contractor_id', selectedOption ? selectedOption.value : '')}
+                            className="basic-select"
+                            classNamePrefix="select"
+                            placeholder="Select Contractor..."
+                            isSearchable={true}
+                            isClearable={true}
+                        />
                         </div>
                     </>
                     )}
 
+                {/* Social Media Agent Assignment - Only for admins and managers */}
+                {session?.user?.userType === 'user' && [1, 2].includes(Number(session.user.role)) && (
+                    <div className="md:col-span-2">
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Media Cell Agents
+                        </label>
+                        <Select
+                            isMulti
+                            options={smAgents.map(sm => ({ value: sm.id, label: sm.name }))}
+                            value={selectedSmAgents}
+                            onChange={handleSmAgentChange}
+                            className="basic-multi-select"
+                            classNamePrefix="select"
+                            placeholder="Select social media agents"
+                        />
+                    </div>
+                )}
 
                 <div className="md:col-span-2">
                     <label htmlFor="nature_of_work" className="block text-sm font-medium text-gray-700 mb-1">

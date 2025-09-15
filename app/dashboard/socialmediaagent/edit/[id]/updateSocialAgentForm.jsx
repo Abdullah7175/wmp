@@ -19,6 +19,9 @@ const validationSchema = Yup.object({
     address: Yup.string()
         .min(3, 'Address must be at least 3 characters'),
     role: Yup.number().required('Role is required'),
+    password: Yup.string()
+        .min(6, 'Password must be at least 6 characters')
+        .nullable(),
     image: Yup.mixed(),
 });
 
@@ -33,6 +36,7 @@ const SocialAgentForm = () => {
         contact: '',
         address: '',
         role: '',
+        password: '',
     });
     const router = useRouter();
 
@@ -153,7 +157,7 @@ const SocialAgentForm = () => {
                 </div>
 
                 <div>
-                    <label htmlFor="email" classpassword="block text-gray-700 text-sm font-medium">Email</label>
+                    <label htmlFor="email" className="block text-gray-700 text-sm font-medium">Email</label>
                     <input
                         id="email"
                         name="email"
@@ -162,7 +166,21 @@ const SocialAgentForm = () => {
                         value={formik.values.email}
                         className="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                     />
-                    {formik.errors.password && formik.touched.email && <div className="text-red-600 text-sm mt-2">{formik.errors.email}</div>}
+                    {formik.errors.email && formik.touched.email && <div className="text-red-600 text-sm mt-2">{formik.errors.email}</div>}
+                </div>
+
+                <div>
+                    <label htmlFor="password" className="block text-gray-700 text-sm font-medium">Password (optional)</label>
+                    <input
+                        id="password"
+                        name="password"
+                        type="password"
+                        onChange={formik.handleChange}
+                        value={formik.values.password}
+                        className="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                        placeholder="Leave blank to keep current password"
+                    />
+                    {formik.errors.password && formik.touched.password && <div className="text-red-600 text-sm mt-2">{formik.errors.password}</div>}
                 </div>
 
                 <div>
@@ -179,7 +197,7 @@ const SocialAgentForm = () => {
                 </div>
 
                 <div>
-                    <label htmlFor="address" classpassword="block text-gray-700 text-sm font-medium">Address</label>
+                    <label htmlFor="address" className="block text-gray-700 text-sm font-medium">Address</label>
                     <input
                         id="address"
                         name="address"
@@ -188,7 +206,7 @@ const SocialAgentForm = () => {
                         value={formik.values.address}
                         className="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                     />
-                    {formik.errors.password && formik.touched.address && <div className="text-red-600 text-sm mt-2">{formik.errors.address}</div>}
+                    {formik.errors.address && formik.touched.address && <div className="text-red-600 text-sm mt-2">{formik.errors.address}</div>}
                 </div>
 
                 <div>

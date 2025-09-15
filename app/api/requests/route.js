@@ -49,6 +49,17 @@ export async function GET(request) {
                         )
                     ) as videographer_name,
                     (
+                        SELECT json_agg(
+                            json_build_object(
+                                'sm_agent_id', ras.socialmedia_agent_id,
+                                'status', ras.status,
+                                'name', sm.name
+                            )
+                        ) FROM request_assign_smagent ras
+                        LEFT JOIN socialmediaperson sm ON ras.socialmedia_agent_id = sm.id
+                        WHERE ras.work_requests_id = wr.id
+                    ) as assigned_sm_agents,
+                    (
                         SELECT link FROM final_videos WHERE work_request_id = wr.id LIMIT 1
                     ) as final_video_link,
                     wr.updated_date as completion_date,
