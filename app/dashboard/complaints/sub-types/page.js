@@ -78,7 +78,7 @@ export default function Page() {
   return (
     <div className="container mx-auto py-6">
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Complaint Sub-Types</h1>
+        <h1 className="text-2xl font-bold">Works</h1>
       </div>
       <div className="flex flex-wrap gap-4 mb-4 items-end">
         <Input

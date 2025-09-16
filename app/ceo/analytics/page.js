@@ -134,7 +134,7 @@ const CeoAnalyticsPage = () => {
             {/* Header */}
             <div className="mb-6 lg:mb-8">
                 <h1 className="text-2xl lg:text-3xl font-bold text-gray-900 mb-2">Analytics Dashboard</h1>
-                <p className="text-sm lg:text-base text-gray-600">Comprehensive overview of KW&SC Water Corporation operations</p>
+                <p className="text-sm lg:text-base text-gray-600">Comprehensive overview of KW&SC operations</p>
             </div>
 
             {/* Quick Actions */}

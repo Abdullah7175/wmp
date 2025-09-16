@@ -10,7 +10,22 @@ const nextConfig = {
     JWT_SECRET: process.env.JWT_SECRET,
   },
   images: {
-    domains: ['placehold.co','localhost','202.61.47.29'],
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'placehold.co',
+      },
+      {
+        protocol: 'http',
+        hostname: 'localhost',
+        port: '3000',
+      },
+      {
+        protocol: 'http',
+        hostname: '202.61.47.29',
+        port: '3000',
+      },
+    ],
     dangerouslyAllowSVG: true,
   },
   experimental: {
