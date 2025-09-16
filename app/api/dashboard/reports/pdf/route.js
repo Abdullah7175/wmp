@@ -16,8 +16,11 @@ export async function POST(request) {
 
     const { reportType, dateFrom, dateTo, data } = await request.json();
 
-    // Create PDF document
-    const doc = new PDFDocument({ margin: 50 });
+    // Create PDF document with built-in fonts
+    const doc = new PDFDocument({ 
+      margin: 50,
+      font: 'Helvetica' // Use built-in Helvetica font
+    });
     const chunks = [];
     
     doc.on('data', chunk => chunks.push(chunk));
