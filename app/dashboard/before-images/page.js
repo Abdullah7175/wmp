@@ -15,6 +15,10 @@ export default function BeforeImagesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 5;
 
   // Admins and managers can upload, edit, and delete
   const canUpload = true;
@@ -93,16 +97,38 @@ export default function BeforeImagesPage() {
         </Link>
       </div>
 
-      {/* Search */}
+      {/* Search and Filters */}
       <div className="mb-6">
-        <div className="relative max-w-md">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-          <Input
-            placeholder="Search by work description, address, or type..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10"
-          />
+        <div className="flex flex-wrap gap-4 items-end">
+          <div className="relative max-w-md">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+            <Input
+              placeholder="Search by work description, address, or type..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">From</label>
+            <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="border rounded px-2 py-1" />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">To</label>
+            <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="border rounded px-2 py-1" />
+          </div>
+          <Button 
+            variant="outline" 
+            onClick={() => {
+              setSearchTerm("");
+              setDateFrom("");
+              setDateTo("");
+              setCurrentPage(1);
+            }}
+            className="h-10"
+          >
+            Reset Filters
+          </Button>
         </div>
       </div>
 
@@ -120,8 +146,9 @@ export default function BeforeImagesPage() {
           </div>
         </Card>
       ) : (
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {filteredImages.map((image) => (
+        <>
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {filteredImages.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((image) => (
             <Card key={image.id} className="overflow-hidden">
               <div className="relative">
                 <Image
@@ -185,8 +212,55 @@ export default function BeforeImagesPage() {
                 </div>
               </CardContent>
             </Card>
-          ))}
-        </div>
+            ))}
+          </div>
+          
+          {/* Pagination */}
+          {filteredImages.length > itemsPerPage && (
+            <div className="flex items-center justify-between mt-6 px-4">
+              <div className="text-sm text-gray-500">
+                Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, filteredImages.length)} of {filteredImages.length} entries
+              </div>
+              <div className="flex items-center space-x-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(1)}
+                  disabled={currentPage === 1}
+                >
+                  First
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(currentPage - 1)}
+                  disabled={currentPage === 1}
+                >
+                  Previous
+                </Button>
+                <span className="text-sm text-gray-500">
+                  Page {currentPage} of {Math.ceil(filteredImages.length / itemsPerPage)}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(currentPage + 1)}
+                  disabled={currentPage === Math.ceil(filteredImages.length / itemsPerPage)}
+                >
+                  Next
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(Math.ceil(filteredImages.length / itemsPerPage))}
+                  disabled={currentPage === Math.ceil(filteredImages.length / itemsPerPage)}
+                >
+                  Last
+                </Button>
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

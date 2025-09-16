@@ -1,8 +1,9 @@
 "use client"
 import { columns } from "./columns"
-import { DataTable } from "./data-table"
+import { EnhancedDataTable } from "@/components/ui/enhanced-data-table"
 import { useEffect, useState } from "react";
 import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 
 export default function Page() {
   const [images, setImages] = useState([]);
@@ -68,7 +69,10 @@ export default function Page() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-10">
+    <div className="container mx-auto py-6">
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-2xl font-bold">Images</h1>
+      </div>
       <div className="flex flex-wrap gap-4 mb-4 items-end">
         <Input
           placeholder="Search by ID, address, description..."
@@ -84,10 +88,25 @@ export default function Page() {
           <label className="block text-xs text-gray-500 mb-1">To</label>
           <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="border rounded px-2 py-1" />
         </div>
+        <Button 
+          variant="outline" 
+          onClick={() => {
+            setSearch("");
+            setDateFrom("");
+            setDateTo("");
+          }}
+          className="h-10"
+        >
+          Reset Filters
+        </Button>
       </div>
-      <DataTable columns={columns} data={images}>
-        <h1 className="text-3xl font-semibold">Images</h1>
-      </DataTable>
+      <div className="bg-white rounded-lg shadow">
+        <EnhancedDataTable 
+          columns={columns} 
+          data={images}
+          pageSize={5}
+        />
+      </div>
     </div>
   )
 }

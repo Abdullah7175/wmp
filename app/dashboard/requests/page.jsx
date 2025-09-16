@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { useRouter } from 'next/navigation';
-import { DataTable } from './data-table';
+import { EnhancedDataTable } from '@/components/ui/enhanced-data-table';
 import { columns } from './columns';
 import { Input } from '@/components/ui/input';
 import { useSession } from 'next-auth/react';
@@ -112,9 +112,20 @@ const RequestsPage = () => {
                     <label className="block text-xs text-gray-500 mb-1">To</label>
                     <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="border rounded px-2 py-1" />
                 </div>
+                <Button 
+                    variant="outline" 
+                    onClick={() => {
+                        setSearch("");
+                        setDateFrom("");
+                        setDateTo("");
+                    }}
+                    className="h-10"
+                >
+                    Reset Filters
+                </Button>
             </div>
             <div className="bg-white rounded-lg shadow">
-                <DataTable 
+                <EnhancedDataTable 
                     columns={columns} 
                     data={requests} 
                     meta={{
@@ -124,6 +135,7 @@ const RequestsPage = () => {
                         onView: handleView,
                         userRole: session?.user?.role
                     }}
+                    pageSize={5}
                 />
             </div>
         </div>

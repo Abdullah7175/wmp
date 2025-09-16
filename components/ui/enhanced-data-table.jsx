@@ -21,7 +21,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 
-export function DataTable({ columns, data, meta }) {
+export function EnhancedDataTable({ columns, data, meta, pageSize = 5 }) {
   const router = useRouter()
   const table = useReactTable({
     data,
@@ -33,7 +33,7 @@ export function DataTable({ columns, data, meta }) {
     meta: meta,
     initialState: {
       pagination: {
-        pageSize: 5,
+        pageSize: pageSize,
       },
     },
   })
@@ -66,7 +66,6 @@ export function DataTable({ columns, data, meta }) {
                 <TableRow
                   key={row.id}
                   data-state={row.getIsSelected() && "selected"}
-                  // onClick={() => router.push(`/dashboard/requests/${row.original.id}`)}
                   className="cursor-pointer hover:bg-gray-50"
                 >
                   {row.getVisibleCells().map((cell) => (

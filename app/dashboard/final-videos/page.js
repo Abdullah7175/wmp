@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Video, Download, Trash2, Plus } from "lucide-react";
 import Link from "next/link";
 import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 
 export default function FinalVideosPage() {
   const { data: session } = useSession();
@@ -15,6 +16,8 @@ export default function FinalVideosPage() {
   const [search, setSearch] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 5;
 
   useEffect(() => {
     if (!session?.user?.id) return;
@@ -102,6 +105,18 @@ export default function FinalVideosPage() {
           <label className="block text-xs text-gray-500 mb-1">To</label>
           <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="border rounded px-2 py-1" />
         </div>
+        <Button 
+          variant="outline" 
+          onClick={() => {
+            setSearch("");
+            setDateFrom("");
+            setDateTo("");
+            setCurrentPage(1);
+          }}
+          className="h-10"
+        >
+          Reset Filters
+        </Button>
       </div>
 
       {finalVideos.length === 0 ? (
@@ -118,8 +133,9 @@ export default function FinalVideosPage() {
           </div>
         </Card>
       ) : (
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {finalVideos.map((video) => (
+        <>
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {finalVideos.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((video) => (
             <Card key={video.id} className="p-6 flex flex-col gap-3 bg-white border-2 shadow-md hover:shadow-lg transition-shadow">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -170,8 +186,55 @@ export default function FinalVideosPage() {
                 </div>
               </div>
             </Card>
-          ))}
-        </div>
+            ))}
+          </div>
+          
+          {/* Pagination */}
+          {finalVideos.length > itemsPerPage && (
+            <div className="flex items-center justify-between mt-6 px-4">
+              <div className="text-sm text-gray-500">
+                Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, finalVideos.length)} of {finalVideos.length} entries
+              </div>
+              <div className="flex items-center space-x-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(1)}
+                  disabled={currentPage === 1}
+                >
+                  First
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(currentPage - 1)}
+                  disabled={currentPage === 1}
+                >
+                  Previous
+                </Button>
+                <span className="text-sm text-gray-500">
+                  Page {currentPage} of {Math.ceil(finalVideos.length / itemsPerPage)}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(currentPage + 1)}
+                  disabled={currentPage === Math.ceil(finalVideos.length / itemsPerPage)}
+                >
+                  Next
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(Math.ceil(finalVideos.length / itemsPerPage))}
+                  disabled={currentPage === Math.ceil(finalVideos.length / itemsPerPage)}
+                >
+                  Last
+                </Button>
+              </div>
+            </div>
+          )}
+        </>
       )}
       {/* Video Modal */}
       {selectedVideo && (

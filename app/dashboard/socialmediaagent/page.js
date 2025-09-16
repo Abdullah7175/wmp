@@ -1,8 +1,9 @@
 "use client"
 import { columns } from "./columns"
-import { DataTable } from "./data-table"
+import { EnhancedDataTable } from "@/components/ui/enhanced-data-table"
 import { useEffect, useState } from "react";
 import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 
 export default function Page() {
   const [agents, setAgents] = useState([]);
@@ -62,46 +63,44 @@ export default function Page() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-10">
-      <DataTable columns={columns} data={agents}>
-        <h1 className="text-3xl font-semibold">Media Cell Agents</h1>
-        <div className="flex flex-wrap gap-4 mb-4 items-end">
-          <Input
-            placeholder="Search by ID, name, email, contact, role..."
-            value={search}
-            onChange={e => { setPage(1); setSearch(e.target.value); }}
-            className="w-64"
-          />
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">From</label>
-            <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="border rounded px-2 py-1" />
-          </div>
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">To</label>
-            <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="border rounded px-2 py-1" />
-          </div>
+    <div className="container mx-auto py-6">
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-2xl font-bold">Media Cell Agents</h1>
+      </div>
+      <div className="flex flex-wrap gap-4 mb-4 items-end">
+        <Input
+          placeholder="Search by ID, name, email, contact, role..."
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          className="w-64"
+        />
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">From</label>
+          <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="border rounded px-2 py-1" />
         </div>
-      </DataTable>
-      
-      {!loading && !error && (
-        <div className="flex justify-center mt-6 gap-2">
-          <button 
-            onClick={() => setPage(p => Math.max(1, p - 1))} 
-            disabled={page === 1} 
-            className="px-3 py-1 border rounded disabled:opacity-50 hover:bg-gray-50"
-          >
-            Previous
-          </button>
-          <span className="px-2 py-1">Page {page} of {totalPages || 1}</span>
-          <button 
-            onClick={() => setPage(p => Math.min(totalPages, p + 1))} 
-            disabled={page === totalPages} 
-            className="px-3 py-1 border rounded disabled:opacity-50 hover:bg-gray-50"
-          >
-            Next
-          </button>
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">To</label>
+          <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="border rounded px-2 py-1" />
         </div>
-      )}
+        <Button 
+          variant="outline" 
+          onClick={() => {
+            setSearch("");
+            setDateFrom("");
+            setDateTo("");
+          }}
+          className="h-10"
+        >
+          Reset Filters
+        </Button>
+      </div>
+      <div className="bg-white rounded-lg shadow">
+        <EnhancedDataTable 
+          columns={columns} 
+          data={agents}
+          pageSize={5}
+        />
+      </div>
       
       {loading && agents.length > 0 && (
         <div className="text-center py-4">

@@ -15,6 +15,8 @@ export default function BeforeImagesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 6;
 
   // Agents can only upload, not edit or delete
   const canUpload = true;
@@ -49,6 +51,17 @@ export default function BeforeImagesPage() {
     img.address?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     img.complaint_type?.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  // Pagination logic
+  const totalPages = Math.ceil(filteredImages.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const currentImages = filteredImages.slice(startIndex, endIndex);
+
+  // Reset to first page when search term changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
 
   if (loading) {
     return <div className="flex items-center justify-center h-96 text-lg">Loading before images...</div>;
@@ -88,7 +101,7 @@ export default function BeforeImagesPage() {
         </div>
       </div>
 
-      {filteredImages.length === 0 ? (
+      {currentImages.length === 0 ? (
         <Card className="p-8 text-center">
           <div className="text-gray-500">
             <MapPin className="w-16 h-16 mx-auto mb-4 text-gray-300" />
@@ -103,7 +116,7 @@ export default function BeforeImagesPage() {
         </Card>
       ) : (
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {filteredImages.map((image) => (
+          {currentImages.map((image) => (
             <Card key={image.id} className="overflow-hidden">
               <div className="relative">
                 <Image
@@ -149,6 +162,38 @@ export default function BeforeImagesPage() {
               </CardContent>
             </Card>
           ))}
+        </div>
+      )}
+
+      {/* Pagination Controls */}
+      {filteredImages.length > itemsPerPage && (
+        <div className="flex items-center justify-between mt-8">
+          <div className="flex items-center space-x-2">
+            <p className="text-sm font-medium">
+              Page {currentPage} of {totalPages}
+            </p>
+            <p className="text-sm text-muted-foreground">
+              ({filteredImages.length} total items)
+            </p>
+          </div>
+          <div className="flex items-center space-x-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+              disabled={currentPage === 1}
+            >
+              Previous
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+              disabled={currentPage === totalPages}
+            >
+              Next
+            </Button>
+          </div>
         </div>
       )}
     </div>
