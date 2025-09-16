@@ -10,38 +10,7 @@ import {
 
 export default function WorkRequestStatus({ status, approvalStatus, className = "" }) {
   const getStatusInfo = () => {
-    // CEO approval status takes precedence
-    if (approvalStatus === 'pending') {
-      return {
-        text: 'Pending CEO Approval',
-        icon: Clock,
-        color: 'text-yellow-600',
-        bgColor: 'bg-yellow-100',
-        borderColor: 'border-yellow-200'
-      };
-    }
-    
-    if (approvalStatus === 'approved') {
-      return {
-        text: 'Approved by CEO',
-        icon: CheckCircle,
-        color: 'text-green-600',
-        bgColor: 'bg-green-100',
-        borderColor: 'border-green-200'
-      };
-    }
-    
-    if (approvalStatus === 'rejected') {
-      return {
-        text: 'Rejected by CEO KW&SC',
-        icon: XCircle,
-        color: 'text-red-600',
-        bgColor: 'bg-red-100',
-        borderColor: 'border-red-200'
-      };
-    }
-
-    // Fallback to regular status
+    // CEO approval mechanism removed - use regular status only
     switch (status?.toLowerCase()) {
       case 'pending':
         return {

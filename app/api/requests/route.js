@@ -123,7 +123,11 @@ export async function GET(request) {
                     s.name as status_name,
                     s.id as status_id,
                     COALESCE(u.name, ag.name, sm.name) as creator_name,
-                    wr.creator_type
+                    wr.creator_type,
+                    ceo_approval.approval_status as ceo_approval_status,
+                    ceo_approval.comments as ceo_comments,
+                    coo_approval.approval_status as coo_approval_status,
+                    coo_approval.comments as coo_comments
                     ${includeApprovalStatus ? ', wra.approval_status' : ''}
                 FROM work_requests wr
                 LEFT JOIN town t ON wr.town_id = t.id
@@ -133,6 +137,8 @@ export async function GET(request) {
                 LEFT JOIN users u ON wr.creator_type = 'user' AND wr.creator_id = u.id
                 LEFT JOIN agents ag ON wr.creator_type = 'agent' AND wr.creator_id = ag.id
                 LEFT JOIN socialmediaperson sm ON wr.creator_type = 'socialmedia' AND wr.creator_id = sm.id
+                LEFT JOIN work_request_soft_approvals ceo_approval ON wr.id = ceo_approval.work_request_id AND ceo_approval.approver_type = 'ceo'
+                LEFT JOIN work_request_soft_approvals coo_approval ON wr.id = coo_approval.work_request_id AND coo_approval.approver_type = 'coo'
                 ${includeApprovalStatus ? 'LEFT JOIN work_request_approvals wra ON wr.id = wra.work_request_id' : ''}
             `;
             
@@ -342,29 +348,33 @@ export async function POST(req) {
         let extraParams = [];
         if (final_executive_engineer_id) {
             extraFields += ', executive_engineer_id';
-            extraValues += ', $' + (10 + extraParams.length + (geoTag ? 1 : 0));
+            extraValues += ', $' + (11 + extraParams.length + (geoTag ? 1 : 0));
             extraParams.push(final_executive_engineer_id);
         }
         if (final_contractor_id) {
             extraFields += ', contractor_id';
-            extraValues += ', $' + (10 + extraParams.length + (geoTag ? 1 : 0));
+            extraValues += ', $' + (11 + extraParams.length + (geoTag ? 1 : 0));
             extraParams.push(final_contractor_id);
         }
         if (nature_of_work) {
             extraFields += ', nature_of_work';
-            extraValues += ', $' + (10 + extraParams.length + (geoTag ? 1 : 0));
+            extraValues += ', $' + (11 + extraParams.length + (geoTag ? 1 : 0));
             extraParams.push(nature_of_work);
         }
         if (budget_code) {
             extraFields += ', budget_code';
-            extraValues += ', $' + (10 + extraParams.length + (geoTag ? 1 : 0));
+            extraValues += ', $' + (11 + extraParams.length + (geoTag ? 1 : 0));
             extraParams.push(budget_code);
         }
         if (file_type) {
             extraFields += ', file_type';
-            extraValues += ', $' + (10 + extraParams.length + (geoTag ? 1 : 0));
+            extraValues += ', $' + (11 + extraParams.length + (geoTag ? 1 : 0));
             extraParams.push(file_type);
         }
+        // Get the default "Pending" status_id
+        const statusResult = await client.query('SELECT id FROM status WHERE name = $1', ['Pending']);
+        const pendingStatusId = statusResult.rows[0]?.id || 1; // Default to 1 if not found
+
         const query = `
             INSERT INTO work_requests (
                 town_id,
@@ -376,8 +386,9 @@ export async function POST(req) {
                 description,
                 creator_id,
                 creator_type,
+                status_id,
                 geo_tag${extraFields}
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, ${geoTag ? `$10` : 'NULL'}${extraValues})
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, ${geoTag ? `$11` : 'NULL'}${extraValues})
             RETURNING id;
         `;
         const params = [
@@ -389,7 +400,8 @@ export async function POST(req) {
             address,
             description,
             creator_id,
-            creator_type
+            creator_type,
+            pendingStatusId
         ];
         if (geoTag) params.push(geoTag);
         params.push(...extraParams);
@@ -418,27 +430,7 @@ export async function POST(req) {
             }
         }
 
-        // Create CEO approval request for all new work requests
-        try {
-            const ceoUsers = await client.query('SELECT id FROM users WHERE role = 5');
-            if (ceoUsers.rows.length > 0) {
-                // Use the first CEO user (in case there are multiple)
-                const ceoId = ceoUsers.rows[0].id;
-                await client.query(`
-                    INSERT INTO work_request_approvals (work_request_id, ceo_id, approval_status, created_at, updated_at)
-                    VALUES ($1, $2, 'pending', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-                `, [workRequestId, ceoId]);
-
-                // Notify CEO about new approval request
-                await client.query(`
-                    INSERT INTO notifications (user_id, type, entity_id, message, created_at, read)
-                    VALUES ($1, 'ceo_approval', $2, $3, CURRENT_TIMESTAMP, false)
-                `, [ceoId, workRequestId, `New work request #${workRequestId} requires CEO approval`]);
-            }
-        } catch (approvalErr) {
-            // Log but don't fail request creation
-            console.error('CEO approval request creation failed:', approvalErr);
-        }
+        // CEO approval mechanism removed - new requests default to Pending status
 
         await client.query('COMMIT');
         

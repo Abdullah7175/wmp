@@ -20,14 +20,26 @@ import {
     FileText,
     MapPin,
     Calendar,
-    DollarSign
+    DollarSign,
+    BarChart3,
+    PieChart,
+    Map,
+    ChevronDown,
+    ChevronUp,
+    Eye,
+    Target,
+    Zap,
+    Globe,
+    Building,
+    Home,
+    TrendingDown
 } from "lucide-react"
 import { LineChartWithValues } from "@/components/lineChart"
 import { PieChartWithValues } from "@/components/pieChart"
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useState, useEffect } from "react";
-import { AlertCircle, Eye, BarChart3, PieChart, Map, ChevronDown, ChevronUp } from "lucide-react";
+import { AlertCircle } from "lucide-react";
 
 const MapComponent = dynamic(() => import("@/components/MapComponent"), { ssr: false });
 
@@ -43,7 +55,14 @@ const CeoAnalyticsPage = () => {
         totalUsers: 0,
         totalAgents: 0,
         totalBudget: 0,
-        recentRequests: []
+        recentRequests: [],
+        // New analytics data
+        departmentDistribution: [],
+        districtDistribution: [],
+        townDistribution: [],
+        monthlyTrends: [],
+        requestTypeDistribution: [],
+        statusDistribution: []
     });
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -149,13 +168,13 @@ const CeoAnalyticsPage = () => {
                         <MessageCircleWarning className="text-blue-700 w-6 h-6 lg:w-8 lg:h-8 flex-shrink-0" />
                         <div className="flex-1 space-y-1 min-w-0">
                             <p className="text-sm lg:text-lg font-semibold leading-none text-blue-900 truncate">
-                                Total Requests
+                                Total Works
                             </p>
                             <p className="text-xl lg:text-2xl font-bold text-blue-800">
                                 {stats.totalRequests.toLocaleString()}
                             </p>
                             <p className="text-xs lg:text-sm text-blue-600">
-                                All time requests
+                                All time works
                             </p>
                         </div>
                     </div>
@@ -166,7 +185,7 @@ const CeoAnalyticsPage = () => {
                         <Activity className="text-purple-700 w-6 h-6 lg:w-8 lg:h-8 flex-shrink-0" />
                         <div className="flex-1 space-y-1 min-w-0">
                             <p className="text-sm lg:text-lg font-semibold leading-none text-purple-900 truncate">
-                                Active Requests
+                                Active Works
                             </p>
                             <p className="text-xl lg:text-2xl font-bold text-purple-800">
                                 {stats.activeRequests.toLocaleString()}
@@ -210,6 +229,186 @@ const CeoAnalyticsPage = () => {
                             </p>
                         </div>
                     </div>
+                </Card>
+            </div>
+
+            {/* New KPI Cards - Department, District, Town Wise */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6 mb-6 lg:mb-8">
+                {/* Completion Rate Card */}
+                <Card className="bg-gradient-to-r from-green-50 to-green-100 border-2 shadow-md">
+                    <div className="flex items-center space-x-3 lg:space-x-4 rounded-md p-4 lg:p-6">
+                        <Target className="text-green-700 w-6 h-6 lg:w-8 lg:h-8 flex-shrink-0" />
+                        <div className="flex-1 space-y-1 min-w-0">
+                            <p className="text-sm lg:text-lg font-semibold leading-none text-green-900 truncate">
+                                Completion Rate
+                            </p>
+                            <p className="text-xl lg:text-2xl font-bold text-green-800">
+                                {stats.completionRate}%
+                            </p>
+                            <p className="text-xs lg:text-sm text-green-600">
+                                Last 30 days
+                            </p>
+                        </div>
+                    </div>
+                </Card>
+
+                {/* Average Completion Time Card */}
+                <Card className="bg-gradient-to-r from-orange-50 to-orange-100 border-2 shadow-md">
+                    <div className="flex items-center space-x-3 lg:space-x-4 rounded-md p-4 lg:p-6">
+                        <Clock className="text-orange-700 w-6 h-6 lg:w-8 lg:h-8 flex-shrink-0" />
+                        <div className="flex-1 space-y-1 min-w-0">
+                            <p className="text-sm lg:text-lg font-semibold leading-none text-orange-900 truncate">
+                                Avg. Completion Time
+                            </p>
+                            <p className="text-xl lg:text-2xl font-bold text-orange-800">
+                                {stats.avgCompletionTime} days
+                            </p>
+                            <p className="text-xs lg:text-sm text-orange-600">
+                                Average processing time
+                            </p>
+                        </div>
+                    </div>
+                </Card>
+
+                {/* Top Department Card */}
+                <Card className="bg-gradient-to-r from-purple-50 to-purple-100 border-2 shadow-md">
+                    <div className="flex items-center space-x-3 lg:space-x-4 rounded-md p-4 lg:p-6">
+                        <Building className="text-purple-700 w-6 h-6 lg:w-8 lg:h-8 flex-shrink-0" />
+                        <div className="flex-1 space-y-1 min-w-0">
+                            <p className="text-sm lg:text-lg font-semibold leading-none text-purple-900 truncate">
+                                Top Department
+                            </p>
+                            <p className="text-lg lg:text-xl font-bold text-purple-800 truncate">
+                                {stats.departmentDistribution?.[0]?.department || 'N/A'}
+                            </p>
+                            <p className="text-xs lg:text-sm text-purple-600">
+                                {stats.departmentDistribution?.[0]?.count || 0} works
+                            </p>
+                        </div>
+                    </div>
+                </Card>
+
+                {/* Top District Card */}
+                <Card className="bg-gradient-to-r from-cyan-50 to-cyan-100 border-2 shadow-md">
+                    <div className="flex items-center space-x-3 lg:space-x-4 rounded-md p-4 lg:p-6">
+                        <Globe className="text-cyan-700 w-6 h-6 lg:w-8 lg:h-8 flex-shrink-0" />
+                        <div className="flex-1 space-y-1 min-w-0">
+                            <p className="text-sm lg:text-lg font-semibold leading-none text-cyan-900 truncate">
+                                Top District
+                            </p>
+                            <p className="text-lg lg:text-xl font-bold text-cyan-800 truncate">
+                                {stats.districtDistribution?.[0]?.district || 'N/A'}
+                            </p>
+                            <p className="text-xs lg:text-sm text-cyan-600">
+                                {stats.districtDistribution?.[0]?.count || 0} works
+                            </p>
+                        </div>
+                    </div>
+                </Card>
+            </div>
+
+            {/* Department-wise Distribution */}
+            <div className="mb-6 lg:mb-8">
+                <Card className="shadow-lg">
+                    <CardHeader className="p-4 lg:p-6">
+                        <div className="flex items-center space-x-2">
+                            <Building className="w-5 h-5 lg:w-6 lg:h-6 text-blue-600" />
+                            <CardTitle className="text-lg lg:text-xl font-semibold">Department-wise Works Distribution</CardTitle>
+                        </div>
+                        <CardDescription className="text-sm lg:text-base">
+                            Works distribution across different departments
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent className="p-4 lg:p-6 pt-0">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {stats.departmentDistribution?.slice(0, 6).map((dept, index) => (
+                                <div key={index} className="bg-gray-50 rounded-lg p-4">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <h4 className="font-medium text-gray-900 text-sm lg:text-base">{dept.department}</h4>
+                                        <span className="text-lg font-bold text-blue-600">{dept.count}</span>
+                                    </div>
+                                    <div className="w-full bg-gray-200 rounded-full h-2">
+                                        <div 
+                                            className="bg-blue-600 h-2 rounded-full" 
+                                            style={{ 
+                                                width: `${(dept.count / Math.max(...stats.departmentDistribution.map(d => d.count))) * 100}%` 
+                                            }}
+                                        ></div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </CardContent>
+                </Card>
+            </div>
+
+            {/* District-wise Distribution */}
+            <div className="mb-6 lg:mb-8">
+                <Card className="shadow-lg">
+                    <CardHeader className="p-4 lg:p-6">
+                        <div className="flex items-center space-x-2">
+                            <MapPin className="w-5 h-5 lg:w-6 lg:h-6 text-green-600" />
+                            <CardTitle className="text-lg lg:text-xl font-semibold">District-wise Works Distribution</CardTitle>
+                        </div>
+                        <CardDescription className="text-sm lg:text-base">
+                            Works distribution across different districts
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent className="p-4 lg:p-6 pt-0">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {stats.districtDistribution?.slice(0, 6).map((district, index) => (
+                                <div key={index} className="bg-gray-50 rounded-lg p-4">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <h4 className="font-medium text-gray-900 text-sm lg:text-base">{district.district}</h4>
+                                        <span className="text-lg font-bold text-green-600">{district.count}</span>
+                                    </div>
+                                    <div className="w-full bg-gray-200 rounded-full h-2">
+                                        <div 
+                                            className="bg-green-600 h-2 rounded-full" 
+                                            style={{ 
+                                                width: `${(district.count / Math.max(...stats.districtDistribution.map(d => d.count))) * 100}%` 
+                                            }}
+                                        ></div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </CardContent>
+                </Card>
+            </div>
+
+            {/* Town-wise Distribution */}
+            <div className="mb-6 lg:mb-8">
+                <Card className="shadow-lg">
+                    <CardHeader className="p-4 lg:p-6">
+                        <div className="flex items-center space-x-2">
+                            <Home className="w-5 h-5 lg:w-6 lg:h-6 text-purple-600" />
+                            <CardTitle className="text-lg lg:text-xl font-semibold">Town-wise Works Distribution</CardTitle>
+                        </div>
+                        <CardDescription className="text-sm lg:text-base">
+                            Works distribution across different towns
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent className="p-4 lg:p-6 pt-0">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {stats.townDistribution?.slice(0, 9).map((town, index) => (
+                                <div key={index} className="bg-gray-50 rounded-lg p-4">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <h4 className="font-medium text-gray-900 text-sm lg:text-base">{town.town}</h4>
+                                        <span className="text-lg font-bold text-purple-600">{town.count}</span>
+                                    </div>
+                                    <div className="w-full bg-gray-200 rounded-full h-2">
+                                        <div 
+                                            className="bg-purple-600 h-2 rounded-full" 
+                                            style={{ 
+                                                width: `${(town.count / Math.max(...stats.townDistribution.map(t => t.count))) * 100}%` 
+                                            }}
+                                        ></div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </CardContent>
                 </Card>
             </div>
 
@@ -281,8 +480,10 @@ const CeoAnalyticsPage = () => {
                         </CardDescription>
                     </CardHeader>
                     <CardContent className="p-4 lg:p-6 pt-0 lg:pt-0">
-                        <div className="h-[300px] lg:h-[600px] w-full rounded shadow">
-                            <MapComponent />
+                        <div className="h-[300px] lg:h-[600px] w-full rounded shadow relative overflow-hidden">
+                            <div className="absolute inset-0 z-10">
+                                <MapComponent />
+                            </div>
                         </div>
                     </CardContent>
                 </Card>
@@ -295,14 +496,18 @@ const CeoAnalyticsPage = () => {
                         <CardHeader className="p-4 lg:p-6">
                             <div className="flex items-center space-x-2">
                                 <BarChart3 className="w-5 h-5 lg:w-6 lg:h-6 text-blue-600" />
-                                <CardTitle className="text-lg lg:text-xl font-semibold">Request Trends</CardTitle>
+                                <CardTitle className="text-lg lg:text-xl font-semibold">Works Trends</CardTitle>
                             </div>
                             <CardDescription className="text-sm lg:text-base">
                                 Monthly trends of work requests over time
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="p-4 lg:p-6 pt-0 lg:pt-0">
-                            <LineChartWithValues />
+                            <div className="w-full overflow-x-auto">
+                                <div className="min-w-[300px] lg:min-w-0">
+                                    <LineChartWithValues />
+                                </div>
+                            </div>
                         </CardContent>
                     </Card>
                 </div>
@@ -312,14 +517,18 @@ const CeoAnalyticsPage = () => {
                         <CardHeader className="p-4 lg:p-6">
                             <div className="flex items-center space-x-2">
                                 <PieChart className="w-5 h-5 lg:w-6 lg:h-6 text-green-600" />
-                                <CardTitle className="text-lg lg:text-xl font-semibold">Request Distribution</CardTitle>
+                                <CardTitle className="text-lg lg:text-xl font-semibold">Works Distribution</CardTitle>
                             </div>
                             <CardDescription className="text-sm lg:text-base">
                                 Breakdown by request types and status
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="p-4 lg:p-6 pt-0 lg:pt-0">
-                            <PieChartWithValues />
+                            <div className="w-full overflow-x-auto">
+                                <div className="min-w-[250px] lg:min-w-0">
+                                    <PieChartWithValues />
+                                </div>
+                            </div>
                         </CardContent>
                     </Card>
                 </div>
@@ -335,7 +544,7 @@ const CeoAnalyticsPage = () => {
                         </div>
                         <div className="flex flex-col lg:flex-row lg:items-center space-y-2 lg:space-y-0 lg:space-x-2">
                             <span className="text-xs lg:text-sm text-gray-500">
-                                {stats.recentRequests.length} total requests
+                                {stats.recentRequests.length} total works
                             </span>
                             {stats.recentRequests.length > recentRequestsPerPage && (
                                 <button
@@ -358,7 +567,7 @@ const CeoAnalyticsPage = () => {
                         </div>
                     </div>
                     <CardDescription className="text-sm lg:text-base">
-                        Latest work requests requiring attention
+                        Latest works requiring attention
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="p-4 lg:p-6 pt-0 lg:pt-0">
@@ -373,7 +582,7 @@ const CeoAnalyticsPage = () => {
                                                 <FileText className="w-4 h-4 lg:w-5 lg:h-5 text-blue-600" />
                                             </div>
                                             <div className="min-w-0 flex-1">
-                                                <p className="text-sm lg:text-base font-medium text-gray-900 truncate">Request #{request.id}</p>
+                                                <p className="text-sm lg:text-base font-medium text-gray-900 truncate">Work #{request.id}</p>
                                                 <p className="text-xs lg:text-sm text-gray-600 truncate">{request.complaint_type}</p>
                                                 <p className="text-xs text-gray-500 truncate">
                                                     {request.town} • {new Date(request.request_date).toLocaleDateString()}
@@ -400,7 +609,7 @@ const CeoAnalyticsPage = () => {
                             {!showAllRecent && stats.recentRequests.length > recentRequestsPerPage && (
                                 <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between pt-3 lg:pt-4 border-t border-gray-200 space-y-2 lg:space-y-0">
                                     <div className="text-xs lg:text-sm text-gray-500 text-center lg:text-left">
-                                        Showing {((recentRequestsPage - 1) * recentRequestsPerPage) + 1} to {Math.min(recentRequestsPage * recentRequestsPerPage, stats.recentRequests.length)} of {stats.recentRequests.length} requests
+                                        Showing {((recentRequestsPage - 1) * recentRequestsPerPage) + 1} to {Math.min(recentRequestsPage * recentRequestsPerPage, stats.recentRequests.length)} of {stats.recentRequests.length} works
                                     </div>
                                     <div className="flex items-center justify-center space-x-2">
                                         <button

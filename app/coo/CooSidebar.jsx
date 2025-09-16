@@ -7,10 +7,6 @@ import Image from "next/image";
 import { 
   LayoutDashboard, 
   FileText, 
-  Bell, 
-  Users, 
-  Settings,
-  Building2,
   User,
   LogOut,
   BarChart3,
@@ -20,17 +16,17 @@ import {
   X
 } from "lucide-react";
 
-export default function CeoSidebar({ isOpen, onClose }) {
+export default function CooSidebar({ isOpen, onClose }) {
   const pathname = usePathname();
   const { data: session, update } = useSession();
   const [imageError, setImageError] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [ceoImage, setCeoImage] = useState(null);
+  const [cooImage, setCooImage] = useState(null);
 
   // Debug session changes
   useEffect(() => {
-    console.log('CEO Sidebar - Session updated:', session?.user);
-    console.log('CEO Sidebar - Image URL:', session?.user?.image);
+    console.log('COO Sidebar - Session updated:', session?.user);
+    console.log('COO Sidebar - Image URL:', session?.user?.image);
     // Reset image error when session changes
     setImageError(false);
   }, [session]);
@@ -43,38 +39,38 @@ export default function CeoSidebar({ isOpen, onClose }) {
     }
   }, [session?.user?.id]);
 
-  // Fetch CEO image directly from database
-  const fetchCeoImage = async () => {
+  // Fetch COO image directly from database
+  const fetchCooImage = async () => {
     if (!session?.user?.id) return;
     
     try {
-      const response = await fetch('/api/ceo/refresh-session', {
+      const response = await fetch('/api/coo/refresh-session', {
         method: 'POST',
       });
       
       const result = await response.json();
       
       if (result.success && result.data.user.image) {
-        console.log('Setting CEO image from database:', result.data.user.image);
-        setCeoImage(result.data.user.image);
+        console.log('Setting COO image from database:', result.data.user.image);
+        setCooImage(result.data.user.image);
         setImageError(false);
       }
     } catch (error) {
-      console.error('Error fetching CEO image:', error);
+      console.error('Error fetching COO image:', error);
     }
   };
 
   // Fetch image on component mount
   useEffect(() => {
     if (session?.user?.id) {
-      fetchCeoImage();
+      fetchCooImage();
     }
   }, [session?.user?.id]);
 
   const refreshSession = async () => {
     setIsRefreshing(true);
     try {
-      const response = await fetch('/api/ceo/refresh-session', {
+      const response = await fetch('/api/coo/refresh-session', {
         method: 'POST',
       });
       
@@ -92,7 +88,7 @@ export default function CeoSidebar({ isOpen, onClose }) {
         });
         // Also update local image state
         if (result.data.user.image) {
-          setCeoImage(result.data.user.image);
+          setCooImage(result.data.user.image);
         }
         setImageError(false);
       }
@@ -105,18 +101,18 @@ export default function CeoSidebar({ isOpen, onClose }) {
 
   const navigation = [
     {
-      name: "Analytics Dashboard",
-      href: "/ceo",
+      name: "Dashboard",
+      href: "/coo",
       icon: BarChart3,
     },
     {
       name: "All Works",
-      href: "/ceo/requests",
+      href: "/coo/requests",
       icon: List,
     },
     {
       name: "Profile",
-      href: "/ceo/profile",
+      href: "/coo/profile",
       icon: User,
     },
   ];
@@ -137,37 +133,37 @@ export default function CeoSidebar({ isOpen, onClose }) {
         transform transition-transform duration-300 ease-in-out
         ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
       `}>
-        {/* CEO Header */}
+        {/* COO Header */}
         <div className="p-6 border-b border-gray-200">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
-              <div className="w-16 h-16 bg-gradient-to-br from-blue-600 to-blue-800 rounded-lg flex items-center justify-center">
-              {(ceoImage || session?.user?.image) && !imageError ? (
+              <div className="w-16 h-16 bg-gradient-to-br from-green-600 to-green-800 rounded-lg flex items-center justify-center">
+              {(cooImage || session?.user?.image) && !imageError ? (
                   <Image 
-                    src={ceoImage || session.user.image} 
-                    alt={session?.user?.name || 'CEO'} 
+                    src={cooImage || session.user.image} 
+                    alt={session?.user?.name || 'COO'} 
                     width={45}  
                     height={45} 
                     className="object-cover w-full h-full"
                     unoptimized
                     onLoad={() => {
-                      console.log('Image loaded successfully:', ceoImage || session?.user?.image);
+                      console.log('Image loaded successfully:', cooImage || session?.user?.image);
                       setImageError(false);
                     }}
                     onError={(e) => {
-                      console.log('Image failed to load:', ceoImage || session?.user?.image);
+                      console.log('Image failed to load:', cooImage || session?.user?.image);
                       console.log('Error event:', e);
                       setImageError(true);
                     }}
                   />
                 ) : (
-                  <div className="w-full h-full bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center">
+                  <div className="w-full h-full bg-gradient-to-br from-green-600 to-green-800 flex items-center justify-center">
                     <User className="w-5 h-5 text-white" />
                   </div>
                 )} 
               </div>
               <div>
-                <h1 className="text-xl font-bold text-gray-900">CEO Portal</h1>
+                <h1 className="text-xl font-bold text-gray-900">COO Portal</h1>
                 <p className="text-sm text-gray-600">KW&SC</p>
               </div>
             </div>
@@ -195,7 +191,7 @@ export default function CeoSidebar({ isOpen, onClose }) {
                 onClick={onClose} // Close sidebar on mobile when link is clicked
                 className={`flex items-center px-6 py-3 text-sm font-medium transition-colors duration-200 ${
                   isActive
-                    ? "bg-blue-50 text-blue-700 border-r-2 border-blue-700"
+                    ? "bg-green-50 text-green-700 border-r-2 border-green-700"
                     : "text-gray-700 hover:bg-gray-50 hover:text-gray-900"
                 }`}
               >
@@ -226,48 +222,40 @@ export default function CeoSidebar({ isOpen, onClose }) {
       <div className="p-6 border-t border-gray-200">
         <div className="flex items-center space-x-3">
           <div className="w-10 h-10 rounded-full overflow-hidden border border-gray-300">
-            {(ceoImage || session?.user?.image) && !imageError ? (
+            {(cooImage || session?.user?.image) && !imageError ? (
               <Image 
-                src={ceoImage || session.user.image} 
-                alt={session?.user?.name || 'CEO'} 
+                src={cooImage || session.user.image} 
+                alt={session?.user?.name || 'COO'} 
                 width={40}  
                 height={40} 
                 className="object-cover w-full h-full"
                 unoptimized
                 onLoad={() => {
-                  console.log('Image loaded successfully:', ceoImage || session?.user?.image);
+                  console.log('Image loaded successfully:', cooImage || session?.user?.image);
                   setImageError(false);
                 }}
                 onError={(e) => {
-                  console.log('Image failed to load:', ceoImage || session?.user?.image);
+                  console.log('Image failed to load:', cooImage || session?.user?.image);
                   console.log('Error event:', e);
                   setImageError(true);
                 }}
               />
             ) : (
-              <div className="w-full h-full bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center">
+              <div className="w-full h-full bg-gradient-to-br from-green-600 to-green-800 flex items-center justify-center">
                 <User className="w-5 h-5 text-white" />
               </div>
             )}
           </div>
           <div className="flex-1">
             <p className="text-sm font-medium text-gray-900">
-              {session?.user?.name || 'CEO'}
+              {session?.user?.name || 'COO'}
             </p>
-            <p className="text-xs text-gray-500">Chief Executive Officer</p>
-            {/* Debug info - remove this later */}
-            {/* {process.env.NODE_ENV === 'development' && (
-              <div className="text-xs text-gray-400">
-                <p>Session: {session?.user?.image ? 'Yes' : 'No'}</p>
-                <p>Local: {ceoImage ? 'Yes' : 'No'}</p>
-                <p>Display: {(ceoImage || session?.user?.image) ? 'Yes' : 'No'}</p>
-              </div>
-            )} */}
+            <p className="text-xs text-gray-500">Chief Operating Officer</p>
           </div>
           <button
             onClick={refreshSession}
             disabled={isRefreshing}
-            className="p-1 text-gray-400 hover:text-blue-600 transition-colors"
+            className="p-1 text-gray-400 hover:text-green-600 transition-colors"
             title="Refresh Profile Image"
           >
             <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />

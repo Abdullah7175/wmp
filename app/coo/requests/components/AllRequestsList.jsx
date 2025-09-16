@@ -32,7 +32,7 @@ export default function AllRequestsList() {
   useEffect(() => {
     const fetchRequests = async () => {
       try {
-        const response = await fetch('/api/ceo/requests');
+        const response = await fetch('/api/coo/requests');
         const result = await response.json();
         
         if (result.success) {
@@ -126,7 +126,7 @@ export default function AllRequestsList() {
               onClick={() => setFilter(tab.key)}
               className={`py-2 px-1 border-b-2 font-medium text-xs lg:text-sm whitespace-nowrap ${
                 filter === tab.key
-                  ? 'border-blue-500 text-blue-600'
+                  ? 'border-green-500 text-green-600'
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
               }`}
             >
@@ -240,30 +240,43 @@ export default function AllRequestsList() {
                     )}
                   </div>
 
-                  {/* CEO Comments */}
-                  {request.ceo_comments && (
-                    <div className="mt-3 lg:mt-4 p-3 bg-blue-50 rounded-lg">
-                      <div className="flex items-center space-x-2 mb-2">
-                        <MessageSquare className="w-3 h-3 lg:w-4 lg:h-4 text-blue-600" />
-                        <span className="text-xs lg:text-sm font-medium text-blue-900">CEO Comment</span>
-                      </div>
-                      <p className="text-xs lg:text-sm text-blue-800">{request.ceo_comments}</p>
+                  {/* CEO/COO Comments */}
+                  {(request.ceo_comments || request.coo_comments) && (
+                    <div className="mt-3 lg:mt-4 space-y-2">
+                      {request.ceo_comments && (
+                        <div className="p-3 bg-blue-50 rounded-lg">
+                          <div className="flex items-center space-x-2 mb-2">
+                            <MessageSquare className="w-3 h-3 lg:w-4 lg:h-4 text-blue-600" />
+                            <span className="text-xs lg:text-sm font-medium text-blue-900">CEO Comment</span>
+                          </div>
+                          <p className="text-xs lg:text-sm text-blue-800">{request.ceo_comments}</p>
+                        </div>
+                      )}
+                      {request.coo_comments && (
+                        <div className="p-3 bg-green-50 rounded-lg">
+                          <div className="flex items-center space-x-2 mb-2">
+                            <MessageSquare className="w-3 h-3 lg:w-4 lg:h-4 text-green-600" />
+                            <span className="text-xs lg:text-sm font-medium text-green-900">COO Comment</span>
+                          </div>
+                          <p className="text-xs lg:text-sm text-green-800">{request.coo_comments}</p>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
 
                 <div className="flex flex-col lg:flex-col space-y-2 lg:ml-6">
                   <Link
-                    href={`/ceo/requests/${request.id}`}
-                    className="inline-flex items-center justify-center px-3 lg:px-4 py-2 border border-gray-300 rounded-md shadow-sm text-xs lg:text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                    href={`/coo/requests/${request.id}`}
+                    className="inline-flex items-center justify-center px-3 lg:px-4 py-2 border border-gray-300 rounded-md shadow-sm text-xs lg:text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
                   >
                     <Eye className="w-3 h-3 lg:w-4 lg:h-4 mr-1 lg:mr-2" />
                     View Details
                   </Link>
                   
                   <Link
-                    href={`/ceo/requests/${request.id}`}
-                    className="inline-flex items-center justify-center px-3 lg:px-4 py-2 border border-transparent rounded-md shadow-sm text-xs lg:text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                    href={`/coo/requests/${request.id}`}
+                    className="inline-flex items-center justify-center px-3 lg:px-4 py-2 border border-transparent rounded-md shadow-sm text-xs lg:text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
                   >
                     <MessageSquare className="w-3 h-3 lg:w-4 lg:h-4 mr-1 lg:mr-2" />
                     Add Comment

@@ -102,15 +102,30 @@ export function getAgentRequestColumns({ onAddImage, onAddVideo, onAddBeforeImag
     },
     {
       accessorKey: "approval_status",
-      header: "CEO Approval",
+      header: "Approval Status",
       cell: ({ row }) => {
-        const approvalStatus = row.original.approval_status;
+        const ceoStatus = row.original.ceo_approval_status;
+        const cooStatus = row.original.coo_approval_status;
+        
+        const getApprovalBadge = (status, type) => {
+          if (!status || status === 'pending') return null;
+          
+          const colorClass = status === 'approved' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800';
+          return (
+            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${colorClass} mr-1`}>
+              {type}: {status === 'approved' ? 'Approved' : 'Not Approved'}
+            </span>
+          );
+        };
+
         return (
-          <WorkRequestStatus 
-            approvalStatus={approvalStatus}
-            status={row.original.status_name}
-            className="text-xs"
-          />
+          <div className="flex flex-col space-y-1">
+            {getApprovalBadge(ceoStatus, 'CEO')}
+            {getApprovalBadge(cooStatus, 'COO')}
+            {!ceoStatus && !cooStatus && (
+              <span className="text-xs text-gray-400">No approvals</span>
+            )}
+          </div>
         );
       },
     },

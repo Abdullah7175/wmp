@@ -25,14 +25,10 @@ async function getRequestDetails(requestId) {
         d.title as district,
         u.name as creator_name,
         u.email as creator_email,
-        wra.approval_status,
-        wra.created_at as approval_request_date,
-        wra.ceo_comments,
         s.name as status_name,
         ee.name as executive_engineer_name,
         c.name as contractor_name
       FROM work_requests wr
-      LEFT JOIN work_request_approvals wra ON wr.id = wra.work_request_id
       LEFT JOIN complaint_types ct ON wr.complaint_type_id = ct.id
       LEFT JOIN complaint_subtypes cst ON wr.complaint_subtype_id = cst.id
       LEFT JOIN town t ON wr.town_id = t.id
@@ -122,7 +118,7 @@ export default async function RequestViewPage({ params }) {
       <div className="mb-6 lg:mb-8">
         <h1 className="text-2xl lg:text-3xl font-bold text-gray-900">Work Details</h1>
         <p className="text-sm lg:text-base text-gray-600 mt-2">
-          View work #{requestData.request.id} and add CEO comments
+          View work #{requestData.request.id} and add COO comments
         </p>
       </div>
 

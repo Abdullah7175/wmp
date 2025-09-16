@@ -169,6 +169,62 @@ export async function GET(request) {
       LIMIT 10
     `);
 
+    // Get town-wise distribution
+    const townDistribution = await query(`
+      SELECT 
+        t.town,
+        COUNT(*) as count
+      FROM work_requests wr
+      LEFT JOIN town t ON wr.town_id = t.id
+      GROUP BY t.town
+      ORDER BY count DESC
+      LIMIT 15
+    `);
+
+    // Get department-wise distribution (based on complaint types)
+    const departmentDistribution = await query(`
+      SELECT 
+        CASE 
+          WHEN ct.type_name ILIKE '%water%' THEN 'Water Department'
+          WHEN ct.type_name ILIKE '%sewer%' OR ct.type_name ILIKE '%drain%' THEN 'Sewerage Department'
+          WHEN ct.type_name ILIKE '%road%' OR ct.type_name ILIKE '%street%' THEN 'Roads Department'
+          WHEN ct.type_name ILIKE '%electric%' OR ct.type_name ILIKE '%power%' THEN 'Electricity Department'
+          ELSE 'General Works'
+        END as department,
+        COUNT(*) as count
+      FROM work_requests wr
+      LEFT JOIN complaint_types ct ON wr.complaint_type_id = ct.id
+      GROUP BY 
+        CASE 
+          WHEN ct.type_name ILIKE '%water%' THEN 'Water Department'
+          WHEN ct.type_name ILIKE '%sewer%' OR ct.type_name ILIKE '%drain%' THEN 'Sewerage Department'
+          WHEN ct.type_name ILIKE '%road%' OR ct.type_name ILIKE '%street%' THEN 'Roads Department'
+          WHEN ct.type_name ILIKE '%electric%' OR ct.type_name ILIKE '%power%' THEN 'Electricity Department'
+          ELSE 'General Works'
+        END
+      ORDER BY count DESC
+    `);
+
+    // Get completion rate (last 30 days)
+    const completionRate = await query(`
+      SELECT 
+        COUNT(CASE WHEN s.name = 'Completed' THEN 1 END) as completed,
+        COUNT(*) as total
+      FROM work_requests wr
+      LEFT JOIN status s ON wr.status_id = s.id
+      WHERE wr.created_date >= CURRENT_DATE - INTERVAL '30 days'
+    `);
+
+    // Get average completion time
+    const avgCompletionTime = await query(`
+      SELECT 
+        AVG(EXTRACT(EPOCH FROM (wr.updated_date - wr.created_date))/86400) as avg_days
+      FROM work_requests wr
+      LEFT JOIN status s ON wr.status_id = s.id
+      WHERE s.name = 'Completed' 
+      AND wr.updated_date IS NOT NULL
+    `);
+
     const analyticsData = {
       // Main statistics
       totalRequests: parseInt(totalRequests.rows?.[0]?.count || 0),
@@ -182,6 +238,11 @@ export async function GET(request) {
       totalAgents: parseInt(totalAgents.rows?.[0]?.count || 0),
       totalBudget: parseInt(totalBudget.rows?.[0]?.total || 0),
       
+      // New KPI metrics
+      completionRate: completionRate.rows?.[0] ? 
+        Math.round((parseInt(completionRate.rows[0].completed) / parseInt(completionRate.rows[0].total)) * 100) : 0,
+      avgCompletionTime: Math.round(parseFloat(avgCompletionTime.rows?.[0]?.avg_days || 0)),
+      
       // Recent activity
       recentRequests: recentRequests.rows || [],
       
@@ -189,7 +250,9 @@ export async function GET(request) {
       monthlyTrends: monthlyTrends.rows || [],
       requestTypeDistribution: requestTypeDistribution.rows || [],
       statusDistribution: statusDistribution.rows || [],
-      districtDistribution: districtDistribution.rows || []
+      districtDistribution: districtDistribution.rows || [],
+      townDistribution: townDistribution.rows || [],
+      departmentDistribution: departmentDistribution.rows || []
     };
 
     return NextResponse.json({

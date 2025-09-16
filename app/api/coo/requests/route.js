@@ -8,25 +8,25 @@ export async function GET(request) {
   try {
     const session = await getServerSession(authOptions);
     
-    // Only allow CEO users (role 5) to access this endpoint
-    if (!session?.user || session.user.userType !== 'user' || parseInt(session.user.role) !== 5) {
+    // Only allow COO users (role 6) to access this endpoint
+    if (!session?.user || session.user.userType !== 'user' || parseInt(session.user.role) !== 6) {
       return NextResponse.json(
-        { success: false, message: "Unauthorized. CEO access required." },
+        { success: false, message: "Unauthorized. COO access required." },
         { status: 401 }
       );
     }
 
-    // Log CEO request list access
+    // Log COO request list access
     await logUserAction({
       user_id: session.user.id,
-      user_type: 'ceo',
-      user_role: 5,
-      user_name: session.user.name || 'CEO',
+      user_type: 'coo',
+      user_role: 6,
+      user_name: session.user.name || 'COO',
       user_email: session.user.email,
       action_type: 'VIEW_REQUESTS',
       entity_type: 'WORK_REQUESTS',
       entity_id: null,
-      details: `CEO viewed all requests list`,
+      details: `COO viewed all requests list`,
       ip_address: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown'
     });
 
@@ -98,7 +98,7 @@ export async function GET(request) {
     });
 
   } catch (error) {
-    console.error('Error fetching CEO requests:', error);
+    console.error('Error in COO requests API:', error);
     return NextResponse.json(
       { success: false, message: "Internal server error" },
       { status: 500 }

@@ -8,10 +8,10 @@ export async function POST(request) {
   try {
     const session = await getServerSession(authOptions);
     
-    // Check if user is CEO (role 5) and userType is 'user'
-    if (!session?.user || parseInt(session.user.role) !== 5 || session.user.userType !== 'user') {
+    // Check if user is COO (role 6) and userType is 'user'
+    if (!session?.user || parseInt(session.user.role) !== 6 || session.user.userType !== 'user') {
       return NextResponse.json(
-        { success: false, message: "Unauthorized. CEO access required." },
+        { success: false, message: "Unauthorized. COO access required." },
         { status: 403 }
       );
     }
@@ -37,10 +37,10 @@ export async function POST(request) {
       );
     }
 
-    // Insert or update CEO soft approval
+    // Insert or update COO soft approval
     const upsertQuery = `
       INSERT INTO work_request_soft_approvals (work_request_id, approver_id, approver_type, approval_status, comments, approved_at, created_at, updated_at)
-      VALUES ($1, $2, 'ceo', $3, $4, $5, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      VALUES ($1, $2, 'coo', $3, $4, $5, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
       ON CONFLICT (work_request_id, approver_type) 
       DO UPDATE SET 
         approval_status = $3,
@@ -67,17 +67,17 @@ export async function POST(request) {
       );
     }
 
-    // Log CEO comment action
+    // Log COO comment action
     await logUserAction({
       user_id: session.user.id,
-      user_type: 'ceo',
-      user_role: 5,
-      user_name: session.user.name || 'CEO',
+      user_type: 'coo',
+      user_role: 6,
+      user_name: session.user.name || 'COO',
       user_email: session.user.email,
       action_type: 'ADD_SOFT_APPROVAL',
       entity_type: 'WORK_REQUEST',
       entity_id: workRequestId,
-      details: `CEO added soft approval to work request #${workRequestId}. Status: ${approvalStatus}, Comment: ${comments.trim()}`,
+      details: `COO added soft approval to work request #${workRequestId}. Status: ${approvalStatus}, Comment: ${comments.trim()}`,
       ip_address: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown'
     });
 
@@ -104,9 +104,9 @@ export async function POST(request) {
         VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP, false)
       `, [
         request.creator_id,
-        'ceo_soft_approval',
+        'coo_soft_approval',
         workRequestId,
-        `CEO KW&SC ${approvalStatus === 'approved' ? 'approved' : approvalStatus === 'not_approved' ? 'did not approve' : 'updated approval status for'} your work request #${workRequestId}`
+        `COO KW&SC ${approvalStatus === 'approved' ? 'approved' : approvalStatus === 'not_approved' ? 'did not approve' : 'updated approval status for'} your work request #${workRequestId}`
       ]);
     }
 
@@ -120,8 +120,8 @@ export async function POST(request) {
     `, [
       session.user.id,
       'user',
-      5,
-      session.user.name || 'CEO',
+      6,
+      session.user.name || 'COO',
       session.user.email,
       'SOFT_APPROVAL',
       'work_request',
@@ -141,7 +141,7 @@ export async function POST(request) {
     });
 
   } catch (error) {
-    console.error('Error in CEO comment API:', error);
+    console.error('Error in COO comment API:', error);
     return NextResponse.json(
       { success: false, message: "Internal server error" },
       { status: 500 }

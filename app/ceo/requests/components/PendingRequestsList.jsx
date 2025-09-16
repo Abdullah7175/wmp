@@ -86,13 +86,13 @@ export default function PendingRequestsList() {
                 <div className="flex items-center space-x-3 mb-3">
                   <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-yellow-100 text-yellow-800">
                     <Clock className="w-4 h-4 mr-1" />
-                    Pending CEO Approval
+                    Pending
                   </span>
                   <span className="text-sm text-gray-500">
                     Request #{request.id}
                   </span>
                   <span className="text-sm text-gray-500">
-                    Submitted: {new Date(request.approval_request_date).toLocaleDateString()}
+                    Submitted: {new Date(request.request_date).toLocaleDateString()}
                   </span>
                 </div>
 

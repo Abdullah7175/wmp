@@ -34,7 +34,7 @@ export default function RequestApprovalForm({ requestData }) {
     setIsLoading(true);
 
     try {
-      const response = await fetch(`/api/ceo/approve-request`, {
+      const response = await fetch(`/api/coo/approve-request`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -54,7 +54,7 @@ export default function RequestApprovalForm({ requestData }) {
       
       if (result.success) {
         alert("Comment added successfully");
-        router.push("/ceo/requests");
+        router.push("/coo/requests");
       } else {
         throw new Error(result.message || "Failed to submit comment");
       }
@@ -75,9 +75,9 @@ export default function RequestApprovalForm({ requestData }) {
             <h2 className="text-lg lg:text-xl font-semibold text-gray-900">
               Work #{request.id}
             </h2>
-            <span className="inline-flex items-center px-2 lg:px-3 py-1 rounded-full text-xs lg:text-sm font-medium bg-blue-100 text-blue-800 w-fit">
+            <span className="inline-flex items-center px-2 lg:px-3 py-1 rounded-full text-xs lg:text-sm font-medium bg-green-100 text-green-800 w-fit">
               <MessageSquare className="w-3 h-3 lg:w-4 lg:h-4 mr-1" />
-              CEO Comments
+              COO Comments
             </span>
           </div>
           
@@ -281,10 +281,10 @@ export default function RequestApprovalForm({ requestData }) {
         </div>
       )}
 
-      {/* CEO Comments Form */}
+      {/* COO Comments Form */}
       <div className="bg-white rounded-lg shadow-md p-4 lg:p-6">
         <h3 className="text-base lg:text-lg font-semibold text-gray-900 mb-4 lg:mb-6">
-          Add Comment & Approval
+          Add COO Comment & Approval
         </h3>
         
         <form onSubmit={handleSubmit} className="space-y-4 lg:space-y-6">
@@ -297,7 +297,7 @@ export default function RequestApprovalForm({ requestData }) {
               id="approvalStatus"
               value={approvalStatus}
               onChange={(e) => setApprovalStatus(e.target.value)}
-              className="w-full px-3 py-2 text-sm lg:text-base border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-3 py-2 text-sm lg:text-base border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
               required
             >
               <option value="pending">Pending</option>
@@ -316,7 +316,7 @@ export default function RequestApprovalForm({ requestData }) {
               value={comments}
               onChange={(e) => setComments(e.target.value)}
               rows={4}
-              className="w-full px-3 py-2 text-sm lg:text-base border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-3 py-2 text-sm lg:text-base border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
               placeholder="Add your comment about this work request..."
               required
             />
@@ -336,7 +336,7 @@ export default function RequestApprovalForm({ requestData }) {
             <button
               type="submit"
               disabled={isLoading}
-              className="px-4 lg:px-6 py-2 text-xs lg:text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-4 lg:px-6 py-2 text-xs lg:text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isLoading ? "Adding Comment..." : "Add Comment"}
             </button>
