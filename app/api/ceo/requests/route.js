@@ -41,13 +41,36 @@ export async function GET(request) {
         wr.nature_of_work,
         wr.budget_code,
         wr.file_type,
+        wr.creator_type,
         ct.type_name as complaint_type,
         cst.subtype_name as complaint_subtype,
         t.town,
         st.subtown,
         d.title as district,
-        u.name as creator_name,
-        u.email as creator_email,
+        CASE 
+          WHEN wr.creator_type = 'user' THEN u.name
+          WHEN wr.creator_type = 'agent' THEN a.name
+          WHEN wr.creator_type = 'socialmedia' THEN sm.name
+          ELSE 'Unknown'
+        END as creator_name,
+        CASE 
+          WHEN wr.creator_type = 'user' THEN u.email
+          WHEN wr.creator_type = 'agent' THEN a.email
+          WHEN wr.creator_type = 'socialmedia' THEN sm.email
+          ELSE NULL
+        END as creator_email,
+        CASE 
+          WHEN wr.creator_type = 'user' THEN r.title
+          WHEN wr.creator_type = 'agent' THEN a.designation
+          WHEN wr.creator_type = 'socialmedia' THEN 'Social Media Agent'
+          ELSE 'Unknown'
+        END as creator_designation,
+        CASE 
+          WHEN wr.creator_type = 'user' THEN u.role
+          WHEN wr.creator_type = 'agent' THEN a.role
+          WHEN wr.creator_type = 'socialmedia' THEN sm.role
+          ELSE NULL
+        END as creator_role,
         ceo_approval.approval_status,
         ceo_approval.approved_at as approval_date,
         ceo_approval.comments as ceo_comments,
@@ -65,7 +88,10 @@ export async function GET(request) {
       LEFT JOIN town t ON wr.town_id = t.id
       LEFT JOIN subtown st ON wr.subtown_id = st.id
       LEFT JOIN district d ON t.district_id = d.id
-      LEFT JOIN users u ON wr.creator_id = u.id
+      LEFT JOIN users u ON wr.creator_id = u.id AND wr.creator_type = 'user'
+      LEFT JOIN agents a ON wr.creator_id = a.id AND wr.creator_type = 'agent'
+      LEFT JOIN socialmediaperson sm ON wr.creator_id = sm.id AND wr.creator_type = 'socialmedia'
+      LEFT JOIN role r ON u.role = r.id
       LEFT JOIN status s ON wr.status_id = s.id
       LEFT JOIN work_request_soft_approvals ceo_approval ON wr.id = ceo_approval.work_request_id AND ceo_approval.approver_type = 'ceo'
       LEFT JOIN work_request_soft_approvals coo_approval ON wr.id = coo_approval.work_request_id AND coo_approval.approver_type = 'coo'

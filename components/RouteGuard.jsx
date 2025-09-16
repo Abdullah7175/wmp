@@ -43,6 +43,9 @@ const allowedRoutes = {
   ceo: {
     "5": ["/ceo", "/ceo/requests", "/ceo/approved", "/ceo/rejected", "/ceo/notifications"],
   },
+  coo: {
+    "6": ["/coo", "/coo/requests", "/coo/approved", "/coo/rejected", "/coo/notifications"],
+  },
 };
 
 export default function RouteGuard({ children }) {

@@ -192,6 +192,9 @@ export default function LoginPage() {
                 case "ceo":
                   window.location.href = "/ceo";
                   break;
+                case "coo":
+                  window.location.href = "/coo";
+                  break;
               }
             } catch (error) {
               window.location.href = "/dashboard";

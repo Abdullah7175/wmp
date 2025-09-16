@@ -190,6 +190,7 @@ export default function AllRequestsList() {
                       <div className="min-w-0">
                         <p className="text-xs lg:text-sm font-medium text-gray-900">Created By</p>
                         <p className="text-xs lg:text-sm text-gray-600 truncate">{request.creator_name}</p>
+                        <p className="text-xs lg:text-sm text-gray-500 truncate">{request.creator_designation}</p>
                         <p className="text-xs lg:text-sm text-gray-500 truncate">{request.creator_email}</p>
                       </div>
                     </div>
