@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/db';
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/pages/api/auth/[...nextauth]";
 
 export async function GET(request) {
     const { searchParams } = new URL(request.url);
@@ -51,6 +53,16 @@ export async function GET(request) {
 
 export async function POST(req) {
     try {
+        // Check authentication
+        const session = await getServerSession(authOptions);
+        
+        if (!session?.user || session.user.userType !== 'user' || parseInt(session.user.role) !== 1) {
+            return NextResponse.json(
+                { error: 'Unauthorized. Admin access required.' },
+                { status: 403 }
+            );
+        }
+
         const body = await req.json();
         const client = await connectToDatabase();
         const { title } = body;
@@ -75,6 +87,16 @@ export async function POST(req) {
 
 export async function PUT(req) {
     try {
+        // Check authentication
+        const session = await getServerSession(authOptions);
+        
+        if (!session?.user || session.user.userType !== 'user' || parseInt(session.user.role) !== 1) {
+            return NextResponse.json(
+                { error: 'Unauthorized. Admin access required.' },
+                { status: 403 }
+            );
+        }
+
         const body = await req.json();
         const client = await connectToDatabase();
         const { id, title } = body;
@@ -105,6 +127,16 @@ export async function PUT(req) {
 
 export async function DELETE(req) {
     try {
+        // Check authentication
+        const session = await getServerSession(authOptions);
+        
+        if (!session?.user || session.user.userType !== 'user' || parseInt(session.user.role) !== 1) {
+            return NextResponse.json(
+                { error: 'Unauthorized. Admin access required.' },
+                { status: 403 }
+            );
+        }
+
         const body = await req.json();
         const client = await connectToDatabase();
 

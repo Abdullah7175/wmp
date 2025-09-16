@@ -18,9 +18,11 @@ export async function POST(request) {
 
     // Create PDF document with built-in fonts
     const doc = new PDFDocument({ 
-      margin: 50,
-      font: 'Helvetica' // Use built-in Helvetica font
+      margin: 50
     });
+    
+    // Use built-in font explicitly
+    doc.font('Helvetica');
     const chunks = [];
     
     doc.on('data', chunk => chunks.push(chunk));
