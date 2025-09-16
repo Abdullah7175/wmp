@@ -105,10 +105,20 @@ export default function EFileLoginPage() {
     onSubmit: async (values) => {
       // Check if account is locked
       if (isLocked) {
-        const remainingTime = Math.ceil((lockoutTime - new Date()) / 1000 / 60);
+        const remainingTimeMs = lockoutTime - new Date();
+        const remainingTimeSeconds = Math.ceil(remainingTimeMs / 1000);
+        const remainingTimeMinutes = Math.ceil(remainingTimeMs / 1000 / 60);
+        
+        let timeMessage;
+        if (remainingTimeSeconds < 60) {
+          timeMessage = `${remainingTimeSeconds} seconds`;
+        } else {
+          timeMessage = `${remainingTimeMinutes} minutes`;
+        }
+        
         toast({
           title: "Account Temporarily Locked",
-          description: `Too many failed attempts. Please try again in ${remainingTime} minutes.`,
+          description: `Too many failed attempts. Please try again in ${timeMessage}.`,
           variant: "destructive",
         });
         return;
@@ -128,16 +138,37 @@ export default function EFileLoginPage() {
 
           let errorMessage = "Invalid email or password";
           let title = "Login Failed";
+          let lockoutDuration = 0;
 
-          if (newAttempts >= 3) {
-            // Lock account for 15 minutes
-            const lockoutEndTime = new Date(Date.now() + 15 * 60 * 1000);
+          if (newAttempts >= 5) {
+            // 5th+ failed attempt: 15 minutes lockout
+            lockoutDuration = 15 * 60 * 1000; // 15 minutes
+            title = "Account Locked";
+            errorMessage = "Too many failed attempts. Your account has been locked for 15 minutes.";
+          } else if (newAttempts === 4) {
+            // 4th failed attempt: 1 minute lockout
+            lockoutDuration = 1 * 60 * 1000; // 1 minute
+            title = "Account Locked";
+            errorMessage = "Too many failed attempts. Your account has been locked for 1 minute.";
+          } else if (newAttempts === 3) {
+            // 3rd failed attempt: 30 seconds lockout
+            lockoutDuration = 30 * 1000; // 30 seconds
+            title = "Account Locked";
+            errorMessage = "Too many failed attempts. Your account has been locked for 30 seconds.";
+          } else if (newAttempts === 2) {
+            title = "Warning: Last Attempt";
+            errorMessage = "Invalid credentials. One more failed attempt will lock your account.";
+          } else if (newAttempts === 1) {
+            title = "Login Failed";
+            errorMessage = "Invalid email or password. Please check your credentials and try again.";
+          }
+
+          // Apply lockout if needed
+          if (lockoutDuration > 0) {
+            const lockoutEndTime = new Date(Date.now() + lockoutDuration);
             setIsLocked(true);
             setLockoutTime(lockoutEndTime);
             localStorage.setItem('eloginLockoutTime', lockoutEndTime.toISOString());
-            
-            title = "Account Locked";
-            errorMessage = "Too many failed attempts. Your account has been locked for 15 minutes.";
             
             toast({
               title: title,
@@ -145,12 +176,6 @@ export default function EFileLoginPage() {
               variant: "destructive",
             });
             return;
-          } else if (newAttempts === 2) {
-            title = "Warning: Last Attempt";
-            errorMessage = "Invalid credentials. One more failed attempt will lock your account for 15 minutes.";
-          } else if (newAttempts === 1) {
-            title = "Login Failed";
-            errorMessage = "Invalid email or password. Please check your credentials and try again.";
           }
 
           toast({
@@ -258,7 +283,16 @@ export default function EFileLoginPage() {
                         Account Temporarily Locked
                       </h3>
                       <div className="mt-1 text-sm text-red-700">
-                        <p>Too many failed login attempts. Please try again in {Math.ceil((lockoutTime - new Date()) / 1000 / 60)} minutes.</p>
+                        <p>
+                          Too many failed login attempts. Please try again in {
+                            (() => {
+                              const remainingTimeMs = lockoutTime - new Date();
+                              const remainingTimeSeconds = Math.ceil(remainingTimeMs / 1000);
+                              const remainingTimeMinutes = Math.ceil(remainingTimeMs / 1000 / 60);
+                              return remainingTimeSeconds < 60 ? `${remainingTimeSeconds} seconds` : `${remainingTimeMinutes} minutes`;
+                            })()
+                          }.
+                        </p>
                       </div>
                     </div>
                   </div>
@@ -278,7 +312,16 @@ export default function EFileLoginPage() {
                         Warning: {failedAttempts} Failed Attempt{failedAttempts > 1 ? 's' : ''}
                       </h3>
                       <div className="mt-1 text-sm text-yellow-700">
-                        <p>{failedAttempts === 2 ? 'One more failed attempt will lock your account for 15 minutes.' : 'Please check your credentials and try again.'}</p>
+                        <p>
+                          {failedAttempts === 2 
+                            ? 'One more failed attempt will lock your account for 30 seconds.' 
+                            : failedAttempts === 3
+                            ? 'One more failed attempt will lock your account for 1 minute.'
+                            : failedAttempts === 4
+                            ? 'One more failed attempt will lock your account for 15 minutes.'
+                            : 'Please check your credentials and try again.'
+                          }
+                        </p>
                       </div>
                     </div>
                   </div>

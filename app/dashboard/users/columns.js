@@ -18,6 +18,8 @@ const getRoleName = (roleId) => {
         case 1: return 'Admin';
         case 2: return 'Manager';
         case 3: return 'Accountant';
+        case 5: return 'CEO';
+        case 6: return 'COO';
         default: return 'Unknown';
     }
 }
