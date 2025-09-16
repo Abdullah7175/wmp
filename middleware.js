@@ -100,10 +100,20 @@ const ceoAllowed = [
   "/ceo/notifications"
 ];
 
+// COO allowed routes (role 6)
+const cooAllowed = [
+  "/coo",
+  "/coo/requests",
+  "/coo/analytics",
+  "/coo/profile"
+];
+
 function getDashboardForUser(token) {
   if (!token) return "/login";
   // Route CEO to CEO portal
   if (token.user?.role === 5 && token.user?.userType === "user") return "/ceo";
+  // Route COO to COO portal
+  if (token.user?.role === 6 && token.user?.userType === "user") return "/coo";
   // Route admins/managers directly to e-filing admin
   if (token.user?.role === 1 || token.user?.role === 2) return "/efiling";
   if (token.user?.userType === "agent") return "/agent";
@@ -163,6 +173,12 @@ export async function middleware(req) {
             // CEO access (role 5)
             if (userRole === 5) {
                 if (!isAllowed(pathname, ceoAllowed)) {
+                    return NextResponse.redirect(new URL('/unauthorized', req.url));
+                }
+            }
+            // COO access (role 6)
+            else if (userRole === 6) {
+                if (!isAllowed(pathname, cooAllowed)) {
                     return NextResponse.redirect(new URL('/unauthorized', req.url));
                 }
             }

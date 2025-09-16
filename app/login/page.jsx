@@ -63,6 +63,7 @@ export default function LoginPage() {
       if (session.user.userType === "agent") window.location.href = "/agent";
       else if (session.user.userType === "socialmedia" || session.user.userType === "socialmediaperson") window.location.href = "/smagent";
       else if (session.user.userType === "user" && parseInt(session.user.role) === 5) window.location.href = "/ceo";
+      else if (session.user.userType === "user" && parseInt(session.user.role) === 6) window.location.href = "/coo";
       else if (session.user.userType === "user") window.location.href = "/dashboard";
     }
   }, [session, status]);
