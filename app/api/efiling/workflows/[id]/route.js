@@ -50,7 +50,7 @@ export async function GET(request, { params }) {
                 u.designation as assigned_user_designation,
                 d.name as department_name,
                 CASE 
-                    WHEN wf.sla_deadline < NOW() AND wf.workflow_status = 'IN_PROGRESS' 
+                    WHEN wf.sla_deadline IS NOT NULL AND wf.sla_deadline < NOW() AND wf.workflow_status = 'IN_PROGRESS' 
                     THEN true 
                     ELSE false 
                 END as sla_breached

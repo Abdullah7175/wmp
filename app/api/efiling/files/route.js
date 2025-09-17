@@ -123,7 +123,7 @@ export async function GET(request) {
                        ls.last_signed_by_name,
                        ls.last_signed_at,
                        wf.sla_deadline as sla_deadline,
-                       (wf.sla_deadline IS NOT NULL AND wf.sla_deadline < NOW()) as is_sla_breached,
+                       (wf.sla_deadline IS NOT NULL AND wf.sla_deadline < NOW() AND wf.workflow_status = 'IN_PROGRESS') as is_sla_breached,
                        ROUND(EXTRACT(EPOCH FROM (wf.sla_deadline - NOW()))/60.0) as minutes_remaining,
                        ws.stage_name as current_stage_name,
                        ws.sla_hours as current_stage_sla_hours

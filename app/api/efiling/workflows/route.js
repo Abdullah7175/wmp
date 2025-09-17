@@ -47,7 +47,7 @@ export async function GET(request) {
                 u.designation as assigned_user_designation,
                 d.name as department_name,
                 CASE 
-                    WHEN wf.sla_deadline < NOW() AND wf.workflow_status = 'IN_PROGRESS' 
+                    WHEN wf.sla_deadline IS NOT NULL AND wf.sla_deadline < NOW() AND wf.workflow_status = 'IN_PROGRESS' 
                     THEN true 
                     ELSE false 
                 END as sla_breached
@@ -173,7 +173,7 @@ export async function POST(request) {
 
         // Get template stages to set initial stage
         const templateStages = await client.query(`
-            SELECT id, stage_name, stage_code 
+            SELECT id, stage_name, stage_code, sla_hours 
             FROM efiling_workflow_stages 
             WHERE template_id = $1 AND stage_order = 1
             ORDER BY stage_order ASC
@@ -187,6 +187,10 @@ export async function POST(request) {
         }
 
         const initialStage = templateStages.rows[0];
+        
+        // Calculate SLA deadline based on stage SLA hours (default to 24 hours if not set)
+        const slaHours = initialStage.sla_hours || 24;
+        const slaDeadline = `NOW() + INTERVAL '${slaHours} hours'`;
 
         // Create workflow
         const workflowResult = await client.query(`
@@ -194,7 +198,7 @@ export async function POST(request) {
                 file_id, template_id, current_stage_id, workflow_status,
                 started_at, current_assignee_id, sla_deadline, created_by, created_at
             ) VALUES ($1, $2, $3, 'IN_PROGRESS', NOW(), $4, 
-                NOW() + INTERVAL '24 hours', $5, NOW())
+                ${slaDeadline}, $5, NOW())
             RETURNING *
         `, [
             fileId,
