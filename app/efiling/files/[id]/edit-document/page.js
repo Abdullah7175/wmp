@@ -861,7 +861,7 @@ export default function DocumentEditor() {
                                                 id="title"
                                                 contentEditable={canEditDocument}
                                                 dangerouslySetInnerHTML={{ __html: (getCurrentPage().content.title) || '' }}
-                                                onBlur={(e) => updateCurrentPageContent({ title: e.target.innerHTML })}
+                                                onBlur={(e) => updateCurrentPageContent({ title: e.target.textContent })}
                                                 onInput={(e) => {
                                                     updateCurrentPageContent({ title: e.target.textContent });
                                                 }}
@@ -876,7 +876,7 @@ export default function DocumentEditor() {
                                                 id="subject"
                                                 contentEditable={canEditDocument}
                                                 dangerouslySetInnerHTML={{ __html: (getCurrentPage().content.subject) || '' }}
-                                                onBlur={(e) => updateCurrentPageContent({ subject: e.target.innerHTML })}
+                                                onBlur={(e) => updateCurrentPageContent({ subject: e.target.textContent })}
                                                 onInput={(e) => {
                                                     updateCurrentPageContent({ subject: e.target.textContent });
                                                 }}
@@ -891,7 +891,7 @@ export default function DocumentEditor() {
                                                 id="date"
                                                 contentEditable={canEditDocument}
                                                 dangerouslySetInnerHTML={{ __html: (getCurrentPage().content.date) || '' }}
-                                                onBlur={(e) => updateCurrentPageContent({ date: e.target.innerHTML })}
+                                                onBlur={(e) => updateCurrentPageContent({ date: e.target.textContent })}
                                                 onInput={(e) => {
                                                     updateCurrentPageContent({ date: e.target.textContent });
                                                 }}
@@ -937,7 +937,7 @@ export default function DocumentEditor() {
                                                     id="customRegards"
                                                     contentEditable={canEditDocument}
                                                     dangerouslySetInnerHTML={{ __html: (getCurrentPage().content.customRegards) || '' }}
-                                                    onBlur={(e) => updateCurrentPageContent({ customRegards: e.target.innerHTML })}
+                                                    onBlur={(e) => updateCurrentPageContent({ customRegards: e.target.textContent })}
                                                     onInput={(e) => {
                                                         updateCurrentPageContent({ customRegards: e.target.textContent });
                                                     }}
@@ -953,7 +953,7 @@ export default function DocumentEditor() {
                                                 id="footer"
                                                 contentEditable={canEditDocument}
                                                 dangerouslySetInnerHTML={{ __html: (getCurrentPage().content.footer) || '' }}
-                                                onBlur={(e) => updateCurrentPageContent({ footer: e.target.innerHTML })}
+                                                onBlur={(e) => updateCurrentPageContent({ footer: e.target.textContent })}
                                                 onInput={(e) => {
                                                     updateCurrentPageContent({ footer: e.target.textContent });
                                                 }}
