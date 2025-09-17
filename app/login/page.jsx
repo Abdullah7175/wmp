@@ -60,6 +60,19 @@ export default function LoginPage() {
   // Redirect authenticated users away from /login
   React.useEffect(() => {
     if (status === "authenticated" && session?.user) {
+      // Block e-filing users (role 4) from accessing video archiving system
+      if (session.user.userType === "user" && parseInt(session.user.role) === 4) {
+        toast({
+          title: "Access Denied",
+          description: "E-filing users are not allowed to access the video archiving system. Please use the e-filing portal instead.",
+          variant: "destructive",
+        });
+        setTimeout(() => {
+          window.location.href = "/elogin";
+        }, 3000);
+        return;
+      }
+      
       if (session.user.userType === "agent") window.location.href = "/agent";
       else if (session.user.userType === "socialmedia" || session.user.userType === "socialmediaperson") window.location.href = "/smagent";
       else if (session.user.userType === "user" && parseInt(session.user.role) === 5) window.location.href = "/ceo";
@@ -177,6 +190,21 @@ export default function LoginPage() {
               const sessionRes = await fetch("/api/auth/session");
               const session = await sessionRes.json();
               const userType = session?.user?.userType;
+              const userRole = session?.user?.role;
+              
+              // Block e-filing users (role 4) from accessing video archiving system
+              if (userType === "user" && parseInt(userRole) === 4) {
+                toast({
+                  title: "Access Denied",
+                  description: "E-filing users are not allowed to access the video archiving system. Please use the e-filing portal instead.",
+                  variant: "destructive",
+                });
+                setTimeout(() => {
+                  window.location.href = "/elogin";
+                }, 3000);
+                return;
+              }
+              
               switch (userType) {
                 case "agent":
                   window.location.href = "/agent";

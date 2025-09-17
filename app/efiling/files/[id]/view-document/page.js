@@ -71,10 +71,16 @@ export default function DocumentViewer() {
 			// Fetch work request details if work_request_id exists
 			console.log('File data:', fileData);
 			console.log('Work request ID:', fileData.work_request_id);
+			console.log('Work request ID type:', typeof fileData.work_request_id);
+			console.log('All file data keys:', Object.keys(fileData));
+			console.log('File data work_request_id value:', fileData.work_request_id);
+			console.log('Is work_request_id null?', fileData.work_request_id === null);
+			console.log('Is work_request_id undefined?', fileData.work_request_id === undefined);
 			
 			if (fileData.work_request_id) {
 				console.log('Fetching work request details for ID:', fileData.work_request_id);
 				const workRes = await fetch(`/api/requests?id=${fileData.work_request_id}`);
+				console.log('Work request response status:', workRes.status);
 				if (workRes.ok) {
 					const workData = await workRes.json();
 					console.log('Work request data:', workData);
@@ -83,15 +89,22 @@ export default function DocumentViewer() {
 					// Fetch before content for this work request
 					console.log('Fetching before content for work request:', fileData.work_request_id);
 					const contentRes = await fetch(`/api/before-content?workRequestId=${fileData.work_request_id}`);
+					console.log('Before content response status:', contentRes.status);
 					if (contentRes.ok) {
 						const contentData = await contentRes.json();
 						console.log('Before content data:', contentData);
+						console.log('Before content data type:', typeof contentData);
+						console.log('Before content is array:', Array.isArray(contentData));
 						setBeforeContent(Array.isArray(contentData) ? contentData : []);
 					} else {
 						console.error('Failed to fetch before content:', contentRes.status, contentRes.statusText);
+						const errorText = await contentRes.text();
+						console.error('Before content error response:', errorText);
 					}
 				} else {
 					console.error('Failed to fetch work request:', workRes.status, workRes.statusText);
+					const errorText = await workRes.text();
+					console.error('Work request error response:', errorText);
 				}
 			} else {
 				console.log('No work_request_id found in file data');
@@ -208,9 +221,48 @@ export default function DocumentViewer() {
 								<CardHeader><CardTitle className="text-lg text-yellow-800">Debug Info</CardTitle></CardHeader>
 								<CardContent className="text-xs">
 									<div>Work Request ID: {file?.work_request_id || 'None'}</div>
+									<div>Work Request ID Type: {typeof file?.work_request_id}</div>
 									<div>Work Request Data: {workRequest ? 'Loaded' : 'Not loaded'}</div>
 									<div>Before Content Count: {beforeContent?.length || 0}</div>
 									<div>File Number: {file?.file_number}</div>
+									<div>File ID: {file?.id}</div>
+									{workRequest && (
+										<div className="mt-2 p-2 bg-white rounded border">
+											<div className="font-semibold">Work Request Details:</div>
+											<div>ID: {workRequest.id}</div>
+											<div>Address: {workRequest.address}</div>
+											<div>Type: {workRequest.complaint_type}</div>
+											<div>Status: {workRequest.status_name}</div>
+										</div>
+									)}
+									<div className="mt-2">
+										<Button 
+											size="sm" 
+											variant="outline"
+											onClick={async () => {
+												if (file?.work_request_id) {
+													console.log('Testing direct API call for work request:', file.work_request_id);
+													try {
+														const testRes = await fetch(`/api/requests?id=${file.work_request_id}`);
+														console.log('Direct API test response status:', testRes.status);
+														if (testRes.ok) {
+															const testData = await testRes.json();
+															console.log('Direct API test data:', testData);
+														} else {
+															const errorText = await testRes.text();
+															console.log('Direct API test error:', errorText);
+														}
+													} catch (error) {
+														console.error('Direct API test error:', error);
+													}
+												} else {
+													console.log('No work_request_id to test');
+												}
+											}}
+										>
+											Test Work Request API
+										</Button>
+									</div>
 								</CardContent>
 							</Card>
 
@@ -240,18 +292,42 @@ export default function DocumentViewer() {
 								</CardContent>
 							</Card>
 
-							{workRequest && (
-								<Card>
-									<CardHeader><CardTitle className="text-lg">Work Request Details</CardTitle></CardHeader>
-									<CardContent className="space-y-3">
-										<div className="flex items-center space-x-2"><FileText className="w-4 h-4 text-gray-500"/><span className="text-sm text-gray-600">Request ID: #{workRequest.id}</span></div>
-										<div className="flex items-center space-x-2"><Building2 className="w-4 h-4 text-gray-500"/><span className="text-sm text-gray-600">Address: {workRequest.address || "N/A"}</span></div>
-										<div className="flex items-center space-x-2"><User className="w-4 h-4 text-gray-500"/><span className="text-sm text-gray-600">Type: {workRequest.complaint_type || "N/A"}</span></div>
-										<div className="flex items-center space-x-2"><Calendar className="w-4 h-4 text-gray-500"/><span className="text-sm text-gray-600">Created: {formatDate(workRequest.request_date)}</span></div>
-										<div className="flex items-center space-x-2"><Badge className={statusColor(workRequest.status_name)}>{workRequest.status_name || "Unknown"}</Badge></div>
-									</CardContent>
-								</Card>
-							)}
+							{/* Work Request Section - Always visible for debugging */}
+							<Card className={workRequest ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"}>
+								<CardHeader>
+									<CardTitle className={`text-lg ${workRequest ? "text-green-800" : "text-red-800"}`}>
+										Work Request Details {workRequest ? "✅" : "❌"}
+									</CardTitle>
+								</CardHeader>
+								<CardContent className="space-y-3">
+									{workRequest ? (
+										<>
+											<div className="flex items-center space-x-2"><FileText className="w-4 h-4 text-gray-500"/><span className="text-sm text-gray-600">Request ID: #{workRequest.id}</span></div>
+											<div className="flex items-center space-x-2"><Building2 className="w-4 h-4 text-gray-500"/><span className="text-sm text-gray-600">Address: {workRequest.address || "N/A"}</span></div>
+											<div className="flex items-center space-x-2"><User className="w-4 h-4 text-gray-500"/><span className="text-sm text-gray-600">Type: {workRequest.complaint_type || "N/A"}</span></div>
+											<div className="flex items-center space-x-2"><Calendar className="w-4 h-4 text-gray-500"/><span className="text-sm text-gray-600">Created: {formatDate(workRequest.request_date)}</span></div>
+											<div className="flex items-center space-x-2"><Badge className={statusColor(workRequest.status_name)}>{workRequest.status_name || "Unknown"}</Badge></div>
+											{workRequest.description && (
+												<div className="mt-3 p-2 bg-white rounded border">
+													<div className="text-xs font-semibold text-gray-700 mb-1">Description:</div>
+													<div className="text-xs text-gray-600">{workRequest.description}</div>
+												</div>
+											)}
+											{workRequest.contact_number && (
+												<div className="flex items-center space-x-2"><span className="text-xs text-gray-500">Contact: {workRequest.contact_number}</span></div>
+											)}
+										</>
+									) : (
+										<div className="text-sm text-red-600">
+											<div>❌ No work request data loaded</div>
+											<div className="mt-2 text-xs">
+												<div>File Work Request ID: {file?.work_request_id || 'None'}</div>
+												<div>Work Request State: {workRequest === null ? 'null' : workRequest === undefined ? 'undefined' : 'empty'}</div>
+											</div>
+										</div>
+									)}
+								</CardContent>
+							</Card>
 
 							{beforeContent.length > 0 && (
 								<Card>
