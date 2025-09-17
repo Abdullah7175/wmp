@@ -45,18 +45,17 @@ export default function DocumentEditor() {
     const [selectedTemplate, setSelectedTemplate] = useState(1);
     const [userRole, setUserRole] = useState('');
     const [canEditDocument, setCanEditDocument] = useState(false);
+    const [hasUserSigned, setHasUserSigned] = useState(false);
+    const [userEfilingId, setUserEfilingId] = useState(null);
     
     const [documentContent, setDocumentContent] = useState({
-        header: '',
         title: '',
         subject: '',
         date: new Date().toLocaleDateString(),
         matter: '',
         regards: '',
         footer: '',
-        customHeader: '',
-        customRegards: '',
-        logo: ''
+        customRegards: ''
     });
 
     const [pages, setPages] = useState([
@@ -65,16 +64,13 @@ export default function DocumentEditor() {
             pageNumber: 1,
             title: 'Main Document',
             content: {
-                header: '',
                 title: '',
                 subject: '',
                 date: new Date().toLocaleDateString(),
                 matter: '',
                 regards: '',
                 footer: '',
-                customHeader: '',
-                customRegards: '',
-                logo: ''
+                customRegards: ''
             },
             type: 'MAIN'
         }
@@ -95,13 +91,13 @@ export default function DocumentEditor() {
         }
     }, [params.id]);
 
-    // Check user permissions
+    // Check user permissions - Only file creators can edit in efilinguser
     useEffect(() => {
         if (session?.user) {
             const role = session.user.role || 'user';
             setUserRole(role);
-            const canEdit = role === 1;
-            setCanEditDocument(canEdit);
+            // In efilinguser, only file creators can edit (not admins)
+            setCanEditDocument(false); // Will be updated after file fetch
         }
     }, [session, file]);
 
@@ -113,11 +109,10 @@ export default function DocumentEditor() {
                     if (mapRes.ok) {
                         const map = await mapRes.json();
                         const efilingUserId = map?.efiling_user_id;
-                        const isAdmin = session.user.role === 1;
                         const isCreator = file.created_by === efilingUserId;
-                        const allowed = isAdmin || isCreator;
-                        setCanEditDocument(allowed);
-                        if (!allowed) {
+                        // In efilinguser, only file creators can edit (no admin override)
+                        setCanEditDocument(isCreator);
+                        if (!isCreator) {
                             router.replace(`/efilinguser/files/${params.id}`);
                         }
                     }
@@ -171,16 +166,15 @@ export default function DocumentEditor() {
                         
                         // Update canEditDocument based on whether user is the file creator
                         const isFileCreator = fileData.created_by === efilingUserId;
-                        const isAdmin = session.user.role === 1;
-                        setCanEditDocument(isAdmin || isFileCreator);
+                        // In efilinguser, only file creators can edit (no admin override)
+                        setCanEditDocument(isFileCreator);
                         
                         console.log('Edit access check:', {
                             userId: session.user.id,
                             efilingUserId: efilingUserId,
                             fileCreatedBy: fileData.created_by,
-                            isAdmin: isAdmin,
                             isFileCreator: isFileCreator,
-                            canEdit: isAdmin || isFileCreator
+                            canEdit: isFileCreator
                         });
                     }
                 }
@@ -259,16 +253,13 @@ export default function DocumentEditor() {
             pageNumber: newPageNumber,
             title: `Page ${newPageNumber}`,
             content: {
-                header: '',
                 title: '',
                 subject: '',
                 date: new Date().toLocaleDateString(),
                 matter: '',
                 regards: '',
                 footer: '',
-            customHeader: '',
-            customRegards: '',
-                logo: ''
+                customRegards: ''
             },
             type: 'ATTACHMENT'
         };
@@ -334,72 +325,57 @@ export default function DocumentEditor() {
         switch (templateId) {
             case 1: // Official Letter
                 templateContent = {
-                    header: 'Karachi Water and Sewerage Corporation',
                     title: 'Official Letter',
                     subject: '',
                     date: new Date().toLocaleDateString(),
                     matter: '',
                     regards: 'Yours faithfully,',
                     footer: 'KWSC - Official Communication',
-                    customHeader: '',
-                    customRegards: '',
-                    logo: ''
+                    customRegards: ''
                 };
                 break;
             case 2: // Internal Memo
                 templateContent = {
-                    header: 'KWSC Internal Memorandum',
                     title: 'Internal Memo',
                     subject: '',
                     date: new Date().toLocaleDateString(),
                     matter: '',
                     regards: 'Best regards,',
                     footer: 'KWSC Internal Communication',
-                    customHeader: '',
-                    customRegards: '',
-                    logo: ''
+                    customRegards: ''
                 };
                 break;
             case 3: // Project Proposal
                 templateContent = {
-                    header: 'KWSC Project Proposal',
                     title: 'Project Proposal',
                     subject: '',
                     date: new Date().toLocaleDateString(),
                     matter: '',
                     regards: 'Sincerely,',
                     footer: 'KWSC Project Management',
-                    customHeader: '',
-                    customRegards: '',
-                    logo: ''
+                    customRegards: ''
                 };
                 break;
             case 4: // Work Order
                 templateContent = {
-                    header: 'KWSC Work Order',
                     title: 'Work Order',
                     subject: '',
                     date: new Date().toLocaleDateString(),
                     matter: '',
                     regards: 'Authorized by,',
                     footer: 'KWSC Engineering Department',
-                    customHeader: '',
-                    customRegards: '',
-                    logo: ''
+                    customRegards: ''
                 };
                 break;
             case 5: // Custom Document
                 templateContent = {
-                    header: 'Custom Header',
                     title: '',
                     subject: '',
                     date: new Date().toLocaleDateString(),
                     matter: '',
                     regards: 'Custom Regards',
                     footer: '',
-                    customHeader: '',
-                    customRegards: '',
-                    logo: ''
+                    customRegards: ''
                 };
                 break;
             default:
@@ -859,96 +835,23 @@ export default function DocumentEditor() {
                                 </CardHeader>
                                 <CardContent className="space-y-6">
                                     <div className="space-y-4">
-                                        {/* Logo Section */}
-                                        <div>
-                                            <Label htmlFor="logo">Logo (Top Left Corner)</Label>
-                                            <div className="flex items-center gap-4">
-                                                <div
-                                                    id="logo"
-                                                    contentEditable={canEditDocument}
-                                                    dangerouslySetInnerHTML={{ __html: getCurrentPage().content.logo || '' }}
-                                                    onBlur={(e) => updateCurrentPageContent({ logo: e.target.innerHTML })}
-                                                    onInput={(e) => {
-                                                        updateCurrentPageContent({ logo: e.target.innerHTML });
-                                                    }}
-                                                    className="w-32 h-20 border border-gray-300 rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent flex items-center justify-center"
-                                                    data-placeholder="Click to add logo"
-                                                    style={{ minHeight: '80px' }}
+                                        {/* Fixed KWSC Header */}
+                                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+                                            <div className="flex items-center justify-center space-x-4">
+                                                <img 
+                                                    src="/logo.png" 
+                                                    alt="KWSC Logo" 
+                                                    className="h-16 w-auto"
                                                 />
-                                                <div className="flex flex-col gap-2">
-                                                    <Button
-                                                        variant="outline"
-                                                        size="sm"
-                                                        onClick={() => {
-                                                            const input = document.createElement('input');
-                                                            input.type = 'file';
-                                                            input.accept = 'image/*';
-                                                            input.onchange = (e) => {
-                                                                const file = e.target.files[0];
-                                                                if (file) {
-                                                                    const reader = new FileReader();
-                                                                    reader.onload = (event) => {
-                                                                        const logoUrl = event.target.result;
-                                                                        updateCurrentPageContent({ logo: `<img src="${logoUrl}" alt="Logo" class="max-w-full max-h-full object-contain" />` });
-                                                                    };
-                                                                    reader.readAsDataURL(file);
-                                                                }
-                                                            };
-                                                            input.click();
-                                                        }}
-                                                        disabled={!canEditDocument}
-                                                    >
-                                                        Upload Logo
-                                                    </Button>
-                                                    {getCurrentPage().content.logo && (
-                                                        <Button
-                                                            variant="outline"
-                                                            size="sm"
-                                                            onClick={() => updateCurrentPageContent({ logo: '' })}
-                                                            disabled={!canEditDocument}
-                                                        >
-                                                            Remove Logo
-                                                        </Button>
-                                                    )}
+                                                <div className="text-center">
+                                                    <h1 className="text-2xl font-bold text-blue-900">
+                                                        Karachi Water & Sewerage Corporation
+                                                    </h1>
+                                                    <p className="text-sm text-blue-700 mt-1">
+                                                        Government of Sindh
+                                                    </p>
                                                 </div>
                                             </div>
-                                            <p className="text-sm text-gray-500 mt-1">
-                                                Upload a logo image to display in the top left corner of your document
-                                            </p>
-                                        </div>
-
-                                        <div>
-                                            <Label htmlFor="header">Header</Label>
-                                            <Select 
-                                                value={(getCurrentPage().content.header) || ''} 
-                                                onValueChange={(value) => updateCurrentPageContent({ header: value })}
-                                                disabled={!canEditDocument}
-                                            >
-                                                <SelectTrigger id="header">
-                                                    <SelectValue placeholder="Select header" />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectItem value="Government of Pakistan">Government of Pakistan</SelectItem>
-                                                    <SelectItem value="Provincial Government">Provincial Government</SelectItem>
-                                                    <SelectItem value="Local Government">Local Government</SelectItem>
-                                                    <SelectItem value="Department of Works">Department of Works</SelectItem>
-                                                    <SelectItem value="Custom">Custom</SelectItem>
-                                                </SelectContent>
-                                            </Select>
-                                            {getCurrentPage().content.header === 'Custom' && (
-                                                <div
-                                                    id="customHeader"
-                                                    contentEditable={canEditDocument}
-                                                    dangerouslySetInnerHTML={{ __html: (getCurrentPage().content.customHeader) || '' }}
-                                                    onBlur={(e) => updateCurrentPageContent({ customHeader: e.target.innerHTML })}
-                                                    onInput={(e) => {
-                                                        updateCurrentPageContent({ customHeader: e.target.innerHTML });
-                                                    }}
-                                                    className="w-full p-2 border border-gray-300 rounded-md min-h-[40px] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent mt-2"
-                                                    data-placeholder="Enter custom header"
-                                                    style={{ minHeight: '40px' }}
-                                                />
-                                            )}
                                         </div>
                                         <div>
                                             <Label htmlFor="title">Title</Label>
@@ -958,7 +861,7 @@ export default function DocumentEditor() {
                                                 dangerouslySetInnerHTML={{ __html: (getCurrentPage().content.title) || '' }}
                                                 onBlur={(e) => updateCurrentPageContent({ title: e.target.innerHTML })}
                                                 onInput={(e) => {
-                                                    updateCurrentPageContent({ title: e.target.innerHTML });
+                                                    updateCurrentPageContent({ title: e.target.textContent });
                                                 }}
                                                 className="w-full p-2 border border-gray-300 rounded-md min-h-[40px] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                                 data-placeholder="Enter document title"
@@ -973,7 +876,7 @@ export default function DocumentEditor() {
                                                 dangerouslySetInnerHTML={{ __html: (getCurrentPage().content.subject) || '' }}
                                                 onBlur={(e) => updateCurrentPageContent({ subject: e.target.innerHTML })}
                                                 onInput={(e) => {
-                                                    updateCurrentPageContent({ subject: e.target.innerHTML });
+                                                    updateCurrentPageContent({ subject: e.target.textContent });
                                                 }}
                                                 className="w-full p-2 border border-gray-300 rounded-md min-h-[40px] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                                 data-placeholder="Enter document subject"
@@ -988,7 +891,7 @@ export default function DocumentEditor() {
                                                 dangerouslySetInnerHTML={{ __html: (getCurrentPage().content.date) || '' }}
                                                 onBlur={(e) => updateCurrentPageContent({ date: e.target.innerHTML })}
                                                 onInput={(e) => {
-                                                    updateCurrentPageContent({ date: e.target.innerHTML });
+                                                    updateCurrentPageContent({ date: e.target.textContent });
                                                 }}
                                                 className="w-full p-2 border border-gray-300 rounded-md min-h-[40px] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                                 data-placeholder="Enter date"
@@ -1034,7 +937,7 @@ export default function DocumentEditor() {
                                                     dangerouslySetInnerHTML={{ __html: (getCurrentPage().content.customRegards) || '' }}
                                                     onBlur={(e) => updateCurrentPageContent({ customRegards: e.target.innerHTML })}
                                                     onInput={(e) => {
-                                                        updateCurrentPageContent({ customRegards: e.target.innerHTML });
+                                                        updateCurrentPageContent({ customRegards: e.target.textContent });
                                                     }}
                                                     className="w-full p-2 border border-gray-300 rounded-md min-h-[40px] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent mt-2"
                                                     data-placeholder="Enter custom regards"
@@ -1050,7 +953,7 @@ export default function DocumentEditor() {
                                                 dangerouslySetInnerHTML={{ __html: (getCurrentPage().content.footer) || '' }}
                                                 onBlur={(e) => updateCurrentPageContent({ footer: e.target.innerHTML })}
                                                 onInput={(e) => {
-                                                    updateCurrentPageContent({ footer: e.target.innerHTML });
+                                                    updateCurrentPageContent({ footer: e.target.textContent });
                                                 }}
                                                 className="w-full p-2 border border-gray-300 rounded-md min-h-[40px] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                                 data-placeholder="Enter footer text"
@@ -1083,10 +986,22 @@ export default function DocumentEditor() {
                                 <CardContent>
                                     {/* A4 Page Container */}
                                     <div className="bg-white border border-gray-300 shadow-lg mx-auto" style={{ width: '210mm', minHeight: '297mm', padding: '20mm' }}>
-                                        {/* Header */}
-                                        <div className="text-center mb-8">
-                                            <div className="text-lg font-semibold text-gray-800 mb-2">
-                                                {documentContent.header || 'Document Header'}
+                                        {/* Fixed KWSC Header */}
+                                        <div className="text-center mb-8 border-b border-gray-300 pb-4">
+                                            <div className="flex items-center justify-center space-x-4 mb-4">
+                                                <img 
+                                                    src="/logo.png" 
+                                                    alt="KWSC Logo" 
+                                                    className="h-12 w-auto"
+                                                />
+                                                <div className="text-center">
+                                                    <h1 className="text-xl font-bold text-blue-900">
+                                                        Karachi Water & Sewerage Corporation
+                                                    </h1>
+                                                    <p className="text-sm text-blue-700">
+                                                        Government of Sindh
+                                                    </p>
+                                                </div>
                                             </div>
                                         </div>
 

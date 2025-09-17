@@ -47,17 +47,33 @@ export default function DocumentEditor() {
     const [canEditDocument, setCanEditDocument] = useState(false);
     
     const [documentContent, setDocumentContent] = useState({
-        header: '',
         title: '',
         subject: '',
         date: new Date().toLocaleDateString(),
         matter: '',
         regards: '',
         footer: '',
-        customHeader: '',
-        customRegards: '',
-        logo: ''
+        customRegards: ''
     });
+
+    const [pages, setPages] = useState([
+        {
+            id: 1,
+            pageNumber: 1,
+            title: 'Main Document',
+            content: {
+                title: '',
+                subject: '',
+                date: new Date().toLocaleDateString(),
+                matter: '',
+                regards: '',
+                footer: '',
+                customRegards: ''
+            },
+            type: 'MAIN'
+        }
+    ]);
+    const [currentPageId, setCurrentPageId] = useState(1);
 
     const [documentTemplates] = useState([
         { id: 1, name: 'Official Letter', type: 'letter' },
@@ -73,24 +89,41 @@ export default function DocumentEditor() {
         }
     }, [params.id]);
 
-    // Check user permissions
+    // Check user permissions - Admin level (efiling) has all rights
     useEffect(() => {
         if (session?.user) {
-            // Get user role from session or database
             const role = session.user.role || 'user';
             setUserRole(role);
-            
-            // Determine if user can edit document
-            // Allow editing for admin users (role 1) or file creators
-            // Note: file.created_by is efiling_users.id, session.user.id is users.id
-            // We need to check if the current user is the file creator by mapping the IDs
-            const canEdit = role === 1; // Admin can always edit
-            
-            // For non-admin users, we'll need to check if they're the file creator
-            // This will be handled by the API when we fetch the user's efiling_users.id
+            // Admin users (role 1) in efiling have all rights
+            const canEdit = role === 1;
             setCanEditDocument(canEdit);
         }
     }, [session, file]);
+
+    useEffect(() => {
+        if (!loading && file && session?.user?.id) {
+            (async () => {
+                try {
+                    const mapRes = await fetch(`/api/efiling/users/profile?userId=${session.user.id}`);
+                    if (mapRes.ok) {
+                        const map = await mapRes.json();
+                        const efilingUserId = map?.efiling_user_id;
+                        const isAdmin = session.user.role === 1;
+                        const isCreator = file.created_by === efilingUserId;
+                        // Admin can always edit, creator can edit their own files
+                        const allowed = isAdmin || isCreator;
+                        setCanEditDocument(allowed);
+                        if (!allowed) {
+                            router.replace(`/efiling/files/${params.id}`);
+                        }
+                    }
+                } catch (e) {
+                    // If mapping fails, be safe and block edit
+                    router.replace(`/efiling/files/${params.id}`);
+                }
+            })();
+        }
+    }, [loading, file, session?.user?.id]);
 
     const fetchFile = async () => {
         try {
@@ -99,12 +132,30 @@ export default function DocumentEditor() {
                 const fileData = await response.json();
                 setFile(fileData);
                 
-                // Load existing document content if available
-                if (fileData.document_content) {
+                // Fetch document content and pages
+                const docResponse = await fetch(`/api/efiling/files/${params.id}/document`);
+                if (docResponse.ok) {
+                    const docData = await docResponse.json();
+                    
+                    // Load pages if they exist
+                    if (docData.pages && docData.pages.length > 0) {
+                        const loadedPages = docData.pages.map(page => ({
+                            id: page.id,
+                            pageNumber: page.pageNumber,
+                            title: page.title,
+                            content: page.content,
+                            type: page.type
+                        }));
+                        setPages(loadedPages);
+                        setCurrentPageId(loadedPages[0].id);
+                        console.log('Loaded pages:', loadedPages);
+                    } else if (docData.document_content) {
+                        // Fallback to single page with document content
                     setDocumentContent(prev => ({
                         ...prev,
-                        ...fileData.document_content
+                            ...docData.document_content
                     }));
+                    }
                 }
                 
                 // Check if current user is the file creator
@@ -157,21 +208,25 @@ export default function DocumentEditor() {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    file_id: params.id,
-                    content: documentContent,
-                    version: 1
+                    content: getCurrentPage().content,
+                    pages: pages,
+                    template: selectedTemplate
                 }),
             });
 
             if (response.ok) {
+                const result = await response.json();
                 toast({
                     title: "Success",
                     description: "Document saved successfully",
                 });
+                console.log('Document saved:', result);
             } else {
+                const errorData = await response.json();
+                console.error('Save error:', errorData);
                 toast({
                     title: "Error",
-                    description: "Failed to save document",
+                    description: errorData.error || "Failed to save document",
                     variant: "destructive",
                 });
             }
@@ -191,87 +246,150 @@ export default function DocumentEditor() {
         setShowMarkToModal(true);
     };
 
+    const addNewPage = () => {
+        const newPageId = Math.max(...pages.map(p => p.id)) + 1;
+        const newPageNumber = Math.max(...pages.map(p => p.pageNumber)) + 1;
+        
+        const newPage = {
+            id: newPageId,
+            pageNumber: newPageNumber,
+            title: `Page ${newPageNumber}`,
+            content: {
+                title: '',
+                subject: '',
+                date: new Date().toLocaleDateString(),
+                matter: '',
+                regards: '',
+                footer: '',
+                customRegards: ''
+            },
+            type: 'ATTACHMENT'
+        };
+        
+        setPages(prev => [...prev, newPage]);
+        setCurrentPageId(newPageId);
+        
+        toast({
+            title: "New Page Added",
+            description: `Page ${newPageNumber} has been added to the document`,
+        });
+    };
+
+    const deletePage = (pageId) => {
+        if (pages.length <= 1) {
+            toast({
+                title: "Cannot Delete",
+                description: "At least one page must remain in the document",
+                variant: "destructive",
+            });
+            return;
+        }
+        
+        const pageToDelete = pages.find(p => p.id === pageId);
+        setPages(prev => prev.filter(p => p.id !== pageId));
+        
+        // If we're deleting the current page, switch to the first remaining page
+        if (currentPageId === pageId) {
+            const remainingPages = pages.filter(p => p.id !== pageId);
+            setCurrentPageId(remainingPages[0].id);
+        }
+        
+        toast({
+            title: "Page Deleted",
+            description: `${pageToDelete.title} has been removed from the document`,
+        });
+    };
+
+    const updatePageTitle = (pageId, newTitle) => {
+        setPages(prev => prev.map(p => 
+            p.id === pageId ? { ...p, title: newTitle } : p
+        ));
+    };
+
+    const getCurrentPage = () => {
+        return pages.find(p => p.id === currentPageId) || pages[0];
+    };
+
+    const updateCurrentPageContent = (content) => {
+        setPages(prev => prev.map(p => 
+            p.id === currentPageId ? { ...p, content: { ...p.content, ...content } } : p
+        ));
+    };
+
     const selectTemplate = (templateId) => {
         setSelectedTemplate(templateId);
         
-        // Clear custom fields when template changes
-        setDocumentContent(prev => ({
-            ...prev,
-            customHeader: '',
-            customRegards: '',
-            logo: '' // Clear logo when template changes
-        }));
+        const currentPage = getCurrentPage();
         
-        // Apply template-specific content
+        // Apply template-specific content to current page
+        let templateContent = {};
+        
         switch (templateId) {
             case 1: // Official Letter
-                setDocumentContent(prev => ({
-                    ...prev,
-                    header: 'Karachi Water and Sewerage Corporation',
+                templateContent = {
                     title: 'Official Letter',
                     subject: '',
                     date: new Date().toLocaleDateString(),
                     matter: '',
                     regards: 'Yours faithfully,',
-                    footer: 'KWSC - Official Communication'
-                }));
+                    footer: 'KWSC - Official Communication',
+                    customRegards: ''
+                };
                 break;
             case 2: // Internal Memo
-                setDocumentContent(prev => ({
-                    ...prev,
-                    header: 'KWSC Internal Memorandum',
+                templateContent = {
                     title: 'Internal Memo',
                     subject: '',
                     date: new Date().toLocaleDateString(),
                     matter: '',
                     regards: 'Best regards,',
-                    footer: 'KWSC Internal Communication'
-                }));
+                    footer: 'KWSC Internal Communication',
+                    customRegards: ''
+                };
                 break;
             case 3: // Project Proposal
-                setDocumentContent(prev => ({
-                    ...prev,
-                    header: 'KWSC Project Proposal',
+                templateContent = {
                     title: 'Project Proposal',
                     subject: '',
                     date: new Date().toLocaleDateString(),
                     matter: '',
                     regards: 'Sincerely,',
-                    footer: 'KWSC Project Management'
-                }));
+                    footer: 'KWSC Project Management',
+                    customRegards: ''
+                };
                 break;
             case 4: // Work Order
-                setDocumentContent(prev => ({
-                    ...prev,
-                    header: 'KWSC Work Order',
+                templateContent = {
                     title: 'Work Order',
                     subject: '',
                     date: new Date().toLocaleDateString(),
                     matter: '',
                     regards: 'Authorized by,',
-                    footer: 'KWSC Engineering Department'
-                }));
+                    footer: 'KWSC Engineering Department',
+                    customRegards: ''
+                };
                 break;
             case 5: // Custom Document
-                setDocumentContent(prev => ({
-                    ...prev,
-                    header: 'Custom Header',
+                templateContent = {
                     title: '',
                     subject: '',
                     date: new Date().toLocaleDateString(),
                     matter: '',
                     regards: 'Custom Regards',
                     footer: '',
-                    logo: '' // Clear logo for custom document
-                }));
+                    customRegards: ''
+                };
                 break;
             default:
-                break;
+                return;
         }
+        
+        // Update current page content
+        updateCurrentPageContent(templateContent);
         
         toast({
             title: "Template Applied",
-            description: "Document template has been applied successfully",
+            description: "Document template has been applied to current page",
         });
     };
 
@@ -525,7 +643,7 @@ export default function DocumentEditor() {
                             Back
                         </Button>
                         <div>
-                            <h1 className="text-xl font-bold text-gray-900">Document Editor</h1>
+                            <h1 className="text-xl font-bold text-gray-900">Document Editor (Admin)</h1>
                             <p className="text-sm text-gray-600">File: {file.file_number}</p>
                             
                             {/* Editor Type Toggle */}
@@ -595,9 +713,46 @@ export default function DocumentEditor() {
                     </div>
                 </div>
 
-                {/* Template Buttons */}
+                {/* Page Tabs */}
                 <div className="border-t border-gray-200 p-2">
+                    <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-2 flex-wrap">
+                            <Label className="text-sm font-medium">Pages:</Label>
+                            {pages.map((page) => (
+                                <div key={page.id} className="flex items-center space-x-1">
+                                    <Button
+                                        variant={currentPageId === page.id ? "default" : "outline"}
+                                        size="sm"
+                                        onClick={() => setCurrentPageId(page.id)}
+                                        className="flex items-center space-x-1"
+                                    >
+                                        <span>{page.title}</span>
+                                    </Button>
+                                    {pages.length > 1 && (
+                                        <button
+                                            onClick={() => deletePage(page.id)}
+                                            className="ml-1 text-red-500 hover:text-red-700 text-sm font-bold w-5 h-5 flex items-center justify-center rounded-full hover:bg-red-100"
+                                            disabled={!canEditDocument}
+                                            title="Delete page"
+                                        >
+                                            ×
+                                        </button>
+                                    )}
+                                </div>
+                            ))}
+                            {canEditDocument && (
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={addNewPage}
+                                    className="text-green-600 border-green-600 hover:bg-green-50"
+                                >
+                                    + Add Page
+                                </Button>
+                            )}
+                        </div>
+                        
+                        <div className="flex items-center space-x-2">
                         <Label className="text-sm font-medium">Templates:</Label>
                         <Button
                             variant={selectedTemplate === 1 ? "default" : "outline"}
@@ -639,11 +794,12 @@ export default function DocumentEditor() {
                         >
                             📋 Custom
                         </Button>
+                        </div>
                     </div>
                 </div>
 
                 {/* Formatting Toolbar */}
-                {/*  */}
+                
             </div>
 
             {/* Main Content */}
@@ -656,7 +812,14 @@ export default function DocumentEditor() {
                             <Card className="min-h-[800px]">
                                 <CardHeader>
                                     <CardTitle className="flex items-center justify-between">
-                                        <span>Document Content</span>
+                                        <span>Document Content - {getCurrentPage().title}</span>
+                                        <div className="flex items-center space-x-2">
+                                            <Input
+                                                value={getCurrentPage().title}
+                                                onChange={(e) => updatePageTitle(currentPageId, e.target.value)}
+                                                className="w-48"
+                                                disabled={!canEditDocument}
+                                            />
                                         <Select value={selectedTemplate.toString()} onValueChange={(value) => selectTemplate(parseInt(value))}>
                                             <SelectTrigger className="w-48">
                                                 <SelectValue placeholder="Select Template" />
@@ -669,111 +832,38 @@ export default function DocumentEditor() {
                                                 ))}
                                             </SelectContent>
                                         </Select>
+                                        </div>
                                     </CardTitle>
                                 </CardHeader>
                                 <CardContent className="space-y-6">
                                     <div className="space-y-4">
-                                        {/* Logo Section */}
-                                        <div>
-                                            <Label htmlFor="logo">Logo (Top Left Corner)</Label>
-                                            <div className="flex items-center gap-4">
-                                                <div
-                                                    id="logo"
-                                                    contentEditable={canEditDocument}
-                                                    dangerouslySetInnerHTML={{ __html: documentContent.logo || '' }}
-                                                    onBlur={(e) => setDocumentContent(prev => ({ ...prev, logo: e.target.innerHTML }))}
-                                                    onInput={(e) => {
-                                                        setDocumentContent(prev => ({ ...prev, logo: e.target.innerHTML }));
-                                                    }}
-                                                    className="w-32 h-20 border border-gray-300 rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent flex items-center justify-center"
-                                                    data-placeholder="Click to add logo"
-                                                    style={{ minHeight: '80px' }}
+                                        {/* Fixed KWSC Header */}
+                                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+                                            <div className="flex items-center justify-center space-x-4">
+                                                <img 
+                                                    src="/logo.png" 
+                                                    alt="KWSC Logo" 
+                                                    className="h-16 w-auto"
                                                 />
-                                                <div className="flex flex-col gap-2">
-                                                    <Button
-                                                        variant="outline"
-                                                        size="sm"
-                                                        onClick={() => {
-                                                            const input = document.createElement('input');
-                                                            input.type = 'file';
-                                                            input.accept = 'image/*';
-                                                            input.onchange = (e) => {
-                                                                const file = e.target.files[0];
-                                                                if (file) {
-                                                                    const reader = new FileReader();
-                                                                    reader.onload = (event) => {
-                                                                        const logoUrl = event.target.result;
-                                                                        setDocumentContent(prev => ({ ...prev, logo: `<img src="${logoUrl}" alt="Logo" class="max-w-full max-h-full object-contain" />` }));
-                                                                    };
-                                                                    reader.readAsDataURL(file);
-                                                                }
-                                                            };
-                                                            input.click();
-                                                        }}
-                                                        disabled={!canEditDocument}
-                                                    >
-                                                        Upload Logo
-                                                    </Button>
-                                                    {documentContent.logo && (
-                                                        <Button
-                                                            variant="outline"
-                                                            size="sm"
-                                                            onClick={() => setDocumentContent(prev => ({ ...prev, logo: '' }))}
-                                                            disabled={!canEditDocument}
-                                                        >
-                                                            Remove Logo
-                                                        </Button>
-                                                    )}
+                                                <div className="text-center">
+                                                    <h1 className="text-2xl font-bold text-blue-900">
+                                                        Karachi Water & Sewerage Corporation
+                                                    </h1>
+                                                    <p className="text-sm text-blue-700 mt-1">
+                                                        Government of Sindh
+                                                    </p>
                                                 </div>
                                             </div>
-                                            <p className="text-sm text-gray-500 mt-1">
-                                                Upload a logo image to display in the top left corner of your document
-                                            </p>
-                                        </div>
-
-                                        <div>
-                                            <Label htmlFor="header">Header</Label>
-                                            <Select 
-                                                value={documentContent.header} 
-                                                onValueChange={(value) => setDocumentContent(prev => ({ ...prev, header: value }))}
-                                                disabled={!canEditDocument}
-                                            >
-                                                <SelectTrigger>
-                                                    <SelectValue placeholder="Select header" />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectItem value="Government of Pakistan">Government of Pakistan</SelectItem>
-                                                    <SelectItem value="Provincial Government">Provincial Government</SelectItem>
-                                                    <SelectItem value="Local Government">Local Government</SelectItem>
-                                                    <SelectItem value="Department of Works">Department of Works</SelectItem>
-                                                    <SelectItem value="Custom">Custom</SelectItem>
-                                                </SelectContent>
-                                            </Select>
-                                            {documentContent.header === 'Custom' && (
-                                                <div
-                                                    id="customHeader"
-                                                    contentEditable={canEditDocument}
-                                                    dangerouslySetInnerHTML={{ __html: documentContent.customHeader }}
-                                                    onBlur={(e) => setDocumentContent(prev => ({ ...prev, customHeader: e.target.innerHTML }))}
-                                                    onInput={(e) => {
-                                                        setDocumentContent(prev => ({ ...prev, customHeader: e.target.innerHTML }));
-                                                    }}
-                                                    className="w-full p-2 border border-gray-300 rounded-md min-h-[40px] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent mt-2"
-                                                    data-placeholder="Enter custom header"
-                                                    style={{ minHeight: '40px' }}
-                                                />
-                                            )}
                                         </div>
                                         <div>
                                             <Label htmlFor="title">Title</Label>
                                             <div
                                                 id="title"
                                                 contentEditable={canEditDocument}
-                                                dangerouslySetInnerHTML={{ __html: documentContent.title }}
-                                                onBlur={(e) => setDocumentContent(prev => ({ ...prev, title: e.target.innerHTML }))}
+                                                dangerouslySetInnerHTML={{ __html: (getCurrentPage().content.title) || '' }}
+                                                onBlur={(e) => updateCurrentPageContent({ title: e.target.innerHTML })}
                                                 onInput={(e) => {
-                                                    // Update state as user types
-                                                    setDocumentContent(prev => ({ ...prev, title: e.target.innerHTML }));
+                                                    updateCurrentPageContent({ title: e.target.textContent });
                                                 }}
                                                 className="w-full p-2 border border-gray-300 rounded-md min-h-[40px] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                                 data-placeholder="Enter document title"
@@ -785,10 +875,10 @@ export default function DocumentEditor() {
                                             <div
                                                 id="subject"
                                                 contentEditable={canEditDocument}
-                                                dangerouslySetInnerHTML={{ __html: documentContent.subject }}
-                                                onBlur={(e) => setDocumentContent(prev => ({ ...prev, subject: e.target.innerHTML }))}
+                                                dangerouslySetInnerHTML={{ __html: (getCurrentPage().content.subject) || '' }}
+                                                onBlur={(e) => updateCurrentPageContent({ subject: e.target.innerHTML })}
                                                 onInput={(e) => {
-                                                    setDocumentContent(prev => ({ ...prev, subject: e.target.innerHTML }));
+                                                    updateCurrentPageContent({ subject: e.target.textContent });
                                                 }}
                                                 className="w-full p-2 border border-gray-300 rounded-md min-h-[40px] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                                 data-placeholder="Enter document subject"
@@ -800,10 +890,10 @@ export default function DocumentEditor() {
                                             <div
                                                 id="date"
                                                 contentEditable={canEditDocument}
-                                                dangerouslySetInnerHTML={{ __html: documentContent.date }}
-                                                onBlur={(e) => setDocumentContent(prev => ({ ...prev, date: e.target.innerHTML }))}
+                                                dangerouslySetInnerHTML={{ __html: (getCurrentPage().content.date) || '' }}
+                                                onBlur={(e) => updateCurrentPageContent({ date: e.target.innerHTML })}
                                                 onInput={(e) => {
-                                                    setDocumentContent(prev => ({ ...prev, date: e.target.innerHTML }));
+                                                    updateCurrentPageContent({ date: e.target.textContent });
                                                 }}
                                                 className="w-full p-2 border border-gray-300 rounded-md min-h-[40px] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                                 data-placeholder="Enter date"
@@ -813,8 +903,8 @@ export default function DocumentEditor() {
                                         <div>
                                             <Label htmlFor="matter">Main Matter</Label>
                                             <TipTapEditor
-                                                value={documentContent.matter}
-                                                onChange={(value) => setDocumentContent(prev => ({ ...prev, matter: value }))}
+                                                value={(getCurrentPage().content.matter) || ''}
+                                                onChange={(value) => updateCurrentPageContent({ matter: value })}
                                                 placeholder="Enter main content..."
                                                 className="min-h-[200px]"
                                                 readOnly={!canEditDocument}
@@ -828,11 +918,11 @@ export default function DocumentEditor() {
                                         <div>
                                             <Label htmlFor="regards">Regards</Label>
                                             <Select 
-                                                value={documentContent.regards} 
-                                                onValueChange={(value) => setDocumentContent(prev => ({ ...prev, regards: value }))}
+                                                value={(getCurrentPage().content.regards) || ''} 
+                                                onValueChange={(value) => updateCurrentPageContent({ regards: value })}
                                                 disabled={!canEditDocument}
                                             >
-                                                <SelectTrigger>
+                                                <SelectTrigger id="regards">
                                                     <SelectValue placeholder="Select regards" />
                                                 </SelectTrigger>
                                                 <SelectContent>
@@ -842,14 +932,14 @@ export default function DocumentEditor() {
                                                     <SelectItem value="Custom">Custom</SelectItem>
                                                 </SelectContent>
                                             </Select>
-                                            {documentContent.regards === 'Custom' && (
+                                            {getCurrentPage().content.regards === 'Custom' && (
                                                 <div
                                                     id="customRegards"
                                                     contentEditable={canEditDocument}
-                                                    dangerouslySetInnerHTML={{ __html: documentContent.customRegards }}
-                                                    onBlur={(e) => setDocumentContent(prev => ({ ...prev, customRegards: e.target.innerHTML }))}
+                                                    dangerouslySetInnerHTML={{ __html: (getCurrentPage().content.customRegards) || '' }}
+                                                    onBlur={(e) => updateCurrentPageContent({ customRegards: e.target.innerHTML })}
                                                     onInput={(e) => {
-                                                        setDocumentContent(prev => ({ ...prev, customRegards: e.target.innerHTML }));
+                                                        updateCurrentPageContent({ customRegards: e.target.textContent });
                                                     }}
                                                     className="w-full p-2 border border-gray-300 rounded-md min-h-[40px] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent mt-2"
                                                     data-placeholder="Enter custom regards"
@@ -862,10 +952,10 @@ export default function DocumentEditor() {
                                             <div
                                                 id="footer"
                                                 contentEditable={canEditDocument}
-                                                dangerouslySetInnerHTML={{ __html: documentContent.footer }}
-                                                onBlur={(e) => setDocumentContent(prev => ({ ...prev, footer: e.target.innerHTML }))}
+                                                dangerouslySetInnerHTML={{ __html: (getCurrentPage().content.footer) || '' }}
+                                                onBlur={(e) => updateCurrentPageContent({ footer: e.target.innerHTML })}
                                                 onInput={(e) => {
-                                                    setDocumentContent(prev => ({ ...prev, footer: e.target.innerHTML }));
+                                                    updateCurrentPageContent({ footer: e.target.textContent });
                                                 }}
                                                 className="w-full p-2 border border-gray-300 rounded-md min-h-[40px] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                                 data-placeholder="Enter footer text"
@@ -898,10 +988,22 @@ export default function DocumentEditor() {
                                 <CardContent>
                                     {/* A4 Page Container */}
                                     <div className="bg-white border border-gray-300 shadow-lg mx-auto" style={{ width: '210mm', minHeight: '297mm', padding: '20mm' }}>
-                                        {/* Header */}
-                                        <div className="text-center mb-8">
-                                            <div className="text-lg font-semibold text-gray-800 mb-2">
-                                                {documentContent.header || 'Document Header'}
+                                        {/* Fixed KWSC Header */}
+                                        <div className="text-center mb-8 border-b border-gray-300 pb-4">
+                                            <div className="flex items-center justify-center space-x-4 mb-4">
+                                                <img 
+                                                    src="/logo.png" 
+                                                    alt="KWSC Logo" 
+                                                    className="h-12 w-auto"
+                                                />
+                                                <div className="text-center">
+                                                    <h1 className="text-xl font-bold text-blue-900">
+                                                        Karachi Water & Sewerage Corporation
+                                                    </h1>
+                                                    <p className="text-sm text-blue-700">
+                                                        Government of Sindh
+                                                    </p>
+                                                </div>
                                             </div>
                                         </div>
 
@@ -996,6 +1098,7 @@ export default function DocumentEditor() {
                             <AttachmentManager
                                 fileId={params.id}
                                 canEdit={canEditDocument}
+                                viewOnly={!canEditDocument}
                             />
 
                             {/* Document Signature System */}
