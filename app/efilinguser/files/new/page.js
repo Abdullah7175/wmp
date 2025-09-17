@@ -255,10 +255,11 @@ export default function CreateNewFile() {
                                             ))}
                                         </SelectContent>
                                     </Select>
+                                    <p className="text-sm text-gray-500 mt-1">Workflow will be attached based on the selected file type</p>
                                     {formik.touched.file_type_id && formik.errors.file_type_id && (<p className="text-red-500 text-sm mt-1">{formik.errors.file_type_id}</p>)}
                                 </div>
 
-                                <div>
+                                {/* <div>
                                     <Label htmlFor="assigned_to">Initial Assignment (Optional)</Label>
                                     <Select value={formik.values.assigned_to ? formik.values.assigned_to.toString() : 'none'} onValueChange={(value) => formik.setFieldValue('assigned_to', value === 'none' ? null : value)}>
                                         <SelectTrigger id="assigned_to">
@@ -274,7 +275,7 @@ export default function CreateNewFile() {
                                         </SelectContent>
                                     </Select>
                                     <p className="text-sm text-gray-500 mt-1">Workflow will be attached based on the selected file type</p>
-                                </div>
+                                </div> */}
 
                                 <div>
                                     <Label htmlFor="remarks">Initial Remarks</Label>

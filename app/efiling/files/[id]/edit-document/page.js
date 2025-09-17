@@ -46,6 +46,15 @@ export default function DocumentEditor() {
     const [userRole, setUserRole] = useState('');
     const [canEditDocument, setCanEditDocument] = useState(false);
     
+    // Helper function to convert HTML to plain text
+    const htmlToText = (html) => {
+        if (!html) return '';
+        // Create a temporary div element to parse HTML
+        const temp = document.createElement('div');
+        temp.innerHTML = html;
+        return temp.textContent || temp.innerText || '';
+    };
+    
     const [documentContent, setDocumentContent] = useState({
         title: '',
         subject: '',
@@ -857,47 +866,38 @@ export default function DocumentEditor() {
                                         </div>
                                         <div>
                                             <Label htmlFor="title">Title</Label>
-                                            <div
+                                            <input
                                                 id="title"
-                                                contentEditable={canEditDocument}
-                                                dangerouslySetInnerHTML={{ __html: (getCurrentPage().content.title) || '' }}
-                                                onBlur={(e) => updateCurrentPageContent({ title: e.target.textContent })}
-                                                onInput={(e) => {
-                                                    updateCurrentPageContent({ title: e.target.textContent });
-                                                }}
+                                                type="text"
+                                                value={htmlToText(getCurrentPage().content.title)}
+                                                onChange={(e) => updateCurrentPageContent({ title: e.target.value })}
                                                 className="w-full p-2 border border-gray-300 rounded-md min-h-[40px] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                                data-placeholder="Enter document title"
-                                                style={{ minHeight: '40px' }}
+                                                placeholder="Enter document title"
+                                                disabled={!canEditDocument}
                                             />
                                         </div>
                                         <div>
                                             <Label htmlFor="subject">Subject</Label>
-                                            <div
+                                            <input
                                                 id="subject"
-                                                contentEditable={canEditDocument}
-                                                dangerouslySetInnerHTML={{ __html: (getCurrentPage().content.subject) || '' }}
-                                                onBlur={(e) => updateCurrentPageContent({ subject: e.target.textContent })}
-                                                onInput={(e) => {
-                                                    updateCurrentPageContent({ subject: e.target.textContent });
-                                                }}
+                                                type="text"
+                                                value={htmlToText(getCurrentPage().content.subject)}
+                                                onChange={(e) => updateCurrentPageContent({ subject: e.target.value })}
                                                 className="w-full p-2 border border-gray-300 rounded-md min-h-[40px] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                                data-placeholder="Enter document subject"
-                                                style={{ minHeight: '40px' }}
+                                                placeholder="Enter document subject"
+                                                disabled={!canEditDocument}
                                             />
                                         </div>
                                         <div>
                                             <Label htmlFor="date">Date</Label>
-                                            <div
+                                            <input
                                                 id="date"
-                                                contentEditable={canEditDocument}
-                                                dangerouslySetInnerHTML={{ __html: (getCurrentPage().content.date) || '' }}
-                                                onBlur={(e) => updateCurrentPageContent({ date: e.target.textContent })}
-                                                onInput={(e) => {
-                                                    updateCurrentPageContent({ date: e.target.textContent });
-                                                }}
+                                                type="text"
+                                                value={htmlToText(getCurrentPage().content.date)}
+                                                onChange={(e) => updateCurrentPageContent({ date: e.target.value })}
                                                 className="w-full p-2 border border-gray-300 rounded-md min-h-[40px] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                                data-placeholder="Enter date"
-                                                style={{ minHeight: '40px' }}
+                                                placeholder="Enter date"
+                                                disabled={!canEditDocument}
                                             />
                                         </div>
                                         <div>
@@ -933,33 +933,27 @@ export default function DocumentEditor() {
                                                 </SelectContent>
                                             </Select>
                                             {getCurrentPage().content.regards === 'Custom' && (
-                                                <div
+                                                <input
                                                     id="customRegards"
-                                                    contentEditable={canEditDocument}
-                                                    dangerouslySetInnerHTML={{ __html: (getCurrentPage().content.customRegards) || '' }}
-                                                    onBlur={(e) => updateCurrentPageContent({ customRegards: e.target.textContent })}
-                                                    onInput={(e) => {
-                                                        updateCurrentPageContent({ customRegards: e.target.textContent });
-                                                    }}
+                                                    type="text"
+                                                    value={htmlToText(getCurrentPage().content.customRegards)}
+                                                    onChange={(e) => updateCurrentPageContent({ customRegards: e.target.value })}
                                                     className="w-full p-2 border border-gray-300 rounded-md min-h-[40px] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent mt-2"
-                                                    data-placeholder="Enter custom regards"
-                                                    style={{ minHeight: '40px' }}
+                                                    placeholder="Enter custom regards"
+                                                    disabled={!canEditDocument}
                                                 />
                                             )}
                                         </div>
                                         <div>
                                             <Label htmlFor="footer">Footer</Label>
-                                            <div
+                                            <input
                                                 id="footer"
-                                                contentEditable={canEditDocument}
-                                                dangerouslySetInnerHTML={{ __html: (getCurrentPage().content.footer) || '' }}
-                                                onBlur={(e) => updateCurrentPageContent({ footer: e.target.textContent })}
-                                                onInput={(e) => {
-                                                    updateCurrentPageContent({ footer: e.target.textContent });
-                                                }}
+                                                type="text"
+                                                value={htmlToText(getCurrentPage().content.footer)}
+                                                onChange={(e) => updateCurrentPageContent({ footer: e.target.value })}
                                                 className="w-full p-2 border border-gray-300 rounded-md min-h-[40px] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                                data-placeholder="Enter footer text"
-                                                style={{ minHeight: '40px' }}
+                                                placeholder="Enter footer text"
+                                                disabled={!canEditDocument}
                                             />
                                         </div>
                                     </div>
