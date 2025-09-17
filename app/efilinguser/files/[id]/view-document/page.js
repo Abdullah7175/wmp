@@ -69,19 +69,32 @@ export default function DocumentViewer() {
 			if (comRes.ok) setComments((await comRes.json()) || []);
 			
 			// Fetch work request details if work_request_id exists
+			console.log('File data:', fileData);
+			console.log('Work request ID:', fileData.work_request_id);
+			
 			if (fileData.work_request_id) {
+				console.log('Fetching work request details for ID:', fileData.work_request_id);
 				const workRes = await fetch(`/api/requests/${fileData.work_request_id}`);
 				if (workRes.ok) {
 					const workData = await workRes.json();
+					console.log('Work request data:', workData);
 					setWorkRequest(workData);
 					
 					// Fetch before content for this work request
+					console.log('Fetching before content for work request:', fileData.work_request_id);
 					const contentRes = await fetch(`/api/before-content?work_request_id=${fileData.work_request_id}`);
 					if (contentRes.ok) {
 						const contentData = await contentRes.json();
+						console.log('Before content data:', contentData);
 						setBeforeContent(Array.isArray(contentData) ? contentData : []);
+					} else {
+						console.error('Failed to fetch before content:', contentRes.status, contentRes.statusText);
 					}
+				} else {
+					console.error('Failed to fetch work request:', workRes.status, workRes.statusText);
 				}
+			} else {
+				console.log('No work_request_id found in file data');
 			}
 		} catch (e) {
 			console.error(e);

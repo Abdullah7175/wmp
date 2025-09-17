@@ -945,8 +945,9 @@ export const RequestForm = ({ isPublic = false, initialValues, onSubmit, isEditM
                         className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm"
                     >
                         <option value="">Select Nature of Work...</option>
-                        <option value="repairing">Repairing</option>
+                        <option value="repairing">Repairing/Replacement</option>
                         <option value="new installation">New Installation</option>
+                        <option value="other">Emergency</option>
                     </select>
                     {formik.errors.nature_of_work && formik.touched.nature_of_work && (
                         <p className="mt-1 text-sm text-red-600">{formik.errors.nature_of_work}</p>

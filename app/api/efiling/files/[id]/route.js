@@ -16,7 +16,8 @@ export async function GET(request, { params }) {
                 s.name as status_name,
                 s.code as status_code,
                 s.color as status_color,
-                COALESCE(ab.designation, 'Unassigned') as assigned_to_name
+                COALESCE(ab.designation, 'Unassigned') as assigned_to_name,
+                f.work_request_id
             FROM efiling_files f
             LEFT JOIN efiling_departments d ON f.department_id = d.id
             LEFT JOIN efiling_file_categories c ON f.category_id = c.id

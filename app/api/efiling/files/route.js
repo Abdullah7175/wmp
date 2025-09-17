@@ -417,13 +417,13 @@ export async function POST(request) {
         
         console.log('Inserting file with values:', {
             fileNumber, subject, category_id: categoryToUse, department_id: deptToUse, statusId,
-            priority: 'high', confidentiality_level: 'normal', work_request_id: null,
+            priority: 'high', confidentiality_level: 'normal', work_request_id: work_request_id || null,
             created_by: createdBy, assigned_to: assigned_to || null, remarks, file_type_id
         });
         
         const result = await client.query(query, [
             fileNumber, subject, categoryToUse, deptToUse, statusId,
-            'high', 'normal', null, createdBy, assigned_to || null, remarks, file_type_id || null
+            'high', 'normal', work_request_id || null, createdBy, assigned_to || null, remarks, file_type_id || null
         ]);
         
         console.log('File created successfully:', result.rows[0]);
