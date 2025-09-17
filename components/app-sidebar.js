@@ -312,11 +312,11 @@ export function AppSidebar() {
                                                     </Link>
                                                 </SidebarMenuSubItem>
                                                 <SidebarMenuSubItem
-                                                    className={`py-2 text-base ml-2 text-gray-500 underline ${pathname === "/dashboard/before-images" ? "font-bold text-blue-950" : ""
+                                                    className={`py-2 text-base ml-2 text-gray-500 underline ${pathname === "/dashboard/before-content" ? "font-bold text-blue-950" : ""
                                                         }`}
                                                 >
-                                                    <Link href="/dashboard/before-images">
-                                                        <span>Before Images</span>
+                                                    <Link href="/dashboard/before-content">
+                                                        <span>Before Content</span>
                                                     </Link>
                                                 </SidebarMenuSubItem>
                                             </SidebarMenuSub>

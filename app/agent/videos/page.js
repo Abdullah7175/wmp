@@ -37,7 +37,7 @@ export default function Page() {
   return (
     <div className="container mx-auto px-4 py-10">
       <DataTable columns={columns} data={videos}>
-        <h1 className="text-3xl font-semibold">Videos</h1>
+        <h1 className="text-3xl font-semibold">Engineer Videos</h1>
       </DataTable>
     </div>
   )

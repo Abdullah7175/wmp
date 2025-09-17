@@ -46,11 +46,11 @@ export function DataTable({ columns, data, children }) {
                 <div className="flex gap-3 items-center justify-end flex-1">
                     <Link href={"/dashboard/agents/add"}>
                         <Button variant="primary" className="border px-3">
-                            <Plus /> Add Agent
+                            <Plus /> Add Engineer
                         </Button>
                     </Link>
                     <Input
-                        placeholder="Filter Agents By ID..."
+                        placeholder="Filter Engineer By ID..."
                         value={table.getColumn("email")?.getFilterValue() || ""}
                         onChange={(event) =>
                             table.getColumn("email")?.setFilterValue(event.target.value)

@@ -9,7 +9,7 @@ import { useRouter } from "next/navigation"
 import Router from "next/router"
 import WorkRequestStatus from "@/components/WorkRequestStatus"
 
-export function getAgentRequestColumns({ onAddImage, onAddVideo, onAddBeforeImage }) {
+export function getAgentRequestColumns({ onAddImage, onAddVideo, onAddBeforeContent }) {
   return [
     {
       accessorKey: "id",
@@ -132,7 +132,7 @@ export function getAgentRequestColumns({ onAddImage, onAddVideo, onAddBeforeImag
     {
       id: "actions",
       cell: ({ row, table }) => {
-        const { onAddImage, onAddVideo, onAddBeforeImage } = table.options.meta || {};
+        const { onAddImage, onAddVideo, onAddBeforeContent } = table.options.meta || {};
         const status = row.original.status_name;
         const isCompleted = status === 'Completed';
         const canUpload = !isCompleted;
@@ -141,11 +141,11 @@ export function getAgentRequestColumns({ onAddImage, onAddVideo, onAddBeforeImag
             <Button
               variant="outline"
               size="sm"
-              onClick={() => onAddBeforeImage && onAddBeforeImage(row.original.id)}
+              onClick={() => onAddBeforeContent && onAddBeforeContent(row.original.id)}
               disabled={!canUpload}
               className="bg-orange-50 border-orange-200 text-orange-700 hover:bg-orange-100"
             >
-              Before Images
+              Before Content
             </Button>
             <Button
               variant="outline"

@@ -9,9 +9,9 @@ import { MapPin, Download, Trash2, Plus, Search, Edit } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 
-export default function BeforeImagesPage() {
+export default function BeforeContentPage() {
   const { data: session } = useSession();
-  const [beforeImages, setBeforeImages] = useState([]);
+  const [beforeContent, setBeforeContent] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -28,71 +28,71 @@ export default function BeforeImagesPage() {
   useEffect(() => {
     if (!session?.user?.id) return;
     
-    const fetchBeforeImages = async () => {
+    const fetchBeforeContent = async () => {
       try {
-        // For admins, we can fetch all before images or just their own
-        // Let's fetch all before images for admins to see everything
-        const response = await fetch(`/api/before-images`);
+        // For admins, we can fetch all before content or just their own
+        // Let's fetch all before content for admins to see everything
+        const response = await fetch(`/api/before-content`);
         if (response.ok) {
           const data = await response.json();
-          setBeforeImages(data || []);
+          setBeforeContent(data || []);
         } else {
-          console.error('Failed to fetch before images:', response.status);
-          setBeforeImages([]); // Set empty array instead of error
+          console.error('Failed to fetch before content:', response.status);
+          setBeforeContent([]); // Set empty array instead of error
         }
       } catch (error) {
-        console.error('Error fetching before images:', error);
-        setBeforeImages([]); // Set empty array instead of error
+        console.error('Error fetching before content:', error);
+        setBeforeContent([]); // Set empty array instead of error
       } finally {
         setLoading(false);
       }
     };
 
-    fetchBeforeImages();
+    fetchBeforeContent();
   }, [session?.user?.id]);
 
-  const handleDelete = async (imageId) => {
-    if (!confirm('Are you sure you want to delete this before image?')) return;
+  const handleDelete = async (contentId) => {
+    if (!confirm('Are you sure you want to delete this before content?')) return;
     
     try {
-      const response = await fetch(`/api/before-images?id=${imageId}`, {
+      const response = await fetch(`/api/before-content?id=${contentId}`, {
         method: 'DELETE',
       });
 
       if (response.ok) {
-        setBeforeImages(prev => prev.filter(img => img.id !== imageId));
+        setBeforeContent(prev => prev.filter(item => item.id !== contentId));
       } else {
-        throw new Error('Failed to delete image');
+        throw new Error('Failed to delete content');
       }
     } catch (error) {
-      console.error('Error deleting image:', error);
-      alert('Failed to delete image');
+      console.error('Error deleting content:', error);
+      alert('Failed to delete content');
     }
   };
 
-  const filteredImages = beforeImages.filter(img => 
-    img.work_description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    img.address?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    img.complaint_type?.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredContent = beforeContent.filter(item => 
+    item.work_description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    item.address?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    item.complaint_type?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   if (loading) {
-    return <div className="flex items-center justify-center h-96 text-lg">Loading before images...</div>;
+    return <div className="flex items-center justify-center h-96 text-lg">Loading before content...</div>;
   }
 
   return (
     <div className="container mx-auto px-4 py-10">
       <div className="mb-8 flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold mb-2">Before Images</h1>
+          <h1 className="text-3xl font-bold mb-2">Before Content</h1>
           <p className="text-gray-600">
-            Images captured before work completion
+            Images and videos captured before work completion
           </p>
         </div>
-        <Link href="/dashboard/before-images/add">
+        <Link href="/dashboard/before-content/add">
           <Button className="flex items-center gap-2">
             <Plus className="w-4 h-4" />
-            Add Before Images
+            Add Before Content
           </Button>
         </Link>
       </div>
@@ -132,15 +132,15 @@ export default function BeforeImagesPage() {
         </div>
       </div>
 
-      {filteredImages.length === 0 ? (
+      {filteredContent.length === 0 ? (
         <Card className="p-8 text-center">
           <div className="text-gray-500">
             <MapPin className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-            <h3 className="text-lg font-medium mb-2">No before images yet</h3>
-            <p>No before images have been uploaded by agents or social media personnel yet.</p>
-            <Link href="/dashboard/before-images/add">
+            <h3 className="text-lg font-medium mb-2">No before content yet</h3>
+            <p>No before content has been uploaded by agents or social media personnel yet.</p>
+            <Link href="/dashboard/before-content/add">
               <Button className="mt-4">
-                Add Before Images
+                Add Before Content
               </Button>
             </Link>
           </div>
@@ -148,42 +148,55 @@ export default function BeforeImagesPage() {
       ) : (
         <>
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {filteredImages.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((image) => (
-            <Card key={image.id} className="overflow-hidden">
+            {filteredContent.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((item) => (
+            <Card key={item.id} className="overflow-hidden">
               <div className="relative">
-                <Image
-                  src={image.link}
-                  alt={image.description || 'Before image'}
-                  width={400}
-                  height={300}
-                  className="w-full h-48 object-cover"
-                />
-                <Badge className="absolute top-2 left-2">
-                  Request #{image.work_request_id}
-                </Badge>
+                {item.content_type === 'video' ? (
+                  <video
+                    src={item.link}
+                    className="w-full h-48 object-cover"
+                    controls
+                  />
+                ) : (
+                  <Image
+                    src={item.link}
+                    alt={item.description || 'Before content'}
+                    width={400}
+                    height={300}
+                    className="w-full h-48 object-cover"
+                  />
+                )}
+                <div className="absolute top-2 left-2 flex gap-1">
+                  <Badge>
+                    Request #{item.work_request_id}
+                  </Badge>
+                  <Badge variant="secondary" className="text-xs">
+                    {item.content_type === 'video' ? 'Video' : 'Image'}
+                  </Badge>
+                </div>
               </div>
               <CardContent className="p-4">
                 <div className="space-y-2">
                   <h3 className="font-semibold text-sm">
-                    {image.address || 'No address'}
+                    {item.address || 'No address'}
                   </h3>
                   <p className="text-xs text-gray-600">
-                    {image.complaint_type || 'Unknown type'}
+                    {item.complaint_type || 'Unknown type'}
                   </p>
-                  {image.description && (
+                  {item.description && (
                     <p className="text-xs text-gray-500 line-clamp-2">
-                      {image.description}
+                      {item.description}
                     </p>
                   )}
                   <div className="flex items-center justify-between text-xs text-gray-500">
                     <span>
-                      {new Date(image.created_at).toLocaleDateString()}
+                      {new Date(item.created_at).toLocaleDateString()}
                     </span>
                     <div className="flex gap-1">
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => window.open(image.link, '_blank')}
+                        onClick={() => window.open(item.link, '_blank')}
                         className="h-6 px-2"
                       >
                         <Download className="w-3 h-3" />
@@ -201,7 +214,7 @@ export default function BeforeImagesPage() {
                         <Button
                           size="sm"
                           variant="destructive"
-                          onClick={() => handleDelete(image.id)}
+                          onClick={() => handleDelete(item.id)}
                           className="h-6 px-2"
                         >
                           <Trash2 className="w-3 h-3" />
@@ -216,10 +229,10 @@ export default function BeforeImagesPage() {
           </div>
           
           {/* Pagination */}
-          {filteredImages.length > itemsPerPage && (
+          {filteredContent.length > itemsPerPage && (
             <div className="flex items-center justify-between mt-6 px-4">
               <div className="text-sm text-gray-500">
-                Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, filteredImages.length)} of {filteredImages.length} entries
+                Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, filteredContent.length)} of {filteredContent.length} entries
               </div>
               <div className="flex items-center space-x-2">
                 <Button
@@ -239,21 +252,21 @@ export default function BeforeImagesPage() {
                   Previous
                 </Button>
                 <span className="text-sm text-gray-500">
-                  Page {currentPage} of {Math.ceil(filteredImages.length / itemsPerPage)}
+                  Page {currentPage} of {Math.ceil(filteredContent.length / itemsPerPage)}
                 </span>
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={() => setCurrentPage(currentPage + 1)}
-                  disabled={currentPage === Math.ceil(filteredImages.length / itemsPerPage)}
+                  disabled={currentPage === Math.ceil(filteredContent.length / itemsPerPage)}
                 >
                   Next
                 </Button>
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setCurrentPage(Math.ceil(filteredImages.length / itemsPerPage))}
-                  disabled={currentPage === Math.ceil(filteredImages.length / itemsPerPage)}
+                  onClick={() => setCurrentPage(Math.ceil(filteredContent.length / itemsPerPage))}
+                  disabled={currentPage === Math.ceil(filteredContent.length / itemsPerPage)}
                 >
                   Last
                 </Button>

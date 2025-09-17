@@ -203,7 +203,7 @@ const VideoForm = ({ workRequestId: propWorkRequestId, onClose }) => {
                         )}
                     </div>
                     <div>
-                        <label htmlFor="vid" className="block text-gray-700 text-sm font-medium">Upload Videos</label>
+                        <label htmlFor="vid" className="block text-gray-700 text-sm font-medium">Upload Engineer Videos</label>
                         <input
                             id="vid"
                             name="vid"
@@ -218,7 +218,7 @@ const VideoForm = ({ workRequestId: propWorkRequestId, onClose }) => {
                         <div className="space-y-6">
                             {fileInputs.map((item, idx) => (
                                 <div key={idx} className="border rounded-md p-4 bg-gray-50">
-                                    <div className="font-medium mb-2">Video {idx + 1}: {item.file.name} ({Math.round(item.file.size / 1024)} KB)</div>
+                                    <div className="font-medium mb-2">Engineer Video {idx + 1}: {item.file.name} ({Math.round(item.file.size / 1024)} KB)</div>
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                         <div>
                                             <label className="block text-xs text-gray-600">Description</label>
@@ -296,7 +296,7 @@ const VideoForm = ({ workRequestId: propWorkRequestId, onClose }) => {
                         type="submit"
                         className="px-4 py-2 mt-4 bg-indigo-600 text-white font-semibold rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     >
-                        Add Video(s)
+                        Add Engineer Video(s)
                     </button>
                 </div>
             </form>

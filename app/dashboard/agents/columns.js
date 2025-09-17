@@ -86,11 +86,11 @@ export const columns = [
           <DropdownMenuContent align="end">
             <DropdownMenuLabel>Actions</DropdownMenuLabel>
             <DropdownMenuItem>
-              <Link href={`/dashboard/agents/edit/${agent.id}`}>Edit Agent</Link>
+              <Link href={`/dashboard/agents/edit/${agent.id}`}>Edit Engineer</Link>
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem>
-            <Link className="text-red-700" href={`/dashboard/agents/delete/${agent.id}`}>Delete Agent</Link>
+            <Link className="text-red-700" href={`/dashboard/agents/delete/${agent.id}`}>Delete Engineer</Link>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

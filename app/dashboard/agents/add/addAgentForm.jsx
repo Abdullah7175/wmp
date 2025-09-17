@@ -105,14 +105,14 @@ const AgentForm = () => {
 
                 if (response.ok) {
                     toast({
-                        title: "Agent added successfully",
+                        title: "Engineer added successfully",
                         description: '',
                         variant: 'success',
                     });
                     setIsSuccess(true);
                 } else {
                     toast({
-                        title: "Failed to add agent",
+                        title: "Failed to add Engineer",
                         description: '',
                         variant: 'destructive',
                     });
@@ -120,7 +120,7 @@ const AgentForm = () => {
             } catch (error) {
                 console.error('Error submitting form:', error);
                 toast({
-                    title: "An error occurred while adding the agent",
+                    title: "An error occurred while adding the Engineer",
                     description: '',
                     variant: 'destructive',
                 });
@@ -323,7 +323,7 @@ const AgentForm = () => {
                         type="submit"
                         className="px-4 py-2 mt-4 bg-indigo-600 text-white font-semibold rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     >
-                        Add Agent
+                        Add Engineer
                     </button>
                 </div>
             </form>

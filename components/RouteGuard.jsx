@@ -6,11 +6,11 @@ import { useEffect } from "react";
 // Define allowed routes for each userType/role
 const allowedRoutes = {
   socialmedia: {
-    "1": ["/smagent", "/smagent/assigned-requests", "/smagent/videos/add", "/smagent/images/add", "/smagent/before-images", "/smagent/before-images/add"],
-    "2": ["/smagent", "/smagent/assigned-requests", "/smagent/videos/add", "/smagent/images/add", "/smagent/before-images", "/smagent/before-images/add"],
-    "3": ["/smagent", "/smagent/assigned-requests", "/smagent/videos/add", "/smagent/images/add", "/smagent/before-images", "/smagent/before-images/add"],
-    "5": ["/smagent", "/smagent/assigned-requests", "/smagent/videos/add", "/smagent/images/add", "/smagent/before-images", "/smagent/before-images/add"],
-    "6": ["/smagent", "/smagent/assigned-requests", "/smagent/videos/add", "/smagent/images/add", "/smagent/before-images", "/smagent/before-images/add"],
+    "1": ["/smagent", "/smagent/assigned-requests", "/smagent/videos/add", "/smagent/images/add", "/smagent/before-content", "/smagent/before-content/add"],
+    "2": ["/smagent", "/smagent/assigned-requests", "/smagent/videos/add", "/smagent/images/add", "/smagent/before-content", "/smagent/before-content/add"],
+    "3": ["/smagent", "/smagent/assigned-requests", "/smagent/videos/add", "/smagent/images/add", "/smagent/before-content", "/smagent/before-content/add"],
+    "5": ["/smagent", "/smagent/assigned-requests", "/smagent/videos/add", "/smagent/images/add", "/smagent/before-content", "/smagent/before-content/add"],
+    "6": ["/smagent", "/smagent/assigned-requests", "/smagent/videos/add", "/smagent/images/add", "/smagent/before-content", "/smagent/before-content/add"],
     "4": [
       "/smagent",
       "/smagent/assigned-requests",
@@ -20,8 +20,8 @@ const allowedRoutes = {
       "/smagent/videos/download",
       "/smagent/images/add",
       "/smagent/videos/add",
-      "/smagent/before-images",
-      "/smagent/before-images/add",
+      "/smagent/before-content",
+      "/smagent/before-content/add",
     ],
     "5": [
       "/smagent",
@@ -32,13 +32,13 @@ const allowedRoutes = {
       "/smagent/videos/download",
       "/smagent/images/add",
       "/smagent/videos/add",
-      "/smagent/before-images",
-      "/smagent/before-images/add",
+      "/smagent/before-content",
+      "/smagent/before-content/add",
     ],
   },
   agent: {
-    "1": ["/agent", "/agent/requests", "/agent/requests/new", "/agent/videos", "/agent/images", "/agent/before-images", "/agent/before-images/add"],
-    "2": ["/agent", "/agent/requests", "/agent/requests/new", "/agent/videos", "/agent/images", "/agent/before-images","/agent/before-images/add"],
+    "1": ["/agent", "/agent/requests", "/agent/requests/new", "/agent/videos", "/agent/images", "/agent/before-content", "/agent/before-content/add"],
+    "2": ["/agent", "/agent/requests", "/agent/requests/new", "/agent/videos", "/agent/images", "/agent/before-content","/agent/before-content/add"],
   },
   ceo: {
     "5": ["/ceo", "/ceo/requests", "/ceo/approved", "/ceo/rejected", "/ceo/notifications"],

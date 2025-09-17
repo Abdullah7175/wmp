@@ -18,13 +18,13 @@ const links = [
     icon: <List className="w-5 h-5 mr-2" />,
   },
   {
-    href: "/agent/before-images",
-    label: "Before Images",
+    href: "/agent/before-content",
+    label: "Before Content",
     icon: <ImageIcon className="w-5 h-5 mr-2" />,
   },
   {
     href: "/agent/videos",
-    label: "Videos",
+    label: "Engineer Videos",
     icon: <Video className="w-5 h-5 mr-2" />,
   },
   {
@@ -41,7 +41,7 @@ export function AgentSidebar() {
   return (
     <aside className={`min-h-screen h-full ${collapsed ? "w-16" : "w-64"} bg-gray-900 text-white flex flex-col shadow-lg border-r border-gray-800 transition-all duration-200`}>
       <div className="flex items-center justify-center h-16 border-b border-gray-800">
-        <span className={`text-xl font-bold tracking-wide transition-opacity duration-200 ${collapsed ? "opacity-0 w-0" : "opacity-100 w-auto"}`}>Agent Panel</span>
+        <span className={`text-xl font-bold tracking-wide transition-opacity duration-200 ${collapsed ? "opacity-0 w-0" : "opacity-100 w-auto"}`}>Engineer Panel</span>
       </div>
       <nav className="flex-1 py-6 px-2 space-y-2">
         {links.map((link) => {

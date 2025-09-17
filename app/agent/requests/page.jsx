@@ -7,7 +7,7 @@ import { columns, getAgentRequestColumns } from './columns';
 import { useSession } from 'next-auth/react';
 import ImageForm from '../images/add/addImageForm';
 import VideoForm from '../videos/add/addVideoForm';
-import AddBeforeImageForm from '../before-images/add/addBeforeImageForm';
+import AddBeforeContentForm from '../before-images/add/addBeforeImageForm';
 
 const Modal = ({ children, onClose }) => (
   <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40 p-4">
@@ -35,7 +35,7 @@ const RequestsPage = () => {
     const [selectedRequestId, setSelectedRequestId] = useState(null);
     const [showImageForm, setShowImageForm] = useState(false);
     const [showVideoForm, setShowVideoForm] = useState(false);
-    const [showBeforeImageForm, setShowBeforeImageForm] = useState(false);
+    const [showBeforeContentForm, setShowBeforeContentForm] = useState(false);
 
     useEffect(() => {
         if (!session?.user?.id) return;
@@ -95,16 +95,16 @@ const RequestsPage = () => {
             setSelectedRequestId(id);
             setShowVideoForm(true);
         },
-        onAddBeforeImage: (id) => {
+        onAddBeforeContent: (id) => {
             setSelectedRequestId(id);
-            setShowBeforeImageForm(true);
+            setShowBeforeContentForm(true);
         },
     });
 
     const closeForms = () => {
         setShowImageForm(false);
         setShowVideoForm(false);
-        setShowBeforeImageForm(false);
+        setShowBeforeContentForm(false);
         setSelectedRequestId(null);
     };
 
@@ -129,9 +129,9 @@ const RequestsPage = () => {
                             setSelectedRequestId(id);
                             setShowVideoForm(true);
                         },
-                        onAddBeforeImage: (id) => {
+                        onAddBeforeContent: (id) => {
                             setSelectedRequestId(id);
-                            setShowBeforeImageForm(true);
+                            setShowBeforeContentForm(true);
                         },
                     }}
                 />
@@ -146,9 +146,9 @@ const RequestsPage = () => {
                   <VideoForm workRequestId={selectedRequestId} onClose={closeForms} />
                 </Modal>
             )}
-            {showBeforeImageForm && selectedRequestId && (
+            {showBeforeContentForm && selectedRequestId && (
                 <Modal onClose={closeForms}>
-                  <AddBeforeImageForm workRequestId={selectedRequestId} onClose={closeForms} />
+                  <AddBeforeContentForm workRequestId={selectedRequestId} onClose={closeForms} />
                 </Modal>
             )}
         </div>

@@ -53,8 +53,8 @@ export function SmAgentSidebar() {
       icon: <List className="w-5 h-5" />,
     },
     {
-      href: "/smagent/before-images",
-      label: "Before Images",
+      href: "/smagent/before-content",
+      label: "Before Content",
       icon: <ImageIcon className="w-5 h-5" />,
     },
     // {

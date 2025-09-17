@@ -188,13 +188,13 @@ const CooAnalyticsPage = () => {
                         <Building2 className="text-teal-700 w-6 h-6 lg:w-8 lg:h-8 flex-shrink-0" />
                         <div className="flex-1 space-y-1 min-w-0">
                             <p className="text-sm lg:text-lg font-semibold leading-none text-teal-900 truncate">
-                                Field Agents
+                                Field Engineer
                             </p>
                             <p className="text-xl lg:text-2xl font-bold text-teal-800">
                                 {stats.totalAgents.toLocaleString()}
                             </p>
                             <p className="text-xs lg:text-sm text-teal-600">
-                                Active agents
+                                Active Engineer
                             </p>
                         </div>
                     </div>

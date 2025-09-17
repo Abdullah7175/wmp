@@ -35,11 +35,11 @@ export default function Page() {
             setTotal(total);
           } else {
             const errorData = await response.json().catch(() => ({}));
-            setError(errorData.error || 'Failed to fetch agents');
+            setError(errorData.error || 'Failed to fetch Engineers');
           }
         } catch (error) {
-          console.error('Error fetching agents:', error);
-          setError('Error fetching agents: ' + error.message);
+          console.error('Error fetching Engineer:', error);
+          setError('Error fetching Engineers: ' + error.message);
         } finally {
           setLoading(false);
         }
@@ -56,7 +56,7 @@ export default function Page() {
       <div className="container mx-auto px-4 py-10">
         <div className="text-center py-8">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto"></div>
-          <p className="mt-2 text-gray-600">Loading agents...</p>
+          <p className="mt-2 text-gray-600">Loading Engineers...</p>
         </div>
       </div>
     );
@@ -65,7 +65,7 @@ export default function Page() {
   return (
     <div className="container mx-auto py-6">
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Agents</h1>
+        <h1 className="text-2xl font-bold">Engineers</h1>
       </div>
       <div className="flex flex-wrap gap-4 mb-4 items-end">
         <Input
@@ -112,7 +112,7 @@ export default function Page() {
       {error && (
         <div className="text-center py-4">
           <div className="text-red-600 bg-red-50 border border-red-200 rounded p-4 max-w-md mx-auto">
-            <p className="font-medium">Error loading agents</p>
+            <p className="font-medium">Error loading Engineers</p>
             <p className="text-sm mt-1">{error}</p>
             <button 
               onClick={() => window.location.reload()} 

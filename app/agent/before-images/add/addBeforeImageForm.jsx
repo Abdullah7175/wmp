@@ -6,10 +6,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { useSession } from 'next-auth/react';
-import { Upload, MapPin, Plus, Trash2, X } from 'lucide-react';
+import { Upload, MapPin, Plus, Trash2, X, Image as ImageIcon, Video } from 'lucide-react';
 import Image from 'next/image';
 
-export default function AddBeforeImageForm({ workRequestId, onClose }) {
+export default function AddBeforeContentForm({ workRequestId, onClose }) {
   const { data: session } = useSession();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
@@ -19,7 +19,7 @@ export default function AddBeforeImageForm({ workRequestId, onClose }) {
     description: '',
     latitude: '',
     longitude: '',
-    images: []
+    content: []
   });
 
   const getCurrentLocation = () => {
@@ -59,41 +59,42 @@ export default function AddBeforeImageForm({ workRequestId, onClose }) {
     }
   };
 
-  const handleImageUpload = (e) => {
+  const handleContentUpload = (e) => {
     const files = Array.from(e.target.files);
-    const newImages = files.map(file => ({
+    const newContent = files.map(file => ({
       id: Date.now() + Math.random(),
       file,
       preview: URL.createObjectURL(file),
-      description: ''
+      description: '',
+      contentType: file.type.startsWith('video/') ? 'video' : 'image'
     }));
     
     setFormData(prev => ({
       ...prev,
-      images: [...prev.images, ...newImages]
+      content: [...prev.content, ...newContent]
     }));
   };
 
-  const removeImage = (imageId) => {
+  const removeContent = (contentId) => {
     setFormData(prev => ({
       ...prev,
-      images: prev.images.filter(img => img.id !== imageId)
+      content: prev.content.filter(item => item.id !== contentId)
     }));
   };
 
-  const updateImageDescription = (imageId, description) => {
+  const updateContentDescription = (contentId, description) => {
     setFormData(prev => ({
       ...prev,
-      images: prev.images.map(img => 
-        img.id === imageId ? { ...img, description } : img
+      content: prev.content.map(item => 
+        item.id === contentId ? { ...item, description } : item
       )
     }));
   };
 
-  const uploadImageToServer = async (file) => {
+  const uploadContentToServer = async (file) => {
     const formData = new FormData();
     formData.append('file', file);
-    formData.append('type', 'before-image');
+    formData.append('type', 'before-content');
 
     try {
       const response = await fetch('/api/media/upload', {
@@ -108,19 +109,19 @@ export default function AddBeforeImageForm({ workRequestId, onClose }) {
       }
 
       const result = await response.json();
-      return result.link;
+      return { link: result.link, contentType: result.contentType };
     } catch (error) {
       console.error('Upload error:', error);
-      throw new Error(`Failed to upload image: ${error.message}`);
+      throw new Error(`Failed to upload content: ${error.message}`);
     }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (formData.images.length === 0) {
+    if (formData.content.length === 0) {
       toast({
-        title: "No images selected",
-        description: 'Please select at least one image to upload.',
+        title: "No content selected",
+        description: 'Please select at least one image or video to upload.',
         variant: 'destructive',
       });
       return;
@@ -128,27 +129,29 @@ export default function AddBeforeImageForm({ workRequestId, onClose }) {
 
     setLoading(true);
     try {
-      const uploadedImages = [];
+      const uploadedContent = [];
       
-      // Upload main image
-      const mainImage = formData.images[0];
-      const mainImageLink = await uploadImageToServer(mainImage.file);
-      uploadedImages.push({
-        link: mainImageLink,
-        description: mainImage.description || formData.description
+      // Upload main content
+      const mainContent = formData.content[0];
+      const mainContentResult = await uploadContentToServer(mainContent.file);
+      uploadedContent.push({
+        link: mainContentResult.link,
+        contentType: mainContentResult.contentType,
+        description: mainContent.description || formData.description
       });
 
-      // Upload additional images
-      for (let i = 1; i < formData.images.length; i++) {
-        const image = formData.images[i];
-        const imageLink = await uploadImageToServer(image.file);
-        uploadedImages.push({
-          link: imageLink,
-          description: image.description || ''
+      // Upload additional content
+      for (let i = 1; i < formData.content.length; i++) {
+        const content = formData.content[i];
+        const contentResult = await uploadContentToServer(content.file);
+        uploadedContent.push({
+          link: contentResult.link,
+          contentType: contentResult.contentType,
+          description: content.description || ''
         });
       }
 
-      const response = await fetch('/api/before-images', {
+      const response = await fetch('/api/before-content', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -156,25 +159,26 @@ export default function AddBeforeImageForm({ workRequestId, onClose }) {
         body: JSON.stringify({
           workRequestId,
           description: formData.description,
-          link: uploadedImages[0].link,
+          link: uploadedContent[0].link,
+          contentType: uploadedContent[0].contentType,
           latitude: formData.latitude || '0',
           longitude: formData.longitude || '0',
-          additionalImages: uploadedImages.slice(1)
+          additionalContent: uploadedContent.slice(1)
         }),
       });
 
       if (response.ok) {
         toast({
-          title: "Before images uploaded successfully",
-          description: 'Your before images have been uploaded.',
+          title: "Before content uploaded successfully",
+          description: 'Your before content has been uploaded.',
           variant: 'success',
         });
         onClose();
       } else {
-        throw new Error('Failed to upload before images');
+        throw new Error('Failed to upload before content');
       }
     } catch (error) {
-      console.error('Error uploading before images:', error);
+      console.error('Error uploading before content:', error);
       toast({
         title: "Upload failed",
         description: 'Please try again later.',
@@ -191,7 +195,7 @@ export default function AddBeforeImageForm({ workRequestId, onClose }) {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Upload className="w-5 h-5" />
-            Upload Before Images
+            Upload Before Content
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -245,65 +249,81 @@ export default function AddBeforeImageForm({ workRequestId, onClose }) {
               )}
             </div>
 
-            {/* Image Upload */}
+            {/* Content Upload */}
             <div>
               <label className="block text-sm font-medium mb-2">
-                Before Images *
+                Before Content (Images & Videos) *
               </label>
               <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
                 <input
                   type="file"
                   multiple
-                  accept="image/*"
-                  onChange={handleImageUpload}
+                  accept="image/*,video/*"
+                  onChange={handleContentUpload}
                   className="hidden"
-                  id="image-upload"
+                  id="content-upload"
                 />
                 <label
-                  htmlFor="image-upload"
+                  htmlFor="content-upload"
                   className="cursor-pointer flex flex-col items-center gap-2"
                 >
                   <Upload className="w-8 h-8 text-gray-400" />
                   <span className="text-sm text-gray-600">
-                    Click to upload before images or drag and drop
+                    Click to upload images and videos or drag and drop
                   </span>
                   <span className="text-xs text-gray-500">
-                    PNG, JPG, JPEG up to 10MB each
+                    Images: PNG, JPG, JPEG, GIF, WebP up to 10MB each<br/>
+                    Videos: MP4, AVI, MOV, WMV, WebM up to 100MB each
                   </span>
                 </label>
               </div>
             </div>
 
-            {/* Image Preview */}
-            {formData.images.length > 0 && (
+            {/* Content Preview */}
+            {formData.content.length > 0 && (
               <div>
-                <h3 className="text-sm font-medium mb-3">Selected Images ({formData.images.length})</h3>
+                <h3 className="text-sm font-medium mb-3">Selected Content ({formData.content.length})</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {formData.images.map((image, index) => (
-                    <div key={image.id} className="relative border rounded-lg p-3">
+                  {formData.content.map((item, index) => (
+                    <div key={item.id} className="relative border rounded-lg p-3">
                       <div className="relative">
-                        <Image
-                          src={image.preview}
-                          alt={`Before image ${index + 1}`}
-                          width={200}
-                          height={150}
-                          className="w-full h-32 object-cover rounded"
-                        />
+                        {item.contentType === 'video' ? (
+                          <video
+                            src={item.preview}
+                            className="w-full h-32 object-cover rounded"
+                            controls
+                          />
+                        ) : (
+                          <Image
+                            src={item.preview}
+                            alt={`Before content ${index + 1}`}
+                            width={200}
+                            height={150}
+                            className="w-full h-32 object-cover rounded"
+                          />
+                        )}
+                        <div className="absolute top-2 left-2">
+                          {item.contentType === 'video' ? (
+                            <Video className="w-4 h-4 text-white bg-black bg-opacity-50 rounded p-1" />
+                          ) : (
+                            <ImageIcon className="w-4 h-4 text-white bg-black bg-opacity-50 rounded p-1" />
+                          )}
+                        </div>
                         <Button
                           type="button"
                           variant="destructive"
                           size="sm"
                           className="absolute top-2 right-2 h-6 w-6 p-0"
-                          onClick={() => removeImage(image.id)}
+                          onClick={() => removeContent(item.id)}
                         >
                           <X className="w-3 h-3" />
                         </Button>
                       </div>
                       <div className="mt-2">
                         <Input
-                          placeholder="Image description (optional)"
-                          value={image.description}
-                          onChange={(e) => updateImageDescription(image.id, e.target.value)}
+                          placeholder={`${item.contentType.charAt(0).toUpperCase() + item.contentType.slice(1)} description (optional)`}
+                          value={item.description}
+                          onChange={(e) => updateContentDescription(item.id, e.target.value)}
                           className="text-xs"
                         />
                       </div>
@@ -325,9 +345,9 @@ export default function AddBeforeImageForm({ workRequestId, onClose }) {
               </Button>
               <Button
                 type="submit"
-                disabled={loading || formData.images.length === 0}
+                disabled={loading || formData.content.length === 0}
               >
-                {loading ? 'Uploading...' : `Upload ${formData.images.length} Image${formData.images.length !== 1 ? 's' : ''}`}
+                {loading ? 'Uploading...' : `Upload ${formData.content.length} Item${formData.content.length !== 1 ? 's' : ''}`}
               </Button>
             </div>
           </form>

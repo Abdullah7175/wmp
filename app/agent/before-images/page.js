@@ -5,13 +5,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { MapPin, Download, Plus, Search } from 'lucide-react';
+import { MapPin, Download, Plus, Search, Image as ImageIcon, Video } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 
-export default function BeforeImagesPage() {
+export default function BeforeContentPage() {
   const { data: session } = useSession();
-  const [beforeImages, setBeforeImages] = useState([]);
+  const [beforeContent, setBeforeContent] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -26,37 +26,37 @@ export default function BeforeImagesPage() {
   useEffect(() => {
     if (!session?.user?.id) return;
     
-    const fetchBeforeImages = async () => {
+    const fetchBeforeContent = async () => {
       try {
-        const response = await fetch(`/api/before-images?creator_id=${session.user.id}&creator_type=agent`);
+        const response = await fetch(`/api/before-content?creator_id=${session.user.id}&creator_type=agent`);
         if (response.ok) {
           const data = await response.json();
-          setBeforeImages(data);
+          setBeforeContent(data);
         } else {
-          setError('Failed to fetch before images');
+          setError('Failed to fetch before content');
         }
       } catch (error) {
-        console.error('Error fetching before images:', error);
-        setError('Error fetching before images');
+        console.error('Error fetching before content:', error);
+        setError('Error fetching before content');
       } finally {
         setLoading(false);
       }
     };
 
-    fetchBeforeImages();
+    fetchBeforeContent();
   }, [session?.user?.id]);
 
-  const filteredImages = beforeImages.filter(img => 
-    img.work_description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    img.address?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    img.complaint_type?.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredContent = beforeContent.filter(item => 
+    item.work_description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    item.address?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    item.complaint_type?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   // Pagination logic
-  const totalPages = Math.ceil(filteredImages.length / itemsPerPage);
+  const totalPages = Math.ceil(filteredContent.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
-  const currentImages = filteredImages.slice(startIndex, endIndex);
+  const currentContent = filteredContent.slice(startIndex, endIndex);
 
   // Reset to first page when search term changes
   useEffect(() => {
@@ -64,7 +64,7 @@ export default function BeforeImagesPage() {
   }, [searchTerm]);
 
   if (loading) {
-    return <div className="flex items-center justify-center h-96 text-lg">Loading before images...</div>;
+    return <div className="flex items-center justify-center h-96 text-lg">Loading before content...</div>;
   }
 
   if (error) {
@@ -75,15 +75,15 @@ export default function BeforeImagesPage() {
     <div className="container mx-auto px-4 py-10">
       <div className="mb-8 flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold mb-2">Before Images</h1>
+          <h1 className="text-3xl font-bold mb-2">Before Content</h1>
           <p className="text-gray-600">
-            Images captured before work completion
+            Images and videos captured before work completion
           </p>
         </div>
-        {/* <Link href="/agent/before-images/add">
+        {/* <Link href="/agent/before-content/add">
           <Button className="flex items-center gap-2">
             <Plus className="w-4 h-4" />
-            Add Before Images
+            Add Before Content
           </Button>
         </Link> */}
       </div>
@@ -101,57 +101,75 @@ export default function BeforeImagesPage() {
         </div>
       </div>
 
-      {currentImages.length === 0 ? (
+      {currentContent.length === 0 ? (
         <Card className="p-8 text-center">
           <div className="text-gray-500">
             <MapPin className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-            <h3 className="text-lg font-medium mb-2">No before images yet</h3>
-            <p>You haven&apos;t uploaded any before images yet.</p>
-            {/* <Link href="/agent/before-images/add">
+            <h3 className="text-lg font-medium mb-2">No before content yet</h3>
+            <p>You haven&apos;t uploaded any before content yet.</p>
+            {/* <Link href="/agent/before-content/add">
               <Button className="mt-4">
-                Upload Your First Before Images
+                Upload Your First Before Content
               </Button>
             </Link> */}
           </div>
         </Card>
       ) : (
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {currentImages.map((image) => (
-            <Card key={image.id} className="overflow-hidden">
+          {currentContent.map((item) => (
+            <Card key={item.id} className="overflow-hidden">
               <div className="relative">
-                <Image
-                  src={image.link}
-                  alt={image.description || 'Before image'}
-                  width={400}
-                  height={300}
-                  className="w-full h-48 object-cover"
-                />
-                <Badge className="absolute top-2 left-2">
-                  Request #{image.work_request_id}
-                </Badge>
+                {item.content_type === 'video' ? (
+                  <video
+                    src={item.link}
+                    className="w-full h-48 object-cover"
+                    controls
+                  />
+                ) : (
+                  <Image
+                    src={item.link}
+                    alt={item.description || 'Before content'}
+                    width={400}
+                    height={300}
+                    className="w-full h-48 object-cover"
+                  />
+                )}
+                <div className="absolute top-2 left-2 flex gap-1">
+                  <Badge>
+                    Request #{item.work_request_id}
+                  </Badge>
+                  <Badge variant="secondary" className="text-xs">
+                    {item.content_type === 'video' ? (
+                      <Video className="w-3 h-3 mr-1" />
+                    ) : (
+                      <ImageIcon className="w-3 h-3 mr-1" />
+                    )}
+                    {item.content_type}
+                  </Badge>
+                </div>
               </div>
               <CardContent className="p-4">
                 <div className="space-y-2">
                   <h3 className="font-semibold text-sm">
-                    {image.address || 'No address'}
+                    {item.address || 'No address'}
                   </h3>
                   <p className="text-xs text-gray-600">
-                    {image.complaint_type || 'Unknown type'}
+                    {item.complaint_type || 'Unknown type'}
                   </p>
-                  {image.description && (
+                  {item.description && (
                     <p className="text-xs text-gray-500 line-clamp-2">
-                      {image.description}
+                      {item.description}
                     </p>
                   )}
                   <div className="flex items-center justify-between text-xs text-gray-500">
                     <span>
-                      {new Date(image.created_at).toLocaleDateString()}
+                      {new Date(item.created_at).toLocaleDateString()}
                     </span>
                     <div className="flex gap-1">
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => window.open(image.link, '_blank')}
+                        onClick={() => window.open(item.link, '_blank')}
                         className="h-6 px-2"
                       >
                         <Download className="w-3 h-3" />
@@ -166,14 +184,14 @@ export default function BeforeImagesPage() {
       )}
 
       {/* Pagination Controls */}
-      {filteredImages.length > itemsPerPage && (
+      {filteredContent.length > itemsPerPage && (
         <div className="flex items-center justify-between mt-8">
           <div className="flex items-center space-x-2">
             <p className="text-sm font-medium">
               Page {currentPage} of {totalPages}
             </p>
             <p className="text-sm text-muted-foreground">
-              ({filteredImages.length} total items)
+              ({filteredContent.length} total items)
             </p>
           </div>
           <div className="flex items-center space-x-2">
