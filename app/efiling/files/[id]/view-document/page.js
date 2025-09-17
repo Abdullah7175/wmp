@@ -26,6 +26,8 @@ export default function DocumentViewer() {
 	const [newComment, setNewComment] = useState("");
 	const [posting, setPosting] = useState(false);
 	const [currentPageId, setCurrentPageId] = useState(1);
+	const [workRequest, setWorkRequest] = useState(null);
+	const [beforeContent, setBeforeContent] = useState([]);
 
 	const sanitizeHtml = (html) => {
 		if (!html || typeof html !== "string") return "";
@@ -65,6 +67,22 @@ export default function DocumentViewer() {
 			if (sigRes.ok) setSignatures((await sigRes.json()).signatures || []);
 			const comRes = await fetch(`/api/efiling/files/${params.id}/comments`);
 			if (comRes.ok) setComments((await comRes.json()) || []);
+			
+			// Fetch work request details if work_request_id exists
+			if (fileData.work_request_id) {
+				const workRes = await fetch(`/api/requests/${fileData.work_request_id}`);
+				if (workRes.ok) {
+					const workData = await workRes.json();
+					setWorkRequest(workData);
+					
+					// Fetch before content for this work request
+					const contentRes = await fetch(`/api/before-content?work_request_id=${fileData.work_request_id}`);
+					if (contentRes.ok) {
+						const contentData = await contentRes.json();
+						setBeforeContent(Array.isArray(contentData) ? contentData : []);
+					}
+				}
+			}
 		} catch (e) {
 			console.error(e);
 			toast({ title: "Error", description: "Failed to fetch document data", variant: "destructive" });
@@ -178,8 +196,74 @@ export default function DocumentViewer() {
 									<div className="flex items-center space-x-2"><Calendar className="w-4 h-4 text-gray-500"/><span className="text-sm text-gray-600">Created: {formatDate(file.created_at)}</span></div>
 									<div className="flex items-center space-x-2"><Badge className={priorityColor(file.priority)}>{file.priority || "Normal"} Priority</Badge></div>
 									<div className="flex items-center space-x-2"><Badge variant="outline">{file.confidentiality_level || "Normal"} Confidentiality</Badge></div>
+									{file.ceo_approval_status && (
+										<div className="flex items-center space-x-2">
+											<Badge className={file.ceo_approval_status === 'approved' ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}>
+												CEO: {file.ceo_approval_status === 'approved' ? 'Approved' : 'Not Approved'}
+											</Badge>
+										</div>
+									)}
+									{file.coo_approval_status && (
+										<div className="flex items-center space-x-2">
+											<Badge className={file.coo_approval_status === 'approved' ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}>
+												COO: {file.coo_approval_status === 'approved' ? 'Approved' : 'Not Approved'}
+											</Badge>
+										</div>
+									)}
 								</CardContent>
 							</Card>
+
+							{workRequest && (
+								<Card>
+									<CardHeader><CardTitle className="text-lg">Work Request Details</CardTitle></CardHeader>
+									<CardContent className="space-y-3">
+										<div className="flex items-center space-x-2"><FileText className="w-4 h-4 text-gray-500"/><span className="text-sm text-gray-600">Request ID: #{workRequest.id}</span></div>
+										<div className="flex items-center space-x-2"><Building2 className="w-4 h-4 text-gray-500"/><span className="text-sm text-gray-600">Address: {workRequest.address || "N/A"}</span></div>
+										<div className="flex items-center space-x-2"><User className="w-4 h-4 text-gray-500"/><span className="text-sm text-gray-600">Type: {workRequest.complaint_type || "N/A"}</span></div>
+										<div className="flex items-center space-x-2"><Calendar className="w-4 h-4 text-gray-500"/><span className="text-sm text-gray-600">Created: {formatDate(workRequest.request_date)}</span></div>
+										<div className="flex items-center space-x-2"><Badge className={statusColor(workRequest.status_name)}>{workRequest.status_name || "Unknown"}</Badge></div>
+									</CardContent>
+								</Card>
+							)}
+
+							{beforeContent.length > 0 && (
+								<Card>
+									<CardHeader><CardTitle className="text-lg">Before Content ({beforeContent.length})</CardTitle></CardHeader>
+									<CardContent>
+										<div className="space-y-3">
+											{beforeContent.map((item) => (
+												<div key={item.id} className="border rounded-lg p-3">
+													<div className="relative">
+														{item.content_type === 'video' ? (
+															<video
+																src={item.link}
+																className="w-full h-32 object-cover rounded"
+																controls
+															/>
+														) : (
+															<img
+																src={item.link}
+																alt={item.description || 'Before content'}
+																className="w-full h-32 object-cover rounded"
+															/>
+														)}
+														<div className="absolute top-2 left-2">
+															<Badge variant="secondary" className="text-xs">
+																{item.content_type === 'video' ? 'Video' : 'Image'}
+															</Badge>
+														</div>
+													</div>
+													{item.description && (
+														<p className="text-xs text-gray-500 mt-2 line-clamp-2">
+															{item.description}
+														</p>
+													)}
+												</div>
+											))}
+										</div>
+									</CardContent>
+								</Card>
+							)}
 
 							<Card>
 								<CardHeader><CardTitle className="text-lg flex items-center"><Paperclip className="w-4 h-4 mr-2"/>Attachments ({attachments.length})</CardTitle></CardHeader>

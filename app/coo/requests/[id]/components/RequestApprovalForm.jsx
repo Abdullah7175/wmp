@@ -18,7 +18,7 @@ import {
 
 export default function RequestApprovalForm({ requestData }) {
   const router = useRouter();
-  const { request, beforeImages, images, videos, finalVideos } = requestData;
+  const { request, beforeContent, images, videos, finalVideos } = requestData;
   const [isLoading, setIsLoading] = useState(false);
   const [comments, setComments] = useState("");
   const [approvalStatus, setApprovalStatus] = useState("pending");
@@ -157,29 +157,37 @@ export default function RequestApprovalForm({ requestData }) {
         </div>
       </div>
 
-      {/* Before Images Section */}
-      {beforeImages.length > 0 && (
+      {/* Before Content Section */}
+      {beforeContent.length > 0 && (
         <div className="bg-white rounded-lg shadow-md p-4 lg:p-6">
           <h3 className="text-base lg:text-lg font-semibold text-gray-900 mb-3 lg:mb-4 flex items-center">
             <Image className="w-4 h-4 lg:w-5 lg:h-5 mr-2" />
-            Before Images ({beforeImages.length})
+            Before Content ({beforeContent.length})
           </h3>
           
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 lg:gap-4">
-            {beforeImages.map((image) => (
-              <div key={image.id} className="border rounded-lg p-3 lg:p-4">
-                <img
-                  src={image.link}
-                  alt="Before image"
-                  className="w-full h-32 lg:h-48 object-cover rounded-md mb-2 lg:mb-3"
-                />
+            {beforeContent.map((content) => (
+              <div key={content.id} className="border rounded-lg p-3 lg:p-4">
+                {content.content_type === 'video' ? (
+                  <video
+                    src={content.link}
+                    className="w-full h-32 lg:h-48 object-cover rounded-md mb-2 lg:mb-3"
+                    controls
+                  />
+                ) : (
+                  <img
+                    src={content.link}
+                    alt="Before content"
+                    className="w-full h-32 lg:h-48 object-cover rounded-md mb-2 lg:mb-3"
+                  />
+                )}
                 <div className="text-xs lg:text-sm text-gray-600">
-                  <p className="font-medium">Uploaded by: {image.creator_name}</p>
+                  <p className="font-medium">Uploaded by: {content.creator_name}</p>
                   <p className="text-gray-500">
-                    {new Date(image.created_at).toLocaleDateString()}
+                    {new Date(content.created_at).toLocaleDateString()}
                   </p>
-                  {image.description && (
-                    <p className="mt-1 text-gray-700">{image.description}</p>
+                  {content.description && (
+                    <p className="mt-1 text-gray-700">{content.description}</p>
                   )}
                 </div>
               </div>

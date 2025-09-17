@@ -41,7 +41,7 @@ export async function GET(request, { params }) {
       success: true,
       data: {
         canUpload: true,
-        allowedMediaTypes: ['before_images', 'images', 'videos', 'final_videos'],
+        allowedMediaTypes: ['before_content', 'images', 'videos', 'final_videos'],
         requestedMediaType: mediaType,
         isMediaTypeAllowed: true,
         reason: "All users can upload media to work requests"

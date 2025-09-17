@@ -50,15 +50,16 @@ async function getRequestDetails(requestId) {
     }
 
     // Get all media for this request
-    const [beforeImages, images, videos, finalVideos] = await Promise.all([
+    const [beforeContent, images, videos, finalVideos] = await Promise.all([
       query(`
         SELECT 
           id,
           link,
           description,
           created_at,
-          creator_name
-        FROM before_images 
+          creator_name,
+          content_type
+        FROM before_content 
         WHERE work_request_id = $1
         ORDER BY created_at DESC
       `, [requestId]),
@@ -99,7 +100,7 @@ async function getRequestDetails(requestId) {
 
     return {
       request: request.rows[0],
-      beforeImages: beforeImages.rows || [],
+      beforeContent: beforeContent.rows || [],
       images: images.rows || [],
       videos: videos.rows || [],
       finalVideos: finalVideos.rows || []

@@ -20,7 +20,7 @@ export async function GET(request) {
         ct.type_name as complaint_type,
         t.town,
         st.subtown
-      FROM before_images bi
+      FROM before_content bi
       LEFT JOIN work_requests wr ON bi.work_request_id = wr.id
       LEFT JOIN complaint_types ct ON wr.complaint_type_id = ct.id
       LEFT JOIN town t ON wr.town_id = t.id
@@ -56,7 +56,7 @@ export async function GET(request) {
         user_name: session.user.name || 'Unknown',
         user_email: session.user.email || 'unknown@example.com',
         action_type: 'VIEW',
-        entity_type: 'before_images',
+        entity_type: 'before_content',
         entity_id: workRequestId,
         entity_name: workRequestId ? `Before Images for Request #${workRequestId}` : 'All Before Images',
         details: {
@@ -92,8 +92,8 @@ export async function POST(request) {
 
     // Insert main before image
     const insertQuery = `
-      INSERT INTO before_images (work_request_id, description, link, creator_id, creator_type, creator_name, geo_tag)
-      VALUES ($1, $2, $3, $4, $5, $6, ST_GeomFromText($7, 4326))
+      INSERT INTO before_content (work_request_id, description, link, creator_id, creator_type, creator_name, geo_tag, content_type)
+      VALUES ($1, $2, $3, $4, $5, $6, ST_GeomFromText($7, 4326), $8)
       RETURNING *
     `;
 
@@ -107,7 +107,8 @@ export async function POST(request) {
       session.user.id,
       session.user.userType || 'user',
       creatorName,
-      geoTag
+      geoTag,
+      'image' // Default content_type for this legacy API
     ]);
 
     const beforeImageId = result[0]?.id;
@@ -120,7 +121,7 @@ export async function POST(request) {
       user_name: session.user.name || 'Unknown',
       user_email: session.user.email || 'unknown@example.com',
       action_type: 'UPLOAD',
-      entity_type: 'before_images',
+      entity_type: 'before_content',
       entity_id: beforeImageId,
       entity_name: `Before Image for Request #${workRequestId}`,
       details: {
@@ -160,7 +161,7 @@ export async function POST(request) {
           user_name: session.user.name || 'Unknown',
           user_email: session.user.email || 'unknown@example.com',
           action_type: 'UPLOAD',
-          entity_type: 'before_images',
+          entity_type: 'before_content',
           entity_id: additionalResult[0]?.id,
           entity_name: `Additional Before Image for Request #${workRequestId}`,
           details: {
@@ -205,7 +206,7 @@ export async function DELETE(request) {
 
     // Check if user has permission to delete (creator or admin)
     const checkQuery = `
-      SELECT creator_id, creator_type FROM before_images WHERE id = $1
+      SELECT creator_id, creator_type FROM before_content WHERE id = $1
     `;
     const checkResult = await query(checkQuery, [id]);
 
@@ -225,13 +226,13 @@ export async function DELETE(request) {
     // Get image details before deletion for logging
     const imageDetailsQuery = `
       SELECT bi.*, wr.id as work_request_id, wr.description as work_description
-      FROM before_images bi
+      FROM before_content bi
       LEFT JOIN work_requests wr ON bi.work_request_id = wr.id
       WHERE bi.id = $1
     `;
     const imageDetails = await query(imageDetailsQuery, [id]);
 
-    const deleteQuery = 'DELETE FROM before_images WHERE id = $1';
+    const deleteQuery = 'DELETE FROM before_content WHERE id = $1';
     await query(deleteQuery, [id]);
 
     // Log before image deletion action
@@ -244,7 +245,7 @@ export async function DELETE(request) {
         user_name: session.user.name || 'Unknown',
         user_email: session.user.email || 'unknown@example.com',
         action_type: 'DELETE',
-        entity_type: 'before_images',
+        entity_type: 'before_content',
         entity_id: parseInt(id),
         entity_name: `Before Image for Request #${image.work_request_id}`,
         details: {

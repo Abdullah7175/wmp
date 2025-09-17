@@ -130,7 +130,7 @@ export default function AssignedRequestsPage() {
                         disabled={isCompleted && !isAdminOrManager}
                       >
                         <ImageIcon className="w-4 h-4" />
-                        Before Images
+                        Before Content
                       </button>
                     </Link>
                     <Link href={`/smagent/images/add?requestId=${req.id}`} className="flex-1">

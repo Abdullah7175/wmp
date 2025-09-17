@@ -80,22 +80,23 @@ export async function GET(request, { params }) {
       );
     }
 
-    // Get before images for this request
-    const beforeImages = await query(`
+    // Get before content for this request
+    const beforeContent = await query(`
       SELECT 
         id,
         link,
         description,
         created_at,
-        creator_name
-      FROM before_images 
+        creator_name,
+        content_type
+      FROM before_content 
       WHERE work_request_id = $1
       ORDER BY created_at DESC
     `, [requestId]);
 
     const requestData = {
       request: request.rows[0],
-      beforeImages: beforeImages.rows || []
+      beforeContent: beforeContent.rows || []
     };
 
     return NextResponse.json({

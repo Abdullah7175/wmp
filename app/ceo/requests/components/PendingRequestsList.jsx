@@ -163,10 +163,10 @@ export default function PendingRequestsList() {
                 </Link>
                 
                 <Link
-                  href={`/ceo/requests/${request.id}/before-images`}
+                  href={`/ceo/requests/${request.id}/before-content`}
                   className="bg-gray-600 text-white px-6 py-2 rounded-md text-sm font-medium hover:bg-gray-700 transition-colors duration-200 text-center"
                 >
-                  View Before Images
+                  View Before Content
                 </Link>
               </div>
             </div>

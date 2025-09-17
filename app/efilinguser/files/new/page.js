@@ -43,6 +43,7 @@ const validationSchema = Yup.object({
         .min(1, 'Please select a file type'),
     assigned_to: Yup.mixed().nullable(),
     remarks: Yup.string().max(1000, 'Remarks must not exceed 1000 characters'),
+    work_request_id: Yup.number().nullable(),
 });
 
 export default function CreateNewFile() {
@@ -56,6 +57,7 @@ export default function CreateNewFile() {
     const [users, setUsers] = useState([]);
     const [selectedDepartment, setSelectedDepartment] = useState(null);
     const [selectedWorkflow, setSelectedWorkflow] = useState(null);
+    const [workRequests, setWorkRequests] = useState([]);
 
     useEffect(() => {
         if (!session?.user?.id) return;
@@ -64,10 +66,11 @@ export default function CreateNewFile() {
 
     const fetchInitialData = async () => {
         try {
-            const [deptRes, catRes, typeRes] = await Promise.all([
+            const [deptRes, catRes, typeRes, workRes] = await Promise.all([
                 fetch('/api/efiling/departments'),
                 fetch('/api/efiling/categories'),
-                fetch('/api/efiling/file-types')
+                fetch('/api/efiling/file-types'),
+                fetch('/api/requests?limit=1000')
             ]);
 
             if (deptRes.ok) {
@@ -82,6 +85,10 @@ export default function CreateNewFile() {
                 const typeData = await typeRes.json();
                 const list = Array.isArray(typeData) ? typeData : (Array.isArray(typeData.fileTypes) ? typeData.fileTypes : []);
                 setFileTypes(list);
+            }
+            if (workRes.ok) {
+                const workData = await workRes.json();
+                setWorkRequests(Array.isArray(workData.data) ? workData.data : []);
             }
         } catch (error) {
             console.error('Error fetching initial data:', error);
@@ -108,6 +115,7 @@ export default function CreateNewFile() {
             file_type_id: '',
             assigned_to: null,
             remarks: '',
+            work_request_id: '',
         },
         validationSchema,
         onSubmit: async (values) => {
@@ -122,7 +130,7 @@ export default function CreateNewFile() {
                         department_id: parseInt(values.department_id),
                         file_type_id: parseInt(values.file_type_id),
                         assigned_to: values.assigned_to ? parseInt(values.assigned_to) : null,
-                        work_request_id: null,
+                        work_request_id: values.work_request_id ? parseInt(values.work_request_id) : null,
                         priority: 'high',
                         confidentiality_level: 'normal',
                     }),
@@ -276,6 +284,25 @@ export default function CreateNewFile() {
                                     </Select>
                                     <p className="text-sm text-gray-500 mt-1">Workflow will be attached based on the selected file type</p>
                                 </div> */}
+
+                                <div>
+                                    <Label htmlFor="work_request_id">Video Request ID (Optional)</Label>
+                                    <Select value={formik.values.work_request_id ? formik.values.work_request_id.toString() : ""} onValueChange={(value) => formik.setFieldValue('work_request_id', value)}>
+                                        <SelectTrigger id="work_request_id">
+                                            <SelectValue placeholder="Select Video Request ID (Optional)" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="">No Video Request</SelectItem>
+                                            {workRequests.map((req) => (
+                                                <SelectItem key={req.id} value={req.id.toString()}>
+                                                    #{req.id} - {req.address || 'No address'} ({req.complaint_type || 'No type'})
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                    <p className="text-sm text-gray-500 mt-1">Link this file to a specific video request for reference</p>
+                                    {formik.touched.work_request_id && formik.errors.work_request_id && (<p className="text-red-500 text-sm mt-1">{formik.errors.work_request_id}</p>)}
+                                </div>
 
                                 <div>
                                     <Label htmlFor="remarks">Initial Remarks</Label>

@@ -218,7 +218,7 @@ export default function AllRequestsList() {
                     {request.before_images_count > 0 && (
                       <div className="flex items-center space-x-1">
                         <Image className="w-3 h-3 lg:w-4 lg:h-4" />
-                        <span>{request.before_images_count} Before Images</span>
+                        <span>{request.before_images_count} Before Content</span>
                       </div>
                     )}
                     {request.images_count > 0 && (

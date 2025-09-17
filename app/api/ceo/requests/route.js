@@ -97,7 +97,7 @@ export async function GET(request) {
       LEFT JOIN work_request_soft_approvals coo_approval ON wr.id = coo_approval.work_request_id AND coo_approval.approver_type = 'coo'
       LEFT JOIN (
         SELECT work_request_id, COUNT(*) as count 
-        FROM before_images 
+        FROM before_content 
         GROUP BY work_request_id
       ) bi_count ON wr.id = bi_count.work_request_id
       LEFT JOIN (
