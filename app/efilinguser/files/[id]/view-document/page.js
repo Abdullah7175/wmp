@@ -74,7 +74,7 @@ export default function DocumentViewer() {
 			
 			if (fileData.work_request_id) {
 				console.log('Fetching work request details for ID:', fileData.work_request_id);
-				const workRes = await fetch(`/api/requests/${fileData.work_request_id}`);
+				const workRes = await fetch(`/api/requests?id=${fileData.work_request_id}`);
 				if (workRes.ok) {
 					const workData = await workRes.json();
 					console.log('Work request data:', workData);
@@ -82,7 +82,7 @@ export default function DocumentViewer() {
 					
 					// Fetch before content for this work request
 					console.log('Fetching before content for work request:', fileData.work_request_id);
-					const contentRes = await fetch(`/api/before-content?work_request_id=${fileData.work_request_id}`);
+					const contentRes = await fetch(`/api/before-content?workRequestId=${fileData.work_request_id}`);
 					if (contentRes.ok) {
 						const contentData = await contentRes.json();
 						console.log('Before content data:', contentData);
