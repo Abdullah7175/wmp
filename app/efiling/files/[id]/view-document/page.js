@@ -136,6 +136,9 @@ export default function DocumentViewer() {
 	if (loading) return <div className="flex items-center justify-center h-96"><div className="text-lg">Loading document...</div></div>;
 	if (!file) return <div className="flex items-center justify-center h-96"><div className="text-lg text-red-600">Document not found</div></div>;
 
+	// Debug logging
+	console.log('Current state:', { workRequest, beforeContent, file });
+
 	return (
 		<div className="min-h-screen bg-gray-50">
 			<div className="bg-white border-b border-gray-200 sticky top-0 z-50">
@@ -200,6 +203,17 @@ export default function DocumentViewer() {
 
 					<div className="lg:col-span-1">
 						<div className="space-y-6">
+							{/* Debug Section - Remove after testing */}
+							<Card className="bg-yellow-50 border-yellow-200">
+								<CardHeader><CardTitle className="text-lg text-yellow-800">Debug Info</CardTitle></CardHeader>
+								<CardContent className="text-xs">
+									<div>Work Request ID: {file?.work_request_id || 'None'}</div>
+									<div>Work Request Data: {workRequest ? 'Loaded' : 'Not loaded'}</div>
+									<div>Before Content Count: {beforeContent?.length || 0}</div>
+									<div>File Number: {file?.file_number}</div>
+								</CardContent>
+							</Card>
+
 							<Card>
 								<CardHeader><CardTitle className="text-lg">File Information</CardTitle></CardHeader>
 								<CardContent className="space-y-3">
