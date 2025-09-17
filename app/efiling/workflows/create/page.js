@@ -468,19 +468,18 @@ export default function CreateWorkflowTemplate() {
                                                         <div>
                                                             <Label>From Role</Label>
                                                             <Select
-                                                                value={cycle.from_role_id || ''}
-                                                                onValueChange={(value) => updateCycle(stageIndex, cycleIndex, 'from_role_id', value === '' ? null : parseInt(value))}
+                                                                value={cycle.from_role_id || 'none'}
+                                                                onValueChange={(value) => updateCycle(stageIndex, cycleIndex, 'from_role_id', value === 'none' ? null : parseInt(value))}
                                                             >
                                                                 <SelectTrigger>
                                                                     <SelectValue placeholder="Select role" />
                                                                 </SelectTrigger>
                                                                 <SelectContent>
-                                                                    <SelectItem value="">No specific role</SelectItem>
+                                                                    <SelectItem value="none">No specific role</SelectItem>
                                                                     {roles.map((role) => (
                                                                         <SelectItem key={role.id} value={role.id}>
                                                                             {role.name}
-                                                                        </SelectItem>
-                                                                    ))}
+                                                                        </SelectItem>                                                                    ))}
                                                                 </SelectContent>
                                                             </Select>
                                                         </div>
@@ -494,7 +493,7 @@ export default function CreateWorkflowTemplate() {
                                                                     <SelectValue placeholder="Select role" />
                                                                 </SelectTrigger>
                                                                 <SelectContent>
-                                                                    <SelectItem value="">No specific role</SelectItem>
+                                                                    <SelectItem value="none">No specific role</SelectItem>
                                                                     {roles.map((role) => (
                                                                         <SelectItem key={role.id} value={role.id}>
                                                                             {role.name}
@@ -525,7 +524,7 @@ export default function CreateWorkflowTemplate() {
                                                                     <SelectValue placeholder="Select department" />
                                                                 </SelectTrigger>
                                                                 <SelectContent>
-                                                                    <SelectItem value="">No specific department</SelectItem>
+                                                                    <SelectItem value="none">No specific department</SelectItem>
                                                                     {departments.map((dept) => (
                                                                         <SelectItem key={dept.id} value={dept.id}>
                                                                             {dept.name}
@@ -537,14 +536,14 @@ export default function CreateWorkflowTemplate() {
                                                         <div>
                                                             <Label>To Department</Label>
                                                             <Select
-                                                                value={cycle.to_department_id || ''}
-                                                                onValueChange={(value) => updateCycle(stageIndex, cycleIndex, 'to_department_id', value === '' ? null : parseInt(value))}
+                                                                value={cycle.to_department_id || 'none'}
+                                                                onValueChange={(value) => updateCycle(stageIndex, cycleIndex, 'to_department_id', value === 'none' ? null : parseInt(value))}
                                                             >
                                                                 <SelectTrigger>
                                                                     <SelectValue placeholder="Select department" />
                                                                 </SelectTrigger>
                                                                 <SelectContent>
-                                                                    <SelectItem value="">No specific department</SelectItem>
+                                                                    <SelectItem value="none">No specific department</SelectItem>
                                                                     {departments.map((dept) => (
                                                                         <SelectItem key={dept.id} value={dept.id}>
                                                                             {dept.name}

@@ -287,12 +287,12 @@ export default function CreateNewFile() {
 
                                 <div>
                                     <Label htmlFor="work_request_id">Video Request ID (Optional)</Label>
-                                    <Select value={formik.values.work_request_id ? formik.values.work_request_id.toString() : ""} onValueChange={(value) => formik.setFieldValue('work_request_id', value)}>
+                                    <Select value={formik.values.work_request_id ? formik.values.work_request_id.toString() : "none"} onValueChange={(value) => formik.setFieldValue('work_request_id', value === "none" ? "" : value)}>
                                         <SelectTrigger id="work_request_id">
                                             <SelectValue placeholder="Select Video Request ID (Optional)" />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="">No Video Request</SelectItem>
+                                            <SelectItem value="none">No Video Request</SelectItem>
                                             {workRequests.map((req) => (
                                                 <SelectItem key={req.id} value={req.id.toString()}>
                                                     #{req.id} - {req.address || 'No address'} ({req.complaint_type || 'No type'})

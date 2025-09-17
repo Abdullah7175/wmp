@@ -384,7 +384,7 @@ export default function CreateEfilingUser() {
                                                         </SelectItem>
                                                     ))
                                                 ) : (
-                                                    <SelectItem value="" disabled>
+                                                    <SelectItem value="loading" disabled>
                                                         {Array.isArray(departments) && departments.length === 0 ? "No departments available" : "Loading..."}
                                                     </SelectItem>
                                                 )}
@@ -413,7 +413,7 @@ export default function CreateEfilingUser() {
                                                     </SelectItem>
                                                 ))
                                             ) : (
-                                                <SelectItem value="" disabled>
+                                                <SelectItem value="loading" disabled>
                                                     {Array.isArray(roles) && roles.length === 0 ? "No roles available" : "Loading..."}
                                                 </SelectItem>
                                             )}
