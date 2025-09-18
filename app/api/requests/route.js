@@ -127,7 +127,9 @@ export async function GET(request) {
                     ceo_approval.approval_status as ceo_approval_status,
                     ceo_approval.comments as ceo_comments,
                     coo_approval.approval_status as coo_approval_status,
-                    coo_approval.comments as coo_comments
+                    coo_approval.comments as coo_comments,
+                    ce_approval.approval_status as ce_approval_status,
+                    ce_approval.comments as ce_comments
                     ${includeApprovalStatus ? ', wra.approval_status' : ''}
                 FROM work_requests wr
                 LEFT JOIN town t ON wr.town_id = t.id
@@ -139,6 +141,7 @@ export async function GET(request) {
                 LEFT JOIN socialmediaperson sm ON wr.creator_type = 'socialmedia' AND wr.creator_id = sm.id
                 LEFT JOIN work_request_soft_approvals ceo_approval ON wr.id = ceo_approval.work_request_id AND ceo_approval.approver_type = 'ceo'
                 LEFT JOIN work_request_soft_approvals coo_approval ON wr.id = coo_approval.work_request_id AND coo_approval.approver_type = 'coo'
+                LEFT JOIN work_request_soft_approvals ce_approval ON wr.id = ce_approval.work_request_id AND ce_approval.approver_type = 'ce'
                 ${includeApprovalStatus ? 'LEFT JOIN work_request_approvals wra ON wr.id = wra.work_request_id' : ''}
             `;
             

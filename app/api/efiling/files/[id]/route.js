@@ -17,12 +17,20 @@ export async function GET(request, { params }) {
                 s.code as status_code,
                 s.color as status_color,
                 COALESCE(ab.designation, 'Unassigned') as assigned_to_name,
-                f.work_request_id
+                f.work_request_id,
+                COALESCE(creator_users.name, 'Unknown') as creator_user_name,
+                creator_users.name as created_by_name,
+                CASE 
+                    WHEN f.work_request_id IS NOT NULL THEN 'Yes'
+                    ELSE 'No'
+                END as has_video_request
             FROM efiling_files f
             LEFT JOIN efiling_departments d ON f.department_id = d.id
             LEFT JOIN efiling_file_categories c ON f.category_id = c.id
             LEFT JOIN efiling_file_status s ON f.status_id = s.id
             LEFT JOIN efiling_users ab ON f.assigned_to = ab.id
+            LEFT JOIN efiling_users creator_efiling ON f.created_by = creator_efiling.id
+            LEFT JOIN users creator_users ON creator_efiling.user_id = creator_users.id
             WHERE f.id = $1
         `, [id]);
 

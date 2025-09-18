@@ -77,6 +77,7 @@ export default function LoginPage() {
       else if (session.user.userType === "socialmedia" || session.user.userType === "socialmediaperson") window.location.href = "/smagent";
       else if (session.user.userType === "user" && parseInt(session.user.role) === 5) window.location.href = "/ceo";
       else if (session.user.userType === "user" && parseInt(session.user.role) === 6) window.location.href = "/coo";
+      else if (session.user.userType === "user" && parseInt(session.user.role) === 7) window.location.href = "/ce";
       else if (session.user.userType === "user") window.location.href = "/dashboard";
     }
   }, [session, status]);
@@ -222,6 +223,9 @@ export default function LoginPage() {
                   break;
                 case "coo":
                   window.location.href = "/coo";
+                  break;
+                case "ce":
+                  window.location.href = "/ce";
                   break;
               }
             } catch (error) {

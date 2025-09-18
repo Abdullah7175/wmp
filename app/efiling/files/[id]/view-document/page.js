@@ -211,10 +211,119 @@ export default function DocumentViewer() {
 									<div className="text-center mt-8"><div className="text-sm text-gray-600">{currentPage?.content?.footer || "Document Footer"}</div></div>
 								</div>
 							</CardContent>
-						</Card>
-					</div>
+                        </Card>
 
-					<div className="lg:col-span-1">
+                        {/* Video Request Details Section */}
+                        {file?.work_request_id && (
+                            <Card className="mt-6 border-blue-200 bg-blue-50">
+                                <CardHeader>
+                                    <CardTitle className="text-lg text-blue-800 flex items-center">
+                                        📹 Video Request Details
+                                        <Badge className="ml-2 bg-blue-100 text-blue-800">Request #{file.work_request_id}</Badge>
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                    {workRequest ? (
+                                        <div className="space-y-4">
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <div className="space-y-2">
+                                                    <div className="flex items-center space-x-2">
+                                                        <FileText className="w-4 h-4 text-blue-600"/>
+                                                        <span className="text-sm font-medium text-blue-800">Request ID:</span>
+                                                        <span className="text-sm text-gray-700">#{workRequest.id}</span>
+                                                    </div>
+                                                    <div className="flex items-center space-x-2">
+                                                        <Building2 className="w-4 h-4 text-blue-600"/>
+                                                        <span className="text-sm font-medium text-blue-800">Address:</span>
+                                                        <span className="text-sm text-gray-700">{workRequest.address || "N/A"}</span>
+                                                    </div>
+                                                    <div className="flex items-center space-x-2">
+                                                        <User className="w-4 h-4 text-blue-600"/>
+                                                        <span className="text-sm font-medium text-blue-800">Type:</span>
+                                                        <span className="text-sm text-gray-700">{workRequest.complaint_type || "N/A"}</span>
+                                                    </div>
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <div className="flex items-center space-x-2">
+                                                        <Calendar className="w-4 h-4 text-blue-600"/>
+                                                        <span className="text-sm font-medium text-blue-800">Created:</span>
+                                                        <span className="text-sm text-gray-700">{formatDate(workRequest.request_date)}</span>
+                                                    </div>
+                                                    <div className="flex items-center space-x-2">
+                                                        <Badge className={statusColor(workRequest.status_name)}>{workRequest.status_name || "Unknown"}</Badge>
+                                                    </div>
+                                                    {workRequest.contact_number && (
+                                                        <div className="flex items-center space-x-2">
+                                                            <span className="text-sm font-medium text-blue-800">Contact:</span>
+                                                            <span className="text-sm text-gray-700">{workRequest.contact_number}</span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                            
+                                            {workRequest.description && (
+                                                <div className="mt-4 p-3 bg-white rounded border">
+                                                    <div className="text-sm font-semibold text-blue-800 mb-2">Work Description:</div>
+                                                    <div className="text-sm text-gray-700">{workRequest.description}</div>
+                                                </div>
+                                            )}
+
+                                            {/* Before Content Section */}
+                                            {beforeContent.length > 0 && (
+                                                <div className="mt-4">
+                                                    <div className="text-sm font-semibold text-blue-800 mb-3">Before Content ({beforeContent.length} items):</div>
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                                        {beforeContent.map((item) => (
+                                                            <div key={item.id} className="border rounded-lg p-3 bg-white">
+                                                                <div className="relative">
+                                                                    {item.content_type === 'video' ? (
+                                                                        <video
+                                                                            src={item.link}
+                                                                            className="w-full h-24 object-cover rounded"
+                                                                            controls
+                                                                        />
+                                                                    ) : (
+                                                                        <img
+                                                                            src={item.link}
+                                                                            alt={item.description || 'Before content'}
+                                                                            className="w-full h-24 object-cover rounded"
+                                                                        />
+                                                                    )}
+                                                                    <div className="absolute top-1 left-1">
+                                                                        <Badge variant="secondary" className="text-xs">
+                                                                            {item.content_type === 'video' ? '🎥 Video' : '📷 Image'}
+                                                                        </Badge>
+                                                                    </div>
+                                                                </div>
+                                                                {item.description && (
+                                                                    <p className="text-xs text-gray-500 mt-2 line-clamp-2">
+                                                                        {item.description}
+                                                                    </p>
+                                                                )}
+                                                                <div className="text-xs text-gray-400 mt-1">
+                                                                    Uploaded by: {item.creator_name || 'Unknown'}
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    ) : (
+                                        <div className="text-sm text-red-600">
+                                            <div>❌ Video request details not available</div>
+                                            <div className="mt-2 text-xs">
+                                                <div>Work Request ID: {file.work_request_id}</div>
+                                                <div>Status: Loading...</div>
+                                            </div>
+                                        </div>
+                                    )}
+                                </CardContent>
+                            </Card>
+                        )}
+                    </div>
+
+                    <div className="lg:col-span-1">
 						<div className="space-y-6">
 							{/* Debug Section - Remove after testing */}
 							<Card className="bg-yellow-50 border-yellow-200">
@@ -275,6 +384,13 @@ export default function DocumentViewer() {
 									<div className="flex items-center space-x-2"><Calendar className="w-4 h-4 text-gray-500"/><span className="text-sm text-gray-600">Created: {formatDate(file.created_at)}</span></div>
 									<div className="flex items-center space-x-2"><Badge className={priorityColor(file.priority)}>{file.priority || "Normal"} Priority</Badge></div>
 									<div className="flex items-center space-x-2"><Badge variant="outline">{file.confidentiality_level || "Normal"} Confidentiality</Badge></div>
+									{file.has_video_request && (
+										<div className="flex items-center space-x-2">
+											<Badge className={file.has_video_request === 'Yes' ? "bg-blue-100 text-blue-800" : "bg-gray-100 text-gray-800"}>
+												{file.has_video_request === 'Yes' ? '📹 Video Request Attached' : 'No Video Request'}
+											</Badge>
+										</div>
+									)}
 									{file.ceo_approval_status && (
 										<div className="flex items-center space-x-2">
 											<Badge className={file.ceo_approval_status === 'approved' ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}>

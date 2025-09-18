@@ -598,7 +598,7 @@ const CeoAnalyticsPage = () => {
                                                     : 'bg-red-100 text-red-800'
                                             }`}>
                                                 {request.approval_status === 'pending' ? 'Pending Approval' : 
-                                                 request.approval_status === 'approved' ? 'Approved' : 'Rejected'}
+                                                 request.approval_status === 'approved' ? 'Approved' : 'Not Approved'}
                                             </span>
                                         </div>
                                     </div>

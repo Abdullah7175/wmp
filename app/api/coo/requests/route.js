@@ -77,6 +77,8 @@ export async function GET(request) {
         coo_approval.approval_status as coo_approval_status,
         coo_approval.comments as coo_comments,
         coo_approval.approved_at as coo_approval_date,
+        ce_approval.approval_status as ce_approval_status,
+        ce_approval.comments as ce_comments,
         s.name as status_name,
         COALESCE(bi_count.count, 0) as before_images_count,
         COALESCE(img_count.count, 0) as images_count,
@@ -95,6 +97,7 @@ export async function GET(request) {
       LEFT JOIN status s ON wr.status_id = s.id
       LEFT JOIN work_request_soft_approvals ceo_approval ON wr.id = ceo_approval.work_request_id AND ceo_approval.approver_type = 'ceo'
       LEFT JOIN work_request_soft_approvals coo_approval ON wr.id = coo_approval.work_request_id AND coo_approval.approver_type = 'coo'
+      LEFT JOIN work_request_soft_approvals ce_approval ON wr.id = ce_approval.work_request_id AND ce_approval.approver_type = 'ce'
       LEFT JOIN (
         SELECT work_request_id, COUNT(*) as count 
         FROM before_content 
