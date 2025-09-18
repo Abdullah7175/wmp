@@ -1,15 +1,15 @@
 -- Verification script for CE implementation
 -- This script verifies that CE users are properly set up and linked
 
--- 1. Check if ce_users table exists and has correct structure
+-- 1. Check if ce_users and ce_user_departments tables exist and have correct structure
 SELECT 
     table_name,
     column_name,
     data_type,
     is_nullable
 FROM information_schema.columns 
-WHERE table_name = 'ce_users' 
-ORDER BY ordinal_position;
+WHERE table_name IN ('ce_users', 'ce_user_departments')
+ORDER BY table_name, ordinal_position;
 
 -- 2. Check if work_request_soft_approvals table exists (used for CE approvals)
 SELECT 
@@ -21,18 +21,21 @@ FROM information_schema.columns
 WHERE table_name = 'work_request_soft_approvals' 
 ORDER BY ordinal_position;
 
--- 3. Verify CE users are created with role 7
+-- 3. Verify CE users are created with role 7 and their department assignments
 SELECT 
     u.id,
     u.name,
     u.email,
     u.role,
-    cu.department,
     cu.designation,
-    cu.address
+    cu.address,
+    ARRAY_AGG(ct.type_name) as assigned_departments
 FROM users u
 LEFT JOIN ce_users cu ON u.id = cu.user_id
+LEFT JOIN ce_user_departments cud ON cu.id = cud.ce_user_id
+LEFT JOIN complaint_types ct ON cud.complaint_type_id = ct.id
 WHERE u.role = 7
+GROUP BY u.id, u.name, u.email, u.role, cu.designation, cu.address
 ORDER BY u.name;
 
 -- 4. Check if there are any users with role 7 but no ce_users record

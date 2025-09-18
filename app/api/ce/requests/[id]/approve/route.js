@@ -25,12 +25,15 @@ export async function POST(request, { params }) {
 
     client = await connectToDatabase();
 
-    // Get CE user info to determine department
+    // Get CE user's assigned complaint types (departments)
     const ceUserResult = await client.query(`
-      SELECT u.*, cu.department_id, cu.designation, cu.department
-      FROM users u
-      LEFT JOIN ce_users cu ON u.id = cu.user_id
+      SELECT cu.*, u.name, u.email,
+             ARRAY_AGG(cud.complaint_type_id) as assigned_complaint_types
+      FROM ce_users cu
+      JOIN users u ON cu.user_id = u.id
+      LEFT JOIN ce_user_departments cud ON cu.id = cud.ce_user_id
       WHERE u.id = $1
+      GROUP BY cu.id, u.name, u.email
     `, [session.user.id]);
 
     if (ceUserResult.rows.length === 0) {
@@ -38,6 +41,7 @@ export async function POST(request, { params }) {
     }
 
     const ceUser = ceUserResult.rows[0];
+    const assignedComplaintTypes = ceUser.assigned_complaint_types?.filter(id => id !== null) || [];
 
     // Check if request exists and CE has access
     const requestResult = await client.query(`
@@ -54,15 +58,10 @@ export async function POST(request, { params }) {
     }
 
     const request = requestResult.rows[0];
-    const ceDepartment = ceUser.department?.toLowerCase();
-    const requestType = request.complaint_type?.toLowerCase();
 
-    // Check department access
-    if (ceDepartment === 'water' && !requestType?.includes('water')) {
-      return NextResponse.json({ error: 'Access denied - Water CE can only approve water-related requests' }, { status: 403 });
-    }
-    if (ceDepartment === 'sewerage' && !requestType?.includes('sewerage')) {
-      return NextResponse.json({ error: 'Access denied - Sewerage CE can only approve sewerage-related requests' }, { status: 403 });
+    // Check if CE has access to this request's complaint type
+    if (!assignedComplaintTypes.includes(request.complaint_type_id)) {
+      return NextResponse.json({ error: 'Access denied - You can only approve requests from your assigned departments' }, { status: 403 });
     }
 
     // Insert or update CE soft approval using the same mechanism as CEO/COO

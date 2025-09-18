@@ -14,12 +14,15 @@ export async function GET() {
 
     client = await connectToDatabase();
 
-    // Get CE user info to determine department
+    // Get CE user's assigned complaint types (departments)
     const ceUserResult = await client.query(`
-      SELECT u.*, cu.department_id, cu.designation, cu.department
-      FROM users u
-      LEFT JOIN ce_users cu ON u.id = cu.user_id
+      SELECT cu.*, u.name, u.email,
+             ARRAY_AGG(cud.complaint_type_id) as assigned_complaint_types
+      FROM ce_users cu
+      JOIN users u ON cu.user_id = u.id
+      LEFT JOIN ce_user_departments cud ON cu.id = cud.ce_user_id
       WHERE u.id = $1
+      GROUP BY cu.id, u.name, u.email
     `, [session.user.id]);
 
     if (ceUserResult.rows.length === 0) {
@@ -27,14 +30,16 @@ export async function GET() {
     }
 
     const ceUser = ceUserResult.rows[0];
-    const ceDepartment = ceUser.department?.toLowerCase();
+    const assignedComplaintTypes = ceUser.assigned_complaint_types?.filter(id => id !== null) || [];
 
-    // Build department filter
+    // Build department filter based on CE's assigned complaint types
     let departmentFilter = '';
-    if (ceDepartment === 'water') {
-      departmentFilter = "AND LOWER(ct.type_name) LIKE '%water%'";
-    } else if (ceDepartment === 'sewerage') {
-      departmentFilter = "AND LOWER(ct.type_name) LIKE '%sewerage%'";
+    if (assignedComplaintTypes.length > 0) {
+      const complaintTypeIds = assignedComplaintTypes.join(',');
+      departmentFilter = `AND r.complaint_type_id IN (${complaintTypeIds})`;
+    } else {
+      // If no departments assigned, return empty result
+      departmentFilter = "AND 1=0";
     }
 
     // Get total requests for CE's department
@@ -75,9 +80,11 @@ export async function GET() {
       ${departmentFilter}
     `);
 
-    // Get department-wise breakdown
-    const waterRequestsResult = await client.query(`
+    // Get department-wise breakdown for assigned complaint types
+    const departmentBreakdownResult = await client.query(`
       SELECT 
+        ct.id as complaint_type_id,
+        ct.type_name as department_name,
         COUNT(*) as total,
         COUNT(CASE WHEN (ce_approval.approval_status IS NULL OR ce_approval.approval_status = 'pending') THEN 1 END) as pending,
         COUNT(CASE WHEN ce_approval.approval_status = 'approved' THEN 1 END) as approved,
@@ -85,19 +92,9 @@ export async function GET() {
       FROM requests r
       LEFT JOIN complaint_types ct ON r.complaint_type_id = ct.id
       LEFT JOIN work_request_soft_approvals ce_approval ON r.id = ce_approval.work_request_id AND ce_approval.approver_type = 'ce'
-      WHERE LOWER(ct.type_name) LIKE '%water%'
-    `);
-
-    const sewerageRequestsResult = await client.query(`
-      SELECT 
-        COUNT(*) as total,
-        COUNT(CASE WHEN (ce_approval.approval_status IS NULL OR ce_approval.approval_status = 'pending') THEN 1 END) as pending,
-        COUNT(CASE WHEN ce_approval.approval_status = 'approved' THEN 1 END) as approved,
-        COUNT(CASE WHEN ce_approval.approval_status = 'rejected' THEN 1 END) as rejected
-      FROM requests r
-      LEFT JOIN complaint_types ct ON r.complaint_type_id = ct.id
-      LEFT JOIN work_request_soft_approvals ce_approval ON r.id = ce_approval.work_request_id AND ce_approval.approver_type = 'ce'
-      WHERE LOWER(ct.type_name) LIKE '%sewerage%'
+      WHERE r.complaint_type_id IN (${assignedComplaintTypes.join(',')})
+      GROUP BY ct.id, ct.type_name
+      ORDER BY ct.type_name
     `);
 
     // Get recent CE activities
@@ -124,14 +121,14 @@ export async function GET() {
       pendingCeApproval: parseInt(pendingCeApprovalResult.rows[0].count),
       ceApproved: parseInt(ceApprovedResult.rows[0].count),
       ceRejected: parseInt(ceRejectedResult.rows[0].count),
-      waterRequests: parseInt(waterRequestsResult.rows[0].total),
-      waterPending: parseInt(waterRequestsResult.rows[0].pending),
-      waterApproved: parseInt(waterRequestsResult.rows[0].approved),
-      waterRejected: parseInt(waterRequestsResult.rows[0].rejected),
-      sewerageRequests: parseInt(sewerageRequestsResult.rows[0].total),
-      seweragePending: parseInt(sewerageRequestsResult.rows[0].pending),
-      sewerageApproved: parseInt(sewerageRequestsResult.rows[0].approved),
-      sewerageRejected: parseInt(sewerageRequestsResult.rows[0].rejected),
+      departmentBreakdown: departmentBreakdownResult.rows.map(dept => ({
+        id: dept.complaint_type_id,
+        name: dept.department_name,
+        total: parseInt(dept.total),
+        pending: parseInt(dept.pending),
+        approved: parseInt(dept.approved),
+        rejected: parseInt(dept.rejected)
+      })),
       recentActivities: recentActivitiesResult.rows.map(activity => ({
         requestId: activity.request_id,
         type: activity.approval_status,

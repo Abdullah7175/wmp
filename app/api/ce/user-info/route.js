@@ -14,16 +14,24 @@ export async function GET() {
 
     client = await connectToDatabase();
 
-    // Get CE user info
+    // Get CE user info with assigned departments
     const result = await client.query(`
       SELECT 
         u.name,
         u.email,
-        cu.department,
-        cu.designation
+        cu.designation,
+        ARRAY_AGG(
+          JSON_BUILD_OBJECT(
+            'id', ct.id,
+            'name', ct.type_name
+          )
+        ) as assigned_departments
       FROM users u
       LEFT JOIN ce_users cu ON u.id = cu.user_id
+      LEFT JOIN ce_user_departments cud ON cu.id = cud.ce_user_id
+      LEFT JOIN complaint_types ct ON cud.complaint_type_id = ct.id
       WHERE u.id = $1
+      GROUP BY u.name, u.email, cu.designation
     `, [session.user.id]);
 
     if (result.rows.length === 0) {

@@ -16,7 +16,7 @@ export async function GET(request, { params }) {
     const { id } = await params;
     client = await connectToDatabase();
 
-    // Get CE user details
+    // Get CE user details with assigned departments
     const result = await client.query(`
       SELECT 
         u.id,
@@ -25,15 +25,23 @@ export async function GET(request, { params }) {
         u.contact_number,
         u.created_date,
         u.updated_date,
-        cu.department_id,
         cu.designation,
-        cu.department,
         cu.address,
         cu.created_at as ce_created_at,
-        cu.updated_at as ce_updated_at
+        cu.updated_at as ce_updated_at,
+        ARRAY_AGG(
+          JSON_BUILD_OBJECT(
+            'id', ct.id,
+            'name', ct.type_name
+          )
+        ) as assigned_departments
       FROM users u
       LEFT JOIN ce_users cu ON u.id = cu.user_id
+      LEFT JOIN ce_user_departments cud ON cu.id = cud.ce_user_id
+      LEFT JOIN complaint_types ct ON cud.complaint_type_id = ct.id
       WHERE u.id = $1 AND u.role = 7
+      GROUP BY u.id, u.name, u.email, u.contact_number, u.created_date, u.updated_date, 
+               cu.designation, cu.address, cu.created_at, cu.updated_at
     `, [id]);
 
     if (result.rows.length === 0) {
@@ -62,7 +70,7 @@ export async function PUT(request, { params }) {
     }
 
     const { id } = await params;
-    const { name, email, contact_number, department, designation, address, password } = await request.json();
+    const { name, email, contact_number, departments, designation, address, password } = await request.json();
 
     client = await connectToDatabase();
 
@@ -119,10 +127,6 @@ export async function PUT(request, { params }) {
     const ceUpdateValues = [];
     let ceParamCount = 1;
 
-    if (department) {
-      ceUpdateFields.push(`department = $${ceParamCount++}`);
-      ceUpdateValues.push(department);
-    }
     if (designation !== undefined) {
       ceUpdateFields.push(`designation = $${ceParamCount++}`);
       ceUpdateValues.push(designation);
@@ -141,6 +145,26 @@ export async function PUT(request, { params }) {
         SET ${ceUpdateFields.join(', ')}
         WHERE user_id = $${ceParamCount}
       `, ceUpdateValues);
+    }
+
+    // Update department assignments if provided
+    if (departments && Array.isArray(departments)) {
+      // Get CE user ID
+      const ceUserResult = await client.query('SELECT id FROM ce_users WHERE user_id = $1', [id]);
+      if (ceUserResult.rows.length > 0) {
+        const ceUserId = ceUserResult.rows[0].id;
+        
+        // Delete existing department assignments
+        await client.query('DELETE FROM ce_user_departments WHERE ce_user_id = $1', [ceUserId]);
+        
+        // Insert new department assignments
+        for (const departmentId of departments) {
+          await client.query(`
+            INSERT INTO ce_user_departments (ce_user_id, complaint_type_id, created_at)
+            VALUES ($1, $2, NOW())
+          `, [ceUserId, departmentId]);
+        }
+      }
     }
 
     // Log the action

@@ -14,12 +14,15 @@ export async function GET() {
 
     client = await connectToDatabase();
 
-    // Get CE user info to determine department
+    // Get CE user's assigned complaint types (departments)
     const ceUserResult = await client.query(`
-      SELECT u.*, cu.department_id, cu.designation, cu.department
-      FROM users u
-      LEFT JOIN ce_users cu ON u.id = cu.user_id
+      SELECT cu.*, u.name, u.email,
+             ARRAY_AGG(cud.complaint_type_id) as assigned_complaint_types
+      FROM ce_users cu
+      JOIN users u ON cu.user_id = u.id
+      LEFT JOIN ce_user_departments cud ON cu.id = cud.ce_user_id
       WHERE u.id = $1
+      GROUP BY cu.id, u.name, u.email
     `, [session.user.id]);
 
     if (ceUserResult.rows.length === 0) {
@@ -27,14 +30,16 @@ export async function GET() {
     }
 
     const ceUser = ceUserResult.rows[0];
-    const ceDepartment = ceUser.department?.toLowerCase();
+    const assignedComplaintTypes = ceUser.assigned_complaint_types?.filter(id => id !== null) || [];
 
-    // Build department filter
+    // Build department filter based on CE's assigned complaint types
     let departmentFilter = '';
-    if (ceDepartment === 'water') {
-      departmentFilter = "AND LOWER(ct.type_name) LIKE '%water%'";
-    } else if (ceDepartment === 'sewerage') {
-      departmentFilter = "AND LOWER(ct.type_name) LIKE '%sewerage%'";
+    if (assignedComplaintTypes.length > 0) {
+      const complaintTypeIds = assignedComplaintTypes.join(',');
+      departmentFilter = `AND r.complaint_type_id IN (${complaintTypeIds})`;
+    } else {
+      // If no departments assigned, return empty result
+      departmentFilter = "AND 1=0";
     }
 
     // Fetch requests with before content count and CE approval status

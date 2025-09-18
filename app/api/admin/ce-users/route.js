@@ -15,7 +15,7 @@ export async function GET() {
 
     client = await connectToDatabase();
 
-    // Get all CE users with their details
+    // Get all CE users with their assigned departments
     const result = await client.query(`
       SELECT 
         u.id,
@@ -24,15 +24,23 @@ export async function GET() {
         u.contact_number,
         u.created_date,
         u.updated_date,
-        cu.department_id,
         cu.designation,
-        cu.department,
         cu.address,
         cu.created_at as ce_created_at,
-        cu.updated_at as ce_updated_at
+        cu.updated_at as ce_updated_at,
+        ARRAY_AGG(
+          JSON_BUILD_OBJECT(
+            'id', ct.id,
+            'name', ct.type_name
+          )
+        ) as assigned_departments
       FROM users u
       LEFT JOIN ce_users cu ON u.id = cu.user_id
+      LEFT JOIN ce_user_departments cud ON cu.id = cud.ce_user_id
+      LEFT JOIN complaint_types ct ON cud.complaint_type_id = ct.id
       WHERE u.role = 7
+      GROUP BY u.id, u.name, u.email, u.contact_number, u.created_date, u.updated_date, 
+               cu.designation, cu.address, cu.created_at, cu.updated_at
       ORDER BY u.created_date DESC
     `);
 
@@ -57,14 +65,10 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { name, email, password, contact_number, department, designation, address, role } = await request.json();
+    const { name, email, password, contact_number, departments, designation, address, role } = await request.json();
 
-    if (!name || !email || !password || !department) {
-      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
-    }
-
-    if (!['water', 'sewerage'].includes(department)) {
-      return NextResponse.json({ error: 'Invalid department. Must be water or sewerage' }, { status: 400 });
+    if (!name || !email || !password || !departments || !Array.isArray(departments) || departments.length === 0) {
+      return NextResponse.json({ error: 'Missing required fields: name, email, password, and at least one department' }, { status: 400 });
     }
 
     client = await connectToDatabase();
@@ -88,10 +92,21 @@ export async function POST(request) {
     const userId = userResult.rows[0].id;
 
     // Create CE user details
-    await client.query(`
-      INSERT INTO ce_users (user_id, department_id, designation, department, address, created_at, updated_at)
-      VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
-    `, [userId, null, designation, department, address]);
+    const ceUserResult = await client.query(`
+      INSERT INTO ce_users (user_id, designation, address, created_at, updated_at)
+      VALUES ($1, $2, $3, NOW(), NOW())
+      RETURNING id
+    `, [userId, designation, address]);
+
+    const ceUserId = ceUserResult.rows[0].id;
+
+    // Create department assignments
+    for (const departmentId of departments) {
+      await client.query(`
+        INSERT INTO ce_user_departments (ce_user_id, complaint_type_id, created_at)
+        VALUES ($1, $2, NOW())
+      `, [ceUserId, departmentId]);
+    }
 
     // Log the action
     await client.query(`

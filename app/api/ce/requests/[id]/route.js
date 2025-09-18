@@ -15,12 +15,15 @@ export async function GET(request, { params }) {
     const { id } = await params;
     client = await connectToDatabase();
 
-    // Get CE user info to determine department
+    // Get CE user's assigned complaint types (departments)
     const ceUserResult = await client.query(`
-      SELECT u.*, cu.department_id, cu.designation, cu.department
-      FROM users u
-      LEFT JOIN ce_users cu ON u.id = cu.user_id
+      SELECT cu.*, u.name, u.email,
+             ARRAY_AGG(cud.complaint_type_id) as assigned_complaint_types
+      FROM ce_users cu
+      JOIN users u ON cu.user_id = u.id
+      LEFT JOIN ce_user_departments cud ON cu.id = cud.ce_user_id
       WHERE u.id = $1
+      GROUP BY cu.id, u.name, u.email
     `, [session.user.id]);
 
     if (ceUserResult.rows.length === 0) {
@@ -28,7 +31,7 @@ export async function GET(request, { params }) {
     }
 
     const ceUser = ceUserResult.rows[0];
-    const ceDepartment = ceUser.department?.toLowerCase();
+    const assignedComplaintTypes = ceUser.assigned_complaint_types?.filter(id => id !== null) || [];
 
     // Fetch request with before content and CE approval status
     const result = await client.query(`
@@ -53,14 +56,11 @@ export async function GET(request, { params }) {
 
     const request = result.rows[0];
 
-    // Check if CE has access to this request based on department
-    const requestType = request.complaint_type?.toLowerCase();
-    if (ceDepartment === 'water' && !requestType?.includes('water')) {
-      return NextResponse.json({ error: 'Access denied - Water CE can only access water-related requests' }, { status: 403 });
+    // Check if CE has access to this request's complaint type
+    if (!assignedComplaintTypes.includes(request.complaint_type_id)) {
+      return NextResponse.json({ error: 'Access denied - You can only view requests from your assigned departments' }, { status: 403 });
     }
-    if (ceDepartment === 'sewerage' && !requestType?.includes('sewerage')) {
-      return NextResponse.json({ error: 'Access denied - Sewerage CE can only access sewerage-related requests' }, { status: 403 });
-    }
+
 
     // Fetch before content
     const beforeContentResult = await client.query(`
