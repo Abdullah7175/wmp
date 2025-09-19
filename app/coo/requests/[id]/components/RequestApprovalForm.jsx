@@ -178,8 +178,8 @@ export default function RequestApprovalForm({ requestData }) {
                   <img
                     src={content.link}
                     alt="Before content"
-                    className="w-full h-32 lg:h-48 object-cover rounded-md mb-2 lg:mb-3"
-                  />
+                  className="w-full h-32 lg:h-48 object-cover rounded-md mb-2 lg:mb-3"
+                />
                 )}
                 <div className="text-xs lg:text-sm text-gray-600">
                   <p className="font-medium">Uploaded by: {content.creator_name}</p>

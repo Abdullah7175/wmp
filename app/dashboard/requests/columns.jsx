@@ -149,7 +149,6 @@ export const columns = [
     cell: ({ row }) => {
       const ceoStatus = row.original.ceo_approval_status;
       const cooStatus = row.original.coo_approval_status;
-      const ceStatus = row.original.ce_approval_status;
       
       const getApprovalBadge = (status, type) => {
         if (!status || status === 'pending') return null;
@@ -166,8 +165,7 @@ export const columns = [
         <div className="flex flex-col space-y-1">
           {getApprovalBadge(ceoStatus, 'CEO')}
           {getApprovalBadge(cooStatus, 'COO')}
-          {getApprovalBadge(ceStatus, 'CE')}
-          {!ceoStatus && !cooStatus && !ceStatus && (
+          {!ceoStatus && !cooStatus && (
             <span className="text-xs text-gray-400">No approvals</span>
           )}
         </div>
