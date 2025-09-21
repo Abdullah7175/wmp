@@ -147,23 +147,3 @@ export function DataTable({ columns, data, children }) {
         </>
     )
 }
-
-                                                flexRender(cell.column.columnDef.cell, cell.getContext())
-                                            )}
-                                        </TableCell>
-                                    ))}
-                                </TableRow>
-                            ))
-                        ) : (
-                            <TableRow>
-                                <TableCell colSpan={columns.length} className="h-24 text-center">
-                                    No results.
-                                </TableCell>
-                            </TableRow>
-                        )}
-                    </TableBody>
-                </Table>
-            </div>
-        </>
-    )
-}

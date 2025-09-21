@@ -124,12 +124,3 @@ export const columns = [
     },
   },
 ]
-  {
-    accessorKey: "created_at",
-    header: "Uploaded On",
-    cell: ({ getValue }) => {
-      const date = new Date(getValue());
-      return date.toLocaleDateString();
-    },
-  },
-]

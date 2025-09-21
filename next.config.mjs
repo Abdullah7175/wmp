@@ -4,6 +4,14 @@ const nextConfig = {
     ignoreDuringBuilds: true,
   },
   reactStrictMode: true,
+  async rewrites() {
+    return [
+      {
+        source: '/uploads/:path*',
+        destination: '/api/uploads/:path*',
+      },
+    ];
+  },
   env: {
     NEXTAUTH_URL: process.env.NEXTAUTH_URL || 'http://202.61.47.29:3000',
     NEXTAUTH_SECRET: process.env.NEXTAUTH_SECRET,
