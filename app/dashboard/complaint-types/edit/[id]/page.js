@@ -14,10 +14,10 @@ export default async function EditComplaintTypePage({ params }) {
           <Link href="/dashboard/complaint-types">
             <Button variant="outline" size="sm">
               <ArrowLeft className="mr-2 h-4 w-4" />
-              Back to Complaint Types
+              Back to Departments
             </Button>
           </Link>
-          <h1 className="text-2xl lg:text-3xl font-bold text-gray-900">Edit Complaint Type</h1>
+          <h1 className="text-2xl lg:text-3xl font-bold text-gray-900">Edit Department</h1>
         </div>
       </div>
 

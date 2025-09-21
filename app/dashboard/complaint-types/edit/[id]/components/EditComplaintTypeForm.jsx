@@ -160,9 +160,9 @@ export default function EditComplaintTypeForm({ complaintTypeId }) {
     <div className="max-w-2xl mx-auto">
       <Card>
         <CardHeader>
-          <CardTitle className="text-xl">Edit Complaint Type</CardTitle>
+          <CardTitle className="text-xl">Edit Department</CardTitle>
           <p className="text-sm text-gray-600">
-            Update the details of this complaint type. Changes will affect CE user assignments and work requests.
+            Update the details of this Department. Changes will affect CE user assignments and work requests.
           </p>
         </CardHeader>
         <CardContent>
@@ -195,7 +195,7 @@ export default function EditComplaintTypeForm({ complaintTypeId }) {
                   rows={4}
                 />
                 <p className="text-xs text-gray-500 mt-1">
-                  Optional: Provide additional details about this complaint type
+                  Optional: Provide additional details about this Department
                 </p>
               </div>
             </div>
@@ -220,7 +220,7 @@ export default function EditComplaintTypeForm({ complaintTypeId }) {
                 ) : (
                   <>
                     <Save className="mr-2 h-4 w-4" />
-                    Update Complaint Type
+                    Update Department
                   </>
                 )}
               </Button>

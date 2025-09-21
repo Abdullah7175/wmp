@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/pages/api/auth/[...nextauth]";
-import { query } from "@/lib/db";
+import { connectToDatabase } from "@/lib/db";
 import bcrypt from "bcryptjs";
 import { logUserAction } from "@/lib/userActionLogger";
 
 export async function GET(request) {
+  let client;
   try {
     const session = await getServerSession(authOptions);
     
@@ -18,7 +19,8 @@ export async function GET(request) {
     }
 
     // Fetch all CE users with their departments
-    const ceUsers = await query(`
+    client = await connectToDatabase();
+    const ceUsers = await client.query(`
       SELECT 
         cu.id,
         cu.user_id,
@@ -51,12 +53,17 @@ export async function GET(request) {
       departments: user.departments.filter(dept => dept.id !== null)
     }));
 
+    client.release();
+
     return NextResponse.json({
       success: true,
       data: processedUsers
     });
 
   } catch (error) {
+    if (client) {
+      client.release();
+    }
     console.error('Error in CE users GET API:', error);
     return NextResponse.json(
       { success: false, message: "Internal server error" },
@@ -66,6 +73,7 @@ export async function GET(request) {
 }
 
 export async function POST(request) {
+  let client;
   try {
     const session = await getServerSession(authOptions);
     
@@ -96,7 +104,8 @@ export async function POST(request) {
     }
 
     // Check if user with this email already exists
-    const existingUser = await query(`
+    client = await connectToDatabase();
+    const existingUser = await client.query(`
       SELECT id FROM users WHERE email = $1
     `, [email]);
 
@@ -111,7 +120,6 @@ export async function POST(request) {
     const hashedPassword = await bcrypt.hash(password, 12);
 
     // Start transaction
-    const client = await query.getClient();
     await client.query('BEGIN');
 
     try {
@@ -173,6 +181,14 @@ export async function POST(request) {
     }
 
   } catch (error) {
+    if (client) {
+      try {
+        await client.query('ROLLBACK');
+      } catch (rollbackError) {
+        console.error('Error during rollback:', rollbackError);
+      }
+      client.release();
+    }
     console.error('Error in CE users POST API:', error);
     return NextResponse.json(
       { success: false, message: "Internal server error" },

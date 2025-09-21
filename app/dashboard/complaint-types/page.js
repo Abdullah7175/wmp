@@ -8,15 +8,15 @@ export default function ComplaintTypesPage() {
   return (
     <div className="p-4 lg:p-6">
       <div className="flex items-center justify-between mb-6 lg:mb-8">
-        <h1 className="text-2xl lg:text-3xl font-bold text-gray-900">Complaint Types (Departments)</h1>
+        <h1 className="text-2xl lg:text-3xl font-bold text-gray-900">Departments</h1>
         <Link href="/dashboard/complaint-types/add">
           <Button>
-            <PlusCircle className="mr-2 h-4 w-4" /> Add Complaint Type
+            <PlusCircle className="mr-2 h-4 w-4" /> Add Department
           </Button>
         </Link>
       </div>
 
-      <Suspense fallback={<div>Loading complaint types...</div>}>
+      <Suspense fallback={<div>Loading Departments...</div>}>
         <ComplaintTypesList />
       </Suspense>
     </div>

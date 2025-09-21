@@ -53,7 +53,7 @@ export default function AddComplaintTypeForm() {
     if (formData.type_name.trim().length < 2) {
       toast({
         title: "Validation Error",
-        description: "Type name must be at least 2 characters long.",
+        description: "Department name must be at least 2 characters long.",
         variant: "destructive",
       });
       return false;
@@ -119,17 +119,17 @@ export default function AddComplaintTypeForm() {
     <div className="max-w-2xl mx-auto">
       <Card>
         <CardHeader>
-          <CardTitle className="text-xl">Create New Complaint Type</CardTitle>
+          <CardTitle className="text-xl">Create New Department</CardTitle>
           <p className="text-sm text-gray-600">
-            Complaint types represent different departments or categories of work requests.
-            CE users can be assigned to one or more complaint types.
+          Department represent different departments or categories of work requests.
+            CE users can be assigned to one or more Departments.
           </p>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="space-y-4">
               <div>
-                <Label htmlFor="type_name">Type Name *</Label>
+                <Label htmlFor="type_name">Department Name *</Label>
                 <Input
                   id="type_name"
                   name="type_name"
@@ -140,7 +140,7 @@ export default function AddComplaintTypeForm() {
                   required
                 />
                 <p className="text-xs text-gray-500 mt-1">
-                  Enter a descriptive name for this complaint type
+                  Enter a descriptive name for this Department
                 </p>
               </div>
 
@@ -155,8 +155,8 @@ export default function AddComplaintTypeForm() {
                   rows={4}
                 />
                 <p className="text-xs text-gray-500 mt-1">
-                  Optional: Provide additional details about this complaint type
-                </p>
+                  Optional: Provide additional details about this Department
+                                  </p>
               </div>
             </div>
 
@@ -180,7 +180,7 @@ export default function AddComplaintTypeForm() {
                 ) : (
                   <>
                     <Save className="mr-2 h-4 w-4" />
-                    Create Complaint Type
+                    Create Department
                   </>
                 )}
               </Button>

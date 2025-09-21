@@ -110,9 +110,9 @@ export default function ComplaintTypesList() {
     }
   };
 
-  if (loading) return <div className="text-center py-8">Loading complaint types...</div>;
+  if (loading) return <div className="text-center py-8">Loading Departments...</div>;
   if (error) return <div className="text-center py-8 text-red-600">Error: {error}</div>;
-  if (complaintTypes.length === 0) return <div className="text-center py-8 text-gray-500">No complaint types found.</div>;
+  if (complaintTypes.length === 0) return <div className="text-center py-8 text-gray-500">No Departments found.</div>;
 
   return (
     <div className="space-y-6">
@@ -120,20 +120,20 @@ export default function ComplaintTypesList() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Types</CardTitle>
+            <CardTitle className="text-sm font-medium">Total Departments</CardTitle>
             <Building2 className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{complaintTypes.length}</div>
             <p className="text-xs text-muted-foreground">
-              Complaint types in system
+            Departments in system
             </p>
           </CardContent>
         </Card>
         
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Subtypes</CardTitle>
+            <CardTitle className="text-sm font-medium">Total Works</CardTitle>
             <FileText className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -141,7 +141,7 @@ export default function ComplaintTypesList() {
               {complaintTypes.reduce((sum, type) => sum + parseInt(type.subtype_count), 0)}
             </div>
             <p className="text-xs text-muted-foreground">
-              Subtypes across all types
+              Works across all types
             </p>
           </CardContent>
         </Card>
@@ -165,7 +165,7 @@ export default function ComplaintTypesList() {
       {/* Complaint Types Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Complaint Types</CardTitle>
+          <CardTitle>Departments</CardTitle>
         </CardHeader>
         <CardContent>
           <Table>
@@ -173,7 +173,7 @@ export default function ComplaintTypesList() {
               <TableRow>
                 <TableHead>Name</TableHead>
                 <TableHead>Description</TableHead>
-                <TableHead>Subtypes</TableHead>
+                <TableHead>Works</TableHead>
                 <TableHead>CE Users</TableHead>
                 <TableHead>Created</TableHead>
                 <TableHead>Actions</TableHead>
@@ -192,7 +192,7 @@ export default function ComplaintTypesList() {
                   </TableCell>
                   <TableCell>
                     <Badge variant="secondary">
-                      {type.subtype_count} subtypes
+                      {type.subtype_count} Works
                     </Badge>
                   </TableCell>
                   <TableCell>
