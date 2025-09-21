@@ -4,6 +4,8 @@ const nextConfig = {
     ignoreDuringBuilds: true,
   },
   reactStrictMode: true,
+  output: 'standalone',
+  trailingSlash: false,
   async rewrites() {
     return [
       {

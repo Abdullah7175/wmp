@@ -4,8 +4,8 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 
-export default function EditComplaintTypePage({ params }) {
-  const { id } = params;
+export default async function EditComplaintTypePage({ params }) {
+  const { id } = await params;
 
   return (
     <div className="p-4 lg:p-6">

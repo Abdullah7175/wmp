@@ -3,34 +3,115 @@
 import * as React from "react"
 import { cn } from "@/lib/utils"
 
-const Dialog = React.forwardRef(({ children, ...props }, ref) => (
-  <div ref={ref} {...props}>
-    {children}
-  </div>
-))
+// Dialog Context
+const DialogContext = React.createContext({
+  open: false,
+  onOpenChange: () => {},
+})
+
+// Dialog Root Component
+const Dialog = React.forwardRef(({ children, open, onOpenChange, ...props }, ref) => {
+  const [internalOpen, setInternalOpen] = React.useState(false)
+  
+  const isControlled = open !== undefined
+  const isOpen = isControlled ? open : internalOpen
+  
+  const handleOpenChange = React.useCallback((newOpen) => {
+    if (isControlled) {
+      onOpenChange?.(newOpen)
+    } else {
+      setInternalOpen(newOpen)
+    }
+  }, [isControlled, onOpenChange])
+
+  return (
+    <DialogContext.Provider value={{ open: isOpen, onOpenChange: handleOpenChange }}>
+      <div ref={ref} {...props}>
+        {children}
+      </div>
+    </DialogContext.Provider>
+  )
+})
 Dialog.displayName = "Dialog"
 
-const DialogTrigger = React.forwardRef(({ className, children, ...props }, ref) => (
-  <div ref={ref} className={cn("", className)} {...props}>
-    {children}
-  </div>
-))
+// Dialog Trigger Component
+const DialogTrigger = React.forwardRef(({ className, children, asChild = false, ...props }, ref) => {
+  const { onOpenChange } = React.useContext(DialogContext)
+  
+  const handleClick = () => {
+    onOpenChange(true)
+  }
+
+  if (asChild && React.isValidElement(children)) {
+    return React.cloneElement(children, {
+      ...props,
+      ref,
+      onClick: handleClick,
+      className: cn(children.props.className, className),
+    })
+  }
+
+  return (
+    <div 
+      ref={ref} 
+      className={cn("", className)} 
+      onClick={handleClick}
+      {...props}
+    >
+      {children}
+    </div>
+  )
+})
 DialogTrigger.displayName = "DialogTrigger"
 
-const DialogContent = React.forwardRef(({ className, children, ...props }, ref) => (
-  <div
-    ref={ref}
-    className={cn(
-      "fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-6 shadow-lg duration-200 sm:rounded-lg",
-      className
-    )}
-    {...props}
-  >
-    {children}
-  </div>
-))
+// Dialog Content Component
+const DialogContent = React.forwardRef(({ className, children, ...props }, ref) => {
+  const { open, onOpenChange } = React.useContext(DialogContext)
+  
+  React.useEffect(() => {
+    const handleEscape = (e) => {
+      if (e.key === 'Escape') {
+        onOpenChange(false)
+      }
+    }
+    
+    if (open) {
+      document.addEventListener('keydown', handleEscape)
+      document.body.style.overflow = 'hidden'
+    }
+    
+    return () => {
+      document.removeEventListener('keydown', handleEscape)
+      document.body.style.overflow = 'unset'
+    }
+  }, [open, onOpenChange])
+
+  if (!open) return null
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      {/* Backdrop */}
+      <div 
+        className="fixed inset-0 bg-black/50" 
+        onClick={() => onOpenChange(false)}
+      />
+      {/* Content */}
+      <div
+        ref={ref}
+        className={cn(
+          "relative z-50 grid w-full max-w-lg gap-4 border bg-background p-6 shadow-lg duration-200 sm:rounded-lg",
+          className
+        )}
+        {...props}
+      >
+        {children}
+      </div>
+    </div>
+  )
+})
 DialogContent.displayName = "DialogContent"
 
+// Dialog Header Component
 const DialogHeader = React.forwardRef(({ className, ...props }, ref) => (
   <div
     ref={ref}
@@ -43,6 +124,7 @@ const DialogHeader = React.forwardRef(({ className, ...props }, ref) => (
 ))
 DialogHeader.displayName = "DialogHeader"
 
+// Dialog Title Component
 const DialogTitle = React.forwardRef(({ className, ...props }, ref) => (
   <h3
     ref={ref}
@@ -55,6 +137,7 @@ const DialogTitle = React.forwardRef(({ className, ...props }, ref) => (
 ))
 DialogTitle.displayName = "DialogTitle"
 
+// Dialog Description Component
 const DialogDescription = React.forwardRef(({ className, ...props }, ref) => (
   <p
     ref={ref}
@@ -64,6 +147,7 @@ const DialogDescription = React.forwardRef(({ className, ...props }, ref) => (
 ))
 DialogDescription.displayName = "DialogDescription"
 
+// Dialog Footer Component
 const DialogFooter = React.forwardRef(({ className, ...props }, ref) => (
   <div
     ref={ref}

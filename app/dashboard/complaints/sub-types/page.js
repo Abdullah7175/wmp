@@ -4,6 +4,8 @@ import { EnhancedDataTable } from "@/components/ui/enhanced-data-table"
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import Link from "next/link";
+import { Plus } from "lucide-react";
 
 export default function Page() {
   const [subtypes, setSubtypes] = useState([]);
@@ -79,6 +81,12 @@ export default function Page() {
     <div className="container mx-auto py-6">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">Works</h1>
+        <Link href="/dashboard/complaints/sub-types/add">
+          <Button>
+            <Plus className="mr-2 h-4 w-4" />
+            Add Subtype
+          </Button>
+        </Link>
       </div>
       <div className="flex flex-wrap gap-4 mb-4 items-end">
         <Input

@@ -5,7 +5,7 @@ import { existsSync } from 'fs';
 
 export async function GET(request, { params }) {
   try {
-    const { path } = params;
+    const { path } = await params;
     const filePath = join(process.cwd(), 'uploads', ...path);
     
     // Security check: ensure the file is within the uploads directory
