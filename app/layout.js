@@ -3,6 +3,11 @@ import { Poppins } from 'next/font/google';
 import { Providers } from "./providers";
 import "./globals.css";
 
+// Fix MaxListenersExceededWarning
+if (typeof process !== 'undefined') {
+  process.setMaxListeners(0);
+}
+
 const geistMono = localFont({
   src: "./fonts/GeistMonoVF.woff",
   variable: "--font-geist-mono",

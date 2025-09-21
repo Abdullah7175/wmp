@@ -256,30 +256,143 @@ export async function POST(req) {
 
 export async function PUT(req) {
     try {
-        const body = await req.json();
         const client = await connectToDatabase();
-        const {id, link} = body;
+        
+        // Check if it's a multipart form data (file upload)
+        const contentType = req.headers.get('content-type');
+        
+        if (contentType && contentType.includes('multipart/form-data')) {
+            // Handle file upload
+            const formData = await req.formData();
+            const id = formData.get('id');
+            const description = formData.get('description');
+            const workRequestId = formData.get('workRequestId');
+            const latitude = formData.get('latitude');
+            const longitude = formData.get('longitude');
+            const file = formData.get('file');
 
-        if (!id || !link ) {
-            return NextResponse.json({ error: 'All fields (id, name) are required' }, { status: 400 });
+            if (!id) {
+                return NextResponse.json({ error: 'Video ID is required' }, { status: 400 });
+            }
+
+            // Get current video info to delete old file
+            const currentVideoQuery = await client.query('SELECT link FROM videos WHERE id = $1', [id]);
+            if (currentVideoQuery.rows.length === 0) {
+                return NextResponse.json({ error: 'Video not found' }, { status: 404 });
+            }
+
+            const currentVideo = currentVideoQuery.rows[0];
+            let newLink = currentVideo.link;
+
+            // Handle file upload if provided
+            if (file && file.size > 0) {
+                const fs = require('fs');
+                const path = require('path');
+                
+                // Delete old file
+                if (currentVideo.link) {
+                    const oldFilePath = path.join(process.cwd(), 'public', currentVideo.link);
+                    if (fs.existsSync(oldFilePath)) {
+                        fs.unlinkSync(oldFilePath);
+                    }
+                }
+
+                // Upload new file
+                const bytes = await file.arrayBuffer();
+                const buffer = Buffer.from(bytes);
+                const fileName = `${Date.now()}-${file.name}`;
+                const filePath = path.join(process.cwd(), 'public/uploads/videos', fileName);
+                
+                // Ensure directory exists
+                const uploadDir = path.join(process.cwd(), 'public/uploads/videos');
+                if (!fs.existsSync(uploadDir)) {
+                    fs.mkdirSync(uploadDir, { recursive: true });
+                }
+                
+                fs.writeFileSync(filePath, buffer);
+                newLink = `/uploads/videos/${fileName}`;
+            }
+
+            // Update video in database
+            const updateQuery = `
+                UPDATE videos 
+                SET 
+                    link = $1,
+                    description = $2,
+                    work_request_id = $3,
+                    geo_tag = CASE 
+                        WHEN $4::numeric IS NOT NULL AND $5::numeric IS NOT NULL 
+                        THEN ST_SetSRID(ST_MakePoint($5::numeric, $4::numeric), 4326)
+                        ELSE geo_tag
+                    END,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = $6
+                RETURNING *;
+            `;
+            
+            // Convert empty strings to null for latitude/longitude
+            const latValue = latitude && latitude.trim() !== '' ? parseFloat(latitude) : null;
+            const lngValue = longitude && longitude.trim() !== '' ? parseFloat(longitude) : null;
+            
+            const { rows: updatedVideo } = await client.query(updateQuery, [
+                newLink,
+                description,
+                workRequestId,
+                latValue,
+                lngValue,
+                id
+            ]);
+
+            return NextResponse.json({ 
+                message: 'Video updated successfully', 
+                video: updatedVideo[0] 
+            }, { status: 200 });
+
+        } else {
+            // Handle JSON update (no file upload)
+            const body = await req.json();
+            const { id, description, workRequestId, latitude, longitude } = body;
+
+            if (!id) {
+                return NextResponse.json({ error: 'Video ID is required' }, { status: 400 });
+            }
+
+            const query = `
+                UPDATE videos 
+                SET 
+                    description = $1,
+                    work_request_id = $2,
+                    geo_tag = CASE 
+                        WHEN $3::numeric IS NOT NULL AND $4::numeric IS NOT NULL 
+                        THEN ST_SetSRID(ST_MakePoint($4::numeric, $3::numeric), 4326)
+                        ELSE geo_tag
+                    END,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = $5
+                RETURNING *;
+            `;
+            
+            // Convert empty strings to null for latitude/longitude
+            const latValue = latitude && latitude.toString().trim() !== '' ? parseFloat(latitude) : null;
+            const lngValue = longitude && longitude.toString().trim() !== '' ? parseFloat(longitude) : null;
+            
+            const { rows: updatedVideo } = await client.query(query, [
+                description,
+                workRequestId,
+                latValue,
+                lngValue,
+                id
+            ]);
+
+            if (updatedVideo.length === 0) {
+                return NextResponse.json({ error: 'Video not found' }, { status: 404 });
+            }
+
+            return NextResponse.json({ 
+                message: 'Video updated successfully', 
+                video: updatedVideo[0] 
+            }, { status: 200 });
         }
-
-        const query = `
-            UPDATE videos 
-            SET link = $1
-            WHERE id = $2
-            RETURNING *;
-        `; 
-        const { rows: updatedVideo } = await client.query(query, [
-            link,
-            id
-        ]);
-
-        if (updatedVideo.length === 0) {
-            return NextResponse.json({ error: 'Video not found' }, { status: 404 });
-        }
-
-        return NextResponse.json({ message: 'Video updated successfully', video: updatedVideo[0] }, { status: 200 });
 
     } catch (error) {
         console.error('Error updating video:', error);
@@ -317,5 +430,3 @@ export async function DELETE(req) {
         return NextResponse.json({ error: 'Error deleting video' }, { status: 500 });
     }
 }
-
-// Keep POST, PUT, DELETE methods as they are or update them similarly

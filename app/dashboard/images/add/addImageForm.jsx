@@ -43,7 +43,7 @@ const ImageForm = () => {
                     console.log('Processed requests:', requestsArray); // Debug log
                     setWorkRequests(requestsArray.map(request => ({
                         value: Number(request.id),
-                        label: `${request.id}`
+                        label: `#${request.id} - ${request.description || 'No description'} (${request.status_name || 'Unknown Status'})`
                     })));
                 }
             } catch (error) {

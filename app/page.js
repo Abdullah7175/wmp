@@ -19,7 +19,7 @@ export default function PortalSelectionPage() {
                         transition={{ duration: 0.6 }}
                         className="flex items-center justify-center gap-4 mb-6"
                     >
-                        <Image src="/logo.png" width={80} height={80} alt="KW&SC Logo" className="rounded-lg shadow-lg" />
+                        <Image src="/logo.png" width={80} height={80} alt="KW&SC Logo" className="rounded-lg shadow-lg" priority />
                         <div className="text-left">
                             <h1 className="text-3xl font-bold text-gray-900">Works Management Portal</h1>
                             <p className="text-lg text-gray-600">Karachi Water & Sewerage Corporation</p>

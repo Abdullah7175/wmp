@@ -77,6 +77,7 @@ export default function LoginPage() {
       else if (session.user.userType === "socialmedia" || session.user.userType === "socialmediaperson") window.location.href = "/smagent";
       else if (session.user.userType === "user" && parseInt(session.user.role) === 5) window.location.href = "/ceo";
       else if (session.user.userType === "user" && parseInt(session.user.role) === 6) window.location.href = "/coo";
+      else if (session.user.userType === "user" && parseInt(session.user.role) === 7) window.location.href = "/ce";
       else if (session.user.userType === "user") window.location.href = "/dashboard";
     }
   }, [session, status]);
@@ -223,6 +224,9 @@ export default function LoginPage() {
                 case "coo":
                   window.location.href = "/coo";
                   break;
+                case "ce":
+                  window.location.href = "/ce";
+                  break;
               }
             } catch (error) {
               window.location.href = "/dashboard";
@@ -253,7 +257,7 @@ export default function LoginPage() {
 
       {/* Overlay */}
       <div className="flex items-center justify-center gap-0">
-         <Image src="/logo.png" className="py-0 px-1" width="150" height="150" alt="logo" />
+         <Image src="/logo.png" className="py-0 px-1" width="150" height="150" alt="logo" priority />
        </div>
        <div className="flex gap-4 items-center mb-8">
          <h1 className="text-2xl font-semibold">Video Archiving Portal</h1>

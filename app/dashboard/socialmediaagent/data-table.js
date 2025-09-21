@@ -21,7 +21,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Bell, Plus } from "lucide-react";
 import Link from "next/link";
-import Image from "next/image";
+// Using regular img tag instead of Next.js Image for better file path handling
 
 export function DataTable({ columns, data, children }) {
     const [sorting, setSorting] = useState([]);
@@ -89,13 +89,23 @@ export function DataTable({ columns, data, children }) {
                                         <TableCell key={cell.id}>
                                             {cell.column.id === "image" ? (
                                                 cell.getValue() ? (
-                                                    <Image
-                                                        src={cell.getValue()}
-                                                        alt="User Image"
-                                                        width={40}
-                                                        height={40}
-                                                        className="w-10 h-10 object-cover rounded-full"
-                                                    />
+                                                    <>
+                                                        <img
+                                                            src={cell.getValue()}
+                                                            alt="User Image"
+                                                            className="w-10 h-10 object-cover rounded-full"
+                                                            onError={(e) => {
+                                                                e.target.style.display = 'none';
+                                                                e.target.nextSibling.style.display = 'flex';
+                                                            }}
+                                                        />
+                                                        <div 
+                                                            className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center"
+                                                            style={{ display: 'none' }}
+                                                        >
+                                                            <span className="text-gray-500 text-xs">No Image</span>
+                                                        </div>
+                                                    </>
                                                 ) : (
                                                     <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center">
                                                         <span className="text-gray-500 text-xs">No Image</span>

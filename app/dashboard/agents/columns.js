@@ -29,6 +29,36 @@ export const columns = [
   {
     accessorKey: "image",
     header: "Image",
+    cell: ({ row }) => {
+      const imageUrl = row.getValue("image");
+      return (
+        <div className="relative w-10 h-10 rounded-full overflow-hidden">
+          {imageUrl ? (
+            <>
+              <img 
+                src={imageUrl} 
+                alt="Agent" 
+                className="w-full h-full object-cover"
+                onError={(e) => {
+                  e.target.style.display = 'none';
+                  e.target.nextSibling.style.display = 'flex';
+                }}
+              />
+              <div 
+                className="w-full h-full bg-gray-200 flex items-center justify-center"
+                style={{ display: 'none' }}
+              >
+                <span className="text-xs text-gray-500">No image</span>
+              </div>
+            </>
+          ) : (
+            <div className="w-full h-full bg-gray-200 flex items-center justify-center">
+              <span className="text-xs text-gray-500">No image</span>
+            </div>
+          )}
+        </div>
+      );
+    },
   },
   {
     accessorKey: "name",

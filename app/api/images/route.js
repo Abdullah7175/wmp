@@ -214,39 +214,156 @@ export async function POST(req) {
 
 export async function PUT(req) {
     try {
-        const body = await req.json();
         const client = await connectToDatabase();
-        const {id, workRequestId, description} = body;
+        
+        // Check if it's a multipart form data (file upload)
+        const contentType = req.headers.get('content-type');
+        
+        if (contentType && contentType.includes('multipart/form-data')) {
+            // Handle file upload
+            const formData = await req.formData();
+            const id = formData.get('id');
+            const description = formData.get('description');
+            const workRequestId = formData.get('workRequestId');
+            const latitude = formData.get('latitude');
+            const longitude = formData.get('longitude');
+            const file = formData.get('file');
 
-        if (!id || !workRequestId || !description) {
-            return NextResponse.json({ error: 'All fields are required' }, { status: 400 });
+            if (!id) {
+                return NextResponse.json({ error: 'Image ID is required' }, { status: 400 });
+            }
+
+            // Get current image info to delete old file
+            const currentImageQuery = await client.query('SELECT link FROM images WHERE id = $1', [id]);
+            if (currentImageQuery.rows.length === 0) {
+                return NextResponse.json({ error: 'Image not found' }, { status: 404 });
+            }
+
+            const currentImage = currentImageQuery.rows[0];
+            let newLink = currentImage.link;
+
+            // Handle file upload if provided
+            if (file && file.size > 0) {
+                // Delete old file
+                if (currentImage.link) {
+                    const oldFilePath = path.join(process.cwd(), 'public', currentImage.link);
+                    try {
+                        await fs.unlink(oldFilePath);
+                    } catch (error) {
+                        console.warn('Could not delete old file:', error);
+                    }
+                }
+
+                // Upload new file
+                const bytes = await file.arrayBuffer();
+                const buffer = Buffer.from(bytes);
+                const fileName = `${Date.now()}-${file.name}`;
+                const filePath = path.join(process.cwd(), 'public/uploads/images', fileName);
+                
+                // Ensure directory exists
+                const uploadDir = path.join(process.cwd(), 'public/uploads/images');
+                try {
+                    await fs.mkdir(uploadDir, { recursive: true });
+                } catch (error) {
+                    // Directory might already exist
+                }
+                
+                await fs.writeFile(filePath, buffer);
+                newLink = `/uploads/images/${fileName}`;
+            }
+
+            // Update image in database
+            const updateQuery = `
+                UPDATE images 
+                SET 
+                    link = $1,
+                    description = $2,
+                    work_request_id = $3,
+                    geo_tag = CASE 
+                        WHEN $4::numeric IS NOT NULL AND $5::numeric IS NOT NULL 
+                        THEN ST_SetSRID(ST_MakePoint($5::numeric, $4::numeric), 4326)
+                        ELSE geo_tag
+                    END,
+                    updated_at = NOW()
+                WHERE id = $6
+                RETURNING *;
+            `;
+            
+            // Convert empty strings to null for latitude/longitude
+            const latValue = latitude && latitude.trim() !== '' ? parseFloat(latitude) : null;
+            const lngValue = longitude && longitude.trim() !== '' ? parseFloat(longitude) : null;
+            
+            const { rows: updatedImage } = await client.query(updateQuery, [
+                newLink,
+                description,
+                workRequestId,
+                latValue,
+                lngValue,
+                id
+            ]);
+
+            // Log the image update action
+            await actionLogger.update(req, ENTITY_TYPES.IMAGE, updatedImage[0].id, `Image #${updatedImage[0].id}`, {
+                workRequestId,
+                description: updatedImage[0].description
+            });
+
+            return NextResponse.json({ 
+                message: 'Image updated successfully', 
+                image: updatedImage[0] 
+            }, { status: 200 });
+
+        } else {
+            // Handle JSON update (no file upload)
+            const body = await req.json();
+            const { id, description, workRequestId, latitude, longitude } = body;
+
+            if (!id) {
+                return NextResponse.json({ error: 'Image ID is required' }, { status: 400 });
+            }
+
+            const query = `
+                UPDATE images 
+                SET 
+                    description = $1,
+                    work_request_id = $2,
+                    geo_tag = CASE 
+                        WHEN $3::numeric IS NOT NULL AND $4::numeric IS NOT NULL 
+                        THEN ST_SetSRID(ST_MakePoint($4::numeric, $3::numeric), 4326)
+                        ELSE geo_tag
+                    END,
+                    updated_at = NOW()
+                WHERE id = $5
+                RETURNING *;
+            `;
+            
+            // Convert empty strings to null for latitude/longitude
+            const latValue = latitude && latitude.toString().trim() !== '' ? parseFloat(latitude) : null;
+            const lngValue = longitude && longitude.toString().trim() !== '' ? parseFloat(longitude) : null;
+            
+            const { rows: updatedImage } = await client.query(query, [
+                description,
+                workRequestId,
+                latValue,
+                lngValue,
+                id
+            ]);
+
+            if (updatedImage.length === 0) {
+                return NextResponse.json({ error: 'Image not found' }, { status: 404 });
+            }
+
+            // Log the image update action
+            await actionLogger.update(req, ENTITY_TYPES.IMAGE, updatedImage[0].id, `Image #${updatedImage[0].id}`, {
+                workRequestId,
+                description: updatedImage[0].description
+            });
+
+            return NextResponse.json({ 
+                message: 'Image updated successfully', 
+                image: updatedImage[0] 
+            }, { status: 200 });
         }
-
-        const query = `
-            UPDATE images 
-            SET work_request_id = $1, 
-                description = $2,
-                updated_at = NOW()
-            WHERE id = $3
-            RETURNING *;
-        `; 
-        const { rows: updatedImage } = await client.query(query, [
-            workRequestId,
-            description,
-            id
-        ]);
-
-        if (updatedImage.length === 0) {
-            return NextResponse.json({ error: 'Image not found' }, { status: 404 });
-        }
-
-        // Log the image update action
-        await actionLogger.update(req, ENTITY_TYPES.IMAGE, updatedImage[0].id, `Image #${updatedImage[0].id}`, {
-            workRequestId,
-            description: updatedImage[0].description
-        });
-
-        return NextResponse.json({ message: 'Image updated successfully', image: updatedImage[0] }, { status: 200 });
 
     } catch (error) {
         console.error('Error updating image:', error);

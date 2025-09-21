@@ -11,7 +11,17 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import Link from "next/link"
-import Image from "next/image"
+// Using regular img tag instead of Next.js Image for better URL handling
+
+// URL validation function
+function isValidUrl(string) {
+    try {
+        new URL(string);
+        return true;
+    } catch (_) {
+        return false;
+    }
+}
 
 const getRoleName = (roleId) => {
     switch(roleId) {
@@ -32,14 +42,24 @@ export const columns = [
     const imageUrl = row.getValue("image");
     return (
       <div className="relative w-10 h-10 rounded-full overflow-hidden">
-        {imageUrl ? (
-          <Image 
-            src={imageUrl} 
-            alt="User" 
-            width={40}  // Added width
-            height={40} // Added height
-            className="object-cover"
-          />
+        {imageUrl && isValidUrl(imageUrl) ? (
+          <>
+            <img 
+              src={imageUrl} 
+              alt="User" 
+              className="w-full h-full object-cover"
+              onError={(e) => {
+                e.target.style.display = 'none';
+                e.target.nextSibling.style.display = 'flex';
+              }}
+            />
+            <div 
+              className="w-full h-full bg-gray-200 flex items-center justify-center"
+              style={{ display: 'none' }}
+            >
+              <span className="text-xs text-gray-500">No image</span>
+            </div>
+          </>
         ) : (
           <div className="w-full h-full bg-gray-200 flex items-center justify-center">
             <span className="text-xs text-gray-500">No image</span>

@@ -11,7 +11,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import Link from "next/link"
-import Image from "next/image"
+// Using regular img tag instead of Next.js Image for better special character handling
 
 export const columns = [
   {
@@ -96,12 +96,21 @@ export const columns = [
       const image = row.original;
       return (
         <div className="relative w-16 h-16">
-          <Image
+          <img
             src={image.link}
             alt={image.description || 'Work request image'}
-            fill
-            className="object-cover rounded-md"
+            className="w-full h-full object-cover rounded-md"
+            onError={(e) => {
+              e.target.style.display = 'none';
+              e.target.nextSibling.style.display = 'flex';
+            }}
           />
+          <div 
+            className="w-full h-full bg-gray-200 flex items-center justify-center text-gray-500 text-xs"
+            style={{ display: 'none' }}
+          >
+            No Image
+          </div>
         </div>
       );
     },

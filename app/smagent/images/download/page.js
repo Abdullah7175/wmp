@@ -6,7 +6,7 @@ import { Card } from "@/components/ui/card";
 import { Download, ArrowLeft, Search, Filter } from "lucide-react";
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
-import Image from "next/image";
+// Using regular img tag instead of Next.js Image for better special character handling
 
 export default function DownloadImagesPage() {
   const { data: session, status } = useSession();
@@ -258,13 +258,10 @@ export default function DownloadImagesPage() {
               <div key={image.id} className="bg-white border rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow">
                 <div className="relative">
                   {image.link ? (
-                    <Image
+                    <img
                       src={image.link}
                       alt={image.description || "Image"}
-                      width={400}
-                      height={128}
                       className="w-full h-48 object-cover"
-                      unoptimized
                       onError={(e) => {
                         e.target.style.display = 'none';
                         e.target.nextSibling.style.display = 'flex';

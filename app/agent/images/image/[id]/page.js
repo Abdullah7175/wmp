@@ -70,6 +70,7 @@ const Page = ({ params }) => {
                             width={800}
                             height={600}
                             className="object-contain max-h-[70vh]"
+                            priority
                         />
                     </div>
                 </div>

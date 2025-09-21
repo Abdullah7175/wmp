@@ -1,5 +1,15 @@
 "use client"
 import { useState } from "react"
+
+// URL validation function
+function isValidUrl(string) {
+    try {
+        new URL(string);
+        return true;
+    } catch (_) {
+        return false;
+    }
+}
 import {
     ColumnDef,
     flexRender,
@@ -20,7 +30,7 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Bell, Plus } from "lucide-react"
 import Link from "next/link"
-import Image from "next/image"
+// Using regular img tag instead of Next.js Image for better URL handling
 import { hasPermission,ROLES } from "@/permissions"
 
 export function DataTable({ columns, data, children }) {
@@ -94,20 +104,50 @@ export function DataTable({ columns, data, children }) {
                                     {row.getVisibleCells().map((cell) => (
                                         <TableCell key={cell.id}>
                                             {cell.column.id === "image" ? (
-                                                cell.getValue() ? (
-                                                    <Image
-                                                        src={cell.getValue()}
-                                                        alt="User Image"
-                                                        width={40}  // Add width
-                                                        height={40} // Add height
-                                                        className="w-10 h-10 object-cover rounded-full"
-                                                    />
+                                                cell.getValue() && isValidUrl(cell.getValue()) ? (
+                                                    <>
+                                                        <img
+                                                            src={cell.getValue()}
+                                                            alt="User Image"
+                                                            className="w-10 h-10 object-cover rounded-full"
+                                                            onError={(e) => {
+                                                                e.target.style.display = 'none';
+                                                                e.target.nextSibling.style.display = 'flex';
+                                                            }}
+                                                        />
+                                                        <div 
+                                                            className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center"
+                                                            style={{ display: 'none' }}
+                                                        >
+                                                            <span className="text-gray-500 text-xs">No Image</span>
+                                                        </div>
+                                                    </>
                                                 ) : (
                                                     <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center">
                                                         <span className="text-gray-500 text-xs">No Image</span>
                                                     </div>
                                                 )
                                             ) : (
+                                                flexRender(cell.column.columnDef.cell, cell.getContext())
+                                            )}
+                                        </TableCell>
+                                    ))}
+                                </TableRow>
+                            ))
+                        ) : (
+                            <TableRow>
+                                <TableCell colSpan={columns.length} className="h-24 text-center">
+                                    No results.
+                                </TableCell>
+                            </TableRow>
+                        )}
+                    </TableBody>
+                </Table>
+            </div>
+        </>
+    )
+}
+
                                                 flexRender(cell.column.columnDef.cell, cell.getContext())
                                             )}
                                         </TableCell>

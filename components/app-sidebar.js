@@ -373,6 +373,26 @@ export function AppSidebar() {
                                                 )}
                                                 {role === 1 && (
                                                     <SidebarMenuSubItem
+                                                        className={`py-2 text-base ml-2 text-gray-500 underline ${pathname === "/dashboard/ce-users" ? "font-bold text-blue-950" : ""
+                                                            }`}
+                                                    >
+                                                        <Link href="/dashboard/ce-users">
+                                                            <span>CE Users</span>
+                                                        </Link>
+                                                    </SidebarMenuSubItem>
+                                                )}
+                                                {role === 1 && (
+                                                    <SidebarMenuSubItem
+                                                        className={`py-2 text-base ml-2 text-gray-500 underline ${pathname === "/dashboard/complaint-types" ? "font-bold text-blue-950" : ""
+                                                            }`}
+                                                    >
+                                                        <Link href="/dashboard/complaint-types">
+                                                            <span>CE Departments</span>
+                                                        </Link>
+                                                    </SidebarMenuSubItem>
+                                                )}
+                                                {role === 1 && (
+                                                    <SidebarMenuSubItem
                                                         className={`py-2 text-base ml-2 text-gray-500 underline ${pathname === "/dashboard/user-actions" ? "font-bold text-blue-950" : ""
                                                             }`}
                                                     >

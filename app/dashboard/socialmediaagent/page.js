@@ -4,6 +4,8 @@ import { EnhancedDataTable } from "@/components/ui/enhanced-data-table"
 import { useEffect, useState } from "react";
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import Link from 'next/link';
+import { Plus } from 'lucide-react';
 
 export default function Page() {
   const [agents, setAgents] = useState([]);
@@ -30,9 +32,11 @@ export default function Page() {
           
           const response = await fetch(url);
           if (response.ok) {
-            const { data, total } = await response.json();
-            setAgents(data);
-            setTotal(total);
+            const responseData = await response.json();
+            const agentsData = Array.isArray(responseData) ? responseData : (responseData.data || []);
+            const totalCount = responseData.total || agentsData.length;
+            setAgents(agentsData);
+            setTotal(totalCount);
           } else {
             const errorData = await response.json().catch(() => ({}));
             setError(errorData.error || 'Failed to fetch social media agents');
@@ -66,6 +70,11 @@ export default function Page() {
     <div className="container mx-auto py-6">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">Media Cell Agents</h1>
+        <Link href={"/dashboard/socialmediaagent/add"}>
+          <Button variant="primary" className="border px-3">
+            <Plus /> Add Agent
+          </Button>
+        </Link>
       </div>
       <div className="flex flex-wrap gap-4 mb-4 items-end">
         <Input

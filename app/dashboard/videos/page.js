@@ -4,6 +4,8 @@ import { EnhancedDataTable } from "@/components/ui/enhanced-data-table"
 import { useEffect, useState } from "react";
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import Link from 'next/link';
+import { Plus } from 'lucide-react';
 
 export default function Page() {
   const [videos, setVideos] = useState([]);
@@ -25,7 +27,8 @@ export default function Page() {
         const response = await fetch(url, { method: 'GET' });
         if (response.ok) {
           const data = await response.json();
-          setVideos(data.data || data || []);
+          const videosData = Array.isArray(data) ? data : (data.data || []);
+          setVideos(videosData);
         } else {
           setError('Failed to fetch videos');
         }
@@ -72,6 +75,11 @@ export default function Page() {
     <div className="container mx-auto py-6">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">Videos</h1>
+        <Link href={"/dashboard/videos/add"}>
+          <Button variant="primary" className="border px-3">
+            <Plus /> Add Video
+          </Button>
+        </Link>
       </div>
       <div className="flex flex-wrap gap-4 mb-4 items-end">
         <Input

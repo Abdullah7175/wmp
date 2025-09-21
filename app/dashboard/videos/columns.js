@@ -87,7 +87,7 @@ export const columns = [
             <DropdownMenuContent align="end">
               <DropdownMenuLabel>Actions</DropdownMenuLabel>
               <DropdownMenuItem>
-                <Link href={`/dashboard/videos/edit/${video.id}`}>Edit Video</Link>
+              <Link href={video.link} target="_blank" rel="noopener noreferrer">Watch Video</Link>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem>

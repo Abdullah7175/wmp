@@ -44,7 +44,7 @@ const VideoForm = () => {
                     const requestsArray = Array.isArray(data) ? data : (data.data || []);
                     setWorkRequests(requestsArray.map(request => ({
                         value: Number(request.id),
-                        label: `${request.id}`
+                        label: `#${request.id} - ${request.description || 'No description'} (${request.status_name || 'Unknown Status'})`
                     })));
                 }
             } catch (error) {

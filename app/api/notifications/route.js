@@ -52,6 +52,9 @@ export async function GET(request) {
         n.read
       FROM notifications n
       ${whereClause}
+      AND n.message IS NOT NULL 
+      AND n.message != ''
+      AND n.message != 'No message'
       ORDER BY n.created_at DESC
       LIMIT $${params.length + 1}
     `, [...params, limit]);
@@ -60,14 +63,18 @@ export async function GET(request) {
     const unreadCount = await query(`
       SELECT COUNT(*) as count
       FROM notifications n
-      ${whereClause} AND n.read = false
+      ${whereClause} 
+      AND n.read = false
+      AND n.message IS NOT NULL 
+      AND n.message != ''
+      AND n.message != 'No message'
     `, params);
 
     return NextResponse.json({
       success: true,
       data: {
-        notifications: notifications || [],
-        unreadCount: unreadCount[0]?.count || 0
+        notifications: notifications.rows || [],
+        unreadCount: unreadCount.rows[0]?.count || 0
       }
     });
 
