@@ -474,7 +474,7 @@ export const RequestForm = ({ isPublic = false, initialValues, onSubmit, isEditM
                     ) : (
                         <div>
                             <label htmlFor="town_id" className="block text-sm font-medium text-gray-700 mb-1">
-                                Town *
+                                Town
                             </label>
                             <Select
                                 id="town_id"
@@ -494,7 +494,7 @@ export const RequestForm = ({ isPublic = false, initialValues, onSubmit, isEditM
                     {/* Sub Town */}
                     <div>
                         <label htmlFor="subtown_id" className="block text-sm font-medium text-gray-700 mb-1">
-                            Sub Town (Optional)
+                            Sub Town
                         </label>
                         <Select
                             id="subtown_id"
@@ -530,7 +530,7 @@ export const RequestForm = ({ isPublic = false, initialValues, onSubmit, isEditM
                     ) : (
                         <div>
                             <label htmlFor="complaint_type_id" className="block text-sm font-medium text-gray-700 mb-1">
-                                Department *
+                                Department
                             </label>
                             <Select
                                 id="complaint_type_id"
@@ -570,11 +570,37 @@ export const RequestForm = ({ isPublic = false, initialValues, onSubmit, isEditM
                             isDisabled={isAgentRole1 && !agentInfo?.complaint_type_id}
                         />
                     </div>
+                    <div className="md:col-span-2">
+                    <label htmlFor="nature_of_work" className="block text-sm font-medium text-gray-700 mb-1">
+                        Nature of Work *
+                    </label>
+                    <select
+                        id="nature_of_work"
+                        name="nature_of_work"
+                        onChange={formik.handleChange}
+                        onBlur={formik.handleBlur}
+                        value={formik.values.nature_of_work}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm"
+                    >
+                        <option value="">Select Nature of Work...</option>
+                        <option value="repairing">Repairing/Replacement</option>
+                        <option value="new installation">New Installation</option>
+                        <option value="new installation">Leakages</option>
+                        <option value="new installation">Sunk Down</option>
+                        <option value="new installation">Rewinding</option>
+                        <option value="new installation">Provide n Fixing</option>
+                        <option value="new installation">Desilting</option>
+                        <option value="other">Emergency</option>
+                    </select>
+                    {formik.errors.nature_of_work && formik.touched.nature_of_work && (
+                        <p className="mt-1 text-sm text-red-600">{formik.errors.nature_of_work}</p>
+                    )}
+                </div>
 
                     {/* Contact Number */}
                     <div>
                         <label htmlFor="contact_number" className="block text-sm font-medium text-gray-700 mb-1">
-                            Contact Number *
+                            POC Number
                         </label>
                         <input
                             id="contact_number"
@@ -932,7 +958,7 @@ export const RequestForm = ({ isPublic = false, initialValues, onSubmit, isEditM
                     </div>
                 )}
 
-                <div className="md:col-span-2">
+                {/* <div className="md:col-span-2">
                     <label htmlFor="nature_of_work" className="block text-sm font-medium text-gray-700 mb-1">
                         Nature of Work *
                     </label>
@@ -947,12 +973,17 @@ export const RequestForm = ({ isPublic = false, initialValues, onSubmit, isEditM
                         <option value="">Select Nature of Work...</option>
                         <option value="repairing">Repairing/Replacement</option>
                         <option value="new installation">New Installation</option>
+                        <option value="new installation">Leakages</option>
+                        <option value="new installation">Sunk Down</option>
+                        <option value="new installation">Rewinding</option>
+                        <option value="new installation">Provide n Fixing</option>
+                        <option value="new installation">Desilting</option>
                         <option value="other">Emergency</option>
                     </select>
                     {formik.errors.nature_of_work && formik.touched.nature_of_work && (
                         <p className="mt-1 text-sm text-red-600">{formik.errors.nature_of_work}</p>
                     )}
-                </div>
+                </div> */}
 
                 <div className="mt-6 flex justify-end">
                     <button

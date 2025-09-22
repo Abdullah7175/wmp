@@ -177,12 +177,27 @@ export default function AllRequestsList() {
       {/* CE User Info */}
       <Card className="bg-blue-50 border-blue-200">
         <CardHeader>
-          <CardTitle className="text-lg text-blue-800">Your Departments</CardTitle>
+          <CardTitle className="text-lg text-blue-800 flex items-center gap-2">
+            <Building2 className="h-5 w-5" />
+            Your Departments
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="text-sm text-blue-700">
             <p><strong>Designation:</strong> {ceUser.designation || 'Chief Engineer'}</p>
-            <p><strong>Assigned Departments:</strong> {ceUser.departments.length} department(s)</p>
+            <p><strong>Assigned Departments:</strong> {ceUser.departments?.length || 0} department(s)</p>
+            {ceUser.departments && ceUser.departments.length > 0 && (
+              <div className="mt-2">
+                <p><strong>Department Types:</strong></p>
+                <div className="flex flex-wrap gap-1 mt-1">
+                  {ceUser.departments.map((dept, index) => (
+                    <Badge key={index} variant="outline" className="text-xs">
+                      {dept.type_name || `Department ${dept}`}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>

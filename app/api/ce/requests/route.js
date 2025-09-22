@@ -44,9 +44,24 @@ export async function GET(request) {
       return NextResponse.json({
         success: true,
         data: [],
+        ce_user: {
+          id: ceUser.ce_user_id,
+          designation: ceUser.designation,
+          departments: []
+        },
         message: "No departments assigned to this CE user."
       });
     }
+
+    // Get department names
+    const departmentNamesQuery = await query(`
+      SELECT id, type_name FROM complaint_types WHERE id = ANY($1)
+    `, [departmentIds]);
+
+    const departmentNames = departmentNamesQuery.rows.reduce((acc, dept) => {
+      acc[dept.id] = dept.type_name;
+      return acc;
+    }, {});
 
     // Log CE request list access
     await logUserAction({
@@ -165,7 +180,10 @@ export async function GET(request) {
       ce_user: {
         id: ceUser.ce_user_id,
         designation: ceUser.designation,
-        departments: departmentIds
+        departments: departmentIds.map(id => ({
+          id: id,
+          type_name: departmentNames[id]
+        }))
       }
     });
 

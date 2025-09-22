@@ -2,7 +2,6 @@ import { Suspense } from "react";
 import AllRequestsList from "./components/AllRequestsList";
 
 export default function AllRequestsPage() {
-
   return (
     <div className="p-4 lg:p-6">
       <div className="mb-6 lg:mb-8">
