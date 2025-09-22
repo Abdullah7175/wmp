@@ -266,7 +266,7 @@ export default function CEUsersList() {
       contact_number: user.contact_number || '',
       designation: user.designation || '',
       address: user.address || '',
-      departments: user.departments || []
+      departments: user.departments ? user.departments.map(dept => dept.id) : []
     });
     setIsEditDialogOpen(true);
   };

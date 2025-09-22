@@ -5,28 +5,28 @@ import { existsSync } from 'fs';
 
 export async function GET(request, { params }) {
   try {
-    const { path } = await params;
-    const filePath = join(process.cwd(), 'uploads', ...path);
+    const { path: filePath } = await params;
     
-    // Security check: ensure the file is within the uploads directory
-    const uploadsDir = join(process.cwd(), 'uploads');
-    if (!filePath.startsWith(uploadsDir)) {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
+    if (!filePath || filePath.length === 0) {
+      return NextResponse.json({ error: 'File path is required' }, { status: 400 });
     }
+
+    // Construct the full file path
+    const fullPath = join(process.cwd(), 'public', 'uploads', ...filePath);
     
     // Check if file exists
-    if (!existsSync(filePath)) {
+    if (!existsSync(fullPath)) {
       return NextResponse.json({ error: 'File not found' }, { status: 404 });
     }
-    
+
     // Read the file
-    const fileBuffer = await readFile(filePath);
+    const fileBuffer = await readFile(fullPath);
     
     // Determine content type based on file extension
-    const ext = filePath.split('.').pop().toLowerCase();
+    const extension = filePath[filePath.length - 1].split('.').pop()?.toLowerCase();
     let contentType = 'application/octet-stream';
     
-    switch (ext) {
+    switch (extension) {
       case 'jpg':
       case 'jpeg':
         contentType = 'image/jpeg';
@@ -40,29 +40,34 @@ export async function GET(request, { params }) {
       case 'webp':
         contentType = 'image/webp';
         break;
-      case 'svg':
-        contentType = 'image/svg+xml';
-        break;
       case 'mp4':
         contentType = 'video/mp4';
         break;
       case 'webm':
         contentType = 'video/webm';
         break;
-      case 'pdf':
-        contentType = 'application/pdf';
+      case 'mov':
+        contentType = 'video/quicktime';
         break;
+      case 'avi':
+        contentType = 'video/x-msvideo';
+        break;
+      default:
+        contentType = 'application/octet-stream';
     }
-    
+
+    // Return the file with appropriate headers
     return new NextResponse(fileBuffer, {
+      status: 200,
       headers: {
         'Content-Type': contentType,
-        'Cache-Control': 'public, max-age=31536000, immutable',
+        'Content-Length': fileBuffer.length.toString(),
+        'Cache-Control': 'public, max-age=31536000', // Cache for 1 year
       },
     });
-    
+
   } catch (error) {
     console.error('Error serving file:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to serve file' }, { status: 500 });
   }
 }

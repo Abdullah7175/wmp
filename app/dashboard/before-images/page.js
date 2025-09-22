@@ -202,13 +202,15 @@ export default function BeforeContentPage() {
                         <Download className="w-3 h-3" />
                       </Button>
                       {canEdit && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-6 px-2"
-                        >
-                          <Edit className="w-3 h-3" />
-                        </Button>
+                        <Link href={`/dashboard/before-content/edit/${item.id}`}>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-6 px-2"
+                          >
+                            <Edit className="w-3 h-3" />
+                          </Button>
+                        </Link>
                       )}
                       {canDelete && (
                         <Button

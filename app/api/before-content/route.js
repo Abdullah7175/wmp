@@ -3,6 +3,8 @@ import { query } from '@/lib/db';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/pages/api/auth/[...nextauth]';
 import { logUserAction } from '@/lib/userActionLogger';
+import { writeFile, mkdir } from 'fs/promises';
+import { join } from 'path';
 
 export async function GET(request) {
   try {
@@ -15,6 +17,7 @@ export async function GET(request) {
     let queryText = `
       SELECT 
         bc.*,
+        CASE WHEN bc.link IS NOT NULL THEN CONCAT('http://202.61.47.29:3000', bc.link) ELSE NULL END as link,
         wr.address,
         wr.description as work_description,
         ct.type_name as complaint_type,
@@ -83,114 +86,245 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const body = await request.json();
-    const { workRequestId, description, link, latitude, longitude, contentType, additionalContent } = body;
+    // Check if request is FormData (file upload) or JSON
+    const contentType = request.headers.get('content-type');
+    let workRequestId, description, contentTypeValue, files, descriptions, latitudes, longitudes;
 
-    if (!workRequestId || !link || !contentType) {
-      return NextResponse.json({ error: 'Work request ID, content link, and content type are required' }, { status: 400 });
+    if (contentType && contentType.includes('multipart/form-data')) {
+      // Handle FormData upload
+      const formData = await request.formData();
+      workRequestId = formData.get('work_request_id');
+      description = formData.get('description');
+      contentTypeValue = formData.get('content_type');
+      
+      // Get all files
+      files = formData.getAll('files');
+      descriptions = formData.getAll('descriptions');
+      latitudes = formData.getAll('latitudes');
+      longitudes = formData.getAll('longitudes');
+    } else {
+      // Handle JSON upload (legacy)
+      const body = await request.json();
+      workRequestId = body.workRequestId;
+      description = body.description;
+      contentTypeValue = body.contentType;
+      const link = body.link;
+      const latitude = body.latitude;
+      const longitude = body.longitude;
+      const additionalContent = body.additionalContent;
+
+      if (!workRequestId || !link || !contentTypeValue) {
+        return NextResponse.json({ error: 'Work request ID, content link, and content type are required' }, { status: 400 });
+      }
+
+      // Validate content type
+      if (!['image', 'video'].includes(contentTypeValue)) {
+        return NextResponse.json({ error: 'Content type must be either "image" or "video"' }, { status: 400 });
+      }
+
+      // Process legacy JSON format
+      const insertQuery = `
+        INSERT INTO before_content (work_request_id, description, link, content_type, creator_id, creator_type, creator_name, geo_tag)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, ST_GeomFromText($8, 4326))
+        RETURNING *
+      `;
+
+      const geoTag = `POINT(${longitude || 0} ${latitude || 0})`;
+      const creatorName = session.user.name || 'Unknown';
+
+      const result = await query(insertQuery, [
+        workRequestId,
+        description || '',
+        link,
+        contentTypeValue,
+        session.user.id,
+        session.user.userType || 'user',
+        creatorName,
+        geoTag
+      ]);
+
+      const beforeContentId = result[0]?.id;
+
+      // Log before content upload action
+      await logUserAction({
+        user_id: session.user.id,
+        user_type: session.user.userType,
+        user_role: session.user.role,
+        user_name: session.user.name || 'Unknown',
+        user_email: session.user.email || 'unknown@example.com',
+        action_type: 'UPLOAD',
+        entity_type: 'before_content',
+        entity_id: beforeContentId,
+        entity_name: `Before ${contentTypeValue.charAt(0).toUpperCase() + contentTypeValue.slice(1)} for Request #${workRequestId}`,
+        details: {
+          work_request_id: workRequestId,
+          content_link: link,
+          content_type: contentTypeValue,
+          description: description || '',
+          has_geolocation: !!(latitude && longitude),
+          latitude: latitude,
+          longitude: longitude
+        },
+        ip_address: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip'),
+        user_agent: request.headers.get('user-agent')
+      });
+
+      // Insert additional content if provided
+      if (additionalContent && additionalContent.length > 0) {
+        for (const additionalItem of additionalContent) {
+          const additionalGeoTag = additionalItem.latitude && additionalItem.longitude 
+            ? `POINT(${additionalItem.longitude} ${additionalItem.latitude})` 
+            : null;
+
+          const additionalResult = await query(insertQuery, [
+            workRequestId,
+            additionalItem.description || '',
+            additionalItem.link,
+            additionalItem.contentType || contentTypeValue,
+            session.user.id,
+            session.user.userType || 'user',
+            creatorName,
+            additionalGeoTag
+          ]);
+
+          // Log additional before content upload action
+          await logUserAction({
+            user_id: session.user.id,
+            user_type: session.user.userType,
+            user_role: session.user.role,
+            user_name: session.user.name || 'Unknown',
+            user_email: session.user.email || 'unknown@example.com',
+            action_type: 'UPLOAD',
+            entity_type: 'before_content',
+            entity_id: additionalResult[0]?.id,
+            entity_name: `Additional Before ${(additionalItem.contentType || contentTypeValue).charAt(0).toUpperCase() + (additionalItem.contentType || contentTypeValue).slice(1)} for Request #${workRequestId}`,
+            details: {
+              work_request_id: workRequestId,
+              content_link: additionalItem.link,
+              content_type: additionalItem.contentType || contentTypeValue,
+              description: additionalItem.description || '',
+              has_geolocation: !!(additionalItem.latitude && additionalItem.longitude),
+              latitude: additionalItem.latitude,
+              longitude: additionalItem.longitude,
+              is_additional: true
+            },
+            ip_address: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip'),
+            user_agent: request.headers.get('user-agent')
+          });
+        }
+      }
+
+      return NextResponse.json({ 
+        success: true, 
+        data: result.rows[0],
+        message: 'Before content uploaded successfully' 
+      });
+    }
+
+    // Handle FormData upload
+    if (!workRequestId || !contentTypeValue) {
+      return NextResponse.json({ error: 'Work request ID and content type are required' }, { status: 400 });
+    }
+
+    if (!files || files.length === 0) {
+      return NextResponse.json({ error: 'At least one file is required' }, { status: 400 });
     }
 
     // Validate content type
-    if (!['image', 'video'].includes(contentType)) {
+    if (!['image', 'video'].includes(contentTypeValue)) {
       return NextResponse.json({ error: 'Content type must be either "image" or "video"' }, { status: 400 });
     }
 
-    // Insert main before content
+    // Process file uploads
+    const uploadDir = join(process.cwd(), 'public', 'uploads', 'before-content', contentTypeValue);
+    await mkdir(uploadDir, { recursive: true });
+
+    const uploadedFiles = [];
+    const creatorName = session.user.name || 'Unknown';
+
+    // Process each file
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      if (!file || file.size === 0) continue;
+
+      // Generate unique filename
+      const fileExtension = file.name.split('.').pop();
+      const uniqueName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
+      const filePath = join(uploadDir, uniqueName);
+      
+      // Save file
+      const buffer = await file.arrayBuffer();
+      await writeFile(filePath, Buffer.from(buffer));
+      
+      // Create relative URL
+      const relativeUrl = `/uploads/before-content/${contentTypeValue}/${uniqueName}`;
+      uploadedFiles.push({
+        link: relativeUrl,
+        description: descriptions[i] || '',
+        latitude: latitudes[i] || '',
+        longitude: longitudes[i] || ''
+      });
+    }
+
+    if (uploadedFiles.length === 0) {
+      return NextResponse.json({ error: 'No valid files uploaded' }, { status: 400 });
+    }
+
+    // Insert each uploaded file
     const insertQuery = `
       INSERT INTO before_content (work_request_id, description, link, content_type, creator_id, creator_type, creator_name, geo_tag)
       VALUES ($1, $2, $3, $4, $5, $6, $7, ST_GeomFromText($8, 4326))
       RETURNING *
     `;
 
-    const geoTag = `POINT(${longitude || 0} ${latitude || 0})`;
-    const creatorName = session.user.name || 'Unknown';
+    const results = [];
+    for (const fileData of uploadedFiles) {
+      const geoTag = fileData.latitude && fileData.longitude 
+        ? `POINT(${fileData.longitude} ${fileData.latitude})` 
+        : `POINT(0 0)`;
 
-    const result = await query(insertQuery, [
-      workRequestId,
-      description || '',
-      link,
-      contentType,
-      session.user.id,
-      session.user.userType || 'user',
-      creatorName,
-      geoTag
-    ]);
+      const result = await query(insertQuery, [
+        workRequestId,
+        fileData.description,
+        fileData.link,
+        contentTypeValue,
+        session.user.id,
+        session.user.userType || 'user',
+        creatorName,
+        geoTag
+      ]);
 
-    const beforeContentId = result[0]?.id;
+      results.push(result.rows[0]);
 
-    // Log before content upload action
-    await logUserAction({
-      user_id: session.user.id,
-      user_type: session.user.userType,
-      user_role: session.user.role,
-      user_name: session.user.name || 'Unknown',
-      user_email: session.user.email || 'unknown@example.com',
-      action_type: 'UPLOAD',
-      entity_type: 'before_content',
-      entity_id: beforeContentId,
-      entity_name: `Before ${contentType.charAt(0).toUpperCase() + contentType.slice(1)} for Request #${workRequestId}`,
-      details: {
-        work_request_id: workRequestId,
-        content_link: link,
-        content_type: contentType,
-        description: description || '',
-        has_geolocation: !!(latitude && longitude),
-        latitude: latitude,
-        longitude: longitude
-      },
-      ip_address: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip'),
-      user_agent: request.headers.get('user-agent')
-    });
-
-    // Insert additional content if provided
-    if (additionalContent && additionalContent.length > 0) {
-      for (const additionalItem of additionalContent) {
-        const additionalGeoTag = additionalItem.latitude && additionalItem.longitude 
-          ? `POINT(${additionalItem.longitude} ${additionalItem.latitude})` 
-          : null;
-
-        const additionalResult = await query(insertQuery, [
-          workRequestId,
-          additionalItem.description || '',
-          additionalItem.link,
-          additionalItem.contentType || contentType,
-          session.user.id,
-          session.user.userType || 'user',
-          creatorName,
-          additionalGeoTag
-        ]);
-
-        // Log additional before content upload action
-        await logUserAction({
-          user_id: session.user.id,
-          user_type: session.user.userType,
-          user_role: session.user.role,
-          user_name: session.user.name || 'Unknown',
-          user_email: session.user.email || 'unknown@example.com',
-          action_type: 'UPLOAD',
-          entity_type: 'before_content',
-          entity_id: additionalResult[0]?.id,
-          entity_name: `Additional Before ${(additionalItem.contentType || contentType).charAt(0).toUpperCase() + (additionalItem.contentType || contentType).slice(1)} for Request #${workRequestId}`,
-          details: {
-            work_request_id: workRequestId,
-            content_link: additionalItem.link,
-            content_type: additionalItem.contentType || contentType,
-            description: additionalItem.description || '',
-            has_geolocation: !!(additionalItem.latitude && additionalItem.longitude),
-            latitude: additionalItem.latitude,
-            longitude: additionalItem.longitude,
-            is_additional: true
-          },
-          ip_address: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip'),
-          user_agent: request.headers.get('user-agent')
-        });
-      }
+      // Log before content upload action
+      await logUserAction({
+        user_id: session.user.id,
+        user_type: session.user.userType,
+        user_role: session.user.role,
+        user_name: session.user.name || 'Unknown',
+        user_email: session.user.email || 'unknown@example.com',
+        action_type: 'UPLOAD',
+        entity_type: 'before_content',
+        entity_id: result.rows[0].id,
+        entity_name: `Before ${contentTypeValue.charAt(0).toUpperCase() + contentTypeValue.slice(1)} for Request #${workRequestId}`,
+        details: {
+          work_request_id: workRequestId,
+          content_link: fileData.link,
+          content_type: contentTypeValue,
+          description: fileData.description,
+          has_geolocation: !!(fileData.latitude && fileData.longitude),
+          latitude: fileData.latitude,
+          longitude: fileData.longitude
+        },
+        ip_address: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip'),
+        user_agent: request.headers.get('user-agent')
+      });
     }
 
     return NextResponse.json({ 
       success: true, 
-      data: result.rows[0],
-      message: 'Before content uploaded successfully' 
+      data: results,
+      message: `${results.length} file(s) uploaded successfully` 
     });
   } catch (error) {
     console.error('Error uploading before content:', error);

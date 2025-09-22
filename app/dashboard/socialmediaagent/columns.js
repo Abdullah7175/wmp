@@ -18,10 +18,11 @@ import Link from "next/link"
 const getRoleLabel = (role) => {
   const roles = {
     1: 'Camera Man',
-    2: 'Assistant',
+    2: 'Helper',
     3: 'Photographer',
     4: 'Video Editor',
-    5: 'Manager'
+    5: 'Content Creator',
+    6: 'Social Media Manager'
   };
   return roles[role] || 'Unknown';
 };

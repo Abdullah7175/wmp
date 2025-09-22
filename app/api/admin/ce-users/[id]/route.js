@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/pages/api/auth/[...nextauth]";
-import { query } from "@/lib/db";
+import { query, connectToDatabase } from "@/lib/db";
 import bcrypt from "bcryptjs";
 import { logUserAction } from "@/lib/userActionLogger";
 
@@ -69,7 +69,7 @@ export async function PUT(request, { params }) {
     }
 
     // Start transaction
-    const client = await query.getClient();
+    const client = await connectToDatabase();
     await client.query('BEGIN');
 
     try {
@@ -183,7 +183,7 @@ export async function DELETE(request, { params }) {
     const userId = ceUser.user_id;
 
     // Start transaction
-    const client = await query.getClient();
+    const client = await connectToDatabase();
     await client.query('BEGIN');
 
     try {
