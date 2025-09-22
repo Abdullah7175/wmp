@@ -1,13 +1,24 @@
 import { Suspense } from "react";
-import { query } from "@/lib/db";
+import { connectToDatabase } from "@/lib/db";
 import CeoUsersList from "./components/CeoUsersList";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/pages/api/auth/[...nextauth]";
 import { redirect } from "next/navigation";
 
+// Force dynamic rendering to prevent build-time database connections
+export const dynamic = 'force-dynamic';
+
 async function getCeoUsers() {
+  let client;
   try {
-    const result = await query(`
+    // Check if we're in build mode
+    if (process.env.NODE_ENV === 'production' && process.env.NEXT_PHASE === 'phase-production-build') {
+      console.log('Skipping database connection during build phase');
+      return [];
+    }
+
+    client = await connectToDatabase();
+    const result = await client.query(`
       SELECT 
         id,
         name,
@@ -24,8 +35,16 @@ async function getCeoUsers() {
     // Extract rows from the PostgreSQL result object
     return result.rows || [];
   } catch (error) {
-    console.error('Error fetching CEO users:', error);
+    console.error('Error fetching CEO users:', {
+      error: error.message,
+      code: error.code,
+      timestamp: new Date().toISOString()
+    });
     return [];
+  } finally {
+    if (client && client.release) {
+      client.release();
+    }
   }
 }
 

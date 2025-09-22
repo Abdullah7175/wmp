@@ -1,10 +1,21 @@
 import { Suspense } from "react";
-import { query } from "@/lib/db";
+import { connectToDatabase } from "@/lib/db";
 import RejectedRequestsList from "./components/RejectedRequestsList";
 
+// Force dynamic rendering to prevent build-time database connections
+export const dynamic = 'force-dynamic';
+
 async function getRejectedRequests() {
+  let client;
   try {
-    const requests = await query(`
+    // Check if we're in build mode
+    if (process.env.NODE_ENV === 'production' && process.env.NEXT_PHASE === 'phase-production-build') {
+      console.log('Skipping database connection during build phase');
+      return [];
+    }
+
+    client = await connectToDatabase();
+    const requests = await client.query(`
       SELECT 
         wr.id,
         wr.request_date,
@@ -42,8 +53,16 @@ async function getRejectedRequests() {
 
     return requests.rows || [];
   } catch (error) {
-    console.error('Error fetching rejected requests:', error);
+    console.error('Error fetching rejected requests:', {
+      error: error.message,
+      code: error.code,
+      timestamp: new Date().toISOString()
+    });
     return [];
+  } finally {
+    if (client && client.release) {
+      client.release();
+    }
   }
 }
 

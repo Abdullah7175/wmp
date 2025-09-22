@@ -91,6 +91,12 @@ export const columns = [
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem>
+                <Link className="text-red-700" href={`/dashboard/videos/edit/${video.id}`}>
+                  Edit Video
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem>
                 <Link className="text-red-700" href={`/dashboard/videos/delete/${video.id}`}>
                   Delete Video
                 </Link>

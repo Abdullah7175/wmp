@@ -21,8 +21,12 @@ export async function GET(request) {
             { status: 400 }
         );
     }
-    const client = await connectToDatabase();
+    let client;
     try {
+        console.log('Starting database connection for requests API');
+        client = await connectToDatabase();
+        console.log('Database connected successfully for requests API');
+        
         if (id) {
             const numericId = Number(id);
             const query = `
@@ -258,16 +262,33 @@ export async function GET(request) {
             return NextResponse.json({ data: result.rows, total }, { status: 200 });
         }
     } catch (error) {
-        console.error('Error fetching data:', error);
+        console.error('Error fetching data:', {
+            error: error.message,
+            code: error.code,
+            timestamp: new Date().toISOString()
+        });
+        
+        // Check if it's a database connection error
+        if (error.message.includes('timeout') || error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {
+            return NextResponse.json({ 
+                error: 'Database connection failed. Please try again later.' 
+            }, { status: 503 });
+        }
+        
         return NextResponse.json({ error: 'Failed to fetch data' }, { status: 500 });
     } finally {
-        client.release && client.release();
+        if (client && client.release) {
+            client.release();
+        }
     }
 }
 
 export async function POST(req) {
-    const client = await connectToDatabase();
+    let client;
     try {
+        console.log('Starting database connection for POST requests API');
+        client = await connectToDatabase();
+        console.log('Database connected successfully for POST requests API');
         const body = await req.json();
         const {
             town_id,
@@ -510,18 +531,36 @@ export async function POST(req) {
             id: workRequestId
         }, { status: 200 });
     } catch (error) {
-        await client.query('ROLLBACK').catch(() => {});
-        console.error('Error submitting work request:', error);
+        if (client) {
+            await client.query('ROLLBACK').catch(() => {});
+        }
+        console.error('Error submitting work request:', {
+            error: error.message,
+            code: error.code,
+            timestamp: new Date().toISOString()
+        });
+        
+        // Check if it's a database connection error
+        if (error.message.includes('timeout') || error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {
+            return NextResponse.json({ 
+                error: 'Database connection failed. Please try again later.' 
+            }, { status: 503 });
+        }
+        
         return NextResponse.json({ error: 'Failed to submit work request', details: error.message }, { status: 500 });
     } finally {
-        client.release();
+        if (client && client.release) {
+            client.release();
+        }
     }
 }
 
 export async function PUT(req) {
-    const client = await connectToDatabase();
-
+    let client;
     try {
+        console.log('Starting database connection for PUT requests API');
+        client = await connectToDatabase();
+        console.log('Database connected successfully for PUT requests API');
         const body = await req.json();
         const { 
             id,
@@ -697,10 +736,26 @@ export async function PUT(req) {
         }, { status: 200 });
 
     } catch (error) {
-        await client.query('ROLLBACK');
-        console.error('Error updating work request:', error);
+        if (client) {
+            await client.query('ROLLBACK').catch(() => {});
+        }
+        console.error('Error updating work request:', {
+            error: error.message,
+            code: error.code,
+            timestamp: new Date().toISOString()
+        });
+        
+        // Check if it's a database connection error
+        if (error.message.includes('timeout') || error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {
+            return NextResponse.json({ 
+                error: 'Database connection failed. Please try again later.' 
+            }, { status: 503 });
+        }
+        
         return NextResponse.json({ error: 'Failed to update work request' }, { status: 500 });
     } finally {
-        client.release();
+        if (client && client.release) {
+            client.release();
+        }
     }
 }
