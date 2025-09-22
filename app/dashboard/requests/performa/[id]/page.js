@@ -13,6 +13,8 @@ const Page = () => {
     const [shootDate, setShootDate] = useState('');
     const [editShootDate, setEditShootDate] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
+    const [externalLink, setExternalLink] = useState('');
+    const [showExternalLinkInput, setShowExternalLinkInput] = useState(true);
     const { toast } = useToast();
     const params = useParams();
     const router = useRouter();
@@ -59,6 +61,12 @@ const Page = () => {
     };
     const handleShootDateSave = () => {
         setEditShootDate(false);
+    };
+
+    const handleExternalLinkChange = (e) => {
+        const value = e.target.value;
+        setExternalLink(value);
+        setShowExternalLinkInput(value === '');
     };
 
     if (!data) return <div>Loading...</div>;
@@ -197,12 +205,64 @@ const Page = () => {
                             ["Assistant", currentUserName],
                             ["Geo Tag", data.latitude && data.longitude ? `${data.latitude}, ${data.longitude}` : 'N/A'],
                             ["Contractor", data.contractor_name || 'N/A'],
-                            ["QR Code",
-                                [<QRCode
-                                    key="qr-code"
-                                    style={{ height: "auto", maxWidth: "50%", width: 130, minWidth: 110, maxWidth: 170 }}
-                                    viewBox={`0 0 150 150`}
-                                    value={window.location.href}></QRCode> || 'N/A']
+                            ["QR Code", 
+                                <div key="qr-codes" className="space-y-4">
+                                    {/* Internal Link QR Code */}
+                                    <div className="text-center">
+                                        <p className="text-xs font-medium mb-2">Internal Link</p>
+                                        <div className="flex justify-center items-center">
+                                        <QRCode
+                                            style={{ height: "auto", maxWidth: "25%", width: 100, minWidth: 90, maxWidth: 110}}
+                                            viewBox={`0 0 150 150`}
+                                            value={window.location.href}
+                                        />
+                                        </div>
+                                    </div>
+                                    
+                                    {/* External Link Input/QR Code */}
+                                    {showExternalLinkInput ? (
+                                        <div className="text-center print:hidden">
+                                            <input
+                                                type="url"
+                                                placeholder="Add YouTube/External Link"
+                                                value={externalLink}
+                                                onChange={handleExternalLinkChange}
+                                                className="w-full px-2 py-1 text-xs border rounded-md mb-2"
+                                            />
+                                            <p className="text-xs text-gray-500">External Link</p>
+                                        </div>
+                                    ) : (
+                                        <div className="text-center">
+                                            <p className="text-xs font-medium mb-2">External Link</p>
+                                            <div className="flex justify-center items-center">
+                                            <QRCode
+                                                style={{ height: "auto", maxWidth: "25%", width: 100, minWidth: 90, maxWidth: 110 }}
+                                                viewBox={`0 0 150 150`}
+                                                value={externalLink}
+                                            />
+                                            </div>
+                                            <button
+                                                onClick={() => {
+                                                    setExternalLink('');
+                                                    setShowExternalLinkInput(true);
+                                                }}
+                                                className="mt-2 px-2 py-1 bg-gray-300 text-gray-700 rounded-md text-xs print:hidden"
+                                            >
+                                                Remove
+                                            </button>
+                                        </div>
+                                    )}
+                                    
+                                    {/* Print-only external QR code placeholder */}
+                                    {showExternalLinkInput && (
+                                        <div className="hidden print:block text-center">
+                                            <p className="text-xs font-medium mb-2">External Link</p>
+                                            <div className="w-[130px] h-[130px] border-2 border-dashed border-gray-400 mx-auto flex items-center justify-center">
+                                                <span className="text-xs text-gray-500">No External Link</span>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
                             ],
                         ].map(([label, value], index) => (
                             <tr key={index} className={index % 2 === 0 ? "bg-gray-100" : ""}>
