@@ -29,17 +29,35 @@ export default function FinalVideosPage() {
     if (dateFrom) params.push(`date_from=${dateFrom}`);
     if (dateTo) params.push(`date_to=${dateTo}`);
     if (params.length) url += '?' + params.join('&');
+    
+    console.log('Fetching final videos from:', url); // Debug log
+    
     fetch(url)
-      .then(res => res.json())
+      .then(res => {
+        console.log('Response status:', res.status); // Debug log
+        if (!res.ok) {
+          throw new Error(`HTTP error! status: ${res.status}`);
+        }
+        return res.json();
+      })
       .then((data) => {
+        console.log('Received data:', data); // Debug log
+        // Handle different response formats
         if (Array.isArray(data)) {
           setFinalVideos(data);
+        } else if (data && Array.isArray(data.data)) {
+          setFinalVideos(data.data);
+        } else if (data && data.error) {
+          console.error('API returned error:', data.error);
+          setError(data.error);
         } else {
-          throw new Error("Invalid data format");
+          console.error('Unexpected data format:', data);
+          setFinalVideos([]);
         }
         setLoading(false);
       })
       .catch(e => {
+        console.error('Error fetching final videos:', e);
         setError(e.message);
         setLoading(false);
       });
@@ -72,7 +90,22 @@ export default function FinalVideosPage() {
     return <div className="flex items-center justify-center h-96 text-lg">Loading final videos...</div>;
   }
   if (error) {
-    return <div className="flex items-center justify-center h-96 text-red-600">Error: {error}</div>;
+    return (
+      <div className="container mx-auto px-4 py-10">
+        <div className="flex items-center justify-center h-96">
+          <div className="text-center">
+            <div className="text-red-600 text-lg font-medium mb-2">Error Loading Final Videos</div>
+            <div className="text-gray-600 mb-4">{error}</div>
+            <button 
+              onClick={() => window.location.reload()}
+              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+            >
+              Try Again
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
