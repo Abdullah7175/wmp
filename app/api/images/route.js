@@ -5,7 +5,6 @@ import { connectToDatabase } from '@/lib/db';
 import { actionLogger, ENTITY_TYPES } from '@/lib/actionLogger';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/pages/api/auth/[...nextauth]';
-import ChunkedFileUpload from '@/lib/chunkedFileUpload';
 
 export async function GET(request) {
     const { searchParams } = new URL(request.url);
@@ -150,57 +149,33 @@ export async function POST(req) {
         const uploadsDir = path.join(process.cwd(), 'public', 'uploads', 'images');
         await fs.mkdir(uploadsDir, { recursive: true });
         const uploadedImages = [];
-        
-        // Process files with improved error handling
         for (let i = 0; i < files.length; i++) {
             const file = files[i];
             const description = descriptions[i];
             const latitude = latitudes[i] || '0';
             const longitude = longitudes[i] || '0';
-            
             if (!description) {
                 continue;
             }
-
-            try {
-                const filename = `${Date.now()}-${file.name}`;
-                const filePath = path.join(uploadsDir, filename);
-                
-                // For large files (>25MB), use chunked upload
-                if (file.size > 25 * 1024 * 1024) {
-                    const chunks = await ChunkedFileUpload.fileToChunks(file, 1024 * 1024); // 1MB chunks
-                    
-                    // Write chunks sequentially to avoid memory issues
-                    for (const chunk of chunks) {
-                        await fs.appendFile(filePath, Buffer.from(chunk.data));
-                    }
-                } else {
-                    // For smaller files, use direct upload
-                    const buffer = await file.arrayBuffer();
-                    await fs.writeFile(filePath, Buffer.from(buffer));
-                }
-
-                const geoTag = `SRID=4326;POINT(${longitude} ${latitude})`;
-                const query = `
-                    INSERT INTO images (work_request_id, description, link, geo_tag, created_at, updated_at, creator_id, creator_type)
-                    VALUES ($1, $2, $3, ST_GeomFromText($4, 4326), NOW(), NOW(), $5, $6)
-                    RETURNING *;
-                `;
-                const { rows } = await client.query(query, [
-                    workRequestId,
-                    description,
-                    `/uploads/images/${filename}`,
-                    geoTag,
-                    creatorId || null,
-                    creatorType || null
-                ]);
-                uploadedImages.push(rows[0]);
-
-            } catch (fileError) {
-                console.error(`Error processing file ${file.name}:`, fileError);
-                // Continue with other files instead of failing completely
-                continue;
-            }
+            const buffer = await file.arrayBuffer();
+            const filename = `${Date.now()}-${file.name}`;
+            const filePath = path.join(uploadsDir, filename);
+            await fs.writeFile(filePath, Buffer.from(buffer));
+            const geoTag = `SRID=4326;POINT(${longitude} ${latitude})`;
+            const query = `
+                INSERT INTO images (work_request_id, description, link, geo_tag, created_at, updated_at, creator_id, creator_type)
+                VALUES ($1, $2, $3, ST_GeomFromText($4, 4326), NOW(), NOW(), $5, $6)
+                RETURNING *;
+            `;
+            const { rows } = await client.query(query, [
+                workRequestId,
+                description,
+                `/uploads/images/${filename}`,
+                geoTag,
+                creatorId || null,
+                creatorType || null
+            ]);
+            uploadedImages.push(rows[0]);
         }
         
         // Log the image upload action

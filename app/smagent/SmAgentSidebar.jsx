@@ -77,24 +77,9 @@ export function SmAgentSidebar() {
       icon: <Video className="w-5 h-5" />,
     },
     {
-      href: "/smagent/final-videos/view",
-      label: "My Final Videos",
-      icon: <Video className="w-5 h-5" />,
-    },
-    {
       href: "/smagent/final-videos/add",
       label: "Upload Final Video",
       icon: <Upload className="w-5 h-5" />,
-    },
-    {
-      href: "/smagent/images/view",
-      label: "My Uploaded Images",
-      icon: <ImageIcon className="w-5 h-5" />,
-    },
-    {
-      href: "/smagent/videos/view",
-      label: "My Uploaded Videos",
-      icon: <Video className="w-5 h-5" />,
     },
     {
       href: "/smagent/images/download",
