@@ -17,17 +17,18 @@ export default function FinalVideosPage() {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 5;
+  const itemsPerPage = 10; // Increased from 5 to 10 for better admin view
 
   useEffect(() => {
     if (!session?.user?.id) return;
     setLoading(true);
-    let url = `/api/final-videos?creator_id=${session.user.id}&creator_type=socialmedia`;
+    // Remove creator filtering for admin - show ALL final videos
+    let url = `/api/final-videos`;
     const params = [];
     if (search) params.push(`filter=${encodeURIComponent(search)}`);
     if (dateFrom) params.push(`date_from=${dateFrom}`);
     if (dateTo) params.push(`date_to=${dateTo}`);
-    if (params.length) url += '&' + params.join('&');
+    if (params.length) url += '?' + params.join('&');
     fetch(url)
       .then(res => res.json())
       .then((data) => {

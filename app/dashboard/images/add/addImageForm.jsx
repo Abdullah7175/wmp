@@ -10,6 +10,8 @@ import { MapPin } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
+import { useFileUpload } from "@/hooks/useFileUpload";
+import { UploadProgressCard } from "@/components/UploadProgressCard";
 
 const validationSchema = Yup.object({
     workRequestId: Yup.number().required('Work Request ID is required'),
@@ -30,6 +32,9 @@ const ImageForm = () => {
     const session = useSession();
     const [workRequestStatus, setWorkRequestStatus] = useState(null);
     const [isUploadAllowed, setIsUploadAllowed] = useState(true);
+
+    // File upload hook
+    const { uploading, progress, uploadStatus, error, uploadFile, reset } = useFileUpload();
 
     useEffect(() => {
         const fetchWorkRequests = async () => {
@@ -122,39 +127,47 @@ const ImageForm = () => {
                 return;
             }
         }
-        const formData = new FormData();
-        formData.append('workRequestId', workRequestId);
-        fileInputs.forEach((item, idx) => {
-            formData.append('img', item.file);
-            formData.append('description', item.description);
-            formData.append('latitude', item.latitude);
-            formData.append('longitude', item.longitude);
-        });
         try {
-            const response = await fetch('/api/images', {
-                method: 'POST',
-                body: formData,
-            });
-            if (response.ok) {
-                toast({
-                    title: 'Image(s) uploaded successfully',
-                    description: `Images added to work request ${workRequestId}`,
-                    variant: 'success',
-                });
-                setIsSuccess(true);
-            } else {
-                const errorData = await response.json();
-                toast({
-                    title: 'Failed to upload image(s)',
-                    description: errorData.error || 'Please try again.',
-                    variant: 'destructive',
+            // Upload images one by one with progress tracking
+            for (let i = 0; i < fileInputs.length; i++) {
+                const item = fileInputs[i];
+                
+                const data = new FormData();
+                data.append('workRequestId', workRequestId);
+                data.append('img', item.file);
+                data.append('description', item.description);
+                data.append('latitude', item.latitude);
+                data.append('longitude', item.longitude);
+
+                await uploadFile(item.file, '/api/images', data, {
+                    onProgress: (progress) => {
+                        // Calculate overall progress across all files
+                        const overallProgress = Math.round(((i + progress / 100) / fileInputs.length) * 100);
+                        console.log(`Uploading ${item.file.name}: ${overallProgress}%`);
+                    },
+                    onSuccess: (response) => {
+                        console.log(`Successfully uploaded ${item.file.name}`);
+                    },
+                    onError: (error) => {
+                        console.error(`Failed to upload ${item.file.name}:`, error);
+                        throw error;
+                    }
                 });
             }
-        } catch (error) {
-            console.error('Error uploading image:', error);
+            
             toast({
-                title: 'An error occurred',
-                description: 'Unable to upload image(s).',
+                title: 'Image(s) uploaded successfully',
+                description: `Images added to work request ${workRequestId}`,
+                variant: 'success',
+            });
+            setIsSuccess(true);
+            reset(); // Reset upload progress
+            
+        } catch (error) {
+            console.error('Upload error:', error);
+            toast({
+                title: 'Failed to upload image(s)',
+                description: error.message || 'Please try again.',
                 variant: 'destructive',
             });
         }
@@ -292,6 +305,25 @@ const ImageForm = () => {
                     </div>
                 </fieldset>
             </form>
+
+            {/* Upload Progress Card */}
+            <UploadProgressCard
+                isVisible={uploading}
+                uploading={uploading}
+                progress={progress}
+                uploadStatus={uploadStatus}
+                error={error}
+                fileName={fileInputs.length > 0 ? fileInputs[0]?.file?.name : ''}
+                fileSize={fileInputs.length > 0 ? fileInputs[0]?.file?.size : 0}
+                onClose={() => reset()}
+                onRetry={() => {
+                    reset();
+                    handleSubmit({ preventDefault: () => {} });
+                }}
+                onCancel={() => {
+                    reset();
+                }}
+            />
         </div>
     );
 };

@@ -11,6 +11,8 @@ import { Button } from '@/components/ui/button';
 // import { SearchableDropdown } from '@/components/SearchableDropdown';
 import { useRouter } from 'next/navigation'; // or 'next/router' if using pages router
 import { useSession } from 'next-auth/react';
+import { useFileUpload } from "@/hooks/useFileUpload";
+import { UploadProgressCard } from "@/components/UploadProgressCard";
 
 
 
@@ -33,6 +35,9 @@ const VideoForm = () => {
     const session = useSession();
     const [workRequestStatus, setWorkRequestStatus] = useState(null);
     const [isUploadAllowed, setIsUploadAllowed] = useState(true);
+
+    // File upload hook
+    const { uploading, progress, uploadStatus, error, uploadFile, reset } = useFileUpload();
 
     useEffect(() => {
         const fetchWorkRequests = async () => {
@@ -122,39 +127,47 @@ const VideoForm = () => {
                 return;
             }
         }
-        const formData = new FormData();
-        formData.append('workRequestId', workRequestId);
-        fileInputs.forEach((item, idx) => {
-            formData.append('vid', item.file);
-            formData.append('description', item.description);
-            formData.append('latitude', item.latitude);
-            formData.append('longitude', item.longitude);
-        });
         try {
-            const response = await fetch('/api/videos/upload', {
-                method: 'POST',
-                body: formData,
-            });
-            if (response.ok) {
+            // Upload videos one by one with progress tracking
+            for (let i = 0; i < fileInputs.length; i++) {
+                const item = fileInputs[i];
+                
+                const data = new FormData();
+                data.append('workRequestId', workRequestId);
+                data.append('vid', item.file);
+                data.append('description', item.description);
+                data.append('latitude', item.latitude);
+                data.append('longitude', item.longitude);
+
+                await uploadFile(item.file, '/api/videos/upload', data, {
+                    onProgress: (progress) => {
+                        // Calculate overall progress across all files
+                        const overallProgress = Math.round(((i + progress / 100) / fileInputs.length) * 100);
+                        console.log(`Uploading ${item.file.name}: ${overallProgress}%`);
+                    },
+                    onSuccess: (response) => {
+                        console.log(`Successfully uploaded ${item.file.name}`);
+                    },
+                    onError: (error) => {
+                        console.error(`Failed to upload ${item.file.name}:`, error);
+                        throw error;
+                    }
+                });
+            }
+            
                 toast({
                     title: 'Video(s) uploaded successfully',
                     description: `Videos added to work request ${workRequestId}`,
                     variant: 'success',
                 });
                 setIsSuccess(true);
-            } else {
-                const errorData = await response.json();
-                toast({
-                    title: 'Failed to upload video(s)',
-                    description: errorData.error || 'Please try again.',
-                    variant: 'destructive',
-                });
-            }
+            reset(); // Reset upload progress
+            
         } catch (error) {
-            console.error('Error uploading video:', error);
+            console.error('Upload error:', error);
             toast({
-                title: 'An error occurred',
-                description: 'Unable to upload video(s).',
+                title: 'Failed to upload video(s)',
+                description: error.message || 'Please try again.',
                 variant: 'destructive',
             });
         }
@@ -292,6 +305,25 @@ const VideoForm = () => {
                     </div>
                 </fieldset>
             </form>
+
+            {/* Upload Progress Card */}
+            <UploadProgressCard
+                isVisible={uploading}
+                uploading={uploading}
+                progress={progress}
+                uploadStatus={uploadStatus}
+                error={error}
+                fileName={fileInputs.length > 0 ? fileInputs[0]?.file?.name : ''}
+                fileSize={fileInputs.length > 0 ? fileInputs[0]?.file?.size : 0}
+                onClose={() => reset()}
+                onRetry={() => {
+                    reset();
+                    handleSubmit({ preventDefault: () => {} });
+                }}
+                onCancel={() => {
+                    reset();
+                }}
+            />
         </div>
     );
 };
