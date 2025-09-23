@@ -66,16 +66,11 @@ const chunkedUpload = new ChunkedFileUpload({
 });
 
 export async function POST(req) {
-    let client;
     try {
         const session = await getServerSession(authOptions);
         if (!session?.user) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
-
-        // Set a longer timeout for file uploads
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 600000); // 10 minutes timeout
 
         const formData = await req.formData();
         const workRequestId = formData.get('workRequestId');
@@ -91,37 +86,31 @@ export async function POST(req) {
         const MAX_FILE_SIZE = 500 * 1024 * 1024; // 500MB
 
         if (!workRequestId || files.length === 0) {
-            clearTimeout(timeoutId);
             return NextResponse.json({ error: 'Work Request ID and at least one video are required' }, { status: 400 });
         }
 
         if (files.length > MAX_VIDEOS) {
-            clearTimeout(timeoutId);
             return NextResponse.json({ error: `Maximum ${MAX_VIDEOS} videos allowed per upload` }, { status: 400 });
         }
 
         // Check file sizes
         for (const file of files) {
             if (file.size > MAX_FILE_SIZE) {
-                clearTimeout(timeoutId);
                 return NextResponse.json({ error: `File ${file.name} exceeds 500MB limit` }, { status: 400 });
             }
         }
 
         if (files.length !== descriptions.length || files.length !== latitudes.length || files.length !== longitudes.length) {
-            clearTimeout(timeoutId);
             return NextResponse.json({ error: 'Each video must have a description, latitude, and longitude' }, { status: 400 });
         }
 
-        // Check if work request exists with timeout
-        client = await connectToDatabase();
+        // Check if work request exists
+        const client = await connectToDatabase();
         const workRequest = await client.query(`
             SELECT id FROM work_requests WHERE id = $1
         `, [workRequestId]);
 
         if (!workRequest.rows || workRequest.rows.length === 0) {
-            clearTimeout(timeoutId);
-            await client.release();
             return NextResponse.json({ error: 'Work request not found' }, { status: 404 });
         }
 
@@ -129,7 +118,7 @@ export async function POST(req) {
         await fs.mkdir(uploadsDir, { recursive: true });
         const uploadedVideos = [];
 
-        // Process files with improved error handling and progress tracking
+        // Process files with improved error handling
         for (let i = 0; i < files.length; i++) {
             const file = files[i];
             const description = descriptions[i];
@@ -144,16 +133,13 @@ export async function POST(req) {
                 const filename = `${Date.now()}-${file.name}`;
                 const filePath = path.join(uploadsDir, filename);
                 
-                console.log(`Processing file ${i + 1}/${files.length}: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)}MB)`);
-                
                 // For large files (>50MB), use chunked upload
                 if (file.size > 50 * 1024 * 1024) {
                     const chunks = await ChunkedFileUpload.fileToChunks(file, 2 * 1024 * 1024);
                     
                     // Write chunks sequentially to avoid memory issues
-                    for (let chunkIndex = 0; chunkIndex < chunks.length; chunkIndex++) {
-                        await fs.appendFile(filePath, Buffer.from(chunks[chunkIndex].data));
-                        console.log(`Chunk ${chunkIndex + 1}/${chunks.length} written for ${file.name}`);
+                    for (const chunk of chunks) {
+                        await fs.appendFile(filePath, Buffer.from(chunk.data));
                     }
                 } else {
                     // For smaller files, use direct upload
@@ -176,7 +162,6 @@ export async function POST(req) {
                     creatorType || null
                 ]);
                 uploadedVideos.push(rows[0]);
-                console.log(`Successfully processed ${file.name}`);
 
             } catch (fileError) {
                 console.error(`Error processing file ${file.name}:`, fileError);
@@ -184,8 +169,6 @@ export async function POST(req) {
                 continue;
             }
         }
-
-        clearTimeout(timeoutId);
 
         // Notify all managers (role=1 or 2)
         try {
@@ -197,13 +180,11 @@ export async function POST(req) {
                     [mgr.id, 'video', workRequestId, `New video uploaded for request #${workRequestId}.`]
                 );
             }
-            await client2.release();
+            client2.release && client2.release();
         } catch (notifErr) {
             // Log but don't fail
             console.error('Notification insert error:', notifErr);
         }
-
-        await client.release();
 
         return NextResponse.json({
             message: 'Video(s) uploaded successfully',
@@ -214,9 +195,6 @@ export async function POST(req) {
 
     } catch (error) {
         console.error('File upload error:', error);
-        if (client) {
-            await client.release();
-        }
         return NextResponse.json({ 
             error: 'Failed to upload file(s)', 
             details: error.message 
