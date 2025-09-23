@@ -115,11 +115,16 @@ export async function GET(request) {
 }
 
 export async function POST(req) {
+    let client;
     try {
         const session = await getServerSession(authOptions);
         if (!session?.user) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
+
+        // Set a longer timeout for file uploads
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 600000); // 10 minutes timeout
 
         const formData = await req.formData();
         const workRequestId = formData.get('workRequestId');
@@ -130,20 +135,42 @@ export async function POST(req) {
         const latitudes = formData.getAll('latitude');
         const longitudes = formData.getAll('longitude');
 
+        // Increased limits: up to 20 images, 200MB each
+        const MAX_IMAGES = 20;
+        const MAX_FILE_SIZE = 200 * 1024 * 1024; // 200MB
+
         if (!workRequestId || files.length === 0) {
+            clearTimeout(timeoutId);
             return NextResponse.json({ error: 'Work Request ID and at least one image are required' }, { status: 400 });
         }
+
+        if (files.length > MAX_IMAGES) {
+            clearTimeout(timeoutId);
+            return NextResponse.json({ error: `Maximum ${MAX_IMAGES} images allowed per upload` }, { status: 400 });
+        }
+
+        // Check file sizes
+        for (const file of files) {
+            if (file.size > MAX_FILE_SIZE) {
+                clearTimeout(timeoutId);
+                return NextResponse.json({ error: `File ${file.name} exceeds 200MB limit` }, { status: 400 });
+            }
+        }
+
         if (files.length !== descriptions.length) {
+            clearTimeout(timeoutId);
             return NextResponse.json({ error: 'Each image must have a description' }, { status: 400 });
         }
 
-        // Check if work request exists
-        const client = await connectToDatabase();
+        // Check if work request exists with timeout
+        client = await connectToDatabase();
         const workRequest = await client.query(`
             SELECT id FROM work_requests WHERE id = $1
         `, [workRequestId]);
 
         if (!workRequest.rows || workRequest.rows.length === 0) {
+            clearTimeout(timeoutId);
+            await client.release();
             return NextResponse.json({ error: 'Work request not found' }, { status: 404 });
         }
 
@@ -151,7 +178,7 @@ export async function POST(req) {
         await fs.mkdir(uploadsDir, { recursive: true });
         const uploadedImages = [];
         
-        // Process files with improved error handling
+        // Process files with improved error handling and progress tracking
         for (let i = 0; i < files.length; i++) {
             const file = files[i];
             const description = descriptions[i];
@@ -166,13 +193,16 @@ export async function POST(req) {
                 const filename = `${Date.now()}-${file.name}`;
                 const filePath = path.join(uploadsDir, filename);
                 
+                console.log(`Processing file ${i + 1}/${files.length}: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)}MB)`);
+                
                 // For large files (>25MB), use chunked upload
                 if (file.size > 25 * 1024 * 1024) {
                     const chunks = await ChunkedFileUpload.fileToChunks(file, 1024 * 1024); // 1MB chunks
                     
                     // Write chunks sequentially to avoid memory issues
-                    for (const chunk of chunks) {
-                        await fs.appendFile(filePath, Buffer.from(chunk.data));
+                    for (let chunkIndex = 0; chunkIndex < chunks.length; chunkIndex++) {
+                        await fs.appendFile(filePath, Buffer.from(chunks[chunkIndex].data));
+                        console.log(`Chunk ${chunkIndex + 1}/${chunks.length} written for ${file.name}`);
                     }
                 } else {
                     // For smaller files, use direct upload
@@ -195,6 +225,7 @@ export async function POST(req) {
                     creatorType || null
                 ]);
                 uploadedImages.push(rows[0]);
+                console.log(`Successfully processed ${file.name}`);
 
             } catch (fileError) {
                 console.error(`Error processing file ${file.name}:`, fileError);
@@ -202,6 +233,8 @@ export async function POST(req) {
                 continue;
             }
         }
+
+        clearTimeout(timeoutId);
         
         // Log the image upload action
         await actionLogger.upload(req, ENTITY_TYPES.IMAGE, workRequestId, `Images for Request #${workRequestId}`, {
@@ -222,18 +255,29 @@ export async function POST(req) {
                     [mgr.id, 'image', workRequestId, `New image uploaded for request #${workRequestId}.`]
                 );
             }
-            client2.release && client2.release();
+            await client2.release();
         } catch (notifErr) {
             // Log but don't fail
             console.error('Notification insert error:', notifErr);
         }
+
+        await client.release();
+
         return NextResponse.json({
             message: 'Image(s) uploaded successfully',
-            images: uploadedImages
+            images: uploadedImages,
+            uploadedCount: uploadedImages.length,
+            totalFiles: files.length
         }, { status: 201 });
     } catch (error) {
         console.error('File upload error:', error);
-        return NextResponse.json({ error: 'Failed to upload file(s)' }, { status: 500 });
+        if (client) {
+            await client.release();
+        }
+        return NextResponse.json({ 
+            error: 'Failed to upload file(s)', 
+            details: error.message 
+        }, { status: 500 });
     }
 }
 
