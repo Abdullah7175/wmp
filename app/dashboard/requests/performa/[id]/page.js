@@ -282,7 +282,7 @@ const Page = () => {
                 </div>
                 <div className="text-center flex-1">
                     <div className="border-t-2 border-black w-full mx-auto mb-2"></div>
-                    <p className="text-sm mt-2 font-bold">Incharge(SWMC)</p>
+                    <p className="text-sm mt-2 font-bold">Incharge(SMW)</p>
                 </div>
                 <div className="text-center flex-1">
                     <div className="border-t-2 border-black w-full mx-auto mb-2"></div>
