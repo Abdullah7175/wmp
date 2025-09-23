@@ -28,23 +28,47 @@ export default function MyUploadsPage() {
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState('images');
 
+  // Check if user is editor role (VIDEO EDITOR - role 4)
+  const isEditorRole = (roleId) => {
+    return roleId === 4; // VIDEO EDITOR
+  };
+
   useEffect(() => {
     if (!session?.user?.id) return;
+    
+    // Check if user has permission to view uploads
+    if (!isEditorRole(session.user.role)) {
+      setError('Access denied. Only Video Editors can view uploads.');
+      setLoading(false);
+      return;
+    }
     
     const fetchUploads = async () => {
       try {
         setLoading(true);
         
         // Fetch images uploaded by this user
-        const imagesRes = await fetch(`/api/images?creator_id=${session.user.id}&creator_type=socialmedia&limit=100`);
+        const imagesRes = await fetch(`/api/images?creator_id=${session.user.id}&creator_type=socialmedia&limit=100`, {
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
         const imagesData = await imagesRes.json();
         
         // Fetch videos uploaded by this user
-        const videosRes = await fetch(`/api/videos?creator_id=${session.user.id}&creator_type=socialmedia&limit=100`);
+        const videosRes = await fetch(`/api/videos?creator_id=${session.user.id}&creator_type=socialmedia&limit=100`, {
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
         const videosData = await videosRes.json();
         
         // Fetch final videos uploaded by this user
-        const finalVideosRes = await fetch(`/api/final-videos?creator_id=${session.user.id}&creator_type=socialmedia&limit=100`);
+        const finalVideosRes = await fetch(`/api/final-videos?creator_id=${session.user.id}&creator_type=socialmedia&limit=100`, {
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
         const finalVideosData = await finalVideosRes.json();
         
         setUploads({
@@ -88,7 +112,23 @@ export default function MyUploadsPage() {
   };
 
   const renderFileCard = (file, type) => {
-    const fileUrl = `/uploads/${file.file_path || file.file_name}`;
+    // Handle different file path formats
+    let fileUrl;
+    if (file.link) {
+      // If link starts with /uploads/, use it directly
+      fileUrl = file.link.startsWith('/uploads/') ? file.link : `/uploads/${file.link}`;
+    } else if (file.file_path) {
+      fileUrl = `/uploads/${file.file_path}`;
+    } else if (file.file_name) {
+      // Determine the correct subdirectory based on type
+      let subdir = 'images';
+      if (type === 'videos') subdir = 'videos';
+      if (type === 'finalVideos') subdir = 'final-videos';
+      fileUrl = `/uploads/${subdir}/${file.file_name}`;
+    } else {
+      fileUrl = '#';
+    }
+    
     const isImage = file.file_type?.startsWith('image/') || type === 'images';
     const isVideo = file.file_type?.startsWith('video/') || type === 'videos' || type === 'finalVideos';
 
@@ -157,7 +197,13 @@ export default function MyUploadsPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => window.open(fileUrl, '_blank')}
+                  onClick={() => {
+                    if (fileUrl !== '#') {
+                      window.open(fileUrl, '_blank');
+                    } else {
+                      alert('File not available');
+                    }
+                  }}
                 >
                   <Eye className="w-4 h-4 mr-1" />
                   View
@@ -166,10 +212,14 @@ export default function MyUploadsPage() {
                   variant="outline"
                   size="sm"
                   onClick={() => {
-                    const link = document.createElement('a');
-                    link.href = fileUrl;
-                    link.download = file.file_name || 'download';
-                    link.click();
+                    if (fileUrl !== '#') {
+                      const link = document.createElement('a');
+                      link.href = fileUrl;
+                      link.download = file.file_name || file.link?.split('/').pop() || 'download';
+                      link.click();
+                    } else {
+                      alert('File not available');
+                    }
                   }}
                 >
                   <Download className="w-4 h-4 mr-1" />
@@ -194,7 +244,15 @@ export default function MyUploadsPage() {
   if (error) {
     return (
       <div className="container mx-auto px-4 py-10">
-        <div className="flex items-center justify-center h-96 text-red-600">Error: {error}</div>
+        <div className="flex items-center justify-center h-96">
+          <div className="text-center">
+            <div className="text-red-600 text-lg font-medium mb-2">Access Denied</div>
+            <div className="text-gray-600">{error}</div>
+            <Link href="/smagent" className="inline-block mt-4 text-blue-600 hover:text-blue-800">
+              ← Back to Dashboard
+            </Link>
+          </div>
+        </div>
       </div>
     );
   }

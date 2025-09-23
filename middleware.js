@@ -7,6 +7,7 @@ const PUBLIC_PATHS = ["/elogin", "/login", "/unauthorized", "/_next", "/api", "/
 // Allowed roles for smagent
 const smagentRolesA = [1, 2, 3, 6]; // CAMERA MAN, ASSISTANT, PHOTOGRAPHER, CONTENT CREATOR
 const smagentRolesB = [4, 5]; // VIDEO EDITOR, MANAGER
+const editorOnlyRoles = [4]; // VIDEO EDITOR only
 // Allowed roles for dashboard
 const dashboardRoles = [1, 2, 3];
 
@@ -211,6 +212,11 @@ export async function middleware(req) {
             } else {
                 // Other roles - basic access
                 allowedPaths = smagentAllowedA;
+            }
+            
+            // Special check for my-uploads - only VIDEO EDITOR (role 4) can access
+            if (pathname === '/smagent/my-uploads' && userRole !== 4) {
+                return NextResponse.redirect(new URL('/unauthorized', req.url));
             }
             
             if (!isAllowed(pathname, allowedPaths)) {

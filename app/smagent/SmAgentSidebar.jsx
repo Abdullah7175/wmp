@@ -23,6 +23,11 @@ const isSpecialRole = (roleId) => {
   return roleId === 4 || roleId === 5 || roleId === 6; // video_editor or manager
 };
 
+// Check if user is editor role (can view uploads)
+const isEditorRole = (roleId) => {
+  return roleId === 4; // VIDEO EDITOR
+};
+
 export function SmAgentSidebar() {
   const pathname = usePathname();
   const { data: session, status } = useSession();
@@ -57,21 +62,15 @@ export function SmAgentSidebar() {
       label: "Before Content",
       icon: <ImageIcon className="w-5 h-5" />,
     },
+  ];
+
+  // Editor-only links
+  const editorLinks = [
     {
       href: "/smagent/my-uploads",
       label: "My Uploads",
       icon: <Download className="w-5 h-5" />,
     },
-    // {
-    //   href: "/smagent/images/add",
-    //   label: "Upload Images",
-    //   icon: <Upload className="w-5 h-5" />,
-    // },
-    // {
-    //   href: "/smagent/videos/add",
-    //   label: "Upload Videos",
-    //   icon: <Upload className="w-5 h-5" />,
-    // },
   ];
 
   // Special links for video editors and managers
@@ -99,7 +98,17 @@ export function SmAgentSidebar() {
   ];
 
   // Combine links based on user role
-  const links = isSpecialRole(userRole) ? [...baseLinks, ...specialLinks] : baseLinks;
+  let links = [...baseLinks];
+  
+  // Add editor-only links for VIDEO EDITOR role
+  if (isEditorRole(userRole)) {
+    links = [...links, ...editorLinks];
+  }
+  
+  // Add special links for video editors and managers
+  if (isSpecialRole(userRole)) {
+    links = [...links, ...specialLinks];
+  }
 
   const getRoleDisplayText = () => {
     if (status === "loading") return "Loading...";
