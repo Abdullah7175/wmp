@@ -43,20 +43,6 @@ const nextConfig = {
       allowedOrigins: ['localhost:3000', 'localhost:3001', 'localhost:3002', 'localhost:3003', 'localhost:3004', '202.61.47.29:3000'],
     },
   },
-  // Add timeout and body size configurations
-  serverRuntimeConfig: {
-    maxFileSize: 500 * 1024 * 1024, // 500MB
-    bodyParser: {
-      sizeLimit: '500mb',
-    },
-  },
-  // Add API timeout configuration
-  api: {
-    bodyParser: {
-      sizeLimit: '500mb',
-    },
-    responseLimit: false,
-  },
   serverExternalPackages: ['sharp', 'fs-extra'],
   webpack: (config) => {
     config.resolve.fallback = { 
