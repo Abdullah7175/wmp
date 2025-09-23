@@ -5,6 +5,15 @@ import { connectToDatabase } from '@/lib/db';
 import { actionLogger, ENTITY_TYPES } from '@/lib/actionLogger';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/pages/api/auth/[...nextauth]';
+import { 
+  UPLOAD_CONFIG, 
+  validateFile, 
+  generateUniqueFilename, 
+  saveFileStream, 
+  getDatabaseConnectionWithRetry,
+  createErrorResponse,
+  createSuccessResponse 
+} from '@/lib/fileUploadOptimized';
 
 export async function GET(request) {
     const { searchParams } = new URL(request.url);
@@ -130,85 +139,113 @@ export async function POST(req) {
         const longitudes = formData.getAll('longitude');
 
         if (!workRequestId || files.length === 0) {
-            return NextResponse.json({ error: 'Work Request ID and at least one image are required' }, { status: 400 });
+            return createErrorResponse('Work Request ID and at least one image are required', 400);
         }
         if (files.length !== descriptions.length) {
-            return NextResponse.json({ error: 'Each image must have a description' }, { status: 400 });
+            return createErrorResponse('Each image must have a description', 400);
         }
 
-        // Check if work request exists
-        const client = await connectToDatabase();
-        const workRequest = await client.query(`
-            SELECT id FROM work_requests WHERE id = $1
-        `, [workRequestId]);
-
-        if (!workRequest.rows || workRequest.rows.length === 0) {
-            return NextResponse.json({ error: 'Work request not found' }, { status: 404 });
-        }
-
-        const uploadsDir = path.join(process.cwd(), 'public', 'uploads', 'images');
-        await fs.mkdir(uploadsDir, { recursive: true });
-        const uploadedImages = [];
-        for (let i = 0; i < files.length; i++) {
-            const file = files[i];
-            const description = descriptions[i];
-            const latitude = latitudes[i] || '0';
-            const longitude = longitudes[i] || '0';
-            if (!description) {
-                continue;
+        // Validate files with improved error handling
+        for (const file of files) {
+            const validation = validateFile(file, UPLOAD_CONFIG.ALLOWED_IMAGE_TYPES, UPLOAD_CONFIG.MAX_FILE_SIZE);
+            if (!validation.isValid) {
+                return createErrorResponse(`File ${file.name}: ${validation.errors.join(', ')}`, 400);
             }
-            const buffer = await file.arrayBuffer();
-            const filename = `${Date.now()}-${file.name}`;
-            const filePath = path.join(uploadsDir, filename);
-            await fs.writeFile(filePath, Buffer.from(buffer));
-            const geoTag = `SRID=4326;POINT(${longitude} ${latitude})`;
-            const query = `
-                INSERT INTO images (work_request_id, description, link, geo_tag, created_at, updated_at, creator_id, creator_type)
-                VALUES ($1, $2, $3, ST_GeomFromText($4, 4326), NOW(), NOW(), $5, $6)
-                RETURNING *;
-            `;
-            const { rows } = await client.query(query, [
-                workRequestId,
-                description,
-                `/uploads/images/${filename}`,
-                geoTag,
-                creatorId || null,
-                creatorType || null
-            ]);
-            uploadedImages.push(rows[0]);
         }
+
+        // Use optimized database connection with retry logic
+        const client = await getDatabaseConnectionWithRetry();
         
-        // Log the image upload action
-        await actionLogger.upload(req, ENTITY_TYPES.IMAGE, workRequestId, `Images for Request #${workRequestId}`, {
-            imageCount: uploadedImages.length,
-            workRequestId,
-            creatorId,
-            creatorType,
-            hasLocation: true
-        });
-        
-        // Notify all managers (role=1 or 2)
         try {
-            const client2 = await connectToDatabase();
-            const managers = await client2.query('SELECT id FROM users WHERE role IN (1,2)');
-            for (const mgr of managers.rows) {
-                await client2.query(
-                    'INSERT INTO notifications (user_id, type, entity_id, message) VALUES ($1, $2, $3, $4)',
-                    [mgr.id, 'image', workRequestId, `New image uploaded for request #${workRequestId}.`]
-                );
+            // Check if work request exists
+            const workRequest = await client.query(`
+                SELECT id FROM work_requests WHERE id = $1
+            `, [workRequestId]);
+
+            if (!workRequest.rows || workRequest.rows.length === 0) {
+                return createErrorResponse('Work request not found', 404);
             }
-            client2.release && client2.release();
-        } catch (notifErr) {
-            // Log but don't fail
-            console.error('Notification insert error:', notifErr);
+
+            const uploadsDir = path.join(process.cwd(), 'public', UPLOAD_CONFIG.UPLOAD_DIRS.images);
+            const uploadedImages = [];
+            
+            // Process files with optimized handling
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                const description = descriptions[i];
+                const latitude = latitudes[i] || '0';
+                const longitude = longitudes[i] || '0';
+                
+                if (!description) {
+                    continue;
+                }
+                
+                // Generate unique filename and save file
+                const filename = generateUniqueFilename(file.name);
+                const saveResult = await saveFileStream(file, uploadsDir, filename);
+                
+                if (!saveResult.success) {
+                    console.error(`Failed to save file ${file.name}:`, saveResult.error);
+                    continue;
+                }
+                
+                const geoTag = `SRID=4326;POINT(${longitude} ${latitude})`;
+                const query = `
+                    INSERT INTO images (work_request_id, description, link, geo_tag, created_at, updated_at, creator_id, creator_type, file_name, file_size, file_type)
+                    VALUES ($1, $2, $3, ST_GeomFromText($4, 4326), NOW(), NOW(), $5, $6, $7, $8, $9)
+                    RETURNING *;
+                `;
+                const { rows } = await client.query(query, [
+                    workRequestId,
+                    description,
+                    `/uploads/images/${filename}`,
+                    geoTag,
+                    creatorId || null,
+                    creatorType || null,
+                    file.name,
+                    file.size,
+                    file.type
+                ]);
+                uploadedImages.push(rows[0]);
+            }
+        
+            // Log the image upload action
+            await actionLogger.upload(req, ENTITY_TYPES.IMAGE, workRequestId, `Images for Request #${workRequestId}`, {
+                imageCount: uploadedImages.length,
+                workRequestId,
+                creatorId,
+                creatorType,
+                hasLocation: true
+            });
+            
+            // Notify all managers (role=1 or 2)
+            try {
+                const managers = await client.query('SELECT id FROM users WHERE role IN (1,2)');
+                for (const mgr of managers.rows) {
+                    await client.query(
+                        'INSERT INTO notifications (user_id, type, entity_id, message) VALUES ($1, $2, $3, $4)',
+                        [mgr.id, 'image', workRequestId, `New image uploaded for request #${workRequestId}.`]
+                    );
+                }
+            } catch (notifErr) {
+                // Log but don't fail
+                console.error('Notification insert error:', notifErr);
+            }
+            
+            return createSuccessResponse({
+                images: uploadedImages,
+                count: uploadedImages.length
+            }, 'Image(s) uploaded successfully');
+            
+        } finally {
+            // Ensure client is released
+            if (client && client.release) {
+                await client.release();
+            }
         }
-        return NextResponse.json({
-            message: 'Image(s) uploaded successfully',
-            images: uploadedImages
-        }, { status: 201 });
     } catch (error) {
         console.error('File upload error:', error);
-        return NextResponse.json({ error: 'Failed to upload file(s)' }, { status: 500 });
+        return createErrorResponse('Failed to upload file(s)', 500, error.message);
     }
 }
 

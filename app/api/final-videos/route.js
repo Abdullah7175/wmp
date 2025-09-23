@@ -4,6 +4,15 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/pages/api/auth/[...nextauth]';
+import { 
+  UPLOAD_CONFIG, 
+  validateFile, 
+  generateUniqueFilename, 
+  saveFileStream, 
+  getDatabaseConnectionWithRetry,
+  createErrorResponse,
+  createSuccessResponse 
+} from '@/lib/fileUploadOptimized';
 
 export async function GET(request) {
     const { searchParams } = new URL(request.url);
@@ -131,82 +140,96 @@ export async function POST(req) {
         const creatorName = formData.get('creator_name');
 
         if (!workRequestId || !description || !file || !creatorId || !creatorType) {
-            return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+            return createErrorResponse('Missing required fields', 400);
         }
 
         if (!latitude || !longitude) {
-            return NextResponse.json({ error: 'Location coordinates are required' }, { status: 400 });
+            return createErrorResponse('Location coordinates are required', 400);
+        }
+
+        // Validate file size and type
+        const validation = validateFile(file, UPLOAD_CONFIG.ALLOWED_VIDEO_TYPES, UPLOAD_CONFIG.MAX_FILE_SIZE);
+        if (!validation.isValid) {
+            return createErrorResponse(`File validation failed: ${validation.errors.join(', ')}`, 400);
         }
 
         // Validate creator type (only social media agents can upload final videos)
         if (creatorType !== 'socialmedia') {
-            return NextResponse.json({ 
-                error: 'Only Media Cell agents can upload final videos' 
-            }, { status: 403 });
+            return createErrorResponse('Only Media Cell agents can upload final videos', 403);
         }
 
-        // Check upload permission for final videos
-        const approvalClient = await connectToDatabase();
-        const workRequestResult = await approvalClient.query(`
-            SELECT id FROM work_requests WHERE id = $1
-        `, [workRequestId]);
-
-        if (workRequestResult.rows.length === 0) {
-            return NextResponse.json({ error: 'Work request not found' }, { status: 404 });
-        }
-
-        // Save the file
-        const uploadsDir = path.join(process.cwd(), 'public', 'uploads', 'final-videos');
-        await fs.mkdir(uploadsDir, { recursive: true });
+        // Use optimized database connection with retry logic
+        const client = await getDatabaseConnectionWithRetry();
         
-        const buffer = await file.arrayBuffer();
-        const filename = `${Date.now()}-${file.name}`;
-        const filePath = path.join(uploadsDir, filename);
-        await fs.writeFile(filePath, Buffer.from(buffer));
-
-        // Create geo_tag from latitude and longitude (use defaults if not provided)
-        const geoTag = `SRID=4326;POINT(${longitude || 0} ${latitude || 0})`;
-
-        // Save to database
-        const dbClient = await connectToDatabase();
-        const query = `
-            INSERT INTO final_videos (work_request_id, description, link, geo_tag, created_at, updated_at, creator_id, creator_type, creator_name)
-            VALUES ($1, $2, $3, ST_GeomFromText($4, 4326), NOW(), NOW(), $5, $6, $7)
-            RETURNING *;
-        `;
-        const { rows } = await dbClient.query(query, [
-            workRequestId,
-            description,
-            `/uploads/final-videos/${filename}`,
-            geoTag,
-            creatorId,
-            creatorType,
-            creatorName || null
-        ]);
-
-        // Notify all managers (role=1 or 2)
         try {
-            const client2 = await connectToDatabase();
-            const managers = await client2.query('SELECT id FROM users WHERE role IN (1,2)');
-            for (const mgr of managers.rows) {
-                await client2.query(
-                    'INSERT INTO notifications (user_id, type, entity_id, message) VALUES ($1, $2, $3, $4)',
-                    [mgr.id, 'final_video', workRequestId, `New final video uploaded for request #${workRequestId}.`]
-                );
+            // Check upload permission for final videos
+            const workRequestResult = await client.query(`
+                SELECT id FROM work_requests WHERE id = $1
+            `, [workRequestId]);
+
+            if (workRequestResult.rows.length === 0) {
+                return createErrorResponse('Work request not found', 404);
             }
-            client2.release && client2.release();
-        } catch (notifErr) {
-            // Log but don't fail
-            console.error('Notification insert error:', notifErr);
+
+            // Save the file using optimized method
+            const uploadsDir = path.join(process.cwd(), 'public', UPLOAD_CONFIG.UPLOAD_DIRS.finalVideos);
+            const filename = generateUniqueFilename(file.name);
+            const saveResult = await saveFileStream(file, uploadsDir, filename);
+            
+            if (!saveResult.success) {
+                return createErrorResponse(`Failed to save file: ${saveResult.error}`, 500);
+            }
+
+            // Create geo_tag from latitude and longitude (use defaults if not provided)
+            const geoTag = `SRID=4326;POINT(${longitude || 0} ${latitude || 0})`;
+
+            // Save to database with additional file metadata
+            const query = `
+                INSERT INTO final_videos (work_request_id, description, link, geo_tag, created_at, updated_at, creator_id, creator_type, creator_name, file_name, file_size, file_type)
+                VALUES ($1, $2, $3, ST_GeomFromText($4, 4326), NOW(), NOW(), $5, $6, $7, $8, $9, $10)
+                RETURNING *;
+            `;
+            const { rows } = await client.query(query, [
+                workRequestId,
+                description,
+                `/uploads/final-videos/${filename}`,
+                geoTag,
+                creatorId,
+                creatorType,
+                creatorName || null,
+                file.name,
+                file.size,
+                file.type
+            ]);
+
+            // Notify all managers (role=1 or 2)
+            try {
+                const managers = await client.query('SELECT id FROM users WHERE role IN (1,2)');
+                for (const mgr of managers.rows) {
+                    await client.query(
+                        'INSERT INTO notifications (user_id, type, entity_id, message) VALUES ($1, $2, $3, $4)',
+                        [mgr.id, 'final_video', workRequestId, `New final video uploaded for request #${workRequestId}.`]
+                    );
+                }
+            } catch (notifErr) {
+                // Log but don't fail
+                console.error('Notification insert error:', notifErr);
+            }
+            
+            return createSuccessResponse({
+                video: rows[0]
+            }, 'Final video uploaded successfully');
+            
+        } finally {
+            // Ensure client is released
+            if (client && client.release) {
+                await client.release();
+            }
         }
-        return NextResponse.json({
-            message: 'Final video uploaded successfully',
-            video: rows[0]
-        }, { status: 201 });
 
     } catch (error) {
         console.error('File upload error:', error);
-        return NextResponse.json({ error: 'Failed to upload file' }, { status: 500 });
+        return createErrorResponse('Failed to upload file', 500, error.message);
     }
 }
 

@@ -57,6 +57,11 @@ export function SmAgentSidebar() {
       label: "Before Content",
       icon: <ImageIcon className="w-5 h-5" />,
     },
+    {
+      href: "/smagent/my-uploads",
+      label: "My Uploads",
+      icon: <Download className="w-5 h-5" />,
+    },
     // {
     //   href: "/smagent/images/add",
     //   label: "Upload Images",
