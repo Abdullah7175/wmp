@@ -235,42 +235,6 @@ export async function POST(req) {
 
 export async function PUT(req) {
     try {
-        const body = await req.json();
-        const client = await connectToDatabase();
-        const {id, workRequestId, description} = body;
-
-        if (!id || !workRequestId || !description) {
-            return NextResponse.json({ error: 'All fields are required' }, { status: 400 });
-        }
-
-        const query = `
-            UPDATE final_videos 
-            SET work_request_id = $1, 
-                description = $2,
-                updated_at = NOW()
-            WHERE id = $3
-            RETURNING *;
-        `; 
-        const { rows: updatedVideo } = await client.query(query, [
-            workRequestId,
-            description,
-            id
-        ]);
-
-        if (updatedVideo.length === 0) {
-            return NextResponse.json({ error: 'Final video not found' }, { status: 404 });
-        }
-
-        return NextResponse.json({ message: 'Final video updated successfully', video: updatedVideo[0] }, { status: 200 });
-
-    } catch (error) {
-        console.error('Error updating final video:', error);
-        return NextResponse.json({ error: 'Error updating final video' }, { status: 500 });
-    }
-}
-
-export async function PUT(req) {
-    try {
         const session = await getServerSession(authOptions);
         if (!session?.user) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
