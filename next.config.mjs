@@ -50,13 +50,6 @@ const nextConfig = {
       sizeLimit: '500mb',
     },
   },
-  // Add API timeout configuration
-  api: {
-    bodyParser: {
-      sizeLimit: '500mb',
-    },
-    responseLimit: false,
-  },
   serverExternalPackages: ['sharp', 'fs-extra'],
   webpack: (config) => {
     config.resolve.fallback = { 
