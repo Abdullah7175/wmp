@@ -6,6 +6,8 @@ import { Card } from "@/components/ui/card";
 import { Upload, ArrowLeft, MapPin, Plus, X } from "lucide-react";
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
+import { useFileUpload } from "@/hooks/useFileUpload";
+import { UploadProgressCard } from "@/components/UploadProgressCard";
 
 export default function AddFinalVideoPage() {
   const { data: session } = useSession();
@@ -19,6 +21,9 @@ export default function AddFinalVideoPage() {
     longitude: "",
     videos: []
   });
+
+  // File upload hook
+  const { uploading, progress, uploadStatus, error, uploadFile, reset } = useFileUpload();
 
   // Get current location
   const getCurrentLocation = () => {
@@ -101,12 +106,13 @@ export default function AddFinalVideoPage() {
       return;
     }
 
-    // Location is now optional - use defaults if not provided
-
     setLoading(true);
     
     try {
-      const uploadPromises = formData.videos.map(async (video) => {
+      // Upload videos one by one with progress tracking
+      for (let i = 0; i < formData.videos.length; i++) {
+        const video = formData.videos[i];
+        
         const data = new FormData();
         data.append("workRequestId", formData.workRequestId);
         data.append("description", formData.description);
@@ -117,20 +123,21 @@ export default function AddFinalVideoPage() {
         data.append("creator_type", "socialmedia");
         data.append("creator_name", session.user.name);
 
-        const response = await fetch("/api/final-videos", {
-          method: "POST",
-          body: data
+        await uploadFile(video.file, "/api/final-videos", data, {
+          onProgress: (progress) => {
+            // Calculate overall progress across all files
+            const overallProgress = Math.round(((i + progress / 100) / formData.videos.length) * 100);
+            console.log(`Uploading ${video.name}: ${overallProgress}%`);
+          },
+          onSuccess: (response) => {
+            console.log(`Successfully uploaded ${video.name}`);
+          },
+          onError: (error) => {
+            console.error(`Failed to upload ${video.name}:`, error);
+            throw error;
+          }
         });
-
-        if (!response.ok) {
-          const error = await response.json();
-          throw new Error(error.error || `Failed to upload ${video.name}`);
-        }
-
-        return response.json();
-      });
-
-      await Promise.all(uploadPromises);
+      }
       
       toast({
         title: "Success",
@@ -145,7 +152,11 @@ export default function AddFinalVideoPage() {
         longitude: "",
         videos: []
       });
+      
+      reset(); // Reset upload progress
+      
     } catch (error) {
+      console.error('Upload error:', error);
       toast({
         title: "Upload failed",
         description: error.message || "Failed to upload final videos",
@@ -347,6 +358,26 @@ export default function AddFinalVideoPage() {
           </div>
         </form>
       </Card>
+
+      {/* Upload Progress Card */}
+      <UploadProgressCard
+        isVisible={uploading}
+        uploading={uploading}
+        progress={progress}
+        uploadStatus={uploadStatus}
+        error={error}
+        fileName={formData.videos.length > 0 ? formData.videos[0]?.name : ''}
+        fileSize={formData.videos.length > 0 ? formData.videos[0]?.size : 0}
+        onClose={() => reset()}
+        onRetry={() => {
+          reset();
+          handleSubmit({ preventDefault: () => {} });
+        }}
+        onCancel={() => {
+          reset();
+          setLoading(false);
+        }}
+      />
     </div>
   );
 } 

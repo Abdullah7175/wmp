@@ -8,6 +8,8 @@ import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
 import { useSearchParams } from "next/navigation";
 import Image from "next/image";
+import { useFileUpload } from "@/hooks/useFileUpload";
+import { UploadProgressCard } from "@/components/UploadProgressCard";
 
 function AddImagePage() {
   const { data: session } = useSession();
@@ -24,6 +26,9 @@ function AddImagePage() {
     longitude: "",
     images: []
   });
+
+  // File upload hook
+  const { uploading, progress, uploadStatus, error, uploadFile, reset } = useFileUpload();
 
   // Get current location
   const getCurrentLocation = () => {
@@ -113,12 +118,13 @@ function AddImagePage() {
       return;
     }
 
-    // Location is now optional - use defaults if not provided
-
     setLoading(true);
     
     try {
-      const uploadPromises = formData.images.map(async (image) => {
+      // Upload images one by one with progress tracking
+      for (let i = 0; i < formData.images.length; i++) {
+        const image = formData.images[i];
+        
         const data = new FormData();
         data.append("workRequestId", formData.workRequestId);
         data.append("description", formData.description);
@@ -128,20 +134,21 @@ function AddImagePage() {
         data.append("creator_id", session.user.id);
         data.append("creator_type", "socialmedia");
 
-        const response = await fetch("/api/images", {
-          method: "POST",
-          body: data
+        await uploadFile(image.file, "/api/images", data, {
+          onProgress: (progress) => {
+            // Calculate overall progress across all files
+            const overallProgress = Math.round(((i + progress / 100) / formData.images.length) * 100);
+            console.log(`Uploading ${image.name}: ${overallProgress}%`);
+          },
+          onSuccess: (response) => {
+            console.log(`Successfully uploaded ${image.name}`);
+          },
+          onError: (error) => {
+            console.error(`Failed to upload ${image.name}:`, error);
+            throw error;
+          }
         });
-
-        if (!response.ok) {
-          const error = await response.json();
-          throw new Error(error.error || `Failed to upload ${image.name}`);
-        }
-
-        return response.json();
-      });
-
-      await Promise.all(uploadPromises);
+      }
       
       toast({
         title: "Success",
@@ -156,7 +163,11 @@ function AddImagePage() {
         longitude: "",
         images: []
       });
+      
+      reset(); // Reset upload progress
+      
     } catch (error) {
+      console.error('Upload error:', error);
       toast({
         title: "Upload failed",
         description: error.message || "Failed to upload images",
@@ -373,6 +384,26 @@ function AddImagePage() {
           </div>
         </form>
       </Card>
+
+      {/* Upload Progress Card */}
+      <UploadProgressCard
+        isVisible={uploading}
+        uploading={uploading}
+        progress={progress}
+        uploadStatus={uploadStatus}
+        error={error}
+        fileName={formData.images.length > 0 ? formData.images[0]?.name : ''}
+        fileSize={formData.images.length > 0 ? formData.images[0]?.size : 0}
+        onClose={() => reset()}
+        onRetry={() => {
+          reset();
+          handleSubmit({ preventDefault: () => {} });
+        }}
+        onCancel={() => {
+          reset();
+          setLoading(false);
+        }}
+      />
     </div>
   );
 }
