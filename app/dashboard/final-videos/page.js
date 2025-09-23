@@ -2,7 +2,7 @@
 import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
 import { Card } from "@/components/ui/card";
-import { Video, Download, Trash2, Plus } from "lucide-react";
+import { Video, Download, Trash2, Plus, Edit } from "lucide-react";
 import Link from "next/link";
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -200,6 +200,12 @@ export default function FinalVideosPage() {
                     <Video className="w-4 h-4" />
                     View
                   </button>
+                  <Link href={`/dashboard/final-videos/edit/${video.id}`}>
+                    <button className="w-full px-3 py-2 bg-yellow-600 text-white text-sm rounded hover:bg-yellow-700 transition-colors flex items-center justify-center gap-2">
+                      <Edit className="w-4 h-4" />
+                      Edit
+                    </button>
+                  </Link>
                   <a 
                     href={video.link} 
                     target="_blank" 

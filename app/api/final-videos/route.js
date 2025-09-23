@@ -269,6 +269,121 @@ export async function PUT(req) {
     }
 }
 
+export async function PUT(req) {
+    try {
+        const session = await getServerSession(authOptions);
+        if (!session?.user) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
+        const formData = await req.formData();
+        
+        const id = formData.get('id');
+        const workRequestId = formData.get('workRequestId');
+        const description = formData.get('description');
+        const latitude = formData.get('latitude');
+        const longitude = formData.get('longitude');
+        const file = formData.get('videoFile');
+        const creatorId = formData.get('creator_id') || session.user.id;
+        const creatorType = formData.get('creator_type') || 'admin';
+        const creatorName = formData.get('creator_name') || session.user.name;
+
+        if (!id || !workRequestId || !description) {
+            return createErrorResponse('Missing required fields', 400);
+        }
+
+        if (!latitude || !longitude) {
+            return createErrorResponse('Location coordinates are required', 400);
+        }
+
+        const client = await getDatabaseConnectionWithRetry();
+
+        try {
+            // Check if video exists
+            const checkQuery = 'SELECT * FROM final_videos WHERE id = $1';
+            const { rows: existingVideo } = await client.query(checkQuery, [id]);
+            
+            if (existingVideo.length === 0) {
+                return createErrorResponse('Final video not found', 404);
+            }
+
+            let updateQuery;
+            let queryParams;
+            let filePath = existingVideo[0].file_path;
+
+            // If a new file is provided, handle file upload
+            if (file) {
+                // Validate file
+                const validationResult = validateFile(file);
+                if (!validationResult.valid) {
+                    return createErrorResponse(validationResult.error, 400);
+                }
+
+                // Generate unique filename
+                const uniqueFilename = generateUniqueFilename(file.name);
+                const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'final-videos');
+                
+                // Ensure directory exists
+                await fs.mkdir(uploadDir, { recursive: true });
+                
+                // Save new file
+                const newFilePath = path.join(uploadDir, uniqueFilename);
+                await saveFileStream(file, newFilePath);
+                
+                // Delete old file if it exists
+                if (existingVideo[0].file_path) {
+                    const oldFilePath = path.join(process.cwd(), 'public', 'uploads', existingVideo[0].file_path);
+                    try {
+                        await fs.unlink(oldFilePath);
+                    } catch (unlinkError) {
+                        console.warn('Could not delete old file:', unlinkError.message);
+                    }
+                }
+                
+                filePath = `final-videos/${uniqueFilename}`;
+                
+                // Update with new file
+                updateQuery = `
+                    UPDATE final_videos 
+                    SET work_request_id = $2, description = $3, latitude = $4, longitude = $5,
+                        file_path = $6, file_name = $7, file_size = $8, file_type = $9,
+                        updated_at = NOW()
+                    WHERE id = $1
+                    RETURNING *;
+                `;
+                queryParams = [
+                    id, workRequestId, description, latitude, longitude,
+                    filePath, file.name, file.size, file.type
+                ];
+            } else {
+                // Update without new file
+                updateQuery = `
+                    UPDATE final_videos 
+                    SET work_request_id = $2, description = $3, latitude = $4, longitude = $5,
+                        updated_at = NOW()
+                    WHERE id = $1
+                    RETURNING *;
+                `;
+                queryParams = [id, workRequestId, description, latitude, longitude];
+            }
+
+            const { rows: updatedVideo } = await client.query(updateQuery, queryParams);
+
+            return createSuccessResponse({
+                message: 'Final video updated successfully',
+                video: updatedVideo[0]
+            });
+
+        } finally {
+            client.release && client.release();
+        }
+
+    } catch (error) {
+        console.error('Error updating final video:', error);
+        return createErrorResponse('Failed to update final video', 500);
+    }
+}
+
 export async function DELETE(req) {
     try {
         const body = await req.json();

@@ -155,18 +155,18 @@ const ImageForm = () => {
                 });
             }
             
-            toast({
-                title: 'Image(s) uploaded successfully',
-                description: `Images added to work request ${workRequestId}`,
-                variant: 'success',
-            });
-            setIsSuccess(true);
+                toast({
+                    title: 'Image(s) uploaded successfully',
+                    description: `Images added to work request ${workRequestId}`,
+                    variant: 'success',
+                });
+                setIsSuccess(true);
             reset(); // Reset upload progress
             
         } catch (error) {
             console.error('Upload error:', error);
-            toast({
-                title: 'Failed to upload image(s)',
+                toast({
+                    title: 'Failed to upload image(s)',
                 description: error.message || 'Please try again.',
                 variant: 'destructive',
             });
