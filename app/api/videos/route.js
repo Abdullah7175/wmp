@@ -1,123 +1,11 @@
-// import { NextResponse } from 'next/server';
-// import { connectToDatabase } from '@/lib/db';
-
-
-// export async function GET(request) {
-//     const { searchParams } = new URL(request.url);
-//     const id = searchParams.get('id');
-//     const client = await connectToDatabase();
-
-//     try {
-//         if (id) {
-//             const query = 'SELECT * FROM videos WHERE id = $1';
-//             const result = await client.query(query, [id]);
-
-//             if (result.rows.length === 0) {
-//                 return NextResponse.json({ error: 'Video not found' }, { status: 404 });
-//             }
-
-//             return NextResponse.json(result.rows[0], { status: 200 });
-//         } else {
-//             const query = `'SELECT * FROM videos`;
-//             const result = await client.query(query);
-
-//             return NextResponse.json(result.rows, { status: 200 });
-//         }
-//     } catch (error) {
-//         console.error('Error fetching data:', error);
-//         return NextResponse.json({ error: 'Failed to fetch data' }, { status: 500 });
-//     } finally {
-//         client.release && client.release();
-//     }
-// }
-
-// export async function POST(req) {
-//     try {
-//         const body = await req.json();
-//         const client = await connectToDatabase();
-
-//         const query = `
-//       INSERT INTO videos (link)
-//       VALUES ($1) RETURNING *;
-//     `;
-//         const { rows: newVideo } = await client.query(query, [
-//          body.link,
-//         ]);
-
-//         return NextResponse.json({ message: 'Video added successfully', video: newVideo[0] }, { status: 201 });
-
-//     } catch (error) {
-//         console.error('Error saving video:', error);
-//         return NextResponse.json({ error: 'Error saving video' }, { status: 500 });
-//     }
-// }
-
-// export async function PUT(req) {
-//     try {
-//         const body = await req.json();
-//         const client = await connectToDatabase();
-//         const {id, link} = body;
-
-//         if (!id || !link ) {
-//             return NextResponse.json({ error: 'All fields (id, name) are required' }, { status: 400 });
-//         }
-
-//         const query = `
-//             UPDATE videos 
-//             SET link = $1
-//             WHERE id = $2
-//             RETURNING *;
-//         `; 
-//         const { rows: updatedVideo } = await client.query(query, [
-//             link,
-//             id
-//         ]);
-
-//         if (updatedVideo.length === 0) {
-//             return NextResponse.json({ error: 'Video not found' }, { status: 404 });
-//         }
-
-//         return NextResponse.json({ message: 'Video updated successfully', video: updatedVideo[0] }, { status: 200 });
-
-//     } catch (error) {
-//         console.error('Error updating video:', error);
-//         return NextResponse.json({ error: 'Error updating video' }, { status: 500 });
-//     }
-// }
-
-// export async function DELETE(req) {
-//     try {
-//         const body = await req.json();
-//         const client = await connectToDatabase();
-
-//         const { id } = body;
-
-//         if (!id) {
-//             return NextResponse.json({ error: 'Video Id is required' }, { status: 400 });
-//         }
-
-//         const query = `
-//             DELETE FROM videos 
-//             WHERE id = $1
-//             RETURNING *;
-//         `;
-
-//         const { rows: deletedVideo } = await client.query(query, [id]);
-
-//         if (deletedVideo.length === 0) {
-//             return NextResponse.json({ error: 'Video not found' }, { status: 404 });
-//         }
-
-//         return NextResponse.json({ message: 'Video deleted successfully', user: deletedVideo[0] }, { status: 200 });
-
-//     } catch (error) {
-//         console.error('Error deleting video:', error);
-//         return NextResponse.json({ error: 'Error deleting video' }, { status: 500 });
-//     }
-// }
-
+import path from 'path';
+import { promises as fs } from 'fs';
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/db';
+import { actionLogger, ENTITY_TYPES } from '@/lib/actionLogger';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/pages/api/auth/[...nextauth]';
+import ChunkedFileUpload from '@/lib/chunkedFileUpload';
 
 export async function GET(request) {
     const { searchParams } = new URL(request.url);
@@ -129,14 +17,14 @@ export async function GET(request) {
     const filter = searchParams.get('filter') || '';
     const dateFrom = searchParams.get('date_from');
     const dateTo = searchParams.get('date_to');
+    const client = await connectToDatabase();
     const creatorId = searchParams.get('creator_id');
     const creatorType = searchParams.get('creator_type');
-    const client = await connectToDatabase();
 
     try {
         if (id) {
             const query = `
-                SELECT v.*, wr.request_date, wr.address ,ST_Y(v.geo_tag) as latitude,ST_X(v.geo_tag) as longitude
+                SELECT v.*, wr.request_date, wr.address, ST_AsGeoJSON(v.geo_tag) as geo_tag
                 FROM videos v
                 JOIN work_requests wr ON v.work_request_id = wr.id
                 WHERE v.id = $1
@@ -150,7 +38,7 @@ export async function GET(request) {
             return NextResponse.json(result.rows[0], { status: 200 });
         } else if (creatorId && creatorType) {
             const query = `
-                SELECT v.*, wr.request_date, wr.address, ST_Y(v.geo_tag) as latitude, ST_X(v.geo_tag) as longitude
+                SELECT v.*, wr.request_date, wr.address, ST_AsGeoJSON(v.geo_tag) as geo_tag
                 FROM videos v
                 JOIN work_requests wr ON v.work_request_id = wr.id
                 WHERE v.creator_id = $1 AND v.creator_type = $2
@@ -160,7 +48,7 @@ export async function GET(request) {
             return NextResponse.json({ data: result.rows, total: result.rows.length }, { status: 200 });
         } else if (workRequestId) {
             const query = `
-                SELECT v.*, wr.request_date, wr.address ,ST_Y(v.geo_tag) as latitude,ST_X(v.geo_tag) as longitude
+                SELECT v.*, wr.request_date, wr.address, ST_AsGeoJSON(v.geo_tag) as geo_tag
                 FROM videos v
                 JOIN work_requests wr ON v.work_request_id = wr.id
                 WHERE v.work_request_id = $1
@@ -170,10 +58,21 @@ export async function GET(request) {
             return NextResponse.json({ data: result.rows, total: result.rows.length }, { status: 200 });
         } else {
             let countQuery = 'SELECT COUNT(*) FROM videos v JOIN work_requests wr ON v.work_request_id = wr.id';
-            let dataQuery = `SELECT v.*, wr.request_date, wr.address ,ST_Y(v.geo_tag) as latitude,ST_X(v.geo_tag) as longitude FROM videos v JOIN work_requests wr ON v.work_request_id = wr.id`;
+            let dataQuery = `SELECT v.*, wr.request_date, wr.address, ST_AsGeoJSON(v.geo_tag) as geo_tag FROM videos v JOIN work_requests wr ON v.work_request_id = wr.id`;
             let whereClauses = [];
             let params = [];
             let paramIdx = 1;
+            
+            if (creatorId && creatorType) {
+                whereClauses.push(`v.creator_id = $${paramIdx} AND v.creator_type = $${paramIdx + 1}`);
+                params.push(creatorId, creatorType);
+                paramIdx += 2;
+            }
+            if (workRequestId) {
+                whereClauses.push(`v.work_request_id = $${paramIdx}`);
+                params.push(workRequestId);
+                paramIdx++;
+            }
             if (filter) {
                 whereClauses.push(`(
                     CAST(v.id AS TEXT) ILIKE $${paramIdx} OR
@@ -218,16 +117,101 @@ export async function GET(request) {
 
 export async function POST(req) {
     try {
-        const body = await req.json();
-        const client = await connectToDatabase();
+        const session = await getServerSession(authOptions);
+        if (!session?.user) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
 
+        const formData = await req.formData();
+        const workRequestId = formData.get('workRequestId');
+        const creatorId = formData.get('creator_id');
+        const creatorType = formData.get('creator_type');
+        const files = formData.getAll('vid');
+        const descriptions = formData.getAll('description');
+        const latitudes = formData.getAll('latitude');
+        const longitudes = formData.getAll('longitude');
+
+        if (!workRequestId || files.length === 0) {
+            return NextResponse.json({ error: 'Work Request ID and at least one video are required' }, { status: 400 });
+        }
+        if (files.length !== descriptions.length) {
+            return NextResponse.json({ error: 'Each video must have a description' }, { status: 400 });
+        }
+
+        // Check if work request exists
+        const client = await connectToDatabase();
+        const workRequest = await client.query(`
+            SELECT id FROM work_requests WHERE id = $1
+        `, [workRequestId]);
+
+        if (!workRequest.rows || workRequest.rows.length === 0) {
+            return NextResponse.json({ error: 'Work request not found' }, { status: 404 });
+        }
+
+        const uploadsDir = path.join(process.cwd(), 'public', 'uploads', 'videos');
+        await fs.mkdir(uploadsDir, { recursive: true });
+        const uploadedVideos = [];
+        
+        // Process files with improved error handling
+        for (let i = 0; i < files.length; i++) {
+            const file = files[i];
+            const description = descriptions[i];
+            const latitude = latitudes[i] || '0';
+            const longitude = longitudes[i] || '0';
+            
+            if (!description) {
+                continue;
+            }
+
+            try {
+                const filename = `${Date.now()}-${file.name}`;
+                const filePath = path.join(uploadsDir, filename);
+                
+                // For large files (>50MB), use chunked upload
+                if (file.size > 50 * 1024 * 1024) {
+                    const chunks = await ChunkedFileUpload.fileToChunks(file, 2 * 1024 * 1024);
+                    
+                    // Write chunks sequentially to avoid memory issues
+                    for (const chunk of chunks) {
+                        await fs.appendFile(filePath, Buffer.from(chunk.data));
+                    }
+                } else {
+                    // For smaller files, use direct upload
+                    const buffer = await file.arrayBuffer();
+                    await fs.writeFile(filePath, Buffer.from(buffer));
+                }
+
+                const geoTag = `SRID=4326;POINT(${longitude} ${latitude})`;
         const query = `
-      INSERT INTO videos (link)
-      VALUES ($1) RETURNING *;
-    `;
-        const { rows: newVideo } = await client.query(query, [
-         body.link,
-        ]);
+                    INSERT INTO videos (work_request_id, description, link, geo_tag, created_at, updated_at, creator_id, creator_type)
+                    VALUES ($1, $2, $3, ST_GeomFromText($4, 4326), NOW(), NOW(), $5, $6)
+                    RETURNING *;
+                `;
+                const { rows } = await client.query(query, [
+                    workRequestId,
+                    description,
+                    `/uploads/videos/${filename}`,
+                    geoTag,
+                    creatorId || null,
+                    creatorType || null
+                ]);
+                uploadedVideos.push(rows[0]);
+
+            } catch (fileError) {
+                console.error(`Error processing file ${file.name}:`, fileError);
+                // Continue with other files instead of failing completely
+                continue;
+            }
+        }
+        
+        // Log the video upload action
+        await actionLogger.upload(req, ENTITY_TYPES.VIDEO, workRequestId, `Videos for Request #${workRequestId}`, {
+            videoCount: uploadedVideos.length,
+            workRequestId,
+            creatorId,
+            creatorType,
+            hasLocation: true
+        });
 
         // Notify all managers (role=1 or 2)
         try {
@@ -236,7 +220,7 @@ export async function POST(req) {
             for (const mgr of managers.rows) {
                 await client2.query(
                     'INSERT INTO notifications (user_id, type, entity_id, message) VALUES ($1, $2, $3, $4)',
-                    [mgr.id, 'video', body.workRequestId, `New video uploaded for request #${body.workRequestId}.`]
+                    [mgr.id, 'video', workRequestId, `New video uploaded for request #${workRequestId}.`]
                 );
             }
             client2.release && client2.release();
@@ -246,187 +230,10 @@ export async function POST(req) {
         }
         return NextResponse.json({
             message: 'Video(s) uploaded successfully',
-            videos: newVideo
+            videos: uploadedVideos
         }, { status: 201 });
     } catch (error) {
-        console.error('Error saving video:', error);
-        return NextResponse.json({ error: 'Error saving video' }, { status: 500 });
-    }
-}
-
-export async function PUT(req) {
-    try {
-        const client = await connectToDatabase();
-        
-        // Check if it's a multipart form data (file upload)
-        const contentType = req.headers.get('content-type');
-        
-        if (contentType && contentType.includes('multipart/form-data')) {
-            // Handle file upload
-            const formData = await req.formData();
-            const id = formData.get('id');
-            const description = formData.get('description');
-            const workRequestId = formData.get('workRequestId');
-            const latitude = formData.get('latitude');
-            const longitude = formData.get('longitude');
-            const file = formData.get('file');
-
-            if (!id) {
-                return NextResponse.json({ error: 'Video ID is required' }, { status: 400 });
-            }
-
-            // Get current video info to delete old file
-            const currentVideoQuery = await client.query('SELECT link FROM videos WHERE id = $1', [id]);
-            if (currentVideoQuery.rows.length === 0) {
-                return NextResponse.json({ error: 'Video not found' }, { status: 404 });
-            }
-
-            const currentVideo = currentVideoQuery.rows[0];
-            let newLink = currentVideo.link;
-
-            // Handle file upload if provided
-            if (file && file.size > 0) {
-                const fs = require('fs');
-                const path = require('path');
-                
-                // Delete old file
-                if (currentVideo.link) {
-                    const oldFilePath = path.join(process.cwd(), 'public', currentVideo.link);
-                    if (fs.existsSync(oldFilePath)) {
-                        fs.unlinkSync(oldFilePath);
-                    }
-                }
-
-                // Upload new file
-                const bytes = await file.arrayBuffer();
-                const buffer = Buffer.from(bytes);
-                const fileName = `${Date.now()}-${file.name}`;
-                const filePath = path.join(process.cwd(), 'public/uploads/videos', fileName);
-                
-                // Ensure directory exists
-                const uploadDir = path.join(process.cwd(), 'public/uploads/videos');
-                if (!fs.existsSync(uploadDir)) {
-                    fs.mkdirSync(uploadDir, { recursive: true });
-                }
-                
-                fs.writeFileSync(filePath, buffer);
-                newLink = `/uploads/videos/${fileName}`;
-            }
-
-            // Update video in database
-            const updateQuery = `
-                UPDATE videos 
-                SET 
-                    link = $1,
-                    description = $2,
-                    work_request_id = $3,
-                    geo_tag = CASE 
-                        WHEN $4::numeric IS NOT NULL AND $5::numeric IS NOT NULL 
-                        THEN ST_SetSRID(ST_MakePoint($5::numeric, $4::numeric), 4326)
-                        ELSE geo_tag
-                    END,
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE id = $6
-                RETURNING *;
-            `;
-            
-            // Convert empty strings to null for latitude/longitude
-            const latValue = latitude && latitude.trim() !== '' ? parseFloat(latitude) : null;
-            const lngValue = longitude && longitude.trim() !== '' ? parseFloat(longitude) : null;
-            
-            const { rows: updatedVideo } = await client.query(updateQuery, [
-                newLink,
-                description,
-                workRequestId,
-                latValue,
-                lngValue,
-                id
-            ]);
-
-            return NextResponse.json({ 
-                message: 'Video updated successfully', 
-                video: updatedVideo[0] 
-            }, { status: 200 });
-
-        } else {
-            // Handle JSON update (no file upload)
-            const body = await req.json();
-            const { id, description, workRequestId, latitude, longitude } = body;
-
-            if (!id) {
-                return NextResponse.json({ error: 'Video ID is required' }, { status: 400 });
-            }
-
-            const query = `
-                UPDATE videos 
-                SET 
-                    description = $1,
-                    work_request_id = $2,
-                    geo_tag = CASE 
-                        WHEN $3::numeric IS NOT NULL AND $4::numeric IS NOT NULL 
-                        THEN ST_SetSRID(ST_MakePoint($4::numeric, $3::numeric), 4326)
-                        ELSE geo_tag
-                    END,
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE id = $5
-                RETURNING *;
-            `;
-            
-            // Convert empty strings to null for latitude/longitude
-            const latValue = latitude && latitude.toString().trim() !== '' ? parseFloat(latitude) : null;
-            const lngValue = longitude && longitude.toString().trim() !== '' ? parseFloat(longitude) : null;
-            
-            const { rows: updatedVideo } = await client.query(query, [
-                description,
-                workRequestId,
-                latValue,
-                lngValue,
-                id
-            ]);
-
-            if (updatedVideo.length === 0) {
-                return NextResponse.json({ error: 'Video not found' }, { status: 404 });
-            }
-
-            return NextResponse.json({ 
-                message: 'Video updated successfully', 
-                video: updatedVideo[0] 
-            }, { status: 200 });
-        }
-
-    } catch (error) {
-        console.error('Error updating video:', error);
-        return NextResponse.json({ error: 'Error updating video' }, { status: 500 });
-    }
-}
-
-export async function DELETE(req) {
-    try {
-        const body = await req.json();
-        const client = await connectToDatabase();
-
-        const { id } = body;
-
-        if (!id) {
-            return NextResponse.json({ error: 'Video Id is required' }, { status: 400 });
-        }
-
-        const query = `
-            DELETE FROM videos 
-            WHERE id = $1
-            RETURNING *;
-        `;
-
-        const { rows: deletedVideo } = await client.query(query, [id]);
-
-        if (deletedVideo.length === 0) {
-            return NextResponse.json({ error: 'Video not found' }, { status: 404 });
-        }
-
-        return NextResponse.json({ message: 'Video deleted successfully', user: deletedVideo[0] }, { status: 200 });
-
-    } catch (error) {
-        console.error('Error deleting video:', error);
-        return NextResponse.json({ error: 'Error deleting video' }, { status: 500 });
+        console.error('File upload error:', error);
+        return NextResponse.json({ error: 'Failed to upload file(s)' }, { status: 500 });
     }
 }
