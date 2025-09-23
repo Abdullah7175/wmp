@@ -6,6 +6,8 @@ const nextConfig = {
   reactStrictMode: true,
   output: 'standalone',
   trailingSlash: false,
+  // Ensure standalone build works properly
+  distDir: '.next',
   async rewrites() {
     return [
       {
@@ -43,14 +45,20 @@ const nextConfig = {
       allowedOrigins: ['localhost:3000', 'localhost:3001', 'localhost:3002', 'localhost:3003', 'localhost:3004', '202.61.47.29:3000'],
     },
   },
-  serverExternalPackages: ['sharp', 'fs-extra'],
-  webpack: (config) => {
+  serverExternalPackages: ['sharp', 'fs-extra', 'pg'],
+  webpack: (config, { isServer }) => {
     config.resolve.fallback = { 
       fs: false, 
       path: false, 
       stream: false, 
       constants: false 
     };
+    
+    // Ensure proper handling of server-side modules
+    if (isServer) {
+      config.externals = [...(config.externals || []), 'pg-native'];
+    }
+    
     return config;
   },
 };
