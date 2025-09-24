@@ -167,7 +167,7 @@ export default function EditCategoryPage() {
                     <form onSubmit={handleSubmit} className="space-y-6">
                         {/* Basic Information */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div>
+                        <div>
                                 <Label htmlFor="name">Category Name *</Label>
                                 <Input
                                     id="name"
@@ -176,8 +176,8 @@ export default function EditCategoryPage() {
                                     placeholder="Enter category name"
                                     required
                                 />
-                            </div>
-                            <div>
+                        </div>
+                        <div>
                                 <Label htmlFor="code">Category Code *</Label>
                                 <Input
                                     id="code"

@@ -19,8 +19,28 @@ export async function GET(request) {
     // Add authentication check for general access
     try {
         const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
-        if (!token?.user?.role || ![1,2].includes(token.user.role)) {
-            return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        if (!token?.user?.id) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+        
+        // Allow access for admin/manager roles (1,2) or efiling users
+        if (![1,2].includes(token.user.role)) {
+            // Check if this is an efiling user
+            const client = await connectToDatabase();
+            try {
+                const efilingUserCheck = await client.query(
+                    'SELECT id FROM efiling_users WHERE user_id = $1 AND is_active = true', 
+                    [token.user.id]
+                );
+                if (efilingUserCheck.rows.length === 0) {
+                    await client.release();
+                    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+                }
+                await client.release();
+            } catch (dbError) {
+                console.error('Database error checking efiling user:', dbError);
+                return NextResponse.json({ error: 'Database error' }, { status: 500 });
+            }
         }
     } catch (authError) {
         console.error('Authentication error:', authError);
@@ -189,6 +209,22 @@ export async function GET(request) {
                 conditions.push(`f.priority = $${paramIndex}`);
                 params.push(priority);
                 paramIndex++;
+            }
+            
+            // Add user-based filtering for efiling users
+            const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
+            if (token?.user?.id && ![1,2].includes(token.user.role)) {
+                // For efiling users, only show files they created or are assigned to
+                const efilingUserRes = await client.query(
+                    'SELECT id FROM efiling_users WHERE user_id = $1 AND is_active = true', 
+                    [token.user.id]
+                );
+                if (efilingUserRes.rows.length > 0) {
+                    const efilingUserId = efilingUserRes.rows[0].id;
+                    conditions.push(`(f.created_by = $${paramIndex} OR f.assigned_to = $${paramIndex} OR wf.current_assignee_id = $${paramIndex})`);
+                    params.push(efilingUserId);
+                    paramIndex++;
+                }
             }
             
             if (conditions.length > 0) {

@@ -162,12 +162,12 @@ export async function POST(req) {
         const client = await getDatabaseConnectionWithRetry();
         
         try {
-            // Check upload permission for final videos
+        // Check upload permission for final videos
             const workRequestResult = await client.query(`
-                SELECT id FROM work_requests WHERE id = $1
-            `, [workRequestId]);
+            SELECT id FROM work_requests WHERE id = $1
+        `, [workRequestId]);
 
-            if (workRequestResult.rows.length === 0) {
+        if (workRequestResult.rows.length === 0) {
                 return createErrorResponse('Work request not found', 404);
             }
 
@@ -180,44 +180,44 @@ export async function POST(req) {
                 return createErrorResponse(`Failed to save file: ${saveResult.error}`, 500);
             }
 
-            // Create geo_tag from latitude and longitude (use defaults if not provided)
-            const geoTag = `SRID=4326;POINT(${longitude || 0} ${latitude || 0})`;
+        // Create geo_tag from latitude and longitude (use defaults if not provided)
+        const geoTag = `SRID=4326;POINT(${longitude || 0} ${latitude || 0})`;
 
             // Save to database with additional file metadata
-            const query = `
+        const query = `
                 INSERT INTO final_videos (work_request_id, description, link, geo_tag, created_at, updated_at, creator_id, creator_type, creator_name, file_name, file_size, file_type)
                 VALUES ($1, $2, $3, ST_GeomFromText($4, 4326), NOW(), NOW(), $5, $6, $7, $8, $9, $10)
-                RETURNING *;
-            `;
+            RETURNING *;
+        `;
             const { rows } = await client.query(query, [
-                workRequestId,
-                description,
-                `/uploads/final-videos/${filename}`,
-                geoTag,
-                creatorId,
-                creatorType,
+            workRequestId,
+            description,
+            `/uploads/final-videos/${filename}`,
+            geoTag,
+            creatorId,
+            creatorType,
                 creatorName || null,
                 file.name,
                 file.size,
                 file.type
-            ]);
+        ]);
 
-            // Notify all managers (role=1 or 2)
-            try {
+        // Notify all managers (role=1 or 2)
+        try {
                 const managers = await client.query('SELECT id FROM users WHERE role IN (1,2)');
-                for (const mgr of managers.rows) {
+            for (const mgr of managers.rows) {
                     await client.query(
-                        'INSERT INTO notifications (user_id, type, entity_id, message) VALUES ($1, $2, $3, $4)',
-                        [mgr.id, 'final_video', workRequestId, `New final video uploaded for request #${workRequestId}.`]
-                    );
-                }
-            } catch (notifErr) {
-                // Log but don't fail
-                console.error('Notification insert error:', notifErr);
+                    'INSERT INTO notifications (user_id, type, entity_id, message) VALUES ($1, $2, $3, $4)',
+                    [mgr.id, 'final_video', workRequestId, `New final video uploaded for request #${workRequestId}.`]
+                );
             }
+        } catch (notifErr) {
+            // Log but don't fail
+            console.error('Notification insert error:', notifErr);
+        }
             
             return createSuccessResponse({
-                video: rows[0]
+            video: rows[0]
             }, 'Final video uploaded successfully');
             
         } finally {
@@ -322,12 +322,12 @@ export async function PUT(req) {
             } else {
                 // Update without new file
                 updateQuery = `
-                    UPDATE final_videos 
+            UPDATE final_videos 
                     SET work_request_id = $2, description = $3, latitude = $4, longitude = $5,
-                        updated_at = NOW()
+                updated_at = NOW()
                     WHERE id = $1
-                    RETURNING *;
-                `;
+            RETURNING *;
+        `; 
                 queryParams = [id, workRequestId, description, latitude, longitude];
             }
 

@@ -83,7 +83,7 @@ export default function CreateCategoryPage() {
                 <CardContent>
                     <form onSubmit={submit} className="space-y-6">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div>
+                        <div>
                                 <Label htmlFor="name">Name *</Label>
                                 <Input
                                     id="name"
@@ -92,8 +92,8 @@ export default function CreateCategoryPage() {
                                     placeholder="e.g., Water Works"
                                     required
                                 />
-                            </div>
-                            <div>
+                        </div>
+                        <div>
                                 <Label htmlFor="code">Code *</Label>
                                 <Input
                                     id="code"
