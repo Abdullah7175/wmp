@@ -125,7 +125,7 @@ export async function GET(request) {
 export async function POST(request) {
     let client;
     try {
-        const token = await getToken({ req: { headers: Object.fromEntries(request.headers) }, secret: process.env.NEXTAUTH_SECRET });
+        const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
         if (!token?.user?.role || ![1,2].includes(token.user.role)) {
             return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
         }
@@ -232,7 +232,7 @@ export async function POST(request) {
 export async function PUT(request) {
     let client;
     try {
-        const token = await getToken({ req: { headers: Object.fromEntries(request.headers) }, secret: process.env.NEXTAUTH_SECRET });
+        const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
         if (!token?.user?.role || ![1,2].includes(token.user.role)) {
             return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
         }
@@ -333,7 +333,7 @@ export async function PUT(request) {
 export async function DELETE(request) {
     let client;
     try {
-        const token = await getToken({ req: { headers: Object.fromEntries(request.headers) }, secret: process.env.NEXTAUTH_SECRET });
+        const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
         if (!token?.user?.role || ![1,2].includes(token.user.role)) {
             return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
         }
