@@ -48,22 +48,46 @@ export default function FileStatusReport() {
 
     const loadFiles = async () => {
         try {
+            console.log('Loading files from /api/efiling/files');
             const response = await fetch('/api/efiling/files');
+            console.log('Files API response status:', response.status);
+            
             if (response.ok) {
                 const data = await response.json();
+                console.log('Files API response data:', data);
                 setFiles(Array.isArray(data) ? data : []);
+            } else {
+                const errorData = await response.json();
+                console.error('Files API error:', errorData);
+                toast({
+                    title: "Error",
+                    description: `Failed to load files: ${errorData.error || 'Unknown error'}`,
+                    variant: "destructive"
+                });
             }
         } catch (error) {
             console.error('Error loading files:', error);
+            toast({
+                title: "Error",
+                description: "Failed to load files",
+                variant: "destructive"
+            });
         }
     };
 
     const loadDepartments = async () => {
         try {
+            console.log('Loading departments from /api/efiling/departments');
             const response = await fetch('/api/efiling/departments?is_active=true');
+            console.log('Departments API response status:', response.status);
+            
             if (response.ok) {
                 const data = await response.json();
+                console.log('Departments API response data:', data);
                 setDepartments(Array.isArray(data) ? data : []);
+            } else {
+                const errorData = await response.json();
+                console.error('Departments API error:', errorData);
             }
         } catch (error) {
             console.error('Error loading departments:', error);
@@ -72,10 +96,17 @@ export default function FileStatusReport() {
 
     const loadFileTypes = async () => {
         try {
+            console.log('Loading file types from /api/efiling/file-types');
             const response = await fetch('/api/efiling/file-types?is_active=true');
+            console.log('File types API response status:', response.status);
+            
             if (response.ok) {
                 const data = await response.json();
+                console.log('File types API response data:', data);
                 setFileTypes(data.fileTypes || []);
+            } else {
+                const errorData = await response.json();
+                console.error('File types API error:', errorData);
             }
         } catch (error) {
             console.error('Error loading file types:', error);

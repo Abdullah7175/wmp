@@ -16,6 +16,17 @@ export async function GET(request) {
     const limit = parseInt(searchParams.get('limit') || '10');
     const offset = (page - 1) * limit;
     
+    // Add authentication check for general access
+    try {
+        const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
+        if (!token?.user?.role || ![1,2].includes(token.user.role)) {
+            return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        }
+    } catch (authError) {
+        console.error('Authentication error:', authError);
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    
     const client = await connectToDatabase();
     
     try {

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/db';
+import { getToken } from 'next-auth/jwt';
 
 export async function GET(request) {
     const { searchParams } = new URL(request.url);
@@ -88,6 +89,216 @@ export async function GET(request) {
         console.error('Error stack:', error.stack);
         // Return empty array instead of 500 error to prevent frontend crash
         return NextResponse.json([]);
+    } finally {
+        if (client) {
+            await client.release();
+        }
+    }
+}
+
+export async function POST(request) {
+    let client;
+    try {
+        const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
+        if (!token?.user?.role || ![1,2].includes(token.user.role)) {
+            return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        }
+
+        const body = await request.json();
+        const { name, code, description, department_id, is_work_related, is_active } = body;
+
+        // Input validation
+        if (!name || !code) {
+            return NextResponse.json(
+                { error: 'Name and code are required' },
+                { status: 400 }
+            );
+        }
+
+        client = await connectToDatabase();
+
+        // Check if code already exists
+        const existingCode = await client.query(`
+            SELECT id FROM efiling_file_categories WHERE code = $1
+        `, [code]);
+
+        if (existingCode.rows.length > 0) {
+            return NextResponse.json(
+                { error: 'Category code already exists' },
+                { status: 409 }
+            );
+        }
+
+        // Create category
+        const result = await client.query(`
+            INSERT INTO efiling_file_categories (
+                name, code, description, department_id, is_work_related, is_active, created_at, updated_at
+            ) VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
+            RETURNING *
+        `, [
+            name,
+            code,
+            description || null,
+            department_id || null,
+            is_work_related || false,
+            is_active !== false
+        ]);
+
+        const category = result.rows[0];
+
+        return NextResponse.json({
+            success: true,
+            category: category
+        });
+
+    } catch (error) {
+        console.error('Error creating category:', error);
+        return NextResponse.json(
+            { error: 'Failed to create category' },
+            { status: 500 }
+        );
+    } finally {
+        if (client) {
+            await client.release();
+        }
+    }
+}
+
+export async function PUT(request) {
+    let client;
+    try {
+        const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
+        if (!token?.user?.role || ![1,2].includes(token.user.role)) {
+            return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        }
+
+        const body = await request.json();
+        const { id, name, code, description, department_id, is_work_related, is_active } = body;
+
+        if (!id) {
+            return NextResponse.json(
+                { error: 'Category ID is required' },
+                { status: 400 }
+            );
+        }
+
+        client = await connectToDatabase();
+
+        // Check if category exists
+        const existingCategory = await client.query(`
+            SELECT * FROM efiling_file_categories WHERE id = $1
+        `, [id]);
+
+        if (existingCategory.rows.length === 0) {
+            return NextResponse.json(
+                { error: 'Category not found' },
+                { status: 404 }
+            );
+        }
+
+        // Check if code already exists (excluding current category)
+        if (code) {
+            const existingCode = await client.query(`
+                SELECT id FROM efiling_file_categories WHERE code = $1 AND id != $2
+            `, [code, id]);
+
+            if (existingCode.rows.length > 0) {
+                return NextResponse.json(
+                    { error: 'Category code already exists' },
+                    { status: 409 }
+                );
+            }
+        }
+
+        // Update category
+        const result = await client.query(`
+            UPDATE efiling_file_categories 
+            SET 
+                name = COALESCE($2, name),
+                code = COALESCE($3, code),
+                description = COALESCE($4, description),
+                department_id = $5,
+                is_work_related = COALESCE($6, is_work_related),
+                is_active = COALESCE($7, is_active),
+                updated_at = NOW()
+            WHERE id = $1
+            RETURNING *
+        `, [
+            id,
+            name || null,
+            code || null,
+            description || null,
+            department_id,
+            is_work_related !== undefined ? is_work_related : null,
+            is_active !== undefined ? is_active : null
+        ]);
+
+        return NextResponse.json({
+            success: true,
+            category: result.rows[0]
+        });
+
+    } catch (error) {
+        console.error('Error updating category:', error);
+        return NextResponse.json(
+            { error: 'Failed to update category' },
+            { status: 500 }
+        );
+    } finally {
+        if (client) {
+            await client.release();
+        }
+    }
+}
+
+export async function DELETE(request) {
+    let client;
+    try {
+        const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
+        if (!token?.user?.role || ![1,2].includes(token.user.role)) {
+            return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        }
+
+        const { searchParams } = new URL(request.url);
+        const id = searchParams.get('id');
+
+        if (!id) {
+            return NextResponse.json(
+                { error: 'Category ID is required' },
+                { status: 400 }
+            );
+        }
+
+        client = await connectToDatabase();
+
+        // Check if category exists
+        const existingCategory = await client.query(`
+            SELECT * FROM efiling_file_categories WHERE id = $1
+        `, [id]);
+
+        if (existingCategory.rows.length === 0) {
+            return NextResponse.json(
+                { error: 'Category not found' },
+                { status: 404 }
+            );
+        }
+
+        // Delete category
+        await client.query(`
+            DELETE FROM efiling_file_categories WHERE id = $1
+        `, [id]);
+
+        return NextResponse.json({
+            success: true,
+            message: 'Category deleted successfully'
+        });
+
+    } catch (error) {
+        console.error('Error deleting category:', error);
+        return NextResponse.json(
+            { error: 'Failed to delete category' },
+            { status: 500 }
+        );
     } finally {
         if (client) {
             await client.release();

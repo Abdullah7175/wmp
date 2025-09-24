@@ -120,15 +120,15 @@ const links = [
             // { href: "/efiling/reports/timeline", label: "Timeline Report", icon: <Calendar className="w-4 h-4" /> },
         ]
     },
-    {
-        href: "/efiling/permissions",
-        label: "Permissions Management",
-        icon: <Shield className="w-5 h-5 mr-2" />,
-        subItems: [
-            { href: "/efiling/permissions", label: "All Permissions", icon: <Shield className="w-4 h-4" /> },
-            // { href: "/efiling/permissions/create", label: "Create Permission", icon: <FileText className="w-4 h-4" /> },
-        ]
-    },
+    // {
+    //     href: "/efiling/permissions",
+    //     label: "Permissions Management",
+    //     icon: <Shield className="w-5 h-5 mr-2" />,
+    //     subItems: [
+    //         { href: "/efiling/permissions", label: "All Permissions", icon: <Shield className="w-4 h-4" /> },
+    //         // { href: "/efiling/permissions/create", label: "Create Permission", icon: <FileText className="w-4 h-4" /> },
+    //     ]
+    // },
     {
         href: "/efiling/user-profile",
         label: "User Profile",

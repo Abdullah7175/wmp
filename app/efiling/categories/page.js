@@ -11,9 +11,9 @@ export default function CategoriesPage() {
     useEffect(() => {
         (async () => {
             try {
-                const res = await fetch('/api/efiling/file-categories');
-                const data = res.ok ? await res.json() : { categories: [] };
-                setCategories(data.categories || []);
+                const res = await fetch('/api/efiling/categories');
+                const data = res.ok ? await res.json() : [];
+                setCategories(Array.isArray(data) ? data : []);
             } finally {
                 setLoading(false);
             }
@@ -21,12 +21,12 @@ export default function CategoriesPage() {
     }, []);
 
     const deactivate = async (id) => {
-        await fetch('/api/efiling/file-categories', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, is_active: false }) });
+        await fetch('/api/efiling/categories', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, is_active: false }) });
         setCategories(prev => prev.map(c => c.id === id ? { ...c, is_active: false } : c));
     };
 
     const remove = async (id) => {
-        await fetch(`/api/efiling/file-categories?id=${id}`, { method: 'DELETE' });
+        await fetch(`/api/efiling/categories?id=${id}`, { method: 'DELETE' });
         setCategories(prev => prev.filter(c => c.id !== id));
     };
 
@@ -51,7 +51,9 @@ export default function CategoriesPage() {
                                 <tr className="text-left">
                                     <th className="py-2">Name</th>
                                     <th className="py-2">Code</th>
+                                    <th className="py-2">Description</th>
                                     <th className="py-2">Department</th>
+                                    <th className="py-2">Work Related</th>
                                     <th className="py-2">Active</th>
                                     <th className="py-2">Actions</th>
                                 </tr>
@@ -61,7 +63,9 @@ export default function CategoriesPage() {
                                     <tr key={cat.id} className="border-t">
                                         <td className="py-2">{cat.name}</td>
                                         <td className="py-2">{cat.code || '-'}</td>
-                                        <td className="py-2">{cat.department_id || '-'}</td>
+                                        <td className="py-2 max-w-xs truncate">{cat.description || '-'}</td>
+                                        <td className="py-2">{cat.department_name || '-'}</td>
+                                        <td className="py-2">{cat.is_work_related ? 'Yes' : 'No'}</td>
                                         <td className="py-2">{cat.is_active ? 'Yes' : 'No'}</td>
                                         <td className="py-2 flex gap-2">
                                             <Link href={`/efiling/categories/${cat.id}/edit`}><Button variant="outline" size="sm">Edit</Button></Link>
