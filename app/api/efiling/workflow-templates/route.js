@@ -193,9 +193,11 @@ export async function POST(request) {
         }
 
         // Log the action
-        await eFileActionLogger.logAction(request, EFILING_ACTION_TYPES.WORKFLOW_TEMPLATE_CREATED, EFILING_ENTITY_TYPES.EFILING_TEMPLATE, {
+        await eFileActionLogger.logAction({
+            entityType: EFILING_ENTITY_TYPES.EFILING_TEMPLATE,
             entityId: template.id,
-            entityName: name,
+            action: EFILING_ACTION_TYPES.WORKFLOW_TEMPLATE_CREATED,
+            userId: token?.sub || 'system',
             details: {
                 templateName: name,
                 fileTypeId,
@@ -413,14 +415,16 @@ export async function PUT(request) {
         await client.query('COMMIT');
 
         // Log the action
-        await eFileActionLogger.logAction(request, EFILING_ACTION_TYPES.WORKFLOW_TEMPLATE_UPDATED, EFILING_ENTITY_TYPES.EFILING_TEMPLATE, {
+        await eFileActionLogger.logAction({
+            entityType: EFILING_ENTITY_TYPES.EFILING_TEMPLATE,
             entityId: id,
-            entityName: name,
+            action: EFILING_ACTION_TYPES.WORKFLOW_TEMPLATE_UPDATED,
+            userId: token?.sub || 'system',
             details: {
                 templateName: name,
                 fileTypeId: file_type_id,
                 stageCount: stages.length
-                }
+            }
         });
 
         return NextResponse.json({
@@ -508,9 +512,11 @@ export async function DELETE(request) {
 
         // Log
         try {
-            await eFileActionLogger.logAction(request, EFILING_ACTION_TYPES.WORKFLOW_TEMPLATE_DELETED, EFILING_ENTITY_TYPES.EFILING_TEMPLATE, {
+            await eFileActionLogger.logAction({
+                entityType: EFILING_ENTITY_TYPES.EFILING_TEMPLATE,
                 entityId: id,
-                entityName: tpl.rows[0].name,
+                action: EFILING_ACTION_TYPES.WORKFLOW_TEMPLATE_DELETED,
+                userId: token?.sub || 'system',
                 details: { templateId: id }
             });
         } catch (e) { /* ignore logging errors */ }

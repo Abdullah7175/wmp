@@ -7,9 +7,18 @@ export async function GET(request, { params }) {
     try {
         const { id } = await params;
         
-        if (!id) {
+        if (!id || id === 'undefined' || id === 'null') {
             return NextResponse.json(
                 { error: 'User ID is required' },
+                { status: 400 }
+            );
+        }
+
+        // Validate that id is a number
+        const userId = parseInt(id);
+        if (isNaN(userId)) {
+            return NextResponse.json(
+                { error: 'Invalid user ID format' },
                 { status: 400 }
             );
         }
@@ -32,7 +41,7 @@ export async function GET(request, { params }) {
             WHERE id = $1
         `;
         
-        const result = await client.query(query, [id]);
+        const result = await client.query(query, [userId]);
         
         if (result.rows.length === 0) {
             return NextResponse.json(
