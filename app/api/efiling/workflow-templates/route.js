@@ -197,7 +197,7 @@ export async function POST(request) {
             entityType: EFILING_ENTITY_TYPES.EFILING_TEMPLATE,
             entityId: template.id,
             action: EFILING_ACTION_TYPES.WORKFLOW_TEMPLATE_CREATED,
-            userId: token?.sub || 'system',
+            userId: token?.user?.id || token?.sub || 'system',
             details: {
                 templateName: name,
                 fileTypeId,
@@ -419,7 +419,7 @@ export async function PUT(request) {
             entityType: EFILING_ENTITY_TYPES.EFILING_TEMPLATE,
             entityId: id,
             action: EFILING_ACTION_TYPES.WORKFLOW_TEMPLATE_UPDATED,
-            userId: token?.sub || 'system',
+            userId: token?.user?.id || token?.sub || 'system',
             details: {
                 templateName: name,
                 fileTypeId: file_type_id,

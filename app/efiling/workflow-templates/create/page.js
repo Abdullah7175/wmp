@@ -172,7 +172,7 @@ export default function CreateWorkflowTemplate() {
                 body: JSON.stringify({
                     name: formData.name,
                     description: formData.description,
-                    file_type_id: formData.fileTypeId,
+                    fileTypeId: formData.fileTypeId,
                     stages: formData.stages.map(stage => ({
                         ...stage,
                         departmentId: stage.departmentId === 'none' ? null : stage.departmentId,
