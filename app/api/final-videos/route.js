@@ -183,7 +183,7 @@ export async function POST(req) {
         // Create geo_tag from latitude and longitude (use defaults if not provided)
         const geoTag = `SRID=4326;POINT(${longitude || 0} ${latitude || 0})`;
 
-            // Save to database with additional file metadata
+            // Save to database
         const query = `
                 INSERT INTO final_videos (work_request_id, description, link, geo_tag, created_at, updated_at, creator_id, creator_type, creator_name, file_name, file_size, file_type)
                 VALUES ($1, $2, $3, ST_GeomFromText($4, 4326), NOW(), NOW(), $5, $6, $7, $8, $9, $10)
@@ -273,30 +273,32 @@ export async function PUT(req) {
 
             let updateQuery;
             let queryParams;
-            let filePath = existingVideo[0].file_path;
+            let newLink = existingVideo[0].link;
 
             // If a new file is provided, handle file upload
             if (file) {
                 // Validate file
-                const validationResult = validateFile(file);
-                if (!validationResult.valid) {
-                    return createErrorResponse(validationResult.error, 400);
+                const validationResult = validateFile(file, UPLOAD_CONFIG.ALLOWED_VIDEO_TYPES, UPLOAD_CONFIG.MAX_FILE_SIZE);
+                if (!validationResult.isValid) {
+                    return createErrorResponse(`File validation failed: ${validationResult.errors.join(', ')}`, 400);
                 }
 
                 // Generate unique filename
                 const uniqueFilename = generateUniqueFilename(file.name);
-                const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'final-videos');
+                const uploadDir = path.join(process.cwd(), 'public', UPLOAD_CONFIG.UPLOAD_DIRS.finalVideos);
                 
                 // Ensure directory exists
                 await fs.mkdir(uploadDir, { recursive: true });
                 
                 // Save new file
-                const newFilePath = path.join(uploadDir, uniqueFilename);
-                await saveFileStream(file, newFilePath);
+                const saveResult = await saveFileStream(file, uploadDir, uniqueFilename);
+                if (!saveResult.success) {
+                    return createErrorResponse(`Failed to save file: ${saveResult.error}`, 500);
+                }
                 
                 // Delete old file if it exists
-                if (existingVideo[0].file_path) {
-                    const oldFilePath = path.join(process.cwd(), 'public', 'uploads', existingVideo[0].file_path);
+                if (existingVideo[0].link) {
+                    const oldFilePath = path.join(process.cwd(), 'public', existingVideo[0].link);
                     try {
                         await fs.unlink(oldFilePath);
                     } catch (unlinkError) {
@@ -304,31 +306,36 @@ export async function PUT(req) {
                     }
                 }
                 
-                filePath = `final-videos/${uniqueFilename}`;
+                newLink = `/uploads/final-videos/${uniqueFilename}`;
+                
+                // Create geo_tag from latitude and longitude
+                const geoTag = `SRID=4326;POINT(${longitude || 0} ${latitude || 0})`;
                 
                 // Update with new file
                 updateQuery = `
                     UPDATE final_videos 
-                    SET work_request_id = $2, description = $3, latitude = $4, longitude = $5,
-                        file_path = $6, file_name = $7, file_size = $8, file_type = $9,
-                        updated_at = NOW()
+                    SET work_request_id = $2, description = $3, link = $4, geo_tag = ST_GeomFromText($5, 4326),
+                        file_name = $6, file_size = $7, file_type = $8, updated_at = NOW()
                     WHERE id = $1
                     RETURNING *;
                 `;
                 queryParams = [
-                    id, workRequestId, description, latitude, longitude,
-                    filePath, file.name, file.size, file.type
+                    id, workRequestId, description, newLink, geoTag,
+                    file.name, file.size, file.type
                 ];
             } else {
+                // Create geo_tag from latitude and longitude
+                const geoTag = `SRID=4326;POINT(${longitude || 0} ${latitude || 0})`;
+                
                 // Update without new file
                 updateQuery = `
-            UPDATE final_videos 
-                    SET work_request_id = $2, description = $3, latitude = $4, longitude = $5,
-                updated_at = NOW()
+                    UPDATE final_videos 
+                    SET work_request_id = $2, description = $3, geo_tag = ST_GeomFromText($4, 4326),
+                        updated_at = NOW()
                     WHERE id = $1
-            RETURNING *;
-        `; 
-                queryParams = [id, workRequestId, description, latitude, longitude];
+                    RETURNING *;
+                `; 
+                queryParams = [id, workRequestId, description, geoTag];
             }
 
             const { rows: updatedVideo } = await client.query(updateQuery, queryParams);
