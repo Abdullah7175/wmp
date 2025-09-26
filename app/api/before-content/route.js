@@ -262,7 +262,10 @@ export async function POST(request) {
         link: relativeUrl,
         description: descriptions[i] || '',
         latitude: latitudes[i] || '',
-        longitude: longitudes[i] || ''
+        longitude: longitudes[i] || '',
+        fileName: file.name,
+        fileSize: file.size,
+        fileType: file.type
       });
     }
 
@@ -272,8 +275,8 @@ export async function POST(request) {
 
     // Insert each uploaded file
     const insertQuery = `
-      INSERT INTO before_content (work_request_id, description, link, content_type, creator_id, creator_type, creator_name, geo_tag)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, ST_GeomFromText($8, 4326))
+      INSERT INTO before_content (work_request_id, description, link, content_type, creator_id, creator_type, creator_name, geo_tag, file_name, file_size, file_type)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, ST_GeomFromText($8, 4326), $9, $10, $11)
       RETURNING *
     `;
 
@@ -291,7 +294,10 @@ export async function POST(request) {
         session.user.id,
         session.user.userType || 'user',
         creatorName,
-        geoTag
+        geoTag,
+        fileData.fileName || null,
+        fileData.fileSize || null,
+        fileData.fileType || null
       ]);
 
       results.push(result.rows[0]);

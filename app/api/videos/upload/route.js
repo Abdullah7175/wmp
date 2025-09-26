@@ -144,8 +144,8 @@ export async function POST(req) {
                 
                 const geoTag = `SRID=4326;POINT(${longitude} ${latitude})`;
                 const query = `
-                    INSERT INTO videos (work_request_id, description, link, geo_tag, created_at, updated_at, creator_id, creator_type, file_name, file_size, file_type)
-                    VALUES ($1, $2, $3, ST_GeomFromText($4, 4326), NOW(), NOW(), $5, $6, $7, $8, $9)
+                    INSERT INTO videos (work_request_id, description, link, geo_tag, created_at, updated_at, creator_id, creator_type, file_name, file_size, file_type, creator_name)
+                    VALUES ($1, $2, $3, ST_GeomFromText($4, 4326), NOW(), NOW(), $5, $6, $7, $8, $9, $10)
                     RETURNING *;
                 `;
                 const { rows } = await client.query(query, [
@@ -157,7 +157,8 @@ export async function POST(req) {
                     creatorType || null,
                     file.name,
                     file.size,
-                    file.type
+                    file.type,
+                    session.user.name || 'Unknown'
                 ]);
                 uploadedVideos.push(rows[0]);
             }

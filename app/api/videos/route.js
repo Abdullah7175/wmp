@@ -118,6 +118,10 @@
 
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/db';
+import { promises as fs } from 'fs';
+import path from 'path';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/pages/api/auth/[...nextauth]';
 
 export async function GET(request) {
     const { searchParams } = new URL(request.url);
@@ -218,36 +222,108 @@ export async function GET(request) {
 
 export async function POST(req) {
     try {
-        const body = await req.json();
-        const client = await connectToDatabase();
-
-        const query = `
-      INSERT INTO videos (link)
-      VALUES ($1) RETURNING *;
-    `;
-        const { rows: newVideo } = await client.query(query, [
-         body.link,
-        ]);
-
-        // Notify all managers (role=1 or 2)
-        try {
-            const client2 = await connectToDatabase();
-            const managers = await client2.query('SELECT id FROM users WHERE role IN (1,2)');
-            for (const mgr of managers.rows) {
-                await client2.query(
-                    'INSERT INTO notifications (user_id, type, entity_id, message) VALUES ($1, $2, $3, $4)',
-                    [mgr.id, 'video', body.workRequestId, `New video uploaded for request #${body.workRequestId}.`]
-                );
-            }
-            client2.release && client2.release();
-        } catch (notifErr) {
-            // Log but don't fail
-            console.error('Notification insert error:', notifErr);
+        const session = await getServerSession(authOptions);
+        if (!session?.user) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
-        return NextResponse.json({
-            message: 'Video(s) uploaded successfully',
-            videos: newVideo
-        }, { status: 201 });
+
+        const formData = await req.formData();
+        const workRequestId = formData.get('workRequestId');
+        const creatorId = formData.get('creator_id');
+        const creatorType = formData.get('creator_type');
+        const files = formData.getAll('vid');
+        const descriptions = formData.getAll('description');
+        const latitudes = formData.getAll('latitude');
+        const longitudes = formData.getAll('longitude');
+
+        if (!workRequestId || files.length === 0) {
+            return NextResponse.json({ error: 'Work Request ID and at least one video are required' }, { status: 400 });
+        }
+
+        // Validate files
+        for (const file of files) {
+            if (!file || file.size === 0) {
+                return NextResponse.json({ error: 'Invalid video file' }, { status: 400 });
+            }
+        }
+
+        const client = await connectToDatabase();
+        
+        try {
+            // Check if work request exists
+            const workRequest = await client.query(`
+                SELECT id FROM work_requests WHERE id = $1
+            `, [workRequestId]);
+
+            if (!workRequest.rows || workRequest.rows.length === 0) {
+                return NextResponse.json({ error: 'Work request not found' }, { status: 404 });
+            }
+
+            const uploadsDir = path.join(process.cwd(), 'public', 'uploads', 'videos');
+            await fs.mkdir(uploadsDir, { recursive: true });
+            
+            const uploadedVideos = [];
+            
+            // Process each file
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                const description = descriptions[i] || '';
+                const latitude = latitudes[i] || '0';
+                const longitude = longitudes[i] || '0';
+                
+                // Generate unique filename
+                const fileExtension = file.name.split('.').pop();
+                const uniqueName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
+                const filePath = path.join(uploadsDir, uniqueName);
+                
+                // Save file
+                const buffer = await file.arrayBuffer();
+                await fs.writeFile(filePath, Buffer.from(buffer));
+                
+                const geoTag = `SRID=4326;POINT(${longitude} ${latitude})`;
+                const query = `
+                    INSERT INTO videos (work_request_id, description, link, geo_tag, created_at, updated_at, creator_id, creator_type, file_name, file_size, file_type, creator_name)
+                    VALUES ($1, $2, $3, ST_GeomFromText($4, 4326), NOW(), NOW(), $5, $6, $7, $8, $9, $10)
+                    RETURNING *;
+                `;
+                const { rows } = await client.query(query, [
+                    workRequestId,
+                    description,
+                    `/uploads/videos/${uniqueName}`,
+                    geoTag,
+                    creatorId || null,
+                    creatorType || null,
+                    file.name,
+                    file.size,
+                    file.type,
+                    session.user.name || 'Unknown'
+                ]);
+                uploadedVideos.push(rows[0]);
+            }
+
+            // Notify all managers (role=1 or 2)
+            try {
+                const managers = await client.query('SELECT id FROM users WHERE role IN (1,2)');
+                for (const mgr of managers.rows) {
+                    await client.query(
+                        'INSERT INTO notifications (user_id, type, entity_id, message) VALUES ($1, $2, $3, $4)',
+                        [mgr.id, 'video', workRequestId, `New video uploaded for request #${workRequestId}.`]
+                    );
+                }
+            } catch (notifErr) {
+                // Log but don't fail
+                console.error('Notification insert error:', notifErr);
+            }
+            
+            return NextResponse.json({
+                message: 'Video(s) uploaded successfully',
+                videos: uploadedVideos,
+                count: uploadedVideos.length
+            }, { status: 201 });
+            
+        } finally {
+            client.release && client.release();
+        }
     } catch (error) {
         console.error('Error saving video:', error);
         return NextResponse.json({ error: 'Error saving video' }, { status: 500 });
