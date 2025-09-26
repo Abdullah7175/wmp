@@ -60,6 +60,104 @@ export default function FilesPage() {
 
     const ROLE = { XEN: 18, SE: 19, CE: 25, COO: 26, CEO: 24, PC: 28, IAO_II: 27, BUDGET: 31, ADLFA: 30, FINANCE: 29 };
 
+    const filterFilesByDepartment = (files, userProfile) => {
+        if (!userProfile) return files;
+        
+        const userRole = userProfile.efiling_role?.code;
+        const userDepartment = userProfile.department_id;
+        
+        // Water department users can only see water files
+        if ([6, 7, 8, 9].includes(userDepartment)) {
+            return files.filter(file => ['WB', 'WTM', 'WD', 'WE_EM'].includes(file.file_type?.code));
+        }
+        
+        // Sewerage department users can only see sewerage files
+        if ([10, 19].includes(userDepartment)) {
+            return files.filter(file => ['SEP', 'SEW_EM'].includes(file.file_type?.code));
+        }
+        
+        // Admin users can see all files
+        if (userRole === 'SYS_ADMIN') {
+            return files;
+        }
+        
+        return files;
+    };
+
+    const getRoleDisplayName = (roleCode) => {
+        const roleMap = {
+            'WAT_XEN_MMB': 'XEN MIR BAHAR',
+            'WAT_XEN_SHAH': 'XEN SHAHFAISAL',
+            'WAT_XEN_KOR': 'XEN KORANGI',
+            'WAT_XEN_NAZ': 'XEN NAZIMABAD',
+            'WAT_XEN_LIA': 'XEN LIAQATABAD',
+            'WAT_XEN_JIN': 'XEN JINNAH',
+            'WAT_XEN_NN': 'XEN NORTH NAZIMABAD',
+            'WAT_XEN_MAL': 'XEN MALIR',
+            'WAT_XEN_CHE': 'XEN CHANESAR',
+            'WAT_XEN_GULS': 'XEN GULSHANIQBAL',
+            'WAT_XEN_SAD': 'XEN SADDAR',
+            'WAT_XEN_MAN': 'XEN MANGOPIR',
+            'WAT_XEN_LAN': 'XEN LANDHI',
+            'WAT_XEN_MOM': 'XEN MOMINABAD',
+            'WAT_XEN_BAL': 'XEN BALDIA',
+            'WAT_XEN_NK': 'XEN NEWKARACHI',
+            'WAT_XEN_MOD': 'XEN MODEL',
+            'WAT_XEN_LIAR': 'XEN LIARI',
+            'WAT_XEN_KEA': 'XEN KEAMARI',
+            'WAT_XEN_GAD': 'XEN GADAP',
+            'WAT_XEN_CLI': 'XEN CLIFTON',
+            'WAT_XEN_IH': 'XEN IBRAHIM HYDERI',
+            'WAT_XEN_ORA': 'XEN ORANGI',
+            'WAT_XEN_SAF': 'XEN SAFOORA',
+            'WAT_XEN_SOG': 'XEN SOHRAB GOTH',
+            'SEW_XEN_MMB': 'SEW XEN MIR BAHAR',
+            'SEW_XEN_SHAH': 'SEW XEN SHAHFAISAL',
+            'SEW_XEN_KOR': 'SEW XEN KORANGI',
+            'SEW_XEN_NAZ': 'SEW XEN NAZIMABAD',
+            'SEW_XEN_LIA': 'SEW XEN LIAQATABAD',
+            'SEW_XEN_JIN': 'SEW XEN JINNAH',
+            'SEW_XEN_NN': 'SEW XEN NORTH NAZIMABAD',
+            'SEW_XEN_MAL': 'SEW XEN MALIR',
+            'SEW_XEN_CHE': 'SEW XEN CHANESAR',
+            'SEW_XEN_GULS': 'SEW XEN GULSHANIQBAL',
+            'SEW_XEN_SAD': 'SEW XEN SADDAR',
+            'SEW_XEN_MAN': 'SEW XEN MANGOPIR',
+            'SEW_XEN_LAN': 'SEW XEN LANDHI',
+            'SEW_XEN_MOM': 'SEW XEN MOMINABAD',
+            'SEW_XEN_BAL': 'SEW XEN BALDIA',
+            'SEW_XEN_NK': 'SEW XEN NEWKARACHI',
+            'SEW_XEN_MOD': 'SEW XEN MODEL',
+            'SEW_XEN_LIAR': 'SEW XEN LIARI',
+            'SEW_XEN_KEA': 'SEW XEN KEAMARI',
+            'SEW_XEN_GAD': 'SEW XEN GADAP',
+            'SEW_XEN_CLI': 'SEW XEN CLIFTON',
+            'SEW_XEN_IH': 'SEW XEN IBRAHIM HYDERI',
+            'SEW_XEN_ORA': 'SEW XEN ORANGI',
+            'SEW_XEN_SAF': 'SEW XEN SAFOORA',
+            'SEW_XEN_SOG': 'SEW XEN SOHRAB GOTH',
+            'SE_CEN': 'SE CENTRAL',
+            'SE_EAST': 'SE EAST',
+            'SE_WEST': 'SE WEST',
+            'SE_SOUTH': 'SE SOUTH',
+            'SE_KOR': 'SE KORANGI',
+            'SE_MAL': 'SE MALIR',
+            'SE_KEA': 'SE KEAMARI',
+            'CE_WAT': 'CE WATER',
+            'CE_SEW': 'CE SEWERAGE',
+            'COO': 'COO',
+            'CEO': 'CEO',
+            'PC': 'PC',
+            'IAO_II': 'IAO II',
+            'BUDGET': 'BUDGET',
+            'ADLFA': 'ADLFA',
+            'FINANCE': 'FINANCE',
+            'CON_': 'CONSULTANT'
+        };
+        
+        return roleMap[roleCode] || roleCode;
+    };
+
     useEffect(() => {
         if (session?.user?.id) {
             fetchProfile();
@@ -96,10 +194,12 @@ export default function FilesPage() {
             // First, get the efiling_users.id for this user
             const userMappingRes = await fetch(`/api/efiling/users/profile?userId=${session.user.id}`);
             let efilingUserId = session.user.id; // fallback
+            let userProfile = null;
             
             if (userMappingRes.ok) {
                 const userMapping = await userMappingRes.json();
                 efilingUserId = userMapping.efiling_user_id || session.user.id;
+                userProfile = userMapping;
                 console.log('Files page - Mapped user ID:', session.user.id, 'to efiling user ID:', efilingUserId);
             }
             
@@ -112,6 +212,10 @@ export default function FilesPage() {
             const myFiles = myFilesRes.ok ? await myFilesRes.json() : { files: [] };
             const assignedFiles = assignedFilesRes.ok ? await assignedFilesRes.json() : { files: [] };
             
+            // Filter files based on user's department and role
+            const filteredMyFiles = filterFilesByDepartment(myFiles.files || [], userProfile);
+            const filteredAssignedFiles = filterFilesByDepartment(assignedFiles.files || [], userProfile);
+            
             const isAdmin = session?.user?.role === 1;
             const enrich = (arr) => (arr || []).map(f => ({
                 ...f,
@@ -119,11 +223,11 @@ export default function FilesPage() {
                 is_creator: f.created_by === efilingUserId
             }));
 
-            setMyFiles(enrich(myFiles.files));
-            setAssignedToMe(enrich(assignedFiles.files));
+            setMyFiles(enrich(filteredMyFiles));
+            setAssignedToMe(enrich(filteredAssignedFiles));
             
             // Combine and deduplicate files for unified filtering if needed
-            const allFiles = [...enrich(myFiles.files), ...enrich(assignedFiles.files)];
+            const allFiles = [...enrich(filteredMyFiles), ...enrich(filteredAssignedFiles)];
             const uniqueFiles = allFiles.filter((file, index, self) => 
                 index === self.findIndex(f => f.id === file.id)
             );
@@ -442,9 +546,9 @@ function renderFilesTable(rows, getStatusBadge, formatTimeRemaining) {
                                                 { (file.current_assignee_user_name || file.assigned_to_name) ? (
                                                     <>
                                                         {file.assigned_to_role_name && (
-                                                            <Badge variant="secondary">{file.assigned_to_role_name}</Badge>
+                                                            <Badge variant="secondary">{getRoleDisplayName(file.assigned_to_role_name)}</Badge>
                                                         )}
-                                                        <span>{file.current_assignee_user_name || file.assigned_to_name}</span>
+                                                        <span>{getRoleDisplayName(file.assigned_to_role_name) || file.current_assignee_user_name || file.assigned_to_name}</span>
                                                     </>
                                                 ) : (
                                                     <span className="text-gray-500">Unassigned</span>
@@ -452,7 +556,7 @@ function renderFilesTable(rows, getStatusBadge, formatTimeRemaining) {
                                                 </div>
                                             </TableCell>
                                         <TableCell>
-                                            <span className="text-sm">{file.last_signed_by_name || '-'}</span>
+                                            <span className="text-sm">{getRoleDisplayName(file.last_signed_by_role_name) || file.last_signed_by_name || '-'}</span>
                                             </TableCell>
                                             <TableCell>
                                                 {getStatusBadge(file.status_code)}

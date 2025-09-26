@@ -59,6 +59,30 @@ export default function CreateNewFile() {
     const [selectedWorkflow, setSelectedWorkflow] = useState(null);
     const [workRequests, setWorkRequests] = useState([]);
 
+    const filterFileTypesByDepartment = (fileTypes, userProfile) => {
+        if (!userProfile) return fileTypes;
+        
+        const userRole = userProfile.efiling_role?.code;
+        const userDepartment = userProfile.department_id;
+        
+        // Water department users can only create water files
+        if ([6, 7, 8, 9].includes(userDepartment)) {
+            return fileTypes.filter(type => ['WB', 'WTM', 'WD', 'WE_EM'].includes(type.code));
+        }
+        
+        // Sewerage department users can only create sewerage files
+        if ([10, 19].includes(userDepartment)) {
+            return fileTypes.filter(type => ['SEP', 'SEW_EM'].includes(type.code));
+        }
+        
+        // Admin users can create all files
+        if (userRole === 'SYS_ADMIN') {
+            return fileTypes;
+        }
+        
+        return fileTypes;
+    };
+
     useEffect(() => {
         if (!session?.user?.id) return;
         fetchInitialData();
@@ -66,6 +90,17 @@ export default function CreateNewFile() {
 
     const fetchInitialData = async () => {
         try {
+            // First get user profile to filter data based on department
+            let userProfile = null;
+            try {
+                const profileRes = await fetch(`/api/efiling/users/profile?userId=${session.user.id}`);
+                if (profileRes.ok) {
+                    userProfile = await profileRes.json();
+                }
+            } catch (error) {
+                console.error('Error fetching user profile:', error);
+            }
+
             const [deptRes, catRes, typeRes, workRes] = await Promise.all([
                 fetch('/api/efiling/departments'),
                 fetch('/api/efiling/categories'),
@@ -84,7 +119,10 @@ export default function CreateNewFile() {
             if (typeRes.ok) {
                 const typeData = await typeRes.json();
                 const list = Array.isArray(typeData) ? typeData : (Array.isArray(typeData.fileTypes) ? typeData.fileTypes : []);
-                setFileTypes(list);
+                
+                // Filter file types based on user's department and role
+                const filteredTypes = filterFileTypesByDepartment(list, userProfile);
+                setFileTypes(filteredTypes);
             }
             if (workRes.ok) {
                 const workData = await workRes.json();
