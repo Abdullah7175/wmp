@@ -298,7 +298,7 @@ export default function AddFinalVideoPage() {
                 Click to select video files
               </button>
               <p className="text-sm text-gray-500 mt-2">
-                MP4, AVI, MOV, or other video formats (multiple files supported)
+                MP4, M4V, AVI, MOV, MKV, WebM, or other video formats (multiple files supported)
               </p>
             </div>
             

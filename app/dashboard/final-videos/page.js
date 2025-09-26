@@ -207,7 +207,7 @@ export default function FinalVideosPage() {
                     </button>
                   </Link>
                   <a 
-                    href={video.link} 
+                    href={`/api/files/serve?path=${encodeURIComponent(video.link)}`} 
                     target="_blank" 
                     rel="noopener noreferrer"
                     className="flex-1"
@@ -289,7 +289,7 @@ export default function FinalVideosPage() {
             </button>
             <h2 className="text-xl font-bold mb-4">View Final Video</h2>
             <video
-              src={selectedVideo.link}
+              src={`/api/files/serve?path=${encodeURIComponent(selectedVideo.link)}`}
               controls
               className="w-full rounded-lg border"
               style={{ maxHeight: 500 }}
