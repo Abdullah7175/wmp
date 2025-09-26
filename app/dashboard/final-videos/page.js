@@ -207,7 +207,7 @@ export default function FinalVideosPage() {
                     </button>
                   </Link>
                   <a 
-                    href={`/api/files/serve?path=${encodeURIComponent(video.link)}`} 
+                    href={`/api/files/serve?path=${encodeURIComponent(video.link)}&download=true`} 
                     target="_blank" 
                     rel="noopener noreferrer"
                     className="flex-1"

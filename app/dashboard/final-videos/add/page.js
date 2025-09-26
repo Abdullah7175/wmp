@@ -188,7 +188,7 @@ export default function AddFinalVideoPage() {
     <div className="container mx-auto px-4 py-10">
       <div className="mb-8">
         <div className="flex items-center gap-4 mb-4">
-          <Link href="/smagent/final-videos" className="flex items-center gap-2 text-blue-600 hover:text-blue-800">
+          <Link href="/dashboard/final-videos" className="flex items-center gap-2 text-blue-600 hover:text-blue-800">
             <ArrowLeft className="w-4 h-4" />
             Back to Final Videos
           </Link>

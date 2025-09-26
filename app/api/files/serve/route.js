@@ -44,7 +44,7 @@ export async function GET(request) {
         let contentType = 'application/octet-stream';
         const contentTypes = {
             '.mp4': 'video/mp4',
-            '.m4v': 'video/m4v',
+            '.m4v': 'video/mp4', // Use mp4 MIME type for better browser compatibility
             '.mov': 'video/quicktime',
             '.avi': 'video/avi',
             '.mkv': 'video/mkv',
@@ -67,7 +67,20 @@ export async function GET(request) {
         const headers = new Headers();
         headers.set('Content-Type', contentType);
         headers.set('Content-Length', fileSize.toString());
-        headers.set('Content-Disposition', `attachment; filename="${fileName}"`);
+        
+        // Check if this is a video streaming request (no download parameter)
+        const download = searchParams.get('download');
+        if (download === 'true' || download === '1') {
+            // Force download
+            headers.set('Content-Disposition', `attachment; filename="${fileName}"`);
+        } else if (contentType.startsWith('video/')) {
+            // For video streaming, use inline disposition
+            headers.set('Content-Disposition', `inline; filename="${fileName}"`);
+        } else {
+            // Default to attachment for other files
+            headers.set('Content-Disposition', `attachment; filename="${fileName}"`);
+        }
+        
         headers.set('Cache-Control', 'public, max-age=31536000'); // Cache for 1 year
         
         // For video files, also set range headers for streaming
