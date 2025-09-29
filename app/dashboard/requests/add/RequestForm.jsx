@@ -584,13 +584,15 @@ export const RequestForm = ({ isPublic = false, initialValues, onSubmit, isEditM
                     >
                         <option value="">Select Nature of Work...</option>
                         <option value="repairing">Repairing/Replacement</option>
-                        <option value="new installation">New Installation</option>
-                        <option value="new installation">Leakages</option>
-                        <option value="new installation">Sunk Down</option>
-                        <option value="new installation">Rewinding</option>
-                        <option value="new installation">Provide n Fixing</option>
-                        <option value="new installation">Desilting</option>
+                        <option value="New installation">New Installation</option>
+                        <option value="Leakages">Leakages</option>
+                        <option value="Sunk Down">Sunk Down</option>
+                        <option value="Rewinding">Rewinding</option>
+                        <option value="Provide n Fixing">Provide n Fixing</option>
+                        <option value="Desilting">Desilting</option>
                         <option value="other">Emergency</option>
+
+                        
                     </select>
                     {formik.errors.nature_of_work && formik.touched.nature_of_work && (
                         <p className="mt-1 text-sm text-red-600">{formik.errors.nature_of_work}</p>
