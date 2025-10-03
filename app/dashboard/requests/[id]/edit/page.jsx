@@ -32,7 +32,7 @@ const EditRequestPage = () => {
                     description: "Failed to load request data",
                     variant: "destructive"
                 });
-                router.push('/dashboard/requests');
+                router.back();
             } finally {
                 setLoading(false);
             }
@@ -94,7 +94,7 @@ const EditRequestPage = () => {
                     title: "Request updated successfully",
                     variant: 'success',
                 });
-                router.push('/dashboard/requests');
+                router.back();
             } else {
                 throw new Error('Failed to update request');
             }
@@ -134,7 +134,7 @@ const EditRequestPage = () => {
                     </div>
                     <Button 
                         variant="outline" 
-                        onClick={() => router.push('/dashboard/requests')}
+                        onClick={() => router.back()}
                         className="mt-4"
                     >
                         Back to Requests
@@ -155,7 +155,7 @@ const EditRequestPage = () => {
                 </div>
                 <Button 
                     variant="outline" 
-                    onClick={() => router.push('/dashboard/requests')}
+                    onClick={() => router.back()}
                 >
                     Back to Requests
                 </Button>

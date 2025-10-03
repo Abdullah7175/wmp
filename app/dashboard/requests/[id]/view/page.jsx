@@ -98,7 +98,7 @@ const ViewRequestPage = () => {
                 <div className="text-center">
                     <h1 className="text-2xl font-bold text-red-600 mb-4">Request Not Found</h1>
                     <p className="text-gray-600 mb-4">The requested work request could not be found.</p>
-                    <Button onClick={() => router.push('/dashboard/requests')}>
+                    <Button onClick={() => router.back()}>
                         Back to Requests
                     </Button>
                 </div>
@@ -149,7 +149,7 @@ const ViewRequestPage = () => {
                     </Button>
                     <Button 
                         variant="outline" 
-                        onClick={() => router.push('/dashboard/requests')}
+                        onClick={() => router.back()}
                     >
                         Back to List
                     </Button>
@@ -546,7 +546,7 @@ const ViewRequestPage = () => {
                 )}
                 <Button 
                     variant="outline" 
-                    onClick={() => router.push('/dashboard/requests')}
+                    onClick={() => router.back()}
                 >
                     Back to Requests
                 </Button>

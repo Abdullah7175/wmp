@@ -102,7 +102,7 @@ const RequestDetailPage = () => {
                     title: "Request updated successfully",
                     variant: 'success',
                 });
-                router.push('/dashboard/requests');
+                router.back();
             } else {
                 toast({
                     title: "Failed to update request",
@@ -243,7 +243,7 @@ const RequestDetailPage = () => {
                     <div className="mt-6 flex justify-end space-x-4">
                         <Button 
                             variant="outline" 
-                            onClick={() => router.push('/dashboard/requests')}
+                            onClick={() => router.back()}
                         >
                             Back to List
                         </Button>

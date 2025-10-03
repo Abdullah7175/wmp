@@ -14,6 +14,8 @@ export async function GET(request) {
     const filter = searchParams.get('filter') || '';
     const dateFrom = searchParams.get('date_from');
     const dateTo = searchParams.get('date_to');
+    const sortBy = searchParams.get('sortBy');
+    const sortOrder = searchParams.get('sortOrder') || 'asc';
     const includeApprovalStatus = searchParams.get('include_approval_status') === 'true';
     if (id && !Number.isInteger(Number(id))) {
         return NextResponse.json(
@@ -251,7 +253,26 @@ export async function GET(request) {
             if (dataWhereClauses.length > 0) {
                 dataQuery += ' WHERE ' + dataWhereClauses.join(' AND ');
             }
-            dataQuery += ` ORDER BY wr.request_date DESC`;
+            
+            // Handle sorting
+            let orderBy = 'wr.request_date DESC'; // default
+            if (sortBy) {
+                const allowedSortFields = {
+                    'id': 'wr.id',
+                    'request_date': 'wr.request_date',
+                    'address': 'wr.address',
+                    'town_name': 't.town',
+                    'complaint_type': 'ct.type_name',
+                    'status_name': 's.name'
+                };
+                
+                if (allowedSortFields[sortBy]) {
+                    const direction = sortOrder.toLowerCase() === 'desc' ? 'DESC' : 'ASC';
+                    orderBy = `${allowedSortFields[sortBy]} ${direction}`;
+                }
+            }
+            
+            dataQuery += ` ORDER BY ${orderBy}`;
             if (limit > 0) {
                 dataQuery += ` LIMIT $${dataParamIdx} OFFSET $${dataParamIdx + 1}`;
                 dataParams.push(limit, offset);

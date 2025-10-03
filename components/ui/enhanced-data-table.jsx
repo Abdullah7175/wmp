@@ -21,7 +21,16 @@ import {
   TableRow,
 } from "@/components/ui/table"
 
-export function EnhancedDataTable({ columns, data, meta, pageSize = 5 }) {
+export function EnhancedDataTable({ 
+  columns, 
+  data, 
+  meta, 
+  pageSize = 5, 
+  totalItems,
+  initialState,
+  onSortingChange,
+  onPaginationChange 
+}) {
   const router = useRouter()
   const table = useReactTable({
     data,
@@ -31,11 +40,17 @@ export function EnhancedDataTable({ columns, data, meta, pageSize = 5 }) {
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     meta: meta,
-    initialState: {
-      pagination: {
+    manualPagination: totalItems !== undefined,
+    pageCount: totalItems !== undefined ? Math.ceil(totalItems / pageSize) : undefined,
+    state: {
+      pagination: initialState?.pagination || {
+        pageIndex: 0,
         pageSize: pageSize,
       },
+      sorting: initialState?.sorting || [],
     },
+    onSortingChange: onSortingChange,
+    onPaginationChange: onPaginationChange,
   })
 
   return (
@@ -96,9 +111,9 @@ export function EnhancedDataTable({ columns, data, meta, pageSize = 5 }) {
           Showing {table.getState().pagination.pageIndex * table.getState().pagination.pageSize + 1} to{" "}
           {Math.min(
             (table.getState().pagination.pageIndex + 1) * table.getState().pagination.pageSize,
-            table.getFilteredRowModel().rows.length
+            totalItems || table.getFilteredRowModel().rows.length
           )}{" "}
-          of {table.getFilteredRowModel().rows.length} entries
+          of {totalItems || table.getFilteredRowModel().rows.length} entries
         </div>
         <div className="flex items-center space-x-2">
           <Button

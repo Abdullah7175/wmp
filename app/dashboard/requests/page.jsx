@@ -1,21 +1,67 @@
 "use client"
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, Suspense } from 'react';
 import { Button } from '@/components/ui/button';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { EnhancedDataTable } from '@/components/ui/enhanced-data-table';
 import { columns } from './columns';
 import { Input } from '@/components/ui/input';
 import { useSession } from 'next-auth/react';
 
-const RequestsPage = () => {
+const RequestsPageContent = () => {
     const [requests, setRequests] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const [totalItems, setTotalItems] = useState(0);
     const router = useRouter();
+    const searchParams = useSearchParams();
     const { data: session } = useSession();
-    const [search, setSearch] = useState("");
-    const [dateFrom, setDateFrom] = useState("");
-    const [dateTo, setDateTo] = useState("");
+    
+    // Initialize state from URL parameters
+    const [search, setSearch] = useState(searchParams.get('search') || "");
+    const [dateFrom, setDateFrom] = useState(searchParams.get('dateFrom') || "");
+    const [dateTo, setDateTo] = useState(searchParams.get('dateTo') || "");
+    const [currentPage, setCurrentPage] = useState(() => {
+        const pageParam = searchParams.get('page');
+        return pageParam ? parseInt(pageParam) - 1 : 0; // Convert from 1-based URL to 0-based state
+    });
+    const [sorting, setSorting] = useState(() => {
+        const sortParam = searchParams.get('sort');
+        if (sortParam) {
+            try {
+                return JSON.parse(decodeURIComponent(sortParam));
+            } catch {
+                return [];
+            }
+        }
+        return [];
+    });
+
+    // Function to update URL parameters
+    const updateURL = useCallback((newParams) => {
+        const params = new URLSearchParams(searchParams);
+        
+        Object.entries(newParams).forEach(([key, value]) => {
+            if (value === null || value === undefined || value === '') {
+                params.delete(key);
+            } else {
+                params.set(key, value);
+            }
+        });
+        
+        const newURL = `${window.location.pathname}?${params.toString()}`;
+        router.replace(newURL, { scroll: false });
+    }, [searchParams, router]);
+
+    // Update URL when filters change
+    useEffect(() => {
+        updateURL({
+            search,
+            dateFrom,
+            dateTo,
+            page: currentPage > 0 ? (currentPage + 1).toString() : null, // Convert from 0-based state to 1-based URL
+            sort: sorting.length > 0 ? encodeURIComponent(JSON.stringify(sorting)) : null
+        });
+    }, [search, dateFrom, dateTo, currentPage, sorting, updateURL]);
 
     useEffect(() => {
         const fetchRequests = async () => {
@@ -25,6 +71,18 @@ const RequestsPage = () => {
                 if (search) params.push(`filter=${encodeURIComponent(search)}`);
                 if (dateFrom) params.push(`date_from=${dateFrom}`);
                 if (dateTo) params.push(`date_to=${dateTo}`);
+                
+                // Add pagination
+                params.push(`page=${currentPage + 1}`); // API uses 1-based pagination (currentPage is 0-based)
+                params.push(`limit=5`);
+                
+                // Add sorting
+                if (sorting && sorting.length > 0) {
+                    const sort = sorting[0];
+                    params.push(`sortBy=${sort.id}`);
+                    params.push(`sortOrder=${sort.desc ? 'desc' : 'asc'}`);
+                }
+                
                 if (params.length) url += '?' + params.join('&');
                 const res = await fetch(url);
                 
@@ -34,6 +92,12 @@ const RequestsPage = () => {
                 
                 const data = await res.json();
                 setRequests(data.data || data || []);
+                
+                // Update pagination info if available
+                if (data.total !== undefined) {
+                    // Store total for pagination
+                    setTotalItems(data.total);
+                }
             } catch (error) {
                 console.error('Error fetching requests:', error);
                 setError(error.message);
@@ -43,7 +107,7 @@ const RequestsPage = () => {
         };
 
         fetchRequests();
-    }, [search, dateFrom, dateTo]);
+    }, [search, dateFrom, dateTo, currentPage, sorting]);
 
     const handleEdit = (requestId) => {
         router.push(`/dashboard/requests/${requestId}/edit`);
@@ -99,7 +163,7 @@ const RequestsPage = () => {
             </div>
             <div className="flex flex-wrap gap-4 mb-4 items-end">
                 <Input
-                    placeholder="Search by ID, address, town, type, status, creator..."
+                    placeholder="Search by ID, address, town, department, status, creator..."
                     value={search}
                     onChange={e => setSearch(e.target.value)}
                     className="w-64"
@@ -118,6 +182,8 @@ const RequestsPage = () => {
                         setSearch("");
                         setDateFrom("");
                         setDateTo("");
+                        setCurrentPage(0);
+                        setSorting([]);
                     }}
                     className="h-10"
                 >
@@ -136,9 +202,41 @@ const RequestsPage = () => {
                         userRole: session?.user?.role
                     }}
                     pageSize={5}
+                    totalItems={totalItems}
+                    initialState={{
+                        pagination: {
+                            pageIndex: currentPage,
+                            pageSize: 5,
+                        },
+                        sorting: sorting,
+                    }}
+                    onSortingChange={setSorting}
+                    onPaginationChange={(updater) => {
+                        if (typeof updater === 'function') {
+                            const newState = updater({ pageIndex: currentPage, pageSize: 5 });
+                            setCurrentPage(newState.pageIndex);
+                        } else {
+                            setCurrentPage(updater.pageIndex);
+                        }
+                    }}
                 />
             </div>
         </div>
+    );
+};
+
+const RequestsPage = () => {
+    return (
+        <Suspense fallback={
+            <div className="container mx-auto px-4 py-10">
+                <div className="text-center">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                    <p className="mt-2 text-gray-600">Loading...</p>
+                </div>
+            </div>
+        }>
+            <RequestsPageContent />
+        </Suspense>
     );
 };
 
