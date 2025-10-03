@@ -298,8 +298,12 @@ export async function GET(request) {
         
         return NextResponse.json({ error: 'Failed to fetch data' }, { status: 500 });
     } finally {
-        if (client && client.release) {
-            client.release();
+        if (client && typeof client.release === 'function') {
+            try {
+                client.release();
+            } catch (releaseError) {
+                console.error('Error releasing database client:', releaseError);
+            }
         }
     }
 }
@@ -570,8 +574,12 @@ export async function POST(req) {
         
         return NextResponse.json({ error: 'Failed to submit work request', details: error.message }, { status: 500 });
     } finally {
-        if (client && client.release) {
-            client.release();
+        if (client && typeof client.release === 'function') {
+            try {
+                client.release();
+            } catch (releaseError) {
+                console.error('Error releasing database client:', releaseError);
+            }
         }
     }
 }
@@ -775,8 +783,12 @@ export async function PUT(req) {
         
         return NextResponse.json({ error: 'Failed to update work request' }, { status: 500 });
     } finally {
-        if (client && client.release) {
-            client.release();
+        if (client && typeof client.release === 'function') {
+            try {
+                client.release();
+            } catch (releaseError) {
+                console.error('Error releasing database client:', releaseError);
+            }
         }
     }
 }
