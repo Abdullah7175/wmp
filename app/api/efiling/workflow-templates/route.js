@@ -523,6 +523,7 @@ export async function DELETE(request) {
 
         return NextResponse.json({ success: true, message: 'Workflow template deleted' });
     } catch (error) {
+        try { if (client) await client.query('ROLLBACK'); } catch (e) {}
         console.error('Error deleting workflow template:', error);
         return NextResponse.json({ error: 'Failed to delete workflow template' }, { status: 500 });
     } finally {
