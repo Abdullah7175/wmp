@@ -24,6 +24,7 @@ export default function FileDetail() {
     const [comments, setComments] = useState([]);
     const [newComment, setNewComment] = useState("");
     const [postingComment, setPostingComment] = useState(false);
+    const [beforeContent, setBeforeContent] = useState([]);
 
     const [showMarkModal, setShowMarkModal] = useState(false);
     const [markUsers, setMarkUsers] = useState([]);
@@ -38,6 +39,12 @@ export default function FileDetail() {
         fetchTimeline();
         fetchComments();
     }, [session?.user?.id, params.id]);
+
+    useEffect(() => {
+        if (file?.work_request_id) {
+            fetchBeforeContent();
+        }
+    }, [file?.work_request_id]);
 
     const fetchFile = async () => {
         setLoading(true);
@@ -101,6 +108,18 @@ export default function FileDetail() {
             }
         } catch (e) {
             console.error('Comments load error', e);
+        }
+    };
+
+    const fetchBeforeContent = async () => {
+        try {
+            const res = await fetch(`/api/before-content?workRequestId=${file.work_request_id}`);
+            if (res.ok) {
+                const data = await res.json();
+                setBeforeContent(Array.isArray(data) ? data : []);
+            }
+        } catch (e) {
+            console.error('Before content load error', e);
         }
     };
 
@@ -175,6 +194,25 @@ export default function FileDetail() {
 
         return (
             <div key={page.id || page.pageNumber} className="bg-white shadow border mx-auto" style={{ width: '794px', minHeight: '1123px', padding: '40px' }}>
+                {/* Fixed KWSC Header */}
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+                    <div className="flex items-center justify-center space-x-4">
+                        <img 
+                            src="/logo.png" 
+                            alt="KWSC Logo" 
+                            className="h-16 w-auto"
+                        />
+                        <div className="text-center">
+                            <h1 className="text-2xl font-bold text-blue-900">
+                                Karachi Water & Sewerage Corporation
+                            </h1>
+                            <p className="text-sm text-blue-700 mt-1">
+                                Government of Sindh
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                
                 {header && (<div className="mb-4 text-center text-xs text-gray-600" dangerouslySetInnerHTML={{ __html: header }} />)}
                 {title && (<h2 className="text-xl font-bold text-center mb-2" dangerouslySetInnerHTML={{ __html: title }} />)}
                 {subject && (
@@ -313,6 +351,13 @@ export default function FileDetail() {
                                     <div className="mt-1"><Badge className={getConfidentialityColor(file.confidentiality_level)}>{file.confidentiality_level}</Badge></div>
                                 </div>
                             </div>
+                            {file.work_request_id && (
+                                <div>
+                                    <label className="text-sm font-medium text-gray-600">Video Archiving ID</label>
+                                    <p className="text-lg font-semibold text-blue-600">#{file.work_request_id}</p>
+                                    <p className="text-sm text-gray-500">Linked to work request for video archiving</p>
+                                </div>
+                            )}
                             {file.remarks && (
                                 <div>
                                     <label className="text-sm font-medium text-gray-600">Remarks</label>
@@ -393,6 +438,47 @@ export default function FileDetail() {
                                             )}
                                             <div className="font-medium">{s.user_name} <span className="text-gray-500">({s.user_role})</span></div>
                                             <div className="text-gray-500 text-xs">{formatDate(s.timestamp)}</div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </CardContent>
+                        </Card>
+                    )}
+
+                    {beforeContent.length > 0 && (
+                        <Card>
+                            <CardHeader>
+                                <CardTitle className="text-lg">Before Content ({beforeContent.length})</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="space-y-3">
+                                    {beforeContent.map((item) => (
+                                        <div key={item.id} className="border rounded-lg p-3">
+                                            <div className="relative">
+                                                {item.content_type === 'video' ? (
+                                                    <video
+                                                        src={item.link}
+                                                        className="w-full h-32 object-cover rounded"
+                                                        controls
+                                                    />
+                                                ) : (
+                                                    <img
+                                                        src={item.link}
+                                                        alt={item.description || 'Before content'}
+                                                        className="w-full h-32 object-cover rounded"
+                                                    />
+                                                )}
+                                                <div className="absolute top-2 left-2">
+                                                    <Badge variant="secondary" className="text-xs">
+                                                        {item.content_type === 'video' ? 'Video' : 'Image'}
+                                                    </Badge>
+                                                </div>
+                                            </div>
+                                            {item.description && (
+                                                <p className="text-xs text-gray-500 mt-2 line-clamp-2">
+                                                    {item.description}
+                                                </p>
+                                            )}
                                         </div>
                                     ))}
                                 </div>
