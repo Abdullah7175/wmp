@@ -9,6 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Bell, FileText, User, Clock, Check, Archive } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { logEfilingUserAction, EFILING_ACTIONS } from '@/lib/efilingUserActionLogger';
+import { Pagination } from '@/components/ui/pagination';
 
 export default function Notifications() {
     const { data: session } = useSession();
@@ -16,6 +17,10 @@ export default function Notifications() {
     const [notifications, setNotifications] = useState([]);
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState('all'); // all, unread, dismissed
+    
+    // Pagination state
+    const [currentPage, setCurrentPage] = useState(1);
+    const [itemsPerPage, setItemsPerPage] = useState(5);
 
     useEffect(() => {
         if (session?.user?.id) {
@@ -138,6 +143,25 @@ export default function Notifications() {
         return !notification.is_dismissed;
     });
 
+    // Calculate pagination
+    const totalPages = Math.ceil(filteredNotifications.length / itemsPerPage);
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    const paginatedNotifications = filteredNotifications.slice(startIndex, endIndex);
+
+    const handlePageChange = (page) => {
+        setCurrentPage(page);
+    };
+
+    const handleItemsPerPageChange = (newItemsPerPage) => {
+        setItemsPerPage(newItemsPerPage);
+        setCurrentPage(1);
+    };
+
+    useEffect(() => {
+        setCurrentPage(1); // Reset to first page when filter changes
+    }, [filter]);
+
     if (loading) {
         return (
             <div className="flex items-center justify-center h-96">
@@ -229,7 +253,7 @@ export default function Notifications() {
                         </div>
                     ) : (
                         <div className="space-y-4">
-                            {filteredNotifications.map((notification) => (
+                            {paginatedNotifications.map((notification) => (
                                 <div
                                     key={notification.id}
                                     className={`p-4 border rounded-lg ${
@@ -285,6 +309,20 @@ export default function Notifications() {
                                     </div>
                                 </div>
                             ))}
+                        </div>
+                    )}
+                    
+                    {/* Pagination */}
+                    {filteredNotifications.length > 0 && (
+                        <div className="mt-4">
+                            <Pagination
+                                currentPage={currentPage}
+                                totalPages={totalPages}
+                                totalItems={filteredNotifications.length}
+                                itemsPerPage={itemsPerPage}
+                                onPageChange={handlePageChange}
+                                onItemsPerPageChange={handleItemsPerPageChange}
+                            />
                         </div>
                     )}
                 </CardContent>

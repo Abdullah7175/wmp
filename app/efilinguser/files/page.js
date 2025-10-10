@@ -35,6 +35,7 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Pagination } from "@/components/ui/pagination";
 
 export default function FilesPage() {
     const { data: session } = useSession();
@@ -51,6 +52,10 @@ export default function FilesPage() {
     const [profile, setProfile] = useState(null);
     const [myFiles, setMyFiles] = useState([]);
     const [assignedToMe, setAssignedToMe] = useState([]);
+    
+    // Pagination state
+    const [currentPage, setCurrentPage] = useState(1);
+    const [itemsPerPage, setItemsPerPage] = useState(5);
 
     // Assign modal state
     const [assignOpen, setAssignOpen] = useState(false);
@@ -66,14 +71,35 @@ export default function FilesPage() {
         const userRole = userProfile.efiling_role?.code;
         const userDepartment = userProfile.department_id;
         
+        console.log('Filtering files for user:', {
+            userDepartment,
+            userRole,
+            totalFiles: files.length,
+            fileTypes: files.map(f => ({ id: f.id, file_type_code: f.file_type_code, file_type_id: f.file_type_id }))
+        });
+        
+        // TEMPORARILY DISABLE DEPARTMENT FILTERING TO DEBUG
+        console.log('Department filtering temporarily disabled for debugging');
+        return files;
+        
         // Water department users can only see water files
         if ([6, 7, 8, 9].includes(userDepartment)) {
-            return files.filter(file => ['WB', 'WTM', 'WD', 'WE_EM'].includes(file.file_type?.code));
+            const filtered = files.filter(file => ['WB', 'WTM', 'WD', 'WE_EM'].includes(file.file_type_code));
+            console.log('Water dept filter applied:', {
+                original: files.length,
+                filtered: filtered.length
+            });
+            return filtered;
         }
         
         // Sewerage department users can only see sewerage files
         if ([10, 19].includes(userDepartment)) {
-            return files.filter(file => ['SEP', 'SEW_EM'].includes(file.file_type?.code));
+            const filtered = files.filter(file => ['SEP', 'SEW_EM'].includes(file.file_type_code));
+            console.log('Sewerage dept filter applied:', {
+                original: files.length,
+                filtered: filtered.length
+            });
+            return filtered;
         }
         
         // Admin users can see all files
@@ -188,6 +214,10 @@ export default function FilesPage() {
         filterFiles();
     }, [searchTerm, statusFilter, departmentFilter, files]);
 
+    useEffect(() => {
+        setCurrentPage(1); // Reset to first page when filters change
+    }, [searchTerm, statusFilter, departmentFilter]);
+
     const fetchFiles = async () => {
         setLoading(true);
         try {
@@ -204,13 +234,20 @@ export default function FilesPage() {
             }
             
             // Fetch user's created files and assigned files using efiling_users.id
+            console.log('Fetching files for efiling user ID:', efilingUserId);
             const [myFilesRes, assignedFilesRes] = await Promise.all([
                 fetch(`/api/efiling/files?created_by=${efilingUserId}`),
                 fetch(`/api/efiling/files?assigned_to=${efilingUserId}`)
             ]);
 
+            console.log('API Response Status - My Files:', myFilesRes.status);
+            console.log('API Response Status - Assigned Files:', assignedFilesRes.status);
+
             const myFiles = myFilesRes.ok ? await myFilesRes.json() : { files: [] };
             const assignedFiles = assignedFilesRes.ok ? await assignedFilesRes.json() : { files: [] };
+            
+            console.log('Raw API Response - My Files:', myFiles);
+            console.log('Raw API Response - Assigned Files:', assignedFiles);
             
             // Filter files based on user's department and role
             const filteredMyFiles = filterFilesByDepartment(myFiles.files || [], userProfile);
@@ -301,6 +338,21 @@ export default function FilesPage() {
         }
 
         setFilteredFiles(filtered);
+    };
+
+    // Calculate pagination
+    const totalPages = Math.ceil(filteredFiles.length / itemsPerPage);
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    const paginatedFiles = filteredFiles.slice(startIndex, endIndex);
+
+    const handlePageChange = (page) => {
+        setCurrentPage(page);
+    };
+
+    const handleItemsPerPageChange = (newItemsPerPage) => {
+        setItemsPerPage(newItemsPerPage);
+        setCurrentPage(1);
     };
 
     const getStatusBadge = (status) => {
@@ -474,25 +526,31 @@ export default function FilesPage() {
                 </Button>
             </div>
 
-            <Tabs defaultValue="assigned">
+            <Tabs defaultValue="mine">
                 <TabsList>
                     <TabsTrigger value="mine">My Files</TabsTrigger>
                     <TabsTrigger value="assigned">Marked To Me</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="mine">
-                    {renderFilesTable(myFiles, getStatusBadge, formatTimeRemaining)}
+                    {renderFilesTable(myFiles, getStatusBadge, formatTimeRemaining, getRoleDisplayName, currentPage, itemsPerPage, handlePageChange, handleItemsPerPageChange)}
                 </TabsContent>
 
                 <TabsContent value="assigned">
-                    {renderFilesTable(assignedToMe, getStatusBadge, formatTimeRemaining)}
+                    {renderFilesTable(assignedToMe, getStatusBadge, formatTimeRemaining, getRoleDisplayName, currentPage, itemsPerPage, handlePageChange, handleItemsPerPageChange)}
                 </TabsContent>
             </Tabs>
                         </div>
     );
 }
 
-function renderFilesTable(rows, getStatusBadge, formatTimeRemaining) {
+function renderFilesTable(rows, getStatusBadge, formatTimeRemaining, getRoleDisplayName, currentPage, itemsPerPage, handlePageChange, handleItemsPerPageChange) {
+    // Calculate pagination for this specific table
+    const totalPages = Math.ceil(rows.length / itemsPerPage);
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    const paginatedRows = rows.slice(startIndex, endIndex);
+
     return (
             <Card>
                 <CardHeader>
@@ -525,7 +583,7 @@ function renderFilesTable(rows, getStatusBadge, formatTimeRemaining) {
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                {rows.map((file) => (
+                                {paginatedRows.map((file) => (
                                         <TableRow key={file.id} className="hover:bg-gray-50">
                                             <TableCell className="font-medium">
                                                 <div className="flex items-center space-x-2">
@@ -590,6 +648,20 @@ function renderFilesTable(rows, getStatusBadge, formatTimeRemaining) {
                                     ))}
                                 </TableBody>
                             </Table>
+                        </div>
+                    )}
+                    
+                    {/* Pagination */}
+                    {rows.length > 0 && (
+                        <div className="mt-4">
+                            <Pagination
+                                currentPage={currentPage}
+                                totalPages={totalPages}
+                                totalItems={rows.length}
+                                itemsPerPage={itemsPerPage}
+                                onPageChange={handlePageChange}
+                                onItemsPerPageChange={handleItemsPerPageChange}
+                            />
                         </div>
                     )}
                 </CardContent>

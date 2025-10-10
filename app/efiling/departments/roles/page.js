@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Shield, Search, Filter, Plus, Edit, Trash2, Building2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { Pagination } from "@/components/ui/pagination";
 
 export default function DepartmentRoles() {
     const { data: session } = useSession();
@@ -18,11 +19,19 @@ export default function DepartmentRoles() {
     const [roles, setRoles] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
+    
+    // Pagination state
+    const [currentPage, setCurrentPage] = useState(1);
+    const [itemsPerPage, setItemsPerPage] = useState(5);
 
     useEffect(() => {
         if (!session?.user?.id) return;
         fetchData();
     }, [session?.user?.id]);
+
+    useEffect(() => {
+        setCurrentPage(1); // Reset to first page when search changes
+    }, [searchTerm]);
 
     const fetchData = async () => {
         setLoading(true);
@@ -47,6 +56,21 @@ export default function DepartmentRoles() {
         role.code?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         role.department_name?.toLowerCase().includes(searchTerm.toLowerCase())
     );
+
+    // Calculate pagination
+    const totalPages = Math.ceil(filteredRoles.length / itemsPerPage);
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    const paginatedRoles = filteredRoles.slice(startIndex, endIndex);
+
+    const handlePageChange = (page) => {
+        setCurrentPage(page);
+    };
+
+    const handleItemsPerPageChange = (newItemsPerPage) => {
+        setItemsPerPage(newItemsPerPage);
+        setCurrentPage(1);
+    };
 
     const handleDeleteRole = async (roleId, roleName) => {
         if (!confirm(`Are you sure you want to delete role "${roleName}"?`)) {
@@ -142,7 +166,7 @@ export default function DepartmentRoles() {
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {filteredRoles.map((role) => (
+                                    {paginatedRoles.map((role) => (
                                         <TableRow key={role.id}>
                                             <TableCell className="font-medium">{role.name}</TableCell>
                                             <TableCell>
@@ -189,6 +213,20 @@ export default function DepartmentRoles() {
                                     ))}
                                 </TableBody>
                             </Table>
+                        </div>
+                    )}
+                    
+                    {/* Pagination */}
+                    {filteredRoles.length > 0 && (
+                        <div className="mt-4">
+                            <Pagination
+                                currentPage={currentPage}
+                                totalPages={totalPages}
+                                totalItems={filteredRoles.length}
+                                itemsPerPage={itemsPerPage}
+                                onPageChange={handlePageChange}
+                                onItemsPerPageChange={handleItemsPerPageChange}
+                            />
                         </div>
                     )}
                 </CardContent>

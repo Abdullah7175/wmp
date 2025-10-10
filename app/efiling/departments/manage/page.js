@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Building2, Search, Filter, Plus, Edit, Trash2, Users } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { Pagination } from "@/components/ui/pagination";
 
 export default function ManageDepartments() {
     const { data: session } = useSession();
@@ -18,6 +19,10 @@ export default function ManageDepartments() {
     const [departments, setDepartments] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
+    
+    // Pagination state
+    const [currentPage, setCurrentPage] = useState(1);
+    const [itemsPerPage, setItemsPerPage] = useState(5);
 
     useEffect(() => {
         if (!session?.user?.id) return;
@@ -77,6 +82,25 @@ export default function ManageDepartments() {
         dept.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         dept.code?.toLowerCase().includes(searchTerm.toLowerCase())
     );
+
+    // Calculate pagination
+    const totalPages = Math.ceil(filteredDepartments.length / itemsPerPage);
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    const paginatedDepartments = filteredDepartments.slice(startIndex, endIndex);
+
+    const handlePageChange = (page) => {
+        setCurrentPage(page);
+    };
+
+    const handleItemsPerPageChange = (newItemsPerPage) => {
+        setItemsPerPage(newItemsPerPage);
+        setCurrentPage(1);
+    };
+
+    useEffect(() => {
+        setCurrentPage(1); // Reset to first page when search changes
+    }, [searchTerm]);
 
     if (loading) {
         return (
@@ -143,7 +167,7 @@ export default function ManageDepartments() {
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {filteredDepartments.map((dept) => (
+                                    {paginatedDepartments.map((dept) => (
                                         <TableRow key={dept.id}>
                                             <TableCell className="font-medium">{dept.code}</TableCell>
                                             <TableCell>{dept.name}</TableCell>
@@ -182,6 +206,20 @@ export default function ManageDepartments() {
                                     ))}
                                 </TableBody>
                             </Table>
+                        </div>
+                    )}
+                    
+                    {/* Pagination */}
+                    {filteredDepartments.length > 0 && (
+                        <div className="mt-4">
+                            <Pagination
+                                currentPage={currentPage}
+                                totalPages={totalPages}
+                                totalItems={filteredDepartments.length}
+                                itemsPerPage={itemsPerPage}
+                                onPageChange={handlePageChange}
+                                onItemsPerPageChange={handleItemsPerPageChange}
+                            />
                         </div>
                     )}
                 </CardContent>

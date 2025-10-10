@@ -33,6 +33,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
+import { Pagination } from "@/components/ui/pagination";
 
 export default function FilesPage() {
     const { data: session } = useSession();
@@ -46,6 +47,11 @@ export default function FilesPage() {
     const [filteredFiles, setFilteredFiles] = useState([]);
     const [departments, setDepartments] = useState([]);
     const [statuses, setStatuses] = useState([]);
+    const isAdmin = (session?.user?.role === 1 || session?.user?.role === 2);
+    
+    // Pagination state
+    const [currentPage, setCurrentPage] = useState(1);
+    const [itemsPerPage, setItemsPerPage] = useState(5);
 
     useEffect(() => {
         if (session?.user?.id) {
@@ -58,6 +64,10 @@ export default function FilesPage() {
     useEffect(() => {
         filterFiles();
     }, [searchTerm, statusFilter, departmentFilter, files]);
+
+    useEffect(() => {
+        setCurrentPage(1); // Reset to first page when filters change
+    }, [searchTerm, statusFilter, departmentFilter]);
 
     const fetchFiles = async () => {
         setLoading(true);
@@ -126,6 +136,21 @@ export default function FilesPage() {
         setFilteredFiles(filtered);
     };
 
+    // Calculate pagination
+    const totalPages = Math.ceil(filteredFiles.length / itemsPerPage);
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    const paginatedFiles = filteredFiles.slice(startIndex, endIndex);
+
+    const handlePageChange = (page) => {
+        setCurrentPage(page);
+    };
+
+    const handleItemsPerPageChange = (newItemsPerPage) => {
+        setItemsPerPage(newItemsPerPage);
+        setCurrentPage(1);
+    };
+
     const getStatusBadge = (status) => {
         const statusConfig = {
             'DRAFT': { variant: 'secondary', icon: FileText },
@@ -161,6 +186,26 @@ export default function FilesPage() {
 
     const handleMarkTo = (fileId) => {
         router.push(`/efiling/files/${fileId}/edit-document`);
+    };
+
+    const handleDeleteFile = async (file) => {
+        if (!isAdmin) {
+            toast({ title: 'Forbidden', description: 'Only admin can delete files', variant: 'destructive' });
+            return;
+        }
+        const confirmed = window.confirm(`Delete file ${file.file_number}? This will remove the file and all related data.`);
+        if (!confirmed) return;
+        try {
+            const res = await fetch(`/api/efiling/files/${file.id}`, { method: 'DELETE' });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.error || 'Delete failed');
+            }
+            toast({ title: 'Deleted', description: `${file.file_number} removed.` });
+            await fetchFiles();
+        } catch (e) {
+            toast({ title: 'Error', description: e.message, variant: 'destructive' });
+        }
     };
 
     if (loading) {
@@ -282,7 +327,7 @@ export default function FilesPage() {
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {filteredFiles.map((file) => (
+                                    {paginatedFiles.map((file) => (
                                         <TableRow key={file.id} className="hover:bg-gray-50">
                                             <TableCell className="font-medium">
                                                 <div className="flex items-center space-x-2">
@@ -325,6 +370,16 @@ export default function FilesPage() {
                                                                 <FileEdit className="w-4 h-4 mr-1" />
                                                                 Edit Document
                                                             </Button>
+                                                            {isAdmin && (
+                                                                <Button
+                                                                    variant="outline"
+                                                                    size="sm"
+                                                                    onClick={() => handleDeleteFile(file)}
+                                                                    className="text-red-600 hover:text-red-700"
+                                                                >
+                                                                    Delete
+                                                                </Button>
+                                                            )}
                                                         </>
                                                     ) : (
                                                         <>
@@ -345,6 +400,16 @@ export default function FilesPage() {
                                                                 <Send className="w-4 h-4 mr-1" />
                                                                 Mark To
                                                             </Button>
+                                                            {isAdmin && (
+                                                                <Button
+                                                                    variant="outline"
+                                                                    size="sm"
+                                                                    onClick={() => handleDeleteFile(file)}
+                                                                    className="text-red-600 hover:text-red-700"
+                                                                >
+                                                                    Delete
+                                                                </Button>
+                                                            )}
                                                         </>
                                                     )}
                                                 </div>
@@ -353,6 +418,20 @@ export default function FilesPage() {
                                     ))}
                                 </TableBody>
                             </Table>
+                        </div>
+                    )}
+                    
+                    {/* Pagination */}
+                    {filteredFiles.length > 0 && (
+                        <div className="mt-4">
+                            <Pagination
+                                currentPage={currentPage}
+                                totalPages={totalPages}
+                                totalItems={filteredFiles.length}
+                                itemsPerPage={itemsPerPage}
+                                onPageChange={handlePageChange}
+                                onItemsPerPageChange={handleItemsPerPageChange}
+                            />
                         </div>
                     )}
                 </CardContent>

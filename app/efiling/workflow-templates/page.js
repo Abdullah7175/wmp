@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { FileText, Search, Filter, Plus, Edit, Trash2, Eye, Settings, Clock } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { Pagination } from "@/components/ui/pagination";
 
 export default function WorkflowTemplates() {
     const { data: session } = useSession();
@@ -18,11 +19,19 @@ export default function WorkflowTemplates() {
     const [templates, setTemplates] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
+    
+    // Pagination state
+    const [currentPage, setCurrentPage] = useState(1);
+    const [itemsPerPage, setItemsPerPage] = useState(5);
 
     useEffect(() => {
         if (!session?.user?.id) return;
         fetchData();
     }, [session?.user?.id]);
+
+    useEffect(() => {
+        setCurrentPage(1); // Reset to first page when search changes
+    }, [searchTerm]);
 
     const fetchData = async () => {
         setLoading(true);
@@ -80,6 +89,21 @@ export default function WorkflowTemplates() {
         template.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         template.file_type_name?.toLowerCase().includes(searchTerm.toLowerCase())
     );
+
+    // Calculate pagination
+    const totalPages = Math.ceil(filteredTemplates.length / itemsPerPage);
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    const paginatedTemplates = filteredTemplates.slice(startIndex, endIndex);
+
+    const handlePageChange = (page) => {
+        setCurrentPage(page);
+    };
+
+    const handleItemsPerPageChange = (newItemsPerPage) => {
+        setItemsPerPage(newItemsPerPage);
+        setCurrentPage(1);
+    };
 
     if (loading) {
         return (
@@ -146,7 +170,7 @@ export default function WorkflowTemplates() {
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {filteredTemplates.map((template) => (
+                                    {paginatedTemplates.map((template) => (
                                         <TableRow key={template.id}>
                                             <TableCell className="font-medium">{template.name}</TableCell>
                                             <TableCell>
@@ -196,6 +220,20 @@ export default function WorkflowTemplates() {
                                     ))}
                                 </TableBody>
                             </Table>
+                        </div>
+                    )}
+                    
+                    {/* Pagination */}
+                    {filteredTemplates.length > 0 && (
+                        <div className="mt-4">
+                            <Pagination
+                                currentPage={currentPage}
+                                totalPages={totalPages}
+                                totalItems={filteredTemplates.length}
+                                itemsPerPage={itemsPerPage}
+                                onPageChange={handlePageChange}
+                                onItemsPerPageChange={handleItemsPerPageChange}
+                            />
                         </div>
                     )}
                 </CardContent>

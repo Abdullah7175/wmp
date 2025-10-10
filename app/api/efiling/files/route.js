@@ -12,9 +12,9 @@ export async function GET(request) {
     const assigned_to = searchParams.get('assigned_to');
     const work_request_id = searchParams.get('work_request_id');
     const priority = searchParams.get('priority');
-    const page = parseInt(searchParams.get('page') || '1');
-    const limit = parseInt(searchParams.get('limit') || '10');
-    const offset = (page - 1) * limit;
+    let page = parseInt(searchParams.get('page') || '1');
+    let limit = parseInt(searchParams.get('limit') || '10');
+    let offset = (page - 1) * limit;
     
     // Add authentication check for general access
     try {
@@ -41,6 +41,12 @@ export async function GET(request) {
                 console.error('Database error checking efiling user:', dbError);
                 return NextResponse.json({ error: 'Database error' }, { status: 500 });
             }
+        }
+
+        // Admins should see all files by default (no server-side limit) unless a limit is explicitly provided
+        if ([1,2].includes(token.user.role) && !searchParams.get('limit')) {
+            limit = 0; // no limit
+            offset = 0;
         }
     } catch (authError) {
         console.error('Authentication error:', authError);
@@ -87,20 +93,23 @@ export async function GET(request) {
                     if (!token?.user?.id) {
                         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
                     }
-                    const userId = token.user.id;
-                    const efUserRes = await client.query('SELECT id FROM efiling_users WHERE user_id = $1 AND is_active = true', [userId]);
-                    const efUserId = efUserRes.rows[0]?.id;
-                    if (!efUserId) {
-                        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-                    }
-                    const aclRes = await client.query(`
-                        SELECT 1
-                        FROM efiling_files f
-                        LEFT JOIN efiling_file_workflows wf ON wf.file_id = f.id
-                        WHERE f.id = $1 AND (f.created_by = $2 OR f.assigned_to = $2 OR wf.current_assignee_id = $2)
-                    `, [id, efUserId]);
-                    if (aclRes.rows.length === 0) {
-                        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+                    // Admin/Manager bypasses ACL for single file fetch
+                    if (![1,2].includes(token.user.role)) {
+                        const userId = token.user.id;
+                        const efUserRes = await client.query('SELECT id FROM efiling_users WHERE user_id = $1 AND is_active = true', [userId]);
+                        const efUserId = efUserRes.rows[0]?.id;
+                        if (!efUserId) {
+                            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+                        }
+                        const aclRes = await client.query(`
+                            SELECT 1
+                            FROM efiling_files f
+                            LEFT JOIN efiling_file_workflows wf ON wf.file_id = f.id
+                            WHERE f.id = $1 AND (f.created_by = $2 OR f.assigned_to = $2 OR wf.current_assignee_id = $2)
+                        `, [id, efUserId]);
+                        if (aclRes.rows.length === 0) {
+                            return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+                        }
                     }
                 } catch (aclErr) {
                     console.error('ACL check error:', aclErr);
@@ -138,12 +147,13 @@ export async function GET(request) {
                 }, { status: 500 });
             }
         } else {
-            // First, let's check if there are any files at all
-            const countQuery = await client.query('SELECT COUNT(*) as total FROM efiling_files');
-            console.log('Total files in database:', countQuery.rows[0].total);
+            // We'll compute total with filters later; also compute overall for logs
+            const overallCountQuery = await client.query('SELECT COUNT(*) as total FROM efiling_files');
+            console.log('Total files in database:', overallCountQuery.rows[0].total);
             
             let query = `
-                SELECT f.*,
+                SELECT DISTINCT ON (f.id)
+                       f.*,
                        c.name as category_name,
                        d.name as department_name,
                        s.name as status_name, s.code as status_code, s.color as status_color,
@@ -157,11 +167,14 @@ export async function GET(request) {
                        (wf.sla_deadline IS NOT NULL AND wf.sla_deadline < NOW() AND wf.workflow_status = 'IN_PROGRESS') as is_sla_breached,
                        ROUND(EXTRACT(EPOCH FROM (wf.sla_deadline - NOW()))/60.0) as minutes_remaining,
                        ws.stage_name as current_stage_name,
-                       ws.sla_hours as current_stage_sla_hours
+                       ws.sla_hours as current_stage_sla_hours,
+                       ft.name as file_type_name,
+                       ft.code as file_type_code
                 FROM efiling_files f
                 LEFT JOIN efiling_file_categories c ON f.category_id = c.id
                 LEFT JOIN efiling_departments d ON f.department_id = d.id
                 LEFT JOIN efiling_file_status s ON f.status_id = s.id
+                LEFT JOIN efiling_file_types ft ON f.file_type_id = ft.id
                 LEFT JOIN efiling_users ab ON f.assigned_to = ab.id
                 LEFT JOIN efiling_roles r ON ab.efiling_role_id = r.id
                 LEFT JOIN efiling_users cr ON f.created_by = cr.id
@@ -194,6 +207,7 @@ export async function GET(request) {
             }
             
             if (created_by) {
+                console.log('Adding created_by filter:', created_by);
                 conditions.push(`f.created_by = $${paramIndex}`);
                 params.push(created_by);
                 paramIndex++;
@@ -211,9 +225,9 @@ export async function GET(request) {
                 paramIndex++;
             }
             
-            // Add user-based filtering for efiling users
+            // Add user-based filtering for efiling users (only if no specific filters are applied)
             const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
-            if (token?.user?.id && ![1,2].includes(token.user.role)) {
+            if (token?.user?.id && ![1,2].includes(token.user.role) && !created_by && !assigned_to) {
                 // For efiling users, only show files they created or are assigned to
                 const efilingUserRes = await client.query(
                     'SELECT id FROM efiling_users WHERE user_id = $1 AND is_active = true', 
@@ -230,20 +244,33 @@ export async function GET(request) {
             if (conditions.length > 0) {
                 query += ` WHERE ${conditions.join(' AND ')}`;
             }
-            
-            query += ` ORDER BY f.created_at DESC`;
+
+            // Build total count with same filters (without joins)
+            let totalCountQuery = 'SELECT COUNT(*) as total FROM efiling_files f';
+            if (conditions.length > 0) {
+                totalCountQuery += ` WHERE ${conditions.join(' AND ')}`;
+            }
+            const totalCountRes = await client.query(totalCountQuery, params);
+            const totalCount = parseInt(totalCountRes.rows[0]?.total || '0');
+
+            query += ` ORDER BY f.id, f.created_at DESC`;
             
             if (limit > 0) {
                 query += ` LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
                 params.push(limit, offset);
             }
             
+            console.log('Final query:', query);
+            console.log('Query parameters:', params);
+            
             const result = await client.query(query, params);
             console.log('Files query result:', result.rows.length, 'files found');
+            console.log('Sample result rows:', result.rows.slice(0, 2));
+            
             return NextResponse.json({
                 success: true,
                 files: result.rows,
-                total: result.rows.length
+                total: totalCount
             });
         }
     } catch (error) {
@@ -688,49 +715,59 @@ export async function DELETE(request) {
     const client = await connectToDatabase();
     
     try {
-        // Check if file exists
-        const existing = await client.query(
-            'SELECT * FROM efiling_files WHERE id = $1',
-            [id]
-        );
-        
+        // Admin-only hard delete with full cleanup (mirror of /efiling/files/[id])
+        const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
+        if (!token?.user?.role || ![1, 2].includes(token.user.role)) {
+            return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        }
+
+        // Check if file exists first
+        const existing = await client.query('SELECT id, file_number, created_by FROM efiling_files WHERE id = $1', [id]);
         if (existing.rows.length === 0) {
             return NextResponse.json({ error: 'File not found' }, { status: 404 });
         }
-        
-        // Check if file has documents
-        const docsCount = await client.query(
-            'SELECT COUNT(*) FROM efiling_documents WHERE file_id = $1',
-            [id]
-        );
-        
-        if (parseInt(docsCount.rows[0].count) > 0) {
-            return NextResponse.json({ 
-                error: 'Cannot delete file with attached documents' 
-            }, { status: 400 });
-        }
-        
+
+        await client.query('BEGIN');
+
+        // Non-cascading dependencies (defensive cleanup)
+        await client.query('DELETE FROM efiling_document_comments WHERE file_id = $1', [id]);
+        await client.query('DELETE FROM efiling_user_actions WHERE file_id::text = $1::text', [String(id)]);
+        await client.query('DELETE FROM efiling_file_attachments WHERE file_id = $1', [String(id)]);
+        await client.query('DELETE FROM efiling_documents WHERE file_id = $1', [id]);
+        await client.query('DELETE FROM efiling_document_pages WHERE file_id = $1', [id]);
+        await client.query('DELETE FROM efiling_document_signatures WHERE file_id = $1', [id]);
+        await client.query('DELETE FROM efiling_file_movements WHERE file_id = $1', [id]);
+        await client.query('DELETE FROM efiling_notifications WHERE file_id = $1', [id]);
+        await client.query('DELETE FROM efiling_signatures WHERE file_id = $1', [id]);
+
+        // Remove workflow tree
+        await client.query('DELETE FROM efiling_file_workflows WHERE file_id = $1', [id]);
+
+        // Finally delete the file
         await client.query('DELETE FROM efiling_files WHERE id = $1', [id]);
-        
-        // Log the action
+
+        await client.query('COMMIT');
+
+        // Log action (best-effort)
         try {
             await eFileActionLogger.logAction({
-                entityId: id.toString(),
+                entityId: String(id),
                 userId: existing.rows[0].created_by?.toString() || 'unknown',
                 action: 'FILE_DELETED',
                 entityType: 'efiling_file',
-                details: { 
+                details: {
                     file_number: existing.rows[0].file_number,
-                    description: `File "${existing.rows[0].file_number}" deleted`
+                    description: `File "${existing.rows[0].file_number}" deleted (hard delete)`
                 }
             });
         } catch (logError) {
             console.error('Error logging action:', logError);
         }
-        
-        return NextResponse.json({ message: 'File deleted successfully' });
+
+        return NextResponse.json({ success: true, message: 'File and related data deleted successfully' });
     } catch (error) {
         console.error('Database error:', error);
+        try { await client.query('ROLLBACK'); } catch {}
         return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
     } finally {
         if (client) await client.release();

@@ -65,14 +65,14 @@ export default function CreateNewFile() {
         const userRole = userProfile.efiling_role?.code;
         const userDepartment = userProfile.department_id;
         
-        // Water department users can only create water files
+        // Water department users can only create water files (use actual codes from DB)
         if ([6, 7, 8, 9].includes(userDepartment)) {
-            return fileTypes.filter(type => ['WB', 'WTM', 'WD', 'WE_EM'].includes(type.code));
+            return fileTypes.filter(type => ['WSP', 'WB_MW', 'PLM', 'OFN', 'ITP', 'TED'].includes(type.code));
         }
         
         // Sewerage department users can only create sewerage files
         if ([10, 19].includes(userDepartment)) {
-            return fileTypes.filter(type => ['SEP', 'SEW_EM'].includes(type.code));
+            return fileTypes.filter(type => ['SEP'].includes(type.code));
         }
         
         // Admin users can create all files

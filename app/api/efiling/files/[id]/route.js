@@ -159,35 +159,54 @@ export async function DELETE(request, { params }) {
     let client;
     try {
         const { id } = await params;
-        
+
+        // Admin-only hard delete with full cleanup
+        const { getToken } = await import('next-auth/jwt');
+        const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
+        if (!token?.user?.role || ![1, 2].includes(token.user.role)) {
+            return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        }
+
         client = await connectToDatabase();
-        
+
         // Check if file exists
         const existingFile = await client.query(
-            'SELECT * FROM efiling_files WHERE id = $1',
+            'SELECT id, file_number FROM efiling_files WHERE id = $1',
             [id]
         );
-        
         if (existingFile.rows.length === 0) {
             return NextResponse.json({ error: 'File not found' }, { status: 404 });
         }
-        
-        // Soft delete by setting is_active to false
-        await client.query(
-            'UPDATE efiling_files SET is_active = false, updated_at = CURRENT_TIMESTAMP WHERE id = $1',
-            [id]
-        );
-        
-        // Log the action
-        // await logAction(request, 'DELETE', ENTITY_TYPES.EFILING_FILE, {
-        //     entityId: id,
-        //     entityName: existingFile.rows[0].file_number,
-        //     details: { softDelete: true }
-        // });
-        
-        return NextResponse.json({ message: 'File deleted successfully' });
+
+        await client.query('BEGIN');
+
+        // Clean up non-cascading dependencies first (some FKs lack ON DELETE CASCADE)
+        await client.query('DELETE FROM efiling_document_comments WHERE file_id = $1', [id]);
+        await client.query('DELETE FROM efiling_user_actions WHERE file_id::text = $1::text', [String(id)]);
+        await client.query('DELETE FROM efiling_file_attachments WHERE file_id = $1', [String(id)]);
+
+        // Proactively clear related records even if cascades exist (idempotent)
+        await client.query('DELETE FROM efiling_documents WHERE file_id = $1', [id]);
+        await client.query('DELETE FROM efiling_document_pages WHERE file_id = $1', [id]);
+        await client.query('DELETE FROM efiling_document_signatures WHERE file_id = $1', [id]);
+        await client.query('DELETE FROM efiling_file_movements WHERE file_id = $1', [id]);
+        await client.query('DELETE FROM efiling_notifications WHERE file_id = $1', [id]);
+        await client.query('DELETE FROM efiling_signatures WHERE file_id = $1', [id]);
+
+        // Remove workflow instance tree (actions, stage instances will cascade via workflow_id)
+        await client.query('DELETE FROM efiling_file_workflows WHERE file_id = $1', [id]);
+
+        // Finally delete the file
+        await client.query('DELETE FROM efiling_files WHERE id = $1', [id]);
+
+        await client.query('COMMIT');
+
+        return NextResponse.json({ success: true, message: 'File and related data deleted successfully' });
     } catch (error) {
         console.error('Database error:', error);
+        if (client) {
+            try { await client.query('ROLLBACK'); } catch {}
+        }
         return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
     } finally {
         if (client) {

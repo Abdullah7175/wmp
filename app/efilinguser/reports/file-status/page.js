@@ -10,6 +10,7 @@ import { useToast } from '@/hooks/use-toast';
 import { FileText, Download, Filter, BarChart3, Calendar, Clock, CheckCircle, AlertCircle, XCircle } from 'lucide-react';
 import { logEfilingUserAction, EFILING_ACTIONS } from '@/lib/efilingUserActionLogger';
 import { useSession } from 'next-auth/react';
+import { Pagination } from '@/components/ui/pagination';
 
 export default function FileStatusReport() {
     const { data: session } = useSession();
@@ -24,6 +25,10 @@ export default function FileStatusReport() {
         status: 'all',
         dateRange: 'all'
     });
+    
+    // Pagination state
+    const [currentPage, setCurrentPage] = useState(1);
+    const [itemsPerPage, setItemsPerPage] = useState(5);
 
     useEffect(() => {
         loadData();
@@ -177,6 +182,25 @@ export default function FileStatusReport() {
         
         return matchesDepartment && matchesFileType && matchesStatus && matchesDate;
     });
+
+    // Calculate pagination
+    const totalPages = Math.ceil(filteredFiles.length / itemsPerPage);
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    const paginatedFiles = filteredFiles.slice(startIndex, endIndex);
+
+    const handlePageChange = (page) => {
+        setCurrentPage(page);
+    };
+
+    const handleItemsPerPageChange = (newItemsPerPage) => {
+        setItemsPerPage(newItemsPerPage);
+        setCurrentPage(1);
+    };
+
+    useEffect(() => {
+        setCurrentPage(1); // Reset to first page when filters change
+    }, [filters]);
 
     const exportToCSV = () => {
         const headers = ['File Number', 'Subject', 'Department', 'File Type', 'Status', 'Created Date', 'Current Stage', 'Assigned To'];
@@ -428,7 +452,7 @@ export default function FileStatusReport() {
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {filteredFiles.map((file) => (
+                                    {paginatedFiles.map((file) => (
                                         <TableRow key={file.id}>
                                             <TableCell className="font-medium">
                                                 {file.file_number || 'N/A'}
@@ -455,6 +479,20 @@ export default function FileStatusReport() {
                                     ))}
                                 </TableBody>
                             </Table>
+                        </div>
+                    )}
+                    
+                    {/* Pagination */}
+                    {filteredFiles.length > 0 && (
+                        <div className="mt-4">
+                            <Pagination
+                                currentPage={currentPage}
+                                totalPages={totalPages}
+                                totalItems={filteredFiles.length}
+                                itemsPerPage={itemsPerPage}
+                                onPageChange={handlePageChange}
+                                onItemsPerPageChange={handleItemsPerPageChange}
+                            />
                         </div>
                     )}
                 </CardContent>

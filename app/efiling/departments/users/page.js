@@ -7,12 +7,20 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Edit, Trash2, User, Building, Shield, Users, UserCheck, UserX } from "lucide-react";
+import { Pagination } from "@/components/ui/pagination";
+import { Input } from "@/components/ui/input";
+import { Search } from "lucide-react";
 
 export default function DepartmentUsers() {
     const router = useRouter();
     const { toast } = useToast();
     const [users, setUsers] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [searchTerm, setSearchTerm] = useState('');
+    
+    // Pagination state
+    const [currentPage, setCurrentPage] = useState(1);
+    const [itemsPerPage, setItemsPerPage] = useState(5);
 
     useEffect(() => {
         fetchData();
@@ -100,6 +108,32 @@ export default function DepartmentUsers() {
         );
     };
 
+    const filteredUsers = users.filter(user =>
+        user.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        user.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        user.department_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        user.efiling_role_name?.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
+    // Calculate pagination
+    const totalPages = Math.ceil(filteredUsers.length / itemsPerPage);
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    const paginatedUsers = filteredUsers.slice(startIndex, endIndex);
+
+    const handlePageChange = (page) => {
+        setCurrentPage(page);
+    };
+
+    const handleItemsPerPageChange = (newItemsPerPage) => {
+        setItemsPerPage(newItemsPerPage);
+        setCurrentPage(1);
+    };
+
+    useEffect(() => {
+        setCurrentPage(1); // Reset to first page when search changes
+    }, [searchTerm]);
+
     if (loading) {
         return (
             <div className="container mx-auto py-6">
@@ -126,15 +160,30 @@ export default function DepartmentUsers() {
                 </Button>
             </div>
 
+            {/* Search */}
+            <Card className="mb-6">
+                <CardContent className="pt-6">
+                    <div className="relative">
+                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                        <Input
+                            placeholder="Search users by name, email, department, or role..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="pl-10"
+                        />
+                    </div>
+                </CardContent>
+            </Card>
+
             <Card>
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                         <Users className="w-5 h-5" />
-                        Users ({users.length})
+                        Users ({filteredUsers.length})
                     </CardTitle>
                 </CardHeader>
                 <CardContent>
-                    {users.length === 0 ? (
+                    {filteredUsers.length === 0 ? (
                         <div className="text-center py-8 text-gray-500">
                             <Users className="w-12 h-12 mx-auto mb-4 text-gray-300" />
                             <p>No users found</p>
@@ -155,7 +204,7 @@ export default function DepartmentUsers() {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {users.map((user) => (
+                                    {paginatedUsers.map((user) => (
                                         <tr key={user.id} className="border-b hover:bg-gray-50">
                                             <td className="py-3 px-4">
                                                 <div className="flex items-center gap-3">
@@ -223,6 +272,20 @@ export default function DepartmentUsers() {
                                     ))}
                                 </tbody>
                             </table>
+                        </div>
+                    )}
+                    
+                    {/* Pagination */}
+                    {filteredUsers.length > 0 && (
+                        <div className="mt-4">
+                            <Pagination
+                                currentPage={currentPage}
+                                totalPages={totalPages}
+                                totalItems={filteredUsers.length}
+                                itemsPerPage={itemsPerPage}
+                                onPageChange={handlePageChange}
+                                onItemsPerPageChange={handleItemsPerPageChange}
+                            />
                         </div>
                     )}
                 </CardContent>

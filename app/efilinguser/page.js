@@ -148,14 +148,14 @@ export default function EFileUserDashboard() {
         const userRole = userProfile.efiling_role?.code;
         const userDepartment = userProfile.department_id;
         
-        // Water department users can only see water files
+        // Water department users can only see water files (use actual codes from DB)
         if ([6, 7, 8, 9].includes(userDepartment)) {
-            return files.filter(file => ['WB', 'WTM', 'WD', 'WE_EM'].includes(file.file_type?.code));
+            return files.filter(file => ['WSP', 'WB_MW', 'PLM'].includes(file.file_type_code || file.file_type?.code));
         }
         
         // Sewerage department users can only see sewerage files
         if ([10, 19].includes(userDepartment)) {
-            return files.filter(file => ['SEP', 'SEW_EM'].includes(file.file_type?.code));
+            return files.filter(file => ['SEP'].includes(file.file_type_code || file.file_type?.code));
         }
         
         // Admin users can see all files

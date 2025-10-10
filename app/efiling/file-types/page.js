@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { FileText, Search, Filter, Plus, Edit, Trash2, Eye, Building2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { Pagination } from "@/components/ui/pagination";
 
 export default function FileTypes() {
     const { data: session } = useSession();
@@ -18,6 +19,10 @@ export default function FileTypes() {
     const [fileTypes, setFileTypes] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
+    
+    // Pagination state
+    const [currentPage, setCurrentPage] = useState(1);
+    const [itemsPerPage, setItemsPerPage] = useState(5);
 
     useEffect(() => {
         if (!session?.user?.id) return;
@@ -80,6 +85,25 @@ export default function FileTypes() {
         fileType.code?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         fileType.department_name?.toLowerCase().includes(searchTerm.toLowerCase())
     );
+
+    // Calculate pagination
+    const totalPages = Math.ceil(filteredFileTypes.length / itemsPerPage);
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    const paginatedFileTypes = filteredFileTypes.slice(startIndex, endIndex);
+
+    const handlePageChange = (page) => {
+        setCurrentPage(page);
+    };
+
+    const handleItemsPerPageChange = (newItemsPerPage) => {
+        setItemsPerPage(newItemsPerPage);
+        setCurrentPage(1);
+    };
+
+    useEffect(() => {
+        setCurrentPage(1); // Reset to first page when search changes
+    }, [searchTerm]);
 
     if (loading) {
         return (
@@ -146,7 +170,7 @@ export default function FileTypes() {
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {filteredFileTypes.map((fileType) => (
+                                    {paginatedFileTypes.map((fileType) => (
                                         <TableRow key={fileType.id}>
                                             <TableCell className="font-medium">{fileType.code}</TableCell>
                                             <TableCell>{fileType.name}</TableCell>
@@ -194,6 +218,20 @@ export default function FileTypes() {
                                     ))}
                                 </TableBody>
                             </Table>
+                        </div>
+                    )}
+                    
+                    {/* Pagination */}
+                    {filteredFileTypes.length > 0 && (
+                        <div className="mt-4">
+                            <Pagination
+                                currentPage={currentPage}
+                                totalPages={totalPages}
+                                totalItems={filteredFileTypes.length}
+                                itemsPerPage={itemsPerPage}
+                                onPageChange={handlePageChange}
+                                onItemsPerPageChange={handleItemsPerPageChange}
+                            />
                         </div>
                     )}
                 </CardContent>
