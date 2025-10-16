@@ -4,7 +4,9 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "next build && node scripts/setup-standalone.js",
+    "build:only": "next build",
+    "setup:standalone": "node scripts/setup-standalone.js",
     "start": "next start -p 3000 -H 0.0.0.0",
     "start:standalone": "node .next/standalone/server.js",
     "pm2:start": "pm2 start ecosystem.config.js",
@@ -79,6 +81,7 @@
     "formik": "^2.4.6",
     "framer-motion": "^12.12.2",
     "fs": "^0.0.1-security",
+    "fs-extra": "^11.2.0",
     "jose": "^5.9.6",
     "js-cookie": "^3.0.5",
     "jsonwebtoken": "^9.0.2",
