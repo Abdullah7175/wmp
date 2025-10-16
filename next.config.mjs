@@ -41,6 +41,7 @@ const nextConfig = {
   experimental: {
     serverActions: {
       allowedOrigins: ['localhost:3000', 'localhost:3001', 'localhost:3002', 'localhost:3003', 'localhost:3004', '202.61.47.29:3000'],
+      bodySizeLimit: '1gb', // Increase body size limit to 1GB
     },
   },
   serverExternalPackages: ['sharp', 'fs-extra'],
