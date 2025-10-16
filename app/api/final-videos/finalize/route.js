@@ -26,7 +26,13 @@ export async function POST(req) {
       return createErrorResponse('Missing required finalize data', 400);
     }
 
-    const tempDir = path.join(process.cwd(), 'temp', 'chunks', uploadId);
+    // Get base directory (handle standalone mode)
+    let baseDir = process.cwd();
+    if (baseDir.includes('.next/standalone')) {
+      baseDir = path.join(baseDir, '..', '..');
+    }
+    
+    const tempDir = path.join(baseDir, 'temp', 'chunks', uploadId);
     
     // Check if temp directory exists
     try {
@@ -59,7 +65,18 @@ export async function POST(req) {
 
       // Generate final filename and save to uploads directory
       const finalFilename = generateUniqueFilename(fileName);
-      const uploadsDir = path.join(process.cwd(), 'public', UPLOAD_CONFIG.UPLOAD_DIRS.finalVideos);
+      
+      // Get the correct public directory path
+      // In standalone mode, process.cwd() is .next/standalone, so we need to go up
+      let publicDir = path.join(process.cwd(), 'public');
+      
+      // Check if we're in standalone mode
+      if (process.cwd().includes('.next/standalone')) {
+        // Go up two levels: .next/standalone -> .next -> root
+        publicDir = path.join(process.cwd(), '..', '..', 'public');
+      }
+      
+      const uploadsDir = path.join(publicDir, UPLOAD_CONFIG.UPLOAD_DIRS.finalVideos);
       await ensureUploadDir(uploadsDir);
       
       const finalPath = path.join(uploadsDir, finalFilename);

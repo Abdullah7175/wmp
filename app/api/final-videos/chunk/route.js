@@ -45,7 +45,13 @@ export async function POST(req) {
     }
 
     // Create temporary directory for chunks
-    const tempDir = path.join(process.cwd(), 'temp', 'chunks', uploadId);
+    // In standalone mode, go up to root directory
+    let baseDir = process.cwd();
+    if (baseDir.includes('.next/standalone')) {
+      baseDir = path.join(baseDir, '..', '..');
+    }
+    
+    const tempDir = path.join(baseDir, 'temp', 'chunks', uploadId);
     await ensureUploadDir(tempDir);
 
     // Save chunk
@@ -85,7 +91,13 @@ export async function DELETE(req) {
       return createErrorResponse('Upload ID is required', 400);
     }
 
-    const tempDir = path.join(process.cwd(), 'temp', 'chunks', uploadId);
+    // In standalone mode, go up to root directory
+    let baseDir = process.cwd();
+    if (baseDir.includes('.next/standalone')) {
+      baseDir = path.join(baseDir, '..', '..');
+    }
+    
+    const tempDir = path.join(baseDir, 'temp', 'chunks', uploadId);
     
     try {
       await fs.rm(tempDir, { recursive: true, force: true });
