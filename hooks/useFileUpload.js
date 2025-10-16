@@ -171,17 +171,28 @@ export function useFileUpload() {
       
       // Finalize upload
       setUploadStatus('Finalizing upload...');
+      
+      // Collect all form data fields to pass to finalize
+      const finalizeData = {
+        uploadId,
+        fileName: file.name,
+        fileSize: file.size,
+        totalChunks
+      };
+      
+      // Add all form data fields for database entry
+      for (const [key, value] of formData.entries()) {
+        if (key !== 'file' && key !== 'img' && key !== 'vid' && key !== 'videoFile') {
+          finalizeData[key] = value;
+        }
+      }
+      
       const finalizeResponse = await fetch(`${endpoint}/finalize`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          uploadId,
-          fileName: file.name,
-          fileSize: file.size,
-          totalChunks
-        }),
+        body: JSON.stringify(finalizeData),
       });
       
       if (!finalizeResponse.ok) {

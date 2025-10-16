@@ -8,7 +8,8 @@ import {
   generateUniqueFilename, 
   ensureUploadDir,
   createErrorResponse,
-  createSuccessResponse 
+  createSuccessResponse,
+  getDatabaseConnectionWithRetry
 } from '@/lib/fileUploadOptimized';
 
 export async function POST(req) {
@@ -18,7 +19,8 @@ export async function POST(req) {
       return createErrorResponse('Unauthorized', 401);
     }
 
-    const { uploadId, fileName, fileSize, totalChunks } = await req.json();
+    const body = await req.json();
+    const { uploadId, fileName, fileSize, totalChunks, workRequestId, description, latitude, longitude, creator_id, creator_type, creator_name } = body;
     
     if (!uploadId || !fileName || !totalChunks) {
       return createErrorResponse('Missing required finalize data', 400);
@@ -62,17 +64,95 @@ export async function POST(req) {
       
       const finalPath = path.join(uploadsDir, finalFilename);
       await fs.writeFile(finalPath, combinedBuffer);
+      
+      const filePath = `/uploads/final-videos/${finalFilename}`;
 
-      // Clean up temporary chunks
-      await fs.rm(tempDir, { recursive: true, force: true });
+      // If workRequestId and description are provided, create database entry
+      if (workRequestId && description) {
+        const client = await getDatabaseConnectionWithRetry();
+        
+        try {
+          // Check if work request exists
+          const workRequestResult = await client.query(`
+            SELECT id FROM work_requests WHERE id = $1
+          `, [workRequestId]);
 
-      return createSuccessResponse({
-        success: true,
-        fileName: finalFilename,
-        filePath: `/uploads/final-videos/${finalFilename}`,
-        fileSize: combinedBuffer.length,
-        message: 'File uploaded and finalized successfully'
-      });
+          if (workRequestResult.rows.length === 0) {
+            // Clean up file if work request not found
+            await fs.unlink(finalPath);
+            return createErrorResponse('Work request not found', 404);
+          }
+
+          // Create geo_tag from latitude and longitude
+          const geoTag = `SRID=4326;POINT(${longitude || 0} ${latitude || 0})`;
+
+          // Save to database
+          const query = `
+            INSERT INTO final_videos (work_request_id, description, link, geo_tag, created_at, updated_at, creator_id, creator_type, creator_name, file_name, file_size, file_type)
+            VALUES ($1, $2, $3, ST_GeomFromText($4, 4326), NOW(), NOW(), $5, $6, $7, $8, $9, $10)
+            RETURNING *;
+          `;
+          
+          const fileExt = fileName.split('.').pop();
+          const mimeType = `video/${fileExt}`;
+          
+          const { rows } = await client.query(query, [
+            workRequestId,
+            description,
+            filePath,
+            geoTag,
+            creator_id || session.user.id,
+            creator_type || 'admin',
+            creator_name || session.user.name,
+            fileName,
+            combinedBuffer.length,
+            mimeType
+          ]);
+
+          // Notify all managers (role=1 or 2)
+          try {
+            const managers = await client.query('SELECT id FROM users WHERE role IN (1,2)');
+            for (const mgr of managers.rows) {
+              await client.query(
+                'INSERT INTO notifications (user_id, type, entity_id, message) VALUES ($1, $2, $3, $4)',
+                [mgr.id, 'final_video', workRequestId, `New final video uploaded for request #${workRequestId}.`]
+              );
+            }
+          } catch (notifErr) {
+            // Log but don't fail
+            console.error('Notification insert error:', notifErr);
+          }
+
+          // Clean up temporary chunks
+          await fs.rm(tempDir, { recursive: true, force: true });
+
+          return createSuccessResponse({
+            success: true,
+            video: rows[0],
+            fileName: finalFilename,
+            filePath,
+            fileSize: combinedBuffer.length,
+            message: 'File uploaded and finalized successfully'
+          });
+          
+        } finally {
+          if (client && client.release) {
+            await client.release();
+          }
+        }
+      } else {
+        // No database entry needed, just return file info
+        // Clean up temporary chunks
+        await fs.rm(tempDir, { recursive: true, force: true });
+
+        return createSuccessResponse({
+          success: true,
+          fileName: finalFilename,
+          filePath,
+          fileSize: combinedBuffer.length,
+          message: 'File uploaded and finalized successfully'
+        });
+      }
 
     } catch (error) {
       // Clean up on error
