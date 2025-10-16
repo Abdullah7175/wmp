@@ -23,19 +23,13 @@ export async function POST(req) {
     
     const chunkIndex = parseInt(formData.get('chunkIndex') || '0');
     const totalChunks = parseInt(formData.get('totalChunks') || '1');
-    const chunkId = formData.get('chunkId'); // Unique identifier for this upload session
+    const uploadId = formData.get('uploadId'); // Frontend sends uploadId, not chunkId
     const fileName = formData.get('fileName');
-    const fileType = formData.get('fileType');
     const fileSize = parseInt(formData.get('fileSize') || '0');
     const chunk = formData.get('chunk');
 
-    if (!chunkId || !fileName || !chunk) {
+    if (!uploadId || !fileName || !chunk) {
       return createErrorResponse('Missing required chunk data', 400);
-    }
-
-    // Validate file type
-    if (!UPLOAD_CONFIG.ALLOWED_VIDEO_TYPES.includes(fileType)) {
-      return createErrorResponse(`File type ${fileType} is not allowed`, 400);
     }
 
     // Validate file size
@@ -43,8 +37,15 @@ export async function POST(req) {
       return createErrorResponse(`File size exceeds limit of ${UPLOAD_CONFIG.MAX_FILE_SIZE / (1024 * 1024 * 1024)}GB`, 400);
     }
 
+    // Validate file extension (since frontend doesn't send fileType)
+    const fileExt = fileName.toLowerCase().split('.').pop();
+    const allowedExtensions = ['mp4', 'mkv', 'webm', 'avi', 'mov', 'm4v'];
+    if (!allowedExtensions.includes(fileExt)) {
+      return createErrorResponse(`File type .${fileExt} is not allowed`, 400);
+    }
+
     // Create temporary directory for chunks
-    const tempDir = path.join(process.cwd(), 'temp', 'chunks', chunkId);
+    const tempDir = path.join(process.cwd(), 'temp', 'chunks', uploadId);
     await ensureUploadDir(tempDir);
 
     // Save chunk
@@ -54,57 +55,13 @@ export async function POST(req) {
     
     await fs.writeFile(chunkPath, buffer);
 
-    // If this is the last chunk, combine all chunks
-    if (chunkIndex === totalChunks - 1) {
-      try {
-        // Read all chunks and combine them
-        const chunks = [];
-        for (let i = 0; i < totalChunks; i++) {
-          const chunkFilePath = path.join(tempDir, `chunk_${i}`);
-          const chunkData = await fs.readFile(chunkFilePath);
-          chunks.push(chunkData);
-        }
-
-        // Combine chunks
-        const combinedBuffer = Buffer.concat(chunks);
-        
-        // Generate final filename and save to uploads directory
-        const finalFilename = generateUniqueFilename(fileName);
-        const uploadsDir = path.join(process.cwd(), 'public', UPLOAD_CONFIG.UPLOAD_DIRS.finalVideos);
-        await ensureUploadDir(uploadsDir);
-        
-        const finalPath = path.join(uploadsDir, finalFilename);
-        await fs.writeFile(finalPath, combinedBuffer);
-
-        // Clean up temporary chunks
-        await fs.rm(tempDir, { recursive: true, force: true });
-
-        return createSuccessResponse({
-          success: true,
-          fileName: finalFilename,
-          filePath: `/uploads/final-videos/${finalFilename}`,
-          fileSize: combinedBuffer.length,
-          message: 'File uploaded successfully'
-        });
-
-      } catch (error) {
-        // Clean up on error
-        try {
-          await fs.rm(tempDir, { recursive: true, force: true });
-        } catch (cleanupError) {
-          console.error('Error cleaning up chunks:', cleanupError);
-        }
-        
-        console.error('Error combining chunks:', error);
-        return createErrorResponse('Failed to combine file chunks', 500);
-      }
-    }
-
-    // Return success for intermediate chunks
+    // Always return success for chunks
+    // The frontend will call a separate finalize endpoint to combine them
     return createSuccessResponse({
       success: true,
       chunkIndex,
       totalChunks,
+      uploadId,
       message: `Chunk ${chunkIndex + 1} of ${totalChunks} uploaded successfully`
     });
 
@@ -122,13 +79,13 @@ export async function DELETE(req) {
       return createErrorResponse('Unauthorized', 401);
     }
 
-    const { chunkId } = await req.json();
+    const { uploadId } = await req.json();
     
-    if (!chunkId) {
-      return createErrorResponse('Chunk ID is required', 400);
+    if (!uploadId) {
+      return createErrorResponse('Upload ID is required', 400);
     }
 
-    const tempDir = path.join(process.cwd(), 'temp', 'chunks', chunkId);
+    const tempDir = path.join(process.cwd(), 'temp', 'chunks', uploadId);
     
     try {
       await fs.rm(tempDir, { recursive: true, force: true });
