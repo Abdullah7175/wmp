@@ -102,11 +102,20 @@ export default function DocumentViewer() {
 				}
 			}
 			const attRes = await fetch(`/api/efiling/files/${params.id}/attachments`);
-			if (attRes.ok) setAttachments((await attRes.json()).attachments || []);
+			if (attRes.ok) {
+				const atts = await attRes.json();
+				setAttachments(Array.isArray(atts) ? atts : []);
+			}
 			const sigRes = await fetch(`/api/efiling/files/${params.id}/signatures`);
-			if (sigRes.ok) setSignatures((await sigRes.json()).signatures || []);
+			if (sigRes.ok) {
+				const sigs = await sigRes.json();
+				setSignatures(Array.isArray(sigs) ? sigs : []);
+			}
 			const comRes = await fetch(`/api/efiling/files/${params.id}/comments`);
-			if (comRes.ok) setComments((await comRes.json()) || []);
+			if (comRes.ok) {
+				const coms = await comRes.json();
+				setComments(Array.isArray(coms) ? coms : []);
+			}
 		} catch (e) {
 			console.error(e);
 			toast({ title: "Error", description: "Failed to fetch document data", variant: "destructive" });
