@@ -6,7 +6,7 @@ import { useRouter, useParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Edit, Download, Eye, Clock, User, Building2, FileText, AlertCircle, MessageSquare, Forward, Printer } from "lucide-react";
+import { ArrowLeft, Edit, Download, Eye, Clock, User, Building2, FileText, AlertCircle, MessageSquare, Forward, Printer, FileDown } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import Image from "next/image";
 
@@ -34,10 +34,13 @@ export default function FileDetail() {
 
     useEffect(() => {
         if (!session?.user?.id || !params.id) return;
-        fetchFile();
-        fetchExtras();
-        fetchTimeline();
-        fetchComments();
+        const loadData = async () => {
+            await fetchFile();
+            await fetchExtras();
+            await fetchTimeline();
+            await fetchComments();
+        };
+        loadData();
     }, [session?.user?.id, params.id]);
 
     useEffect(() => {
@@ -72,14 +75,29 @@ export default function FileDetail() {
             ]);
             if (docRes.ok) {
                 const doc = await docRes.json();
+                console.log('Document data:', doc);
                 setPages(doc.pages || []);
+                
+                // If no pages but document_content exists, create a single page
+                if ((!doc.pages || doc.pages.length === 0) && doc.document_content) {
+                    console.log('Creating fallback page from document_content');
+                    setPages([{
+                        id: 'main',
+                        pageNumber: 1,
+                        title: 'Main Document',
+                        content: doc.document_content,
+                        type: 'MAIN'
+                    }]);
+                }
             }
             if (attRes.ok) {
                 const atts = await attRes.json();
+                console.log('Fetched attachments:', atts);
                 setAttachments(Array.isArray(atts) ? atts : []);
             }
             if (sigRes.ok) {
                 const sigs = await sigRes.json();
+                console.log('Fetched signatures:', sigs);
                 setSignatures(Array.isArray(sigs) ? sigs : []);
             }
         } catch (e) {
@@ -104,6 +122,7 @@ export default function FileDetail() {
             const res = await fetch(`/api/efiling/files/${params.id}/comments`);
             if (res.ok) {
                 const data = await res.json();
+                console.log('Fetched comments:', data);
                 setComments(Array.isArray(data) ? data : []);
             }
         } catch (e) {
@@ -185,48 +204,136 @@ export default function FileDetail() {
     };
 
     const handlePrint = () => {
+        console.log('Print button clicked');
+        console.log('Current pages state:', pages);
+        console.log('Current file state:', file);
+        console.log('File document_content:', file?.document_content);
+        console.log('Signatures:', signatures);
+        console.log('Attachments:', attachments);
+        console.log('Comments:', comments);
         window.print();
     };
 
+    const handleExportPDF = async () => {
+        try {
+            toast({ title: "Generating PDF...", description: "Please wait while we prepare your document." });
+            
+            // Use browser's print to PDF functionality
+            // Set a flag to indicate PDF export mode
+            const originalTitle = document.title;
+            document.title = `EFile_${file?.file_number || 'document'}_${new Date().toISOString().split('T')[0]}`;
+            
+            // Trigger print dialog with PDF as default
+            window.print();
+            
+            // Restore original title after a short delay
+            setTimeout(() => {
+                document.title = originalTitle;
+            }, 1000);
+            
+            toast({ 
+                title: "PDF Export", 
+                description: "Please select 'Save as PDF' in the print dialog to export." 
+            });
+        } catch (error) {
+            console.error('PDF export error:', error);
+            toast({ 
+                title: "Export Failed", 
+                description: "Failed to export PDF. Please try again.", 
+                variant: "destructive" 
+            });
+        }
+    };
+
     const renderPage = (page) => {
-        const content = page.content || {};
-        const header = content.header || file?.document_content?.header;
-        const title = content.title || file?.document_content?.title;
-        const subject = content.subject || file?.document_content?.subject;
-        const matter = content.matter || file?.document_content?.matter;
-        const footer = content.footer || file?.document_content?.footer;
+        // Parse page.content if it's a string
+        let content = page.content || {};
+        if (typeof page.content === 'string') {
+            try {
+                content = JSON.parse(page.content);
+                console.log('Parsed page content:', content);
+            } catch (e) {
+                console.error('Error parsing page content:', e);
+                content = {};
+            }
+        }
+        
+        // Parse file.document_content if it's a string
+        let parsedDocumentContent = file?.document_content;
+        if (typeof file?.document_content === 'string') {
+            try {
+                parsedDocumentContent = JSON.parse(file.document_content);
+                console.log('Parsed document_content:', parsedDocumentContent);
+            } catch (e) {
+                console.error('Error parsing document_content:', e);
+                parsedDocumentContent = {};
+            }
+        }
+        
+        const header = content.header || parsedDocumentContent?.header;
+        const title = content.title || parsedDocumentContent?.title;
+        const subject = content.subject || parsedDocumentContent?.subject;
+        const matter = content.matter || parsedDocumentContent?.matter;
+        const footer = content.footer || parsedDocumentContent?.footer;
+        
+        console.log('Rendering page:', page);
+        console.log('Page content:', content);
+        console.log('Parsed document_content:', parsedDocumentContent);
+        console.log('Header:', header);
+        console.log('Title:', title);
+        console.log('Subject:', subject);
+        console.log('Matter:', matter);
+        console.log('Footer:', footer);
+
+        // Check if page has meaningful content
+        const hasContent = header || title || subject || matter || footer;
+        if (!hasContent) {
+            console.log('Skipping empty page:', page);
+            return null;
+        }
+        
+        // Additional check for empty strings
+        const hasRealContent = (header && header.trim()) || 
+                              (title && title.trim()) || 
+                              (subject && subject.trim()) || 
+                              (matter && matter.trim()) || 
+                              (footer && footer.trim());
+        if (!hasRealContent) {
+            console.log('Skipping page with empty content:', page);
+            return null;
+        }
 
         return (
-            <div key={page.id || page.pageNumber} className="bg-white shadow border mx-auto page-content print:shadow-none print:border-0" style={{ width: '794px', minHeight: '1123px', padding: '40px' }}>
-                {/* Fixed KWSC Header */}
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6 print:bg-white print:border-gray-300">
-                    <div className="flex items-center justify-center space-x-4">
+            <div key={page.id || page.pageNumber} className="bg-white shadow border mx-auto page-content" style={{ width: '794px', minHeight: '1123px', padding: '20px' }}>
+                {/* Compact KWSC Header */}
+                <div className="border-b border-gray-300 pb-3 mb-4">
+                    <div className="flex items-center space-x-3">
                         <img 
                             src="/logo.png" 
                             alt="KWSC Logo" 
-                            className="h-16 w-auto"
+                            className="h-8 w-auto"
                         />
-                        <div className="text-center">
-                            <h1 className="text-2xl font-bold text-blue-900 print:text-black">
+                        <div>
+                            <h1 className="text-lg font-bold text-blue-900">
                                 Karachi Water & Sewerage Corporation
                             </h1>
-                            <p className="text-sm text-blue-700 mt-1 print:text-gray-700">
+                            <p className="text-xs text-blue-700">
                                 Government of Sindh
                             </p>
                         </div>
                     </div>
                 </div>
                 
-                {header && (<div className="mb-4 text-center text-xs text-gray-600" dangerouslySetInnerHTML={{ __html: header }} />)}
-                {title && (<h2 className="text-xl font-bold text-center mb-2" dangerouslySetInnerHTML={{ __html: title }} />)}
+                {header && (<div className="mb-3 text-center text-xs text-gray-600" dangerouslySetInnerHTML={{ __html: header }} />)}
+                {title && (<h2 className="text-lg font-bold text-center mb-3" dangerouslySetInnerHTML={{ __html: title }} />)}
                 {subject && (
-                    <div className="mb-4">
-                        <div className="font-semibold">Subject:</div>
-                        <div dangerouslySetInnerHTML={{ __html: subject }} />
+                    <div className="mb-3">
+                        <div className="font-semibold text-sm">Subject:</div>
+                        <div className="text-sm" dangerouslySetInnerHTML={{ __html: subject }} />
                     </div>
                 )}
-                {matter && (<div className="prose print:text-black" dangerouslySetInnerHTML={{ __html: matter }} />)}
-                {footer && (<div className="mt-6 text-xs text-gray-600" dangerouslySetInnerHTML={{ __html: footer }} />)}
+                {matter && (<div className="prose text-sm" dangerouslySetInnerHTML={{ __html: matter }} />)}
+                {footer && (<div className="mt-4 text-xs text-gray-600" dangerouslySetInnerHTML={{ __html: footer }} />)}
             </div>
         );
     };
@@ -307,18 +414,35 @@ export default function FileDetail() {
                     }
                     
                     .page-content {
-                        page-break-after: always;
                         page-break-inside: avoid;
                         width: 100% !important;
                         max-width: 100% !important;
                         margin: 0 !important;
-                        padding: 20mm !important;
+                        padding: 15mm !important;
                         box-shadow: none !important;
                         border: none !important;
+                        min-height: 250mm !important;
+                        background: white !important;
+                        display: block !important;
+                        visibility: visible !important;
+                    }
+                    
+                    .page-content:not(:last-child) {
+                        page-break-after: always;
                     }
                     
                     .page-content:last-child {
                         page-break-after: auto;
+                    }
+                    
+                    /* Hide empty pages */
+                    .page-content:empty {
+                        display: none !important;
+                    }
+                    
+                    /* Hide pages with no meaningful content */
+                    .page-content:has(.prose:empty) {
+                        display: none !important;
                     }
                     
                     /* Print header on each page */
@@ -394,6 +518,53 @@ export default function FileDetail() {
                         font-weight: bold !important;
                     }
                     
+                    /* Compact KWSC header styling */
+                    .border-b {
+                        border-bottom: 1px solid #ccc !important;
+                        padding-bottom: 8px !important;
+                        margin-bottom: 15px !important;
+                    }
+                    
+                    /* Logo sizing for print */
+                    .h-8 {
+                        height: 32px !important;
+                        width: auto !important;
+                    }
+                    
+                    /* Header text sizing */
+                    .text-lg {
+                        font-size: 14pt !important;
+                    }
+                    
+                    .text-xs {
+                        font-size: 10pt !important;
+                    }
+                    
+                    .text-sm {
+                        font-size: 11pt !important;
+                    }
+                    
+                    /* Ensure KWSC header is visible in print */
+                    .bg-blue-50 {
+                        background: white !important;
+                        border: 1px solid #ccc !important;
+                    }
+                    
+                    .text-blue-900, .text-blue-700 {
+                        color: #000 !important;
+                    }
+                    
+                    /* Ensure all text is visible */
+                    .text-gray-600, .text-gray-700 {
+                        color: #000 !important;
+                    }
+                    
+                    /* Force visibility of all content */
+                    .page-content * {
+                        visibility: visible !important;
+                        opacity: 1 !important;
+                    }
+                    
                     /* File info for first page */
                     .print-file-info {
                         border: 1px solid #ddd;
@@ -424,6 +595,46 @@ export default function FileDetail() {
                     .print-file-info .info-value {
                         width: 60%;
                         color: #000;
+                    }
+                    
+                    /* Print sections for signatures, attachments, comments */
+                    .print-section {
+                        page-break-inside: avoid;
+                        margin-top: 15mm;
+                        padding: 10mm;
+                        border: 1px solid #ddd;
+                        background: white;
+                    }
+                    
+                    .print-section h3 {
+                        font-size: 13pt;
+                        font-weight: bold;
+                        margin-bottom: 5mm;
+                        border-bottom: 2px solid #333;
+                        padding-bottom: 3mm;
+                        color: #000;
+                    }
+                    
+                    .print-signature-item,
+                    .print-attachment-item,
+                    .print-comment-item {
+                        margin-bottom: 5mm;
+                        padding: 5mm;
+                        border: 1px solid #ccc;
+                        page-break-inside: avoid;
+                    }
+                    
+                    .print-signature-item img {
+                        max-height: 40mm;
+                        width: auto;
+                        border: 1px solid #ddd;
+                        margin-bottom: 3mm;
+                    }
+                    
+                    .print-attachment-item img {
+                        max-height: 60mm;
+                        width: auto;
+                        margin-bottom: 3mm;
                     }
                 }
                 
@@ -489,6 +700,10 @@ export default function FileDetail() {
                     <Button onClick={handlePrint} variant="outline" className="bg-green-50 hover:bg-green-100 text-green-700 border-green-300">
                         <Printer className="w-4 h-4 mr-2" />
                         Print
+                    </Button>
+                    <Button onClick={handleExportPDF} variant="outline" className="bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-300">
+                        <FileDown className="w-4 h-4 mr-2" />
+                        Export PDF
                     </Button>
                     <Button variant="outline">
                         <Download className="w-4 h-4 mr-2" />
@@ -560,20 +775,102 @@ export default function FileDetail() {
                     </Card>
 
                     <div className="space-y-6">
-                        {pages && pages.length > 0 ? (
-                            pages.map(renderPage)
-                        ) : (
-                            file?.document_content ? (
-                                renderPage({ id: 'main', pageNumber: 1, content: file.document_content })
-                            ) : (
+                        {(() => {
+                            console.log('Pages state:', pages);
+                            console.log('File state:', file);
+                            console.log('Pages length:', pages?.length);
+                            console.log('File document_content:', file?.document_content);
+                            
+                            if (pages && pages.length > 0) {
+                                console.log('Rendering pages:', pages);
+                                return pages.map(renderPage).filter(page => page !== null);
+                            } else if (file?.document_content) {
+                                console.log('Rendering fallback from file document_content');
+                                // Parse document_content if it's a string
+                                let parsedContent = file.document_content;
+                                if (typeof file.document_content === 'string') {
+                                    try {
+                                        parsedContent = JSON.parse(file.document_content);
+                                        console.log('Parsed fallback content:', parsedContent);
+                                    } catch (e) {
+                                        console.error('Error parsing fallback content:', e);
+                                        parsedContent = {};
+                                    }
+                                }
+                                return renderPage({ id: 'main', pageNumber: 1, content: parsedContent });
+                            } else {
+                                console.log('No content available');
+                                return (
                                 <Card>
                                     <CardContent>
                                         <p className="text-sm text-gray-500">No document content available.</p>
+                                            <p className="text-xs text-gray-400 mt-2">Debug: pages={pages?.length || 0}, file={file ? 'loaded' : 'not loaded'}</p>
                                     </CardContent>
                                 </Card>
-                            )
-                        )}
+                                );
+                            }
+                        })()}
                     </div>
+
+                    {/* Print-only E-Signatures Section */}
+                    {signatures.length > 0 && (
+                        <div className="print-only print-section">
+                            <h3>E-Signatures ({signatures.length})</h3>
+                            {signatures.map((s, idx) => (
+                                <div key={s.id || idx} className="print-signature-item">
+                                    {s.content && s.type?.toLowerCase().includes('image') ? (
+                                        // eslint-disable-next-line @next/next/no-img-element
+                                        <img src={s.content} alt="signature" />
+                                    ) : (
+                                        <div style={{ padding: '5mm', border: '1px solid #ddd', backgroundColor: '#f9f9f9', fontFamily: 'monospace', fontSize: '10pt', marginBottom: '3mm' }}>
+                                            {s.content}
+                                        </div>
+                                    )}
+                                    <div style={{ fontWeight: 'bold', fontSize: '11pt', marginBottom: '2mm' }}>
+                                        {s.user_name} <span style={{ color: '#666', fontWeight: 'normal' }}>({s.user_role})</span>
+                    </div>
+                                    <div style={{ color: '#666', fontSize: '9pt' }}>{formatDate(s.timestamp)}</div>
+                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    {/* Print-only Attachments Section */}
+                    {attachments.length > 0 && (
+                        <div className="print-only print-section">
+                            <h3>Attachments ({attachments.length})</h3>
+                            {attachments.map((a, idx) => (
+                                <div key={a.id || idx} className="print-attachment-item">
+                                    {a.file_url && a.file_type?.startsWith('image/') ? (
+                                        // eslint-disable-next-line @next/next/no-img-element
+                                        <img src={a.file_url} alt={a.file_name} />
+                                    ) : (
+                                        <div style={{ padding: '10mm', backgroundColor: '#f0f0f0', textAlign: 'center', border: '1px solid #ccc', marginBottom: '3mm' }}>
+                                            <div style={{ fontSize: '11pt', color: '#666' }}>{a.file_type || 'Document'}</div>
+                                        </div>
+                                    )}
+                                    <div style={{ fontWeight: 'bold', fontSize: '11pt', marginBottom: '2mm' }}>{a.file_name}</div>
+                                    <div style={{ color: '#666', fontSize: '9pt' }}>
+                                        Size: {Math.round((a.file_size || 0) / 1024)} KB | Uploaded: {formatDate(a.uploaded_at)}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    {/* Print-only Comments Section */}
+                    {comments.length > 0 && (
+                        <div className="print-only print-section">
+                            <h3>Comments ({comments.length})</h3>
+                            {comments.map((c, idx) => (
+                                <div key={c.id || idx} className="print-comment-item">
+                                    <div style={{ fontWeight: 'bold', fontSize: '11pt', marginBottom: '2mm' }}>{c.user_name}</div>
+                                    <div style={{ color: '#666', fontSize: '9pt', marginBottom: '3mm' }}>{formatDate(c.timestamp)}</div>
+                                    <div style={{ fontSize: '10pt', lineHeight: '1.5' }}>{c.text}</div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
                 </div>
 
                 <div className="space-y-6 no-print">

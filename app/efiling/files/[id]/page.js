@@ -6,7 +6,7 @@ import { useRouter, useParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Edit, Download, Eye, Clock, User, Building2, FileText, AlertCircle, Printer } from "lucide-react";
+import { ArrowLeft, Edit, Download, Eye, Clock, User, Building2, FileText, AlertCircle, Printer, FileDown } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 export default function FileDetail() {
@@ -16,10 +16,19 @@ export default function FileDetail() {
     const { toast } = useToast();
     const [file, setFile] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [pages, setPages] = useState([]);
+    const [attachments, setAttachments] = useState([]);
+    const [signatures, setSignatures] = useState([]);
+    const [comments, setComments] = useState([]);
 
     useEffect(() => {
         if (!session?.user?.id || !params.id) return;
-        fetchFile();
+        const loadData = async () => {
+            await fetchFile();
+            await fetchExtras();
+            await fetchComments();
+        };
+        loadData();
     }, [session?.user?.id, params.id]);
 
     const fetchFile = async () => {
@@ -40,6 +49,58 @@ export default function FileDetail() {
             });
         } finally {
             setLoading(false);
+        }
+    };
+
+    const fetchExtras = async () => {
+        try {
+            const [docRes, attRes, sigRes] = await Promise.all([
+                fetch(`/api/efiling/files/${params.id}/document`),
+                fetch(`/api/efiling/files/${params.id}/attachments`),
+                fetch(`/api/efiling/files/${params.id}/signatures`)
+            ]);
+            if (docRes.ok) {
+                const doc = await docRes.json();
+                console.log('Document data:', doc);
+                setPages(doc.pages || []);
+                
+                // If no pages but document_content exists, create a single page
+                if ((!doc.pages || doc.pages.length === 0) && doc.document_content) {
+                    console.log('Creating fallback page from document_content');
+                    setPages([{
+                        id: 'main',
+                        pageNumber: 1,
+                        title: 'Main Document',
+                        content: doc.document_content,
+                        type: 'MAIN'
+                    }]);
+                }
+            }
+            if (attRes.ok) {
+                const atts = await attRes.json();
+                console.log('Fetched attachments:', atts);
+                setAttachments(Array.isArray(atts) ? atts : []);
+            }
+            if (sigRes.ok) {
+                const sigs = await sigRes.json();
+                console.log('Fetched signatures:', sigs);
+                setSignatures(Array.isArray(sigs) ? sigs : []);
+            }
+        } catch (e) {
+            console.error('Error loading extras', e);
+        }
+    };
+
+    const fetchComments = async () => {
+        try {
+            const res = await fetch(`/api/efiling/files/${params.id}/comments`);
+            if (res.ok) {
+                const data = await res.json();
+                console.log('Fetched comments:', data);
+                setComments(Array.isArray(data) ? data : []);
+            }
+        } catch (e) {
+            console.error('Comments load error', e);
         }
     };
 
@@ -86,7 +147,138 @@ export default function FileDetail() {
     };
 
     const handlePrint = () => {
+        console.log('Print button clicked');
+        console.log('Current pages state:', pages);
+        console.log('Current file state:', file);
+        console.log('File document_content:', file?.document_content);
+        console.log('Signatures:', signatures);
+        console.log('Attachments:', attachments);
+        console.log('Comments:', comments);
         window.print();
+    };
+
+    const handleExportPDF = async () => {
+        try {
+            toast({ title: "Generating PDF...", description: "Please wait while we prepare your document." });
+            
+            // Use browser's print to PDF functionality
+            // Set a flag to indicate PDF export mode
+            const originalTitle = document.title;
+            document.title = `EFile_${file?.file_number || 'document'}_${new Date().toISOString().split('T')[0]}`;
+            
+            // Trigger print dialog with PDF as default
+            window.print();
+            
+            // Restore original title after a short delay
+            setTimeout(() => {
+                document.title = originalTitle;
+            }, 1000);
+            
+            toast({ 
+                title: "PDF Export", 
+                description: "Please select 'Save as PDF' in the print dialog to export." 
+            });
+        } catch (error) {
+            console.error('PDF export error:', error);
+            toast({ 
+                title: "Export Failed", 
+                description: "Failed to export PDF. Please try again.", 
+                variant: "destructive" 
+            });
+        }
+    };
+
+    const renderPage = (page) => {
+        // Parse page.content if it's a string
+        let content = page.content || {};
+        if (typeof page.content === 'string') {
+            try {
+                content = JSON.parse(page.content);
+                console.log('Parsed page content:', content);
+            } catch (e) {
+                console.error('Error parsing page content:', e);
+                content = {};
+            }
+        }
+        
+        // Parse file.document_content if it's a string
+        let parsedDocumentContent = file?.document_content;
+        if (typeof file?.document_content === 'string') {
+            try {
+                parsedDocumentContent = JSON.parse(file.document_content);
+                console.log('Parsed document_content:', parsedDocumentContent);
+            } catch (e) {
+                console.error('Error parsing document_content:', e);
+                parsedDocumentContent = {};
+            }
+        }
+        
+        const header = content.header || parsedDocumentContent?.header;
+        const title = content.title || parsedDocumentContent?.title;
+        const subject = content.subject || parsedDocumentContent?.subject;
+        const matter = content.matter || parsedDocumentContent?.matter;
+        const footer = content.footer || parsedDocumentContent?.footer;
+        
+        console.log('Rendering page:', page);
+        console.log('Page content:', content);
+        console.log('Parsed document_content:', parsedDocumentContent);
+        console.log('Header:', header);
+        console.log('Title:', title);
+        console.log('Subject:', subject);
+        console.log('Matter:', matter);
+        console.log('Footer:', footer);
+
+        // Check if page has meaningful content
+        const hasContent = header || title || subject || matter || footer;
+        if (!hasContent) {
+            console.log('Skipping empty page:', page);
+            return null;
+        }
+        
+        // Additional check for empty strings
+        const hasRealContent = (header && header.trim()) || 
+                              (title && title.trim()) || 
+                              (subject && subject.trim()) || 
+                              (matter && matter.trim()) || 
+                              (footer && footer.trim());
+        if (!hasRealContent) {
+            console.log('Skipping page with empty content:', page);
+            return null;
+        }
+
+        return (
+            <div key={page.id || page.pageNumber} className="bg-white shadow border mx-auto page-content" style={{ width: '794px', minHeight: '1123px', padding: '20px' }}>
+                {/* Compact KWSC Header */}
+                <div className="border-b border-gray-300 pb-3 mb-4">
+                    <div className="flex items-center space-x-3">
+                        <img 
+                            src="/logo.png" 
+                            alt="KWSC Logo" 
+                            className="h-8 w-auto"
+                        />
+                        <div>
+                            <h1 className="text-lg font-bold text-blue-900">
+                                Karachi Water & Sewerage Corporation
+                            </h1>
+                            <p className="text-xs text-blue-700">
+                                Government of Sindh
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                
+                {header && (<div className="mb-3 text-center text-xs text-gray-600" dangerouslySetInnerHTML={{ __html: header }} />)}
+                {title && (<h2 className="text-lg font-bold text-center mb-3" dangerouslySetInnerHTML={{ __html: title }} />)}
+                {subject && (
+                    <div className="mb-3">
+                        <div className="font-semibold text-sm">Subject:</div>
+                        <div className="text-sm" dangerouslySetInnerHTML={{ __html: subject }} />
+                    </div>
+                )}
+                {matter && (<div className="prose text-sm" dangerouslySetInnerHTML={{ __html: matter }} />)}
+                {footer && (<div className="mt-4 text-xs text-gray-600" dangerouslySetInnerHTML={{ __html: footer }} />)}
+            </div>
+        );
     };
 
     if (loading) {
@@ -127,6 +319,62 @@ export default function FileDetail() {
                         display: block !important;
                     }
                     
+                    .page-content {
+                        page-break-inside: avoid;
+                        width: 100% !important;
+                        max-width: 100% !important;
+                        margin: 0 !important;
+                        padding: 15mm !important;
+                        box-shadow: none !important;
+                        border: none !important;
+                        min-height: 250mm !important;
+                        background: white !important;
+                        display: block !important;
+                        visibility: visible !important;
+                    }
+                    
+                    .page-content:not(:last-child) {
+                        page-break-after: always;
+                    }
+                    
+                    .page-content:last-child {
+                        page-break-after: auto;
+                    }
+                    
+                    /* Hide empty pages */
+                    .page-content:empty {
+                        display: none !important;
+                    }
+                    
+                    /* Hide pages with no meaningful content */
+                    .page-content:has(.prose:empty) {
+                        display: none !important;
+                    }
+                    
+                    /* Print header on each page */
+                    @page {
+                        @top-center {
+                            content: "Karachi Water & Sewerage Corporation - E-Filing System";
+                            font-size: 10pt;
+                            color: #666;
+                        }
+                        @bottom-right {
+                            content: "Page " counter(page) " of " counter(pages);
+                            font-size: 9pt;
+                            color: #666;
+                        }
+                        @bottom-left {
+                            content: "File: ${file?.file_number || 'N/A'}";
+                            font-size: 9pt;
+                            color: #666;
+                        }
+                    }
+                    
+                    /* Ensure content doesn't overflow */
+                    * {
+                        overflow: visible !important;
+                    }
+                    
                     /* Hide navigation and sidebar on print */
                     nav, aside, .no-print {
                         display: none !important;
@@ -135,12 +383,21 @@ export default function FileDetail() {
                     /* Make main content full width */
                     .container {
                         max-width: 100% !important;
-                        padding: 20mm !important;
+                        padding: 0 !important;
                     }
                     
-                    /* Show document content */
                     .lg\\:col-span-2 {
                         grid-column: span 1 !important;
+                    }
+                    
+                    /* Hide only UI elements, show all content */
+                    .no-print {
+                        display: none !important;
+                    }
+                    
+                    /* Ensure document pages are visible */
+                    .page-content {
+                        display: block !important;
                     }
                     
                     /* Show all content cards */
@@ -167,69 +424,123 @@ export default function FileDetail() {
                         font-weight: bold !important;
                     }
                     
-                    /* Print header on each page */
-                    @page {
-                        @top-center {
-                            content: "Karachi Water & Sewerage Corporation - E-Filing System";
-                            font-size: 10pt;
-                            color: #666;
-                        }
-                        @bottom-right {
-                            content: "Page " counter(page) " of " counter(pages);
-                            font-size: 9pt;
-                            color: #666;
-                        }
-                        @bottom-left {
-                            content: "File: ${file?.file_number || 'N/A'}";
-                            font-size: 9pt;
-                            color: #666;
-                        }
+                    /* Compact KWSC header styling */
+                    .border-b {
+                        border-bottom: 1px solid #ccc !important;
+                        padding-bottom: 8px !important;
+                        margin-bottom: 15px !important;
                     }
                     
-                    /* File info styling */
-                    .print-file-header {
-                        border: 2px solid #333;
+                    /* Logo sizing for print */
+                    .h-8 {
+                        height: 32px !important;
+                        width: auto !important;
+                    }
+                    
+                    /* Header text sizing */
+                    .text-lg {
+                        font-size: 14pt !important;
+                    }
+                    
+                    .text-xs {
+                        font-size: 10pt !important;
+                    }
+                    
+                    .text-sm {
+                        font-size: 11pt !important;
+                    }
+                    
+                    /* Ensure KWSC header is visible in print */
+                    .bg-blue-50 {
+                        background: white !important;
+                        border: 1px solid #ccc !important;
+                    }
+                    
+                    .text-blue-900, .text-blue-700 {
+                        color: #000 !important;
+                    }
+                    
+                    /* Ensure all text is visible */
+                    .text-gray-600, .text-gray-700 {
+                        color: #000 !important;
+                    }
+                    
+                    /* Force visibility of all content */
+                    .page-content * {
+                        visibility: visible !important;
+                        opacity: 1 !important;
+                    }
+                    
+                    /* File info for first page */
+                    .print-file-info {
+                        border: 1px solid #ddd;
                         padding: 15mm;
                         margin-bottom: 10mm;
                         page-break-inside: avoid;
-                        background: #f9f9f9;
                     }
                     
-                    .print-file-header h1 {
-                        font-size: 18pt;
+                    .print-file-info h2 {
+                        font-size: 14pt;
                         font-weight: bold;
                         margin-bottom: 5mm;
-                        color: #000;
-                        text-align: center;
                         border-bottom: 2px solid #333;
                         padding-bottom: 3mm;
                     }
                     
-                    .print-info-grid {
-                        display: grid;
-                        grid-template-columns: 1fr 1fr;
-                        gap: 5mm;
-                        margin-top: 5mm;
-                    }
-                    
-                    .print-info-item {
+                    .print-file-info .info-row {
+                        display: flex;
                         margin-bottom: 3mm;
                     }
                     
-                    .print-info-label {
+                    .print-file-info .info-label {
                         font-weight: bold;
+                        width: 40%;
                         color: #333;
-                        font-size: 10pt;
                     }
                     
-                    .print-info-value {
+                    .print-file-info .info-value {
+                        width: 60%;
                         color: #000;
-                        font-size: 11pt;
-                        margin-top: 1mm;
                     }
                     
-                    .print-full-width {
-                        grid-column: 1 / -1;
+                    /* Print sections for signatures, attachments, comments */
+                    .print-section {
+                        page-break-inside: avoid;
+                        margin-top: 15mm;
+                        padding: 10mm;
+                        border: 1px solid #ddd;
+                        background: white;
+                    }
+                    
+                    .print-section h3 {
+                        font-size: 13pt;
+                        font-weight: bold;
+                        margin-bottom: 5mm;
+                        border-bottom: 2px solid #333;
+                        padding-bottom: 3mm;
+                        color: #000;
+                    }
+                    
+                    .print-signature-item,
+                    .print-attachment-item,
+                    .print-comment-item {
+                        margin-bottom: 5mm;
+                        padding: 5mm;
+                        border: 1px solid #ccc;
+                        page-break-inside: avoid;
+                    }
+                    
+                    .print-signature-item img {
+                        max-height: 40mm;
+                        width: auto;
+                        border: 1px solid #ddd;
+                        margin-bottom: 3mm;
+                    }
+                    
+                    .print-attachment-item img {
+                        max-height: 60mm;
+                        width: auto;
+                        margin-bottom: 3mm;
                     }
                 }
                 
@@ -238,66 +549,40 @@ export default function FileDetail() {
                 }
             `}</style>
             
-            {/* Print-only file information */}
-            <div className="print-only">
-                <div className="print-file-header">
-                    <h1>KWSC E-Filing Document</h1>
-                    <div className="print-info-grid">
-                        <div className="print-info-item">
-                            <div className="print-info-label">File Number:</div>
-                            <div className="print-info-value">{file?.file_number}</div>
-                        </div>
-                        <div className="print-info-item">
-                            <div className="print-info-label">Status:</div>
-                            <div className="print-info-value">{file?.status_name}</div>
-                        </div>
-                        <div className="print-info-item print-full-width">
-                            <div className="print-info-label">Subject:</div>
-                            <div className="print-info-value">{file?.subject}</div>
-                        </div>
-                        <div className="print-info-item">
-                            <div className="print-info-label">Department:</div>
-                            <div className="print-info-value">{file?.department_name}</div>
-                        </div>
-                        <div className="print-info-item">
-                            <div className="print-info-label">Category:</div>
-                            <div className="print-info-value">{file?.category_name}</div>
-                        </div>
-                        <div className="print-info-item">
-                            <div className="print-info-label">Priority:</div>
-                            <div className="print-info-value">{file?.priority}</div>
-                        </div>
-                        <div className="print-info-item">
-                            <div className="print-info-label">Confidentiality:</div>
-                            <div className="print-info-value">{file?.confidentiality_level}</div>
-                        </div>
-                        <div className="print-info-item">
-                            <div className="print-info-label">Created Date:</div>
-                            <div className="print-info-value">{formatDate(file?.created_at)}</div>
-                        </div>
-                        <div className="print-info-item">
-                            <div className="print-info-label">Created By:</div>
-                            <div className="print-info-value">{file?.created_by_name}</div>
-                        </div>
-                        {file?.assigned_to_name && (
-                            <div className="print-info-item">
-                                <div className="print-info-label">Assigned To:</div>
-                                <div className="print-info-value">{file?.assigned_to_name}</div>
-                            </div>
-                        )}
-                        {file?.work_request_id && (
-                            <div className="print-info-item">
-                                <div className="print-info-label">Work Request:</div>
-                                <div className="print-info-value">WR-{file?.work_request_id}</div>
-                            </div>
-                        )}
-                        {file?.remarks && (
-                            <div className="print-info-item print-full-width">
-                                <div className="print-info-label">Remarks:</div>
-                                <div className="print-info-value">{file?.remarks}</div>
-                            </div>
-                        )}
-                    </div>
+            {/* Print-only file information header */}
+            <div className="print-only print-file-info">
+                <h2>E-Filing Document</h2>
+                <div className="info-row">
+                    <div className="info-label">File Number:</div>
+                    <div className="info-value">{file?.file_number}</div>
+                </div>
+                <div className="info-row">
+                    <div className="info-label">Subject:</div>
+                    <div className="info-value">{file?.subject}</div>
+                </div>
+                <div className="info-row">
+                    <div className="info-label">Department:</div>
+                    <div className="info-value">{file?.department_name}</div>
+                </div>
+                <div className="info-row">
+                    <div className="info-label">Category:</div>
+                    <div className="info-value">{file?.category_name}</div>
+                </div>
+                <div className="info-row">
+                    <div className="info-label">Priority:</div>
+                    <div className="info-value">{file?.priority}</div>
+                </div>
+                <div className="info-row">
+                    <div className="info-label">Status:</div>
+                    <div className="info-value">{file?.status_name}</div>
+                </div>
+                <div className="info-row">
+                    <div className="info-label">Created Date:</div>
+                    <div className="info-value">{formatDate(file?.created_at)}</div>
+                </div>
+                <div className="info-row">
+                    <div className="info-label">Created By:</div>
+                    <div className="info-value">{file?.created_by_name}</div>
                 </div>
             </div>
         
@@ -330,6 +615,10 @@ export default function FileDetail() {
                         <Printer className="w-4 h-4 mr-2" />
                         Print
                     </Button>
+                    <Button onClick={handleExportPDF} variant="outline" className="bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-300">
+                        <FileDown className="w-4 h-4 mr-2" />
+                        Export PDF
+                    </Button>
                     <Button variant="outline">
                         <Download className="w-4 h-4 mr-2" />
                         Download
@@ -341,7 +630,7 @@ export default function FileDetail() {
                 {/* Main Content */}
                 <div className="lg:col-span-2 space-y-6">
                     {/* File Information */}
-                    <Card className="print:border-2 print:border-gray-300 print:shadow-none">
+                    <Card className="no-print">
                         <CardHeader>
                             <CardTitle className="flex items-center">
                                 <FileText className="w-5 h-5 mr-2" />
@@ -412,7 +701,7 @@ export default function FileDetail() {
                     </Card>
 
                     {/* Assignment Information */}
-                    <Card className="print:border-2 print:border-gray-300 print:shadow-none print:page-break-before-auto">
+                    <Card className="no-print">
                         <CardHeader>
                             <CardTitle className="flex items-center">
                                 <User className="w-5 h-5 mr-2" />
@@ -435,6 +724,104 @@ export default function FileDetail() {
                             </div>
                         </CardContent>
                     </Card>
+
+                    <div className="space-y-6">
+                        {(() => {
+                            console.log('Pages state:', pages);
+                            console.log('File state:', file);
+                            console.log('Pages length:', pages?.length);
+                            console.log('File document_content:', file?.document_content);
+                            
+                            if (pages && pages.length > 0) {
+                                console.log('Rendering pages:', pages);
+                                return pages.map(renderPage).filter(page => page !== null);
+                            } else if (file?.document_content) {
+                                console.log('Rendering fallback from file document_content');
+                                // Parse document_content if it's a string
+                                let parsedContent = file.document_content;
+                                if (typeof file.document_content === 'string') {
+                                    try {
+                                        parsedContent = JSON.parse(file.document_content);
+                                        console.log('Parsed fallback content:', parsedContent);
+                                    } catch (e) {
+                                        console.error('Error parsing fallback content:', e);
+                                        parsedContent = {};
+                                    }
+                                }
+                                return renderPage({ id: 'main', pageNumber: 1, content: parsedContent });
+                            } else {
+                                console.log('No content available');
+                                return (
+                                <Card>
+                                    <CardContent>
+                                        <p className="text-sm text-gray-500">No document content available.</p>
+                                            <p className="text-xs text-gray-400 mt-2">Debug: pages={pages?.length || 0}, file={file ? 'loaded' : 'not loaded'}</p>
+                                    </CardContent>
+                                </Card>
+                                );
+                            }
+                        })()}
+                    </div>
+
+                    {/* Print-only E-Signatures Section */}
+                    {signatures.length > 0 && (
+                        <div className="print-only print-section">
+                            <h3>E-Signatures ({signatures.length})</h3>
+                            {signatures.map((s, idx) => (
+                                <div key={s.id || idx} className="print-signature-item">
+                                    {s.content && s.type?.toLowerCase().includes('image') ? (
+                                        // eslint-disable-next-line @next/next/no-img-element
+                                        <img src={s.content} alt="signature" />
+                                    ) : (
+                                        <div style={{ padding: '5mm', border: '1px solid #ddd', backgroundColor: '#f9f9f9', fontFamily: 'monospace', fontSize: '10pt', marginBottom: '3mm' }}>
+                                            {s.content}
+                                        </div>
+                                    )}
+                                    <div style={{ fontWeight: 'bold', fontSize: '11pt', marginBottom: '2mm' }}>
+                                        {s.user_name} <span style={{ color: '#666', fontWeight: 'normal' }}>({s.user_role})</span>
+                                    </div>
+                                    <div style={{ color: '#666', fontSize: '9pt' }}>{formatDate(s.timestamp)}</div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    {/* Print-only Attachments Section */}
+                    {attachments.length > 0 && (
+                        <div className="print-only print-section">
+                            <h3>Attachments ({attachments.length})</h3>
+                            {attachments.map((a, idx) => (
+                                <div key={a.id || idx} className="print-attachment-item">
+                                    {a.file_url && a.file_type?.startsWith('image/') ? (
+                                        // eslint-disable-next-line @next/next/no-img-element
+                                        <img src={a.file_url} alt={a.file_name} />
+                                    ) : (
+                                        <div style={{ padding: '10mm', backgroundColor: '#f0f0f0', textAlign: 'center', border: '1px solid #ccc', marginBottom: '3mm' }}>
+                                            <div style={{ fontSize: '11pt', color: '#666' }}>{a.file_type || 'Document'}</div>
+                                        </div>
+                                    )}
+                                    <div style={{ fontWeight: 'bold', fontSize: '11pt', marginBottom: '2mm' }}>{a.file_name}</div>
+                                    <div style={{ color: '#666', fontSize: '9pt' }}>
+                                        Size: {Math.round((a.file_size || 0) / 1024)} KB | Uploaded: {formatDate(a.uploaded_at)}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    {/* Print-only Comments Section */}
+                    {comments.length > 0 && (
+                        <div className="print-only print-section">
+                            <h3>Comments ({comments.length})</h3>
+                            {comments.map((c, idx) => (
+                                <div key={c.id || idx} className="print-comment-item">
+                                    <div style={{ fontWeight: 'bold', fontSize: '11pt', marginBottom: '2mm' }}>{c.user_name}</div>
+                                    <div style={{ color: '#666', fontSize: '9pt', marginBottom: '3mm' }}>{formatDate(c.timestamp)}</div>
+                                    <div style={{ fontSize: '10pt', lineHeight: '1.5' }}>{c.text}</div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
                 </div>
 
                 {/* Sidebar */}

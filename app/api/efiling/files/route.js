@@ -418,16 +418,42 @@ export async function POST(request) {
         const deptCode = deptQuery.rows[0].code;
         
         // Get next sequence number for this department and year
+        // Use MAX to get the highest sequence number, then add 1
         const seqQuery = await client.query(
-            `SELECT COUNT(*) + 1 as next_seq 
+            `SELECT COALESCE(MAX(CAST(SUBSTRING(file_number FROM '\\d{4}$') AS INTEGER)), 0) + 1 as next_seq 
              FROM efiling_files 
              WHERE department_id = $1 
-             AND EXTRACT(YEAR FROM created_at) = $2`,
-            [deptToUse, year]
+             AND EXTRACT(YEAR FROM created_at) = $2
+             AND file_number LIKE $3`,
+            [deptToUse, year, `${deptCode}/${year}/%`]
         );
         
-        const sequence = seqQuery.rows[0].next_seq;
-        const fileNumber = `${deptCode}/${year}/${sequence.toString().padStart(4, '0')}`;
+        let sequence = seqQuery.rows[0].next_seq;
+        let fileNumber = `${deptCode}/${year}/${sequence.toString().padStart(4, '0')}`;
+        
+        // Double-check if file number exists and increment if needed
+        let attempts = 0;
+        while (attempts < 10) {
+            const existsQuery = await client.query(
+                'SELECT id FROM efiling_files WHERE file_number = $1',
+                [fileNumber]
+            );
+            
+            if (existsQuery.rows.length === 0) {
+                break; // File number is unique
+            }
+            
+            // File number exists, increment and try again
+            sequence++;
+            fileNumber = `${deptCode}/${year}/${sequence.toString().padStart(4, '0')}`;
+            attempts++;
+        }
+        
+        if (attempts >= 10) {
+            return NextResponse.json({ 
+                error: 'Unable to generate unique file number after multiple attempts' 
+            }, { status: 500 });
+        }
         
         // Get default status (Draft)
         const statusQuery = await client.query(
