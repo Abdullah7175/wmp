@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/db';
 import { logAction, ENTITY_TYPES } from '@/lib/actionLogger';
+import { pauseSLA, resumeSLA, isCEORole } from '@/lib/efilingSLAManager';
+import { getToken } from 'next-auth/jwt';
 
 export async function POST(request, { params }) {
     let client;
@@ -13,13 +15,25 @@ export async function POST(request, { params }) {
             return NextResponse.json({ error: 'User IDs array is required' }, { status: 400 });
         }
 
+        // Get current user from token
+        const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
+        if (!token?.user?.id) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
         client = await connectToDatabase();
         await client.query('BEGIN');
 
         const fileRes = await client.query(`
-            SELECT f.*, eu_from.department_id as from_department_id, eu_from.id as from_user_efiling_id
+            SELECT f.*, 
+                   eu_from.department_id as from_department_id, 
+                   eu_from.id as from_user_efiling_id,
+                   eu_from.user_id as from_user_system_id,
+                   wf.id as workflow_id,
+                   wf.current_stage_id
             FROM efiling_files f
             LEFT JOIN efiling_users eu_from ON eu_from.id = f.assigned_to
+            LEFT JOIN efiling_file_workflows wf ON wf.file_id = f.id
             WHERE f.id = $1
         `, [id]);
         if (fileRes.rows.length === 0) {
@@ -27,6 +41,28 @@ export async function POST(request, { params }) {
             return NextResponse.json({ error: 'File not found' }, { status: 404 });
         }
         const fileRow = fileRes.rows[0];
+
+        // ========== E-SIGNATURE VALIDATION ==========
+        // Check if file creator has signed (unless user is admin)
+        const isAdmin = [1, 2].includes(token.user.role);
+        
+        if (!isAdmin) {
+            const creatorSignatureCheck = await client.query(`
+                SELECT COUNT(*) as count
+                FROM efiling_document_signatures eds
+                JOIN efiling_users eu ON eds.user_id = eu.user_id
+                WHERE eds.file_id = $1 AND eu.id = $2 AND eds.is_active = true
+            `, [id, fileRow.created_by]);
+
+            if (creatorSignatureCheck.rows[0].count === 0) {
+                await client.query('ROLLBACK');
+                return NextResponse.json({
+                    error: 'File creator must add e-signature before marking to others',
+                    code: 'SIGNATURE_REQUIRED'
+                }, { status: 403 });
+            }
+        }
+        // ========== END E-SIGNATURE VALIDATION ==========
 
         try {
             await client.query(`
@@ -74,6 +110,30 @@ export async function POST(request, { params }) {
 
                 const fromRole = (actor.role_code || '').toUpperCase();
                 const toRole = (t.role_code || '').toUpperCase();
+
+                // ========== SLA PAUSE/RESUME LOGIC ==========
+                // Check if we're moving FROM CEO role - Resume SLA
+                if (isCEORole(fromRole) && fileRow.workflow_id) {
+                    console.log('Resuming SLA - File leaving CEO');
+                    // Get next stage ID from transitions
+                    const nextStageRes = await client.query(`
+                        SELECT to_stage_id 
+                        FROM efiling_stage_transitions 
+                        WHERE from_stage_id = $1 AND is_active = true
+                        ORDER BY id LIMIT 1
+                    `, [fileRow.current_stage_id]);
+                    
+                    if (nextStageRes.rows.length > 0) {
+                        await resumeSLA(client, id, fileRow.workflow_id, nextStageRes.rows[0].to_stage_id);
+                    }
+                }
+                
+                // Check if we're moving TO CEO role - Pause SLA
+                if (isCEORole(toRole) && fileRow.workflow_id) {
+                    console.log('Pausing SLA - File moving to CEO');
+                    await pauseSLA(client, id, fileRow.workflow_id, userId, fileRow.current_stage_id);
+                }
+                // ========== END SLA PAUSE/RESUME LOGIC ==========
                 if (allowedNext[fromRole] && allowedNext[fromRole].length > 0) {
                     if (!allowedNext[fromRole].includes(toRole)) {
                         throw new Error(`Assignment not allowed: ${fromRole} → ${toRole}`);
