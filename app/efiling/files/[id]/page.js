@@ -6,7 +6,7 @@ import { useRouter, useParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Edit, Download, Eye, Clock, User, Building2, FileText, AlertCircle } from "lucide-react";
+import { ArrowLeft, Edit, Download, Eye, Clock, User, Building2, FileText, AlertCircle, Printer } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 export default function FileDetail() {
@@ -85,6 +85,10 @@ export default function FileDetail() {
         }
     };
 
+    const handlePrint = () => {
+        window.print();
+    };
+
     if (loading) {
         return (
             <div className="flex items-center justify-center h-96">
@@ -102,9 +106,204 @@ export default function FileDetail() {
     }
 
     return (
+        <>
+            <style jsx global>{`
+                @media print {
+                    @page {
+                        size: A4;
+                        margin: 20mm;
+                    }
+                    
+                    body {
+                        print-color-adjust: exact;
+                        -webkit-print-color-adjust: exact;
+                    }
+                    
+                    .no-print {
+                        display: none !important;
+                    }
+                    
+                    .print-only {
+                        display: block !important;
+                    }
+                    
+                    /* Hide navigation and sidebar on print */
+                    nav, aside, .no-print {
+                        display: none !important;
+                    }
+                    
+                    /* Make main content full width */
+                    .container {
+                        max-width: 100% !important;
+                        padding: 20mm !important;
+                    }
+                    
+                    /* Show document content */
+                    .lg\\:col-span-2 {
+                        grid-column: span 1 !important;
+                    }
+                    
+                    /* Show all content cards */
+                    .space-y-6 > div {
+                        display: block !important;
+                    }
+                    
+                    /* Ensure document content is visible and properly styled */
+                    .prose {
+                        color: #000 !important;
+                        font-size: 12pt !important;
+                        line-height: 1.5 !important;
+                    }
+                    
+                    /* Make sure images and logos are visible */
+                    img {
+                        max-width: 100% !important;
+                        height: auto !important;
+                    }
+                    
+                    /* Style document headers */
+                    h1, h2, h3, h4, h5, h6 {
+                        color: #000 !important;
+                        font-weight: bold !important;
+                    }
+                    
+                    /* Print header on each page */
+                    @page {
+                        @top-center {
+                            content: "Karachi Water & Sewerage Corporation - E-Filing System";
+                            font-size: 10pt;
+                            color: #666;
+                        }
+                        @bottom-right {
+                            content: "Page " counter(page) " of " counter(pages);
+                            font-size: 9pt;
+                            color: #666;
+                        }
+                        @bottom-left {
+                            content: "File: ${file?.file_number || 'N/A'}";
+                            font-size: 9pt;
+                            color: #666;
+                        }
+                    }
+                    
+                    /* File info styling */
+                    .print-file-header {
+                        border: 2px solid #333;
+                        padding: 15mm;
+                        margin-bottom: 10mm;
+                        page-break-inside: avoid;
+                        background: #f9f9f9;
+                    }
+                    
+                    .print-file-header h1 {
+                        font-size: 18pt;
+                        font-weight: bold;
+                        margin-bottom: 5mm;
+                        color: #000;
+                        text-align: center;
+                        border-bottom: 2px solid #333;
+                        padding-bottom: 3mm;
+                    }
+                    
+                    .print-info-grid {
+                        display: grid;
+                        grid-template-columns: 1fr 1fr;
+                        gap: 5mm;
+                        margin-top: 5mm;
+                    }
+                    
+                    .print-info-item {
+                        margin-bottom: 3mm;
+                    }
+                    
+                    .print-info-label {
+                        font-weight: bold;
+                        color: #333;
+                        font-size: 10pt;
+                    }
+                    
+                    .print-info-value {
+                        color: #000;
+                        font-size: 11pt;
+                        margin-top: 1mm;
+                    }
+                    
+                    .print-full-width {
+                        grid-column: 1 / -1;
+                    }
+                }
+                
+                .print-only {
+                    display: none;
+                }
+            `}</style>
+            
+            {/* Print-only file information */}
+            <div className="print-only">
+                <div className="print-file-header">
+                    <h1>KWSC E-Filing Document</h1>
+                    <div className="print-info-grid">
+                        <div className="print-info-item">
+                            <div className="print-info-label">File Number:</div>
+                            <div className="print-info-value">{file?.file_number}</div>
+                        </div>
+                        <div className="print-info-item">
+                            <div className="print-info-label">Status:</div>
+                            <div className="print-info-value">{file?.status_name}</div>
+                        </div>
+                        <div className="print-info-item print-full-width">
+                            <div className="print-info-label">Subject:</div>
+                            <div className="print-info-value">{file?.subject}</div>
+                        </div>
+                        <div className="print-info-item">
+                            <div className="print-info-label">Department:</div>
+                            <div className="print-info-value">{file?.department_name}</div>
+                        </div>
+                        <div className="print-info-item">
+                            <div className="print-info-label">Category:</div>
+                            <div className="print-info-value">{file?.category_name}</div>
+                        </div>
+                        <div className="print-info-item">
+                            <div className="print-info-label">Priority:</div>
+                            <div className="print-info-value">{file?.priority}</div>
+                        </div>
+                        <div className="print-info-item">
+                            <div className="print-info-label">Confidentiality:</div>
+                            <div className="print-info-value">{file?.confidentiality_level}</div>
+                        </div>
+                        <div className="print-info-item">
+                            <div className="print-info-label">Created Date:</div>
+                            <div className="print-info-value">{formatDate(file?.created_at)}</div>
+                        </div>
+                        <div className="print-info-item">
+                            <div className="print-info-label">Created By:</div>
+                            <div className="print-info-value">{file?.created_by_name}</div>
+                        </div>
+                        {file?.assigned_to_name && (
+                            <div className="print-info-item">
+                                <div className="print-info-label">Assigned To:</div>
+                                <div className="print-info-value">{file?.assigned_to_name}</div>
+                            </div>
+                        )}
+                        {file?.work_request_id && (
+                            <div className="print-info-item">
+                                <div className="print-info-label">Work Request:</div>
+                                <div className="print-info-value">WR-{file?.work_request_id}</div>
+                            </div>
+                        )}
+                        {file?.remarks && (
+                            <div className="print-info-item print-full-width">
+                                <div className="print-info-label">Remarks:</div>
+                                <div className="print-info-value">{file?.remarks}</div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </div>
+        
         <div className="container mx-auto px-4 py-6">
             {/* Header */}
-            <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center justify-between mb-6 no-print">
                 <div className="flex items-center space-x-4">
                     <Button
                         variant="ghost"
@@ -119,13 +318,17 @@ export default function FileDetail() {
                         <p className="text-gray-600">View comprehensive file information</p>
                     </div>
                 </div>
-                <div className="flex space-x-2">
+                <div className="flex space-x-2 no-print">
                     <Button
                         onClick={() => router.push(`/efiling/files/${file.id}/edit`)}
                         className="bg-blue-600 hover:bg-blue-700"
                     >
                         <Edit className="w-4 h-4 mr-2" />
                         Edit File
+                    </Button>
+                    <Button onClick={handlePrint} variant="outline" className="bg-green-50 hover:bg-green-100 text-green-700 border-green-300">
+                        <Printer className="w-4 h-4 mr-2" />
+                        Print
                     </Button>
                     <Button variant="outline">
                         <Download className="w-4 h-4 mr-2" />
@@ -138,7 +341,7 @@ export default function FileDetail() {
                 {/* Main Content */}
                 <div className="lg:col-span-2 space-y-6">
                     {/* File Information */}
-                    <Card>
+                    <Card className="print:border-2 print:border-gray-300 print:shadow-none">
                         <CardHeader>
                             <CardTitle className="flex items-center">
                                 <FileText className="w-5 h-5 mr-2" />
@@ -209,7 +412,7 @@ export default function FileDetail() {
                     </Card>
 
                     {/* Assignment Information */}
-                    <Card>
+                    <Card className="print:border-2 print:border-gray-300 print:shadow-none print:page-break-before-auto">
                         <CardHeader>
                             <CardTitle className="flex items-center">
                                 <User className="w-5 h-5 mr-2" />
@@ -235,7 +438,7 @@ export default function FileDetail() {
                 </div>
 
                 {/* Sidebar */}
-                <div className="space-y-6">
+                <div className="space-y-6 no-print">
                     {/* File Metadata */}
                     <Card>
                         <CardHeader>
@@ -316,5 +519,6 @@ export default function FileDetail() {
                 </div>
             </div>
         </div>
+        </>
     );
 } 
