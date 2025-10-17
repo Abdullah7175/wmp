@@ -205,11 +205,9 @@ export default function DocumentSignatureSystem({
                 setOtpCode("");
                 setGoogleAuthCode("");
                 
-                // Execute the pending action
+                // Execute the pending action - Only for signatures, not comments
                 if (pendingAction === 'addSignature' && pendingSignatureData) {
                     await addSignatureToDocument(pendingSignatureData);
-                } else if (pendingAction === 'addComment') {
-                    await addCommentToDocument();
                 }
                 
                 toast({
@@ -538,7 +536,7 @@ export default function DocumentSignatureSystem({
     };
 
     // Handle comment creation
-    const handleAddComment = () => {
+    const handleAddComment = async () => {
         if (!commentText.trim()) {
             toast({
                 title: "No Comment",
@@ -547,8 +545,8 @@ export default function DocumentSignatureSystem({
             });
             return;
         }
-        setPendingAction('addComment');
-        setShowAuthModal(true);
+        // Comments don't require authentication - only e-signatures do
+        await addCommentToDocument();
     };
 
     // Edit comment

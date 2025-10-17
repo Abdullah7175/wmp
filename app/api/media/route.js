@@ -58,7 +58,15 @@ async function processMediaFiles(files, descriptions, workRequestId, geoTag, med
         if (!file) continue;
 
         const buffer = await file.arrayBuffer();
-        const filename = `${Date.now()}-${file.name}`;
+        
+        // Sanitize filename
+        const ext = path.extname(file.name);
+        let sanitizedName = path.basename(file.name, ext);
+        sanitizedName = sanitizedName.replace(/\s+/g, '-').replace(/[^a-zA-Z0-9-_]/g, '').replace(/-+/g, '-').replace(/^-+|-+$/g, '');
+        if (!sanitizedName) sanitizedName = 'file';
+        if (sanitizedName.length > 50) sanitizedName = sanitizedName.substring(0, 50);
+        
+        const filename = `${sanitizedName}-${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
         const filePath = path.join(uploadsDir, filename);
         await fs.writeFile(filePath, Buffer.from(buffer));
 

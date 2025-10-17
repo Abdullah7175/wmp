@@ -373,10 +373,18 @@ export async function PUT(req) {
                     }
                 }
 
-                // Upload new file
+                // Upload new file with sanitized filename
                 const bytes = await file.arrayBuffer();
                 const buffer = Buffer.from(bytes);
-                const fileName = `${Date.now()}-${file.name}`;
+                
+                // Sanitize filename
+                const ext = path.extname(file.name);
+                let sanitizedName = path.basename(file.name, ext);
+                sanitizedName = sanitizedName.replace(/\s+/g, '-').replace(/[^a-zA-Z0-9-_]/g, '').replace(/-+/g, '-').replace(/^-+|-+$/g, '');
+                if (!sanitizedName) sanitizedName = 'video';
+                if (sanitizedName.length > 50) sanitizedName = sanitizedName.substring(0, 50);
+                
+                const fileName = `${sanitizedName}-${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
                 const filePath = path.join(process.cwd(), 'public/uploads/videos', fileName);
                 
                 // Ensure directory exists
