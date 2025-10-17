@@ -7,8 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Download, Eye, FileText, User, Calendar, Building2, Shield, MessageSquare, Paperclip, Printer, FileDown } from "lucide-react";
-import AttachmentManager from "../../../components/AttachmentManager";
+import { ArrowLeft, Download, Eye, FileText, User, Calendar, Building2, Shield, MessageSquare, Paperclip, Printer, FileDown, X, Maximize2 } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import DocumentSignatureSystem from "../../../components/DocumentSignatureSystem";
 import Image from "next/image";
 
@@ -29,6 +29,8 @@ export default function DocumentViewer() {
     const [currentPageId, setCurrentPageId] = useState(1);
     const [workRequest, setWorkRequest] = useState(null);
     const [beforeContent, setBeforeContent] = useState([]);
+    const [selectedAttachment, setSelectedAttachment] = useState(null);
+    const [isModalOpen, setIsModalOpen] = useState(false);
 
     const handlePrint = () => {
         window.print();
@@ -79,6 +81,12 @@ export default function DocumentViewer() {
 		if (params.id) fetchFileData();
     }, [params.id]);
 
+    useEffect(() => {
+        if (file?.work_request_id) {
+            fetchWorkRequest();
+        }
+    }, [file?.work_request_id]);
+
 	async function fetchFileData() {
         try {
             setLoading(true);
@@ -99,55 +107,44 @@ export default function DocumentViewer() {
 			if (sigRes.ok) setSignatures((await sigRes.json()).signatures || []);
 			const comRes = await fetch(`/api/efiling/files/${params.id}/comments`);
 			if (comRes.ok) setComments((await comRes.json()) || []);
-			
-			// Fetch work request details if work_request_id exists
-			console.log('File data:', fileData);
-			console.log('Work request ID:', fileData.work_request_id);
-			console.log('Work request ID type:', typeof fileData.work_request_id);
-			console.log('All file data keys:', Object.keys(fileData));
-			console.log('File data work_request_id value:', fileData.work_request_id);
-			console.log('Is work_request_id null?', fileData.work_request_id === null);
-			console.log('Is work_request_id undefined?', fileData.work_request_id === undefined);
-			
-			if (fileData.work_request_id) {
-				console.log('Fetching work request details for ID:', fileData.work_request_id);
-				const workRes = await fetch(`/api/requests?id=${fileData.work_request_id}`);
-				console.log('Work request response status:', workRes.status);
-				if (workRes.ok) {
-					const workData = await workRes.json();
-					console.log('Work request data:', workData);
-					setWorkRequest(workData);
-					
-					// Fetch before content for this work request
-					console.log('Fetching before content for work request:', fileData.work_request_id);
-					const contentRes = await fetch(`/api/before-content?workRequestId=${fileData.work_request_id}`);
-					console.log('Before content response status:', contentRes.status);
-					if (contentRes.ok) {
-						const contentData = await contentRes.json();
-						console.log('Before content data:', contentData);
-						console.log('Before content data type:', typeof contentData);
-						console.log('Before content is array:', Array.isArray(contentData));
-						setBeforeContent(Array.isArray(contentData) ? contentData : []);
-					} else {
-						console.error('Failed to fetch before content:', contentRes.status, contentRes.statusText);
-						const errorText = await contentRes.text();
-						console.error('Before content error response:', errorText);
-					}
-				} else {
-					console.error('Failed to fetch work request:', workRes.status, workRes.statusText);
-					const errorText = await workRes.text();
-					console.error('Work request error response:', errorText);
-				}
-			} else {
-				console.log('No work_request_id found in file data');
-			}
 		} catch (e) {
 			console.error(e);
 			toast({ title: "Error", description: "Failed to fetch document data", variant: "destructive" });
         } finally {
             setLoading(false);
         }
-	}
+    }
+
+    async function fetchWorkRequest() {
+        if (!file?.work_request_id) return;
+        
+        try {
+            const workRes = await fetch(`/api/requests?id=${file.work_request_id}`);
+            if (workRes.ok) {
+                const workData = await workRes.json();
+                setWorkRequest(workData);
+                
+                // Fetch before content for this work request
+                const contentRes = await fetch(`/api/before-content?workRequestId=${file.work_request_id}`);
+                if (contentRes.ok) {
+                    const contentData = await contentRes.json();
+                    setBeforeContent(Array.isArray(contentData) ? contentData : []);
+                }
+            }
+        } catch (e) {
+            console.error('Error fetching work request:', e);
+        }
+    }
+
+    const openAttachmentModal = (attachment) => {
+        setSelectedAttachment(attachment);
+        setIsModalOpen(true);
+    };
+
+    const closeAttachmentModal = () => {
+        setSelectedAttachment(null);
+        setIsModalOpen(false);
+    };
 
 	const currentPage = pages.find((p) => p.id === currentPageId) || pages[0];
 	const formatDate = (d) => new Date(d).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" });
@@ -403,56 +400,6 @@ export default function DocumentViewer() {
 
                     <div className="lg:col-span-1">
                         <div className="space-y-6">
-                            {/* Debug Section - Remove after testing */}
-                            <Card className="bg-yellow-50 border-yellow-200">
-                                <CardHeader><CardTitle className="text-lg text-yellow-800">Debug Info</CardTitle></CardHeader>
-                                <CardContent className="text-xs">
-                                    <div>Work Request ID: {file?.work_request_id || 'None'}</div>
-                                    <div>Work Request ID Type: {typeof file?.work_request_id}</div>
-                                    <div>Work Request Data: {workRequest ? 'Loaded' : 'Not loaded'}</div>
-                                    <div>Before Content Count: {beforeContent?.length || 0}</div>
-                                    <div>File Number: {file?.file_number}</div>
-                                    <div>File ID: {file?.id}</div>
-                                    {workRequest && (
-                                        <div className="mt-2 p-2 bg-white rounded border">
-                                            <div className="font-semibold">Work Request Details:</div>
-                                            <div>ID: {workRequest.id}</div>
-                                            <div>Address: {workRequest.address}</div>
-                                            <div>Type: {workRequest.complaint_type}</div>
-                                            <div>Status: {workRequest.status_name}</div>
-                                        </div>
-                                    )}
-                                    <div className="mt-2">
-                                        <Button 
-                                            size="sm" 
-                                            variant="outline"
-                                            onClick={async () => {
-                                                if (file?.work_request_id) {
-                                                    console.log('Testing direct API call for work request:', file.work_request_id);
-                                                    try {
-                                                        const testRes = await fetch(`/api/requests?id=${file.work_request_id}`);
-                                                        console.log('Direct API test response status:', testRes.status);
-                                                        if (testRes.ok) {
-                                                            const testData = await testRes.json();
-                                                            console.log('Direct API test data:', testData);
-                                                        } else {
-                                                            const errorText = await testRes.text();
-                                                            console.log('Direct API test error:', errorText);
-                                                        }
-                                                    } catch (error) {
-                                                        console.error('Direct API test error:', error);
-                                                    }
-                                                } else {
-                                                    console.log('No work_request_id to test');
-                                                }
-                                            }}
-                                        >
-                                            Test Work Request API
-                                        </Button>
-                                    </div>
-                                </CardContent>
-                            </Card>
-
                             <Card>
 								<CardHeader><CardTitle className="text-lg">File Information</CardTitle></CardHeader>
                                 <CardContent className="space-y-3">
@@ -487,42 +434,29 @@ export default function DocumentViewer() {
                                 </CardContent>
                             </Card>
 
-                            {/* Work Request Section - Always visible for debugging */}
-                            <Card className={workRequest ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"}>
-                                <CardHeader>
-                                    <CardTitle className={`text-lg ${workRequest ? "text-green-800" : "text-red-800"}`}>
-                                        Work Request Details {workRequest ? "✅" : "❌"}
-                                    </CardTitle>
-                                </CardHeader>
-                                <CardContent className="space-y-3">
-                                    {workRequest ? (
-                                        <>
-                                            <div className="flex items-center space-x-2"><FileText className="w-4 h-4 text-gray-500"/><span className="text-sm text-gray-600">Request ID: #{workRequest.id}</span></div>
-                                            <div className="flex items-center space-x-2"><Building2 className="w-4 h-4 text-gray-500"/><span className="text-sm text-gray-600">Address: {workRequest.address || "N/A"}</span></div>
-                                            <div className="flex items-center space-x-2"><User className="w-4 h-4 text-gray-500"/><span className="text-sm text-gray-600">Type: {workRequest.complaint_type || "N/A"}</span></div>
-                                            <div className="flex items-center space-x-2"><Calendar className="w-4 h-4 text-gray-500"/><span className="text-sm text-gray-600">Created: {formatDate(workRequest.request_date)}</span></div>
-                                            <div className="flex items-center space-x-2"><Badge className={statusColor(workRequest.status_name)}>{workRequest.status_name || "Unknown"}</Badge></div>
-                                            {workRequest.description && (
-                                                <div className="mt-3 p-2 bg-white rounded border">
-                                                    <div className="text-xs font-semibold text-gray-700 mb-1">Description:</div>
-                                                    <div className="text-xs text-gray-600">{workRequest.description}</div>
-                                                </div>
-                                            )}
-                                            {workRequest.contact_number && (
-                                                <div className="flex items-center space-x-2"><span className="text-xs text-gray-500">Contact: {workRequest.contact_number}</span></div>
-                                            )}
-                                        </>
-                                    ) : (
-                                        <div className="text-sm text-red-600">
-                                            <div>❌ No work request data loaded</div>
-                                            <div className="mt-2 text-xs">
-                                                <div>File Work Request ID: {file?.work_request_id || 'None'}</div>
-                                                <div>Work Request State: {workRequest === null ? 'null' : workRequest === undefined ? 'undefined' : 'empty'}</div>
+                            {file?.work_request_id && workRequest && (
+                                <Card>
+                                    <CardHeader>
+                                        <CardTitle className="text-lg">Work Request Details</CardTitle>
+                                    </CardHeader>
+                                    <CardContent className="space-y-3">
+                                        <div className="flex items-center space-x-2"><FileText className="w-4 h-4 text-gray-500"/><span className="text-sm text-gray-600">Request ID: #{workRequest.id}</span></div>
+                                        <div className="flex items-center space-x-2"><Building2 className="w-4 h-4 text-gray-500"/><span className="text-sm text-gray-600">Address: {workRequest.address || "N/A"}</span></div>
+                                        <div className="flex items-center space-x-2"><User className="w-4 h-4 text-gray-500"/><span className="text-sm text-gray-600">Type: {workRequest.complaint_type || "N/A"}</span></div>
+                                        <div className="flex items-center space-x-2"><Calendar className="w-4 h-4 text-gray-500"/><span className="text-sm text-gray-600">Created: {formatDate(workRequest.request_date)}</span></div>
+                                        <div className="flex items-center space-x-2"><Badge className={statusColor(workRequest.status_name)}>{workRequest.status_name || "Unknown"}</Badge></div>
+                                        {workRequest.description && (
+                                            <div className="mt-3 p-2 bg-white rounded border">
+                                                <div className="text-xs font-semibold text-gray-700 mb-1">Description:</div>
+                                                <div className="text-xs text-gray-600">{workRequest.description}</div>
                                             </div>
-                                        </div>
-                                    )}
-                                </CardContent>
-                            </Card>
+                                        )}
+                                        {workRequest.contact_number && (
+                                            <div className="flex items-center space-x-2"><span className="text-xs text-gray-500">Contact: {workRequest.contact_number}</span></div>
+                                        )}
+                                    </CardContent>
+                                </Card>
+                            )}
 
                             {beforeContent.length > 0 && (
                                 <Card>
@@ -566,7 +500,43 @@ export default function DocumentViewer() {
                             <Card>
 								<CardHeader><CardTitle className="text-lg flex items-center"><Paperclip className="w-4 h-4 mr-2"/>Attachments ({attachments.length})</CardTitle></CardHeader>
                                 <CardContent>
-                                    <AttachmentManager fileId={params.id} canEdit={true} viewOnly={false} />
+                                    {attachments.length === 0 ? (
+                                        <p className="text-sm text-gray-500">No attachments in this file.</p>
+                                    ) : (
+                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                            {attachments.map(a => (
+                                                <div key={a.id} className="border rounded-lg p-3 hover:shadow-md transition-shadow cursor-pointer group" onClick={() => openAttachmentModal(a)}>
+                                                    {a.file_url && a.file_type?.startsWith('image/') ? (
+                                                        <div className="relative">
+                                                            <Image 
+                                                                src={a.file_url} 
+                                                                alt={a.file_name} 
+                                                                width={200} 
+                                                                height={150} 
+                                                                className="w-full h-32 object-cover rounded mb-2" 
+                                                            />
+                                                            <div className="absolute top-2 right-2 bg-black bg-opacity-50 text-white p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                <Maximize2 className="w-4 h-4" />
+                                                            </div>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="w-full h-32 flex items-center justify-center bg-gray-100 rounded mb-2 text-gray-500">
+                                                            <FileText className="w-8 h-8" />
+                                                        </div>
+                                                    )}
+                                                    <div className="space-y-1">
+                                                        <div className="font-medium text-sm truncate" title={a.file_name}>{a.file_name}</div>
+                                                        <div className="text-xs text-gray-500">
+                                                            {Math.round((a.file_size || 0)/1024)} KB • {formatDate(a.uploaded_at)}
+                                                        </div>
+                                                        <div className="text-xs text-blue-600 group-hover:text-blue-800">
+                                                            Click to view
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
                                 </CardContent>
                             </Card>
 
@@ -618,6 +588,69 @@ export default function DocumentViewer() {
                     </div>
                 </div>
             </div>
+
+            {/* Attachment Preview Modal */}
+            <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+                <DialogContent className="max-w-4xl max-h-[90vh] overflow-auto">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center justify-between">
+                            <span>{selectedAttachment?.file_name}</span>
+                            <Button variant="ghost" size="sm" onClick={closeAttachmentModal}>
+                                <X className="w-4 h-4" />
+                            </Button>
+                        </DialogTitle>
+                    </DialogHeader>
+                    {selectedAttachment && (
+                        <div className="space-y-4">
+                            {selectedAttachment.file_url && selectedAttachment.file_type?.startsWith('image/') ? (
+                                <div className="text-center">
+                                    <Image 
+                                        src={selectedAttachment.file_url} 
+                                        alt={selectedAttachment.file_name} 
+                                        width={800} 
+                                        height={600} 
+                                        className="max-w-full h-auto mx-auto"
+                                        style={{ objectFit: 'contain' }}
+                                    />
+                                </div>
+                            ) : (
+                                <div className="text-center py-8">
+                                    <FileText className="w-16 h-16 mx-auto text-gray-400 mb-4" />
+                                    <p className="text-gray-600 mb-2">{selectedAttachment.file_name}</p>
+                                    <p className="text-sm text-gray-500">
+                                        {Math.round((selectedAttachment.file_size || 0)/1024)} KB • {formatDate(selectedAttachment.uploaded_at)}
+                                    </p>
+                                    <Button 
+                                        className="mt-4" 
+                                        onClick={() => window.open(selectedAttachment.file_url, '_blank')}
+                                    >
+                                        <Download className="w-4 h-4 mr-2" />
+                                        Download File
+                                    </Button>
+                                </div>
+                            )}
+                            <div className="border-t pt-4 grid grid-cols-2 gap-4 text-sm">
+                                <div>
+                                    <span className="font-medium">File Name:</span>
+                                    <p className="text-gray-600">{selectedAttachment.file_name}</p>
+                                </div>
+                                <div>
+                                    <span className="font-medium">File Size:</span>
+                                    <p className="text-gray-600">{Math.round((selectedAttachment.file_size || 0)/1024)} KB</p>
+                                </div>
+                                <div>
+                                    <span className="font-medium">File Type:</span>
+                                    <p className="text-gray-600">{selectedAttachment.file_type || 'Unknown'}</p>
+                                </div>
+                                <div>
+                                    <span className="font-medium">Uploaded:</span>
+                                    <p className="text-gray-600">{formatDate(selectedAttachment.uploaded_at)}</p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </DialogContent>
+            </Dialog>
         </>
     );
 }
