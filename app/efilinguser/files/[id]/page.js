@@ -6,9 +6,10 @@ import { useRouter, useParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Edit, Download, Eye, Clock, User, Building2, FileText, AlertCircle, MessageSquare, Forward, Printer, FileDown } from "lucide-react";
+import { ArrowLeft, Edit, Download, Eye, Clock, User, Building2, FileText, AlertCircle, MessageSquare, Forward, Printer, FileDown, X, Maximize2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import Image from "next/image";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 export default function FileDetail() {
     const { data: session } = useSession();
@@ -29,6 +30,8 @@ export default function FileDetail() {
     const [showMarkModal, setShowMarkModal] = useState(false);
     const [markUsers, setMarkUsers] = useState([]);
     const [markToUserId, setMarkToUserId] = useState("");
+    const [selectedAttachment, setSelectedAttachment] = useState(null);
+    const [isModalOpen, setIsModalOpen] = useState(false);
     const [markRemarks, setMarkRemarks] = useState("");
     const [markSubmitting, setMarkSubmitting] = useState(false);
 
@@ -243,6 +246,16 @@ export default function FileDetail() {
                 variant: "destructive" 
             });
         }
+    };
+
+    const openAttachmentModal = (attachment) => {
+        setSelectedAttachment(attachment);
+        setIsModalOpen(true);
+    };
+
+    const closeAttachmentModal = () => {
+        setSelectedAttachment(null);
+        setIsModalOpen(false);
     };
 
     const renderPage = (page) => {
@@ -599,42 +612,111 @@ export default function FileDetail() {
                     
                     /* Print sections for signatures, attachments, comments */
                     .print-section {
-                        page-break-inside: avoid;
-                        margin-top: 15mm;
-                        padding: 10mm;
-                        border: 1px solid #ddd;
-                        background: white;
+                        page-break-before: always;
+                        page-break-inside: auto;
+                        margin-top: 0;
+                        padding: 15mm;
+                        border: 2px solid #333;
+                        background: white !important;
+                        display: block !important;
+                        visibility: visible !important;
                     }
                     
                     .print-section h3 {
-                        font-size: 13pt;
+                        font-size: 14pt;
                         font-weight: bold;
-                        margin-bottom: 5mm;
+                        margin-bottom: 8mm;
                         border-bottom: 2px solid #333;
-                        padding-bottom: 3mm;
-                        color: #000;
+                        padding-bottom: 5mm;
+                        color: #000 !important;
+                        text-align: center;
                     }
                     
-                    .print-signature-item,
-                    .print-attachment-item,
-                    .print-comment-item {
-                        margin-bottom: 5mm;
-                        padding: 5mm;
-                        border: 1px solid #ccc;
-                        page-break-inside: avoid;
+                    /* Grid layout for signatures and comments */
+                    .print-signatures-grid {
+                        display: grid !important;
+                        grid-template-columns: 1fr 1fr !important;
+                        gap: 8mm !important;
+                        margin-bottom: 5mm !important;
                     }
-                    
+
+                    .print-comments-grid {
+                        display: grid !important;
+                        grid-template-columns: 1fr 1fr !important;
+                        gap: 8mm !important;
+                        margin-bottom: 5mm !important;
+                    }
+
+                    .print-signature-item {
+                        padding: 3mm !important;
+                        border: 1px solid #ddd !important;
+                        background: white !important;
+                        display: block !important;
+                        visibility: visible !important;
+                        break-inside: avoid !important;
+                        margin-bottom: 0 !important;
+                        text-align: center !important;
+                    }
+
                     .print-signature-item img {
-                        max-height: 40mm;
-                        width: auto;
-                        border: 1px solid #ddd;
+                        max-width: 100% !important;
+                        height: auto !important;
+                        max-height: 25mm !important;
+                        display: block !important;
+                        margin: 0 auto 2mm auto !important;
+                        border: 1px solid #333 !important;
+                    }
+
+                    .print-signature-details {
+                        font-size: 8pt !important;
+                        text-align: center !important;
+                        color: #000 !important;
+                        margin-top: 2mm !important;
+                    }
+
+                    .print-attachment-item {
                         margin-bottom: 3mm;
+                        padding: 3mm;
+                        border: 1px solid #666;
+                        page-break-inside: avoid;
+                        background: #f9f9f9 !important;
+                    }
+
+                    .print-comment-item {
+                        padding: 3mm !important;
+                        border: 1px solid #ddd !important;
+                        background: white !important;
+                        display: block !important;
+                        visibility: visible !important;
+                        break-inside: avoid !important;
+                        margin-bottom: 0 !important;
+                    }
+
+                    .print-comment-header {
+                        font-size: 8pt !important;
+                        font-weight: bold !important;
+                        color: #000 !important;
+                        margin-bottom: 1mm !important;
+                    }
+
+                    .print-comment-content {
+                        font-size: 7pt !important;
+                        color: #000 !important;
+                        line-height: 1.2 !important;
                     }
                     
                     .print-attachment-item img {
-                        max-height: 60mm;
+                        max-height: 70mm;
                         width: auto;
                         margin-bottom: 3mm;
+                        display: block;
+                    }
+                    
+                    /* Force print sections to be visible */
+                    .print-section * {
+                        visibility: visible !important;
+                        opacity: 1 !important;
+                        color: #000 !important;
                     }
                 }
                 
@@ -816,22 +898,24 @@ export default function FileDetail() {
                     {signatures.length > 0 && (
                         <div className="print-only print-section">
                             <h3>E-Signatures ({signatures.length})</h3>
-                            {signatures.map((s, idx) => (
-                                <div key={s.id || idx} className="print-signature-item">
-                                    {s.content && s.type?.toLowerCase().includes('image') ? (
-                                        // eslint-disable-next-line @next/next/no-img-element
-                                        <img src={s.content} alt="signature" />
-                                    ) : (
-                                        <div style={{ padding: '5mm', border: '1px solid #ddd', backgroundColor: '#f9f9f9', fontFamily: 'monospace', fontSize: '10pt', marginBottom: '3mm' }}>
-                                            {s.content}
+                            <div className="print-signatures-grid">
+                                {signatures.map((s, idx) => (
+                                    <div key={s.id || idx} className="print-signature-item">
+                                        {s.content && s.type?.toLowerCase().includes('image') ? (
+                                            // eslint-disable-next-line @next/next/no-img-element
+                                            <img src={s.content} alt="signature" />
+                                        ) : (
+                                            <div style={{ padding: '3mm', border: '1px solid #ddd', backgroundColor: '#f9f9f9', fontFamily: 'monospace', fontSize: '8pt', marginBottom: '2mm' }}>
+                                                {s.content}
+                                            </div>
+                                        )}
+                                        <div className="print-signature-details">
+                                            <div><strong>{s.user_name}</strong> <span style={{ color: '#666', fontWeight: 'normal' }}>({s.user_role})</span></div>
+                                            <div>{formatDate(s.timestamp)}</div>
                                         </div>
-                                    )}
-                                    <div style={{ fontWeight: 'bold', fontSize: '11pt', marginBottom: '2mm' }}>
-                                        {s.user_name} <span style={{ color: '#666', fontWeight: 'normal' }}>({s.user_role})</span>
-                    </div>
-                                    <div style={{ color: '#666', fontSize: '9pt' }}>{formatDate(s.timestamp)}</div>
-                </div>
-                            ))}
+                                    </div>
+                                ))}
+                            </div>
                         </div>
                     )}
 
@@ -862,13 +946,15 @@ export default function FileDetail() {
                     {comments.length > 0 && (
                         <div className="print-only print-section">
                             <h3>Comments ({comments.length})</h3>
-                            {comments.map((c, idx) => (
-                                <div key={c.id || idx} className="print-comment-item">
-                                    <div style={{ fontWeight: 'bold', fontSize: '11pt', marginBottom: '2mm' }}>{c.user_name}</div>
-                                    <div style={{ color: '#666', fontSize: '9pt', marginBottom: '3mm' }}>{formatDate(c.timestamp)}</div>
-                                    <div style={{ fontSize: '10pt', lineHeight: '1.5' }}>{c.text}</div>
-                                </div>
-                            ))}
+                            <div className="print-comments-grid">
+                                {comments.map((c, idx) => (
+                                    <div key={c.id || idx} className="print-comment-item">
+                                        <div className="print-comment-header">{c.user_name}</div>
+                                        <div style={{ color: '#666', fontSize: '7pt', marginBottom: '2mm' }}>{formatDate(c.timestamp)}</div>
+                                        <div className="print-comment-content">{c.text}</div>
+                                    </div>
+                                ))}
+                            </div>
                         </div>
                     )}
                 </div>
@@ -983,18 +1069,35 @@ export default function FileDetail() {
                             {attachments.length === 0 ? (
                                 <p className="text-sm text-gray-500">No attachments in this file.</p>
                             ) : (
-                                <div className="grid grid-cols-1 gap-3">
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                                     {attachments.map(a => (
-                                        <div key={a.id} className="border rounded p-2 flex items-center gap-3 text-sm">
+                                        <div key={a.id} className="border rounded-lg p-3 hover:shadow-md transition-shadow cursor-pointer group" onClick={() => openAttachmentModal(a)}>
                                             {a.file_url && a.file_type?.startsWith('image/') ? (
-                                                // eslint-disable-next-line @next/next/no-img-element
-                                                <img src={a.file_url} alt={a.file_name} className="w-20 h-16 object-cover rounded" />
+                                                <div className="relative">
+                                                    <Image 
+                                                        src={a.file_url} 
+                                                        alt={a.file_name} 
+                                                        width={200} 
+                                                        height={150} 
+                                                        className="w-full h-32 object-cover rounded mb-2" 
+                                                    />
+                                                    <div className="absolute top-2 right-2 bg-black bg-opacity-50 text-white p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        <Maximize2 className="w-4 h-4" />
+                                                    </div>
+                                                </div>
                                             ) : (
-                                                <div className="w-20 h-16 flex items-center justify-center bg-gray-100 rounded text-xs text-gray-500">{a.file_type || 'file'}</div>
+                                                <div className="w-full h-32 flex items-center justify-center bg-gray-100 rounded mb-2 text-gray-500">
+                                                    <FileText className="w-8 h-8" />
+                                                </div>
                                             )}
-                                            <div className="flex-1">
-                                                <div className="truncate" title={a.file_name}>{a.file_name}</div>
-                                                <div className="text-xs text-gray-500">{Math.round((a.file_size || 0)/1024)} KB • {formatDate(a.uploaded_at)}</div>
+                                            <div className="space-y-1">
+                                                <div className="font-medium text-sm truncate" title={a.file_name}>{a.file_name}</div>
+                                                <div className="text-xs text-gray-500">
+                                                    {Math.round((a.file_size || 0)/1024)} KB • {formatDate(a.uploaded_at)}
+                                                </div>
+                                                <div className="text-xs text-blue-600 group-hover:text-blue-800">
+                                                    Click to view
+                                                </div>
                                             </div>
                                         </div>
                                     ))}
@@ -1091,6 +1194,70 @@ export default function FileDetail() {
                     </Card>
                 </div>
             )}
+
+            {/* Attachment Preview Modal */}
+            <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+                <DialogContent className="max-w-4xl max-h-[90vh] overflow-auto">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center justify-between">
+                            <span>{selectedAttachment?.file_name}</span>
+                            <Button variant="ghost" size="sm" onClick={closeAttachmentModal}>
+                                <X className="w-4 h-4" />
+                            </Button>
+                        </DialogTitle>
+                    </DialogHeader>
+                    {selectedAttachment && (
+                        <div className="space-y-4">
+                            {selectedAttachment.file_url && selectedAttachment.file_type?.startsWith('image/') ? (
+                                <div className="text-center">
+                                    <Image 
+                                        src={selectedAttachment.file_url} 
+                                        alt={selectedAttachment.file_name} 
+                                        width={800} 
+                                        height={600} 
+                                        className="max-w-full max-h-[70vh] object-contain mx-auto rounded-lg shadow-lg" 
+                                    />
+                                </div>
+                            ) : (
+                                <div className="text-center py-8">
+                                    <FileText className="w-16 h-16 mx-auto text-gray-400 mb-4" />
+                                    <p className="text-gray-600 mb-2">{selectedAttachment.file_name}</p>
+                                    <p className="text-sm text-gray-500">
+                                        {Math.round((selectedAttachment.file_size || 0)/1024)} KB • {formatDate(selectedAttachment.uploaded_at)}
+                                    </p>
+                                    <Button 
+                                        className="mt-4" 
+                                        onClick={() => window.open(selectedAttachment.file_url, '_blank')}
+                                    >
+                                        <Download className="w-4 h-4 mr-2" />
+                                        Download File
+                                    </Button>
+                                </div>
+                            )}
+                            <div className="border-t pt-4">
+                                <div className="grid grid-cols-2 gap-4 text-sm">
+                                    <div>
+                                        <span className="font-medium">File Name:</span>
+                                        <p className="text-gray-600">{selectedAttachment.file_name}</p>
+                                    </div>
+                                    <div>
+                                        <span className="font-medium">File Size:</span>
+                                        <p className="text-gray-600">{Math.round((selectedAttachment.file_size || 0)/1024)} KB</p>
+                                    </div>
+                                    <div>
+                                        <span className="font-medium">File Type:</span>
+                                        <p className="text-gray-600">{selectedAttachment.file_type || 'Unknown'}</p>
+                                    </div>
+                                    <div>
+                                        <span className="font-medium">Uploaded:</span>
+                                        <p className="text-gray-600">{formatDate(selectedAttachment.uploaded_at)}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </DialogContent>
+            </Dialog>
         </div>
         </>
     );

@@ -3,6 +3,9 @@ import { query } from '@/lib/db';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/pages/api/auth/[...nextauth]';
 import { logUserAction } from '@/lib/userActionLogger';
+import { promises as fs } from 'fs';
+import { join } from 'path';
+import { mkdir, writeFile } from 'fs/promises';
 
 export async function GET(request) {
   try {
@@ -83,6 +86,98 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const contentType = request.headers.get('content-type');
+    
+    // Handle FormData upload (new direct upload method)
+    if (contentType && contentType.includes('multipart/form-data')) {
+      const formData = await request.formData();
+      const workRequestId = formData.get('workRequestId');
+      const description = formData.get('description') || '';
+      const img = formData.get('img');
+      const latitude = formData.get('latitude') || '0';
+      const longitude = formData.get('longitude') || '0';
+      const creatorId = formData.get('creator_id');
+      const creatorType = formData.get('creator_type');
+
+      if (!workRequestId || !img) {
+        return NextResponse.json({ error: 'Work request ID and image file are required' }, { status: 400 });
+      }
+
+      // Validate file
+      if (!img || img.size === 0) {
+        return NextResponse.json({ error: 'Invalid image file' }, { status: 400 });
+      }
+
+      // Create upload directory
+      const uploadDir = join(process.cwd(), 'public', 'uploads', 'before-content', 'image');
+      await mkdir(uploadDir, { recursive: true });
+
+      // Generate unique filename
+      const fileExtension = img.name.split('.').pop();
+      const uniqueName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
+      const filePath = join(uploadDir, uniqueName);
+      
+      // Save file
+      const buffer = await img.arrayBuffer();
+      await writeFile(filePath, Buffer.from(buffer));
+      
+      // Create relative URL
+      const link = `/uploads/before-content/image/${uniqueName}`;
+      const geoTag = `POINT(${longitude} ${latitude})`;
+      const creatorName = session.user.name || 'Unknown';
+
+      // Insert into database
+      const insertQuery = `
+        INSERT INTO before_content (work_request_id, description, link, creator_id, creator_type, creator_name, geo_tag, content_type)
+        VALUES ($1, $2, $3, $4, $5, $6, ST_GeomFromText($7, 4326), $8)
+        RETURNING *
+      `;
+
+      const result = await query(insertQuery, [
+        workRequestId,
+        description,
+        link,
+        creatorId || session.user.id,
+        creatorType || session.user.userType || 'user',
+        creatorName,
+        geoTag,
+        'image'
+      ]);
+
+      // Log upload action
+      await logUserAction({
+        user_id: session.user.id,
+        user_type: session.user.userType,
+        user_role: session.user.role,
+        user_name: session.user.name || 'Unknown',
+        user_email: session.user.email || 'unknown@example.com',
+        action_type: 'UPLOAD',
+        entity_type: 'before_content',
+        entity_id: result[0]?.id,
+        entity_name: `Before Image for Request #${workRequestId}`,
+        details: {
+          work_request_id: workRequestId,
+          image_link: link,
+          description: description,
+          has_geolocation: !!(latitude && longitude),
+          latitude: latitude,
+          longitude: longitude,
+          file_name: img.name,
+          file_size: img.size,
+          file_type: img.type
+        },
+        ip_address: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip'),
+        user_agent: request.headers.get('user-agent')
+      });
+
+      return NextResponse.json({ 
+        success: true, 
+        data: result[0],
+        message: 'Before image uploaded successfully' 
+      });
+    }
+
+    // Handle JSON upload (existing method for backward compatibility)
     const body = await request.json();
     const { workRequestId, description, link, latitude, longitude, additionalImages } = body;
 
@@ -150,7 +245,8 @@ export async function POST(request) {
           session.user.id,
           session.user.userType || 'user',
           creatorName,
-          additionalGeoTag
+          additionalGeoTag,
+          'image'
         ]);
 
         // Log additional before image upload action
@@ -181,7 +277,7 @@ export async function POST(request) {
 
     return NextResponse.json({ 
       success: true, 
-      data: result.rows[0],
+      data: result[0],
       message: 'Before images uploaded successfully' 
     });
   } catch (error) {

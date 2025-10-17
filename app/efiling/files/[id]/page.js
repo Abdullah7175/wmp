@@ -505,42 +505,111 @@ export default function FileDetail() {
                     
                     /* Print sections for signatures, attachments, comments */
                     .print-section {
-                        page-break-inside: avoid;
-                        margin-top: 15mm;
-                        padding: 10mm;
-                        border: 1px solid #ddd;
-                        background: white;
+                        page-break-before: always;
+                        page-break-inside: auto;
+                        margin-top: 0;
+                        padding: 15mm;
+                        border: 2px solid #333;
+                        background: white !important;
+                        display: block !important;
+                        visibility: visible !important;
                     }
                     
                     .print-section h3 {
-                        font-size: 13pt;
+                        font-size: 14pt;
                         font-weight: bold;
-                        margin-bottom: 5mm;
+                        margin-bottom: 8mm;
                         border-bottom: 2px solid #333;
-                        padding-bottom: 3mm;
-                        color: #000;
+                        padding-bottom: 5mm;
+                        color: #000 !important;
+                        text-align: center;
                     }
                     
-                    .print-signature-item,
-                    .print-attachment-item,
-                    .print-comment-item {
-                        margin-bottom: 5mm;
-                        padding: 5mm;
-                        border: 1px solid #ccc;
-                        page-break-inside: avoid;
+                    /* Grid layout for signatures and comments */
+                    .print-signatures-grid {
+                        display: grid !important;
+                        grid-template-columns: 1fr 1fr !important;
+                        gap: 8mm !important;
+                        margin-bottom: 5mm !important;
                     }
-                    
+
+                    .print-comments-grid {
+                        display: grid !important;
+                        grid-template-columns: 1fr 1fr !important;
+                        gap: 8mm !important;
+                        margin-bottom: 5mm !important;
+                    }
+
+                    .print-signature-item {
+                        padding: 3mm !important;
+                        border: 1px solid #ddd !important;
+                        background: white !important;
+                        display: block !important;
+                        visibility: visible !important;
+                        break-inside: avoid !important;
+                        margin-bottom: 0 !important;
+                        text-align: center !important;
+                    }
+
                     .print-signature-item img {
-                        max-height: 40mm;
-                        width: auto;
-                        border: 1px solid #ddd;
+                        max-width: 100% !important;
+                        height: auto !important;
+                        max-height: 25mm !important;
+                        display: block !important;
+                        margin: 0 auto 2mm auto !important;
+                        border: 1px solid #333 !important;
+                    }
+
+                    .print-signature-details {
+                        font-size: 8pt !important;
+                        text-align: center !important;
+                        color: #000 !important;
+                        margin-top: 2mm !important;
+                    }
+
+                    .print-attachment-item {
                         margin-bottom: 3mm;
+                        padding: 3mm;
+                        border: 1px solid #666;
+                        page-break-inside: avoid;
+                        background: #f9f9f9 !important;
+                    }
+
+                    .print-comment-item {
+                        padding: 3mm !important;
+                        border: 1px solid #ddd !important;
+                        background: white !important;
+                        display: block !important;
+                        visibility: visible !important;
+                        break-inside: avoid !important;
+                        margin-bottom: 0 !important;
+                    }
+
+                    .print-comment-header {
+                        font-size: 8pt !important;
+                        font-weight: bold !important;
+                        color: #000 !important;
+                        margin-bottom: 1mm !important;
+                    }
+
+                    .print-comment-content {
+                        font-size: 7pt !important;
+                        color: #000 !important;
+                        line-height: 1.2 !important;
                     }
                     
                     .print-attachment-item img {
-                        max-height: 60mm;
+                        max-height: 70mm;
                         width: auto;
                         margin-bottom: 3mm;
+                        display: block;
+                    }
+                    
+                    /* Force print sections to be visible */
+                    .print-section * {
+                        visibility: visible !important;
+                        opacity: 1 !important;
+                        color: #000 !important;
                     }
                 }
                 
@@ -767,22 +836,24 @@ export default function FileDetail() {
                     {signatures.length > 0 && (
                         <div className="print-only print-section">
                             <h3>E-Signatures ({signatures.length})</h3>
-                            {signatures.map((s, idx) => (
-                                <div key={s.id || idx} className="print-signature-item">
-                                    {s.content && s.type?.toLowerCase().includes('image') ? (
-                                        // eslint-disable-next-line @next/next/no-img-element
-                                        <img src={s.content} alt="signature" />
-                                    ) : (
-                                        <div style={{ padding: '5mm', border: '1px solid #ddd', backgroundColor: '#f9f9f9', fontFamily: 'monospace', fontSize: '10pt', marginBottom: '3mm' }}>
-                                            {s.content}
+                            <div className="print-signatures-grid">
+                                {signatures.map((s, idx) => (
+                                    <div key={s.id || idx} className="print-signature-item">
+                                        {s.content && s.type?.toLowerCase().includes('image') ? (
+                                            // eslint-disable-next-line @next/next/no-img-element
+                                            <img src={s.content} alt="signature" />
+                                        ) : (
+                                            <div style={{ padding: '3mm', border: '1px solid #ddd', backgroundColor: '#f9f9f9', fontFamily: 'monospace', fontSize: '8pt', marginBottom: '2mm' }}>
+                                                {s.content}
+                                            </div>
+                                        )}
+                                        <div className="print-signature-details">
+                                            <div><strong>{s.user_name}</strong> <span style={{ color: '#666', fontWeight: 'normal' }}>({s.user_role})</span></div>
+                                            <div>{formatDate(s.timestamp)}</div>
                                         </div>
-                                    )}
-                                    <div style={{ fontWeight: 'bold', fontSize: '11pt', marginBottom: '2mm' }}>
-                                        {s.user_name} <span style={{ color: '#666', fontWeight: 'normal' }}>({s.user_role})</span>
                                     </div>
-                                    <div style={{ color: '#666', fontSize: '9pt' }}>{formatDate(s.timestamp)}</div>
-                                </div>
-                            ))}
+                                ))}
+                            </div>
                         </div>
                     )}
 
@@ -813,13 +884,15 @@ export default function FileDetail() {
                     {comments.length > 0 && (
                         <div className="print-only print-section">
                             <h3>Comments ({comments.length})</h3>
-                            {comments.map((c, idx) => (
-                                <div key={c.id || idx} className="print-comment-item">
-                                    <div style={{ fontWeight: 'bold', fontSize: '11pt', marginBottom: '2mm' }}>{c.user_name}</div>
-                                    <div style={{ color: '#666', fontSize: '9pt', marginBottom: '3mm' }}>{formatDate(c.timestamp)}</div>
-                                    <div style={{ fontSize: '10pt', lineHeight: '1.5' }}>{c.text}</div>
-                                </div>
-                            ))}
+                            <div className="print-comments-grid">
+                                {comments.map((c, idx) => (
+                                    <div key={c.id || idx} className="print-comment-item">
+                                        <div className="print-comment-header">{c.user_name}</div>
+                                        <div style={{ color: '#666', fontSize: '7pt', marginBottom: '2mm' }}>{formatDate(c.timestamp)}</div>
+                                        <div className="print-comment-content">{c.text}</div>
+                                    </div>
+                                ))}
+                            </div>
                         </div>
                     )}
                 </div>

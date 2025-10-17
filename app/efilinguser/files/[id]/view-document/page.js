@@ -7,9 +7,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Download, Eye, FileText, User, Calendar, Building2, Shield, MessageSquare, Paperclip } from "lucide-react";
+import { ArrowLeft, Download, Eye, FileText, User, Calendar, Building2, Shield, MessageSquare, Paperclip, Printer, FileDown } from "lucide-react";
 import AttachmentManager from "../../../components/AttachmentManager";
 import DocumentSignatureSystem from "../../../components/DocumentSignatureSystem";
+import Image from "next/image";
 
 export default function DocumentViewer() {
     const { data: session } = useSession();
@@ -28,6 +29,37 @@ export default function DocumentViewer() {
     const [currentPageId, setCurrentPageId] = useState(1);
     const [workRequest, setWorkRequest] = useState(null);
     const [beforeContent, setBeforeContent] = useState([]);
+
+    const handlePrint = () => {
+        window.print();
+    };
+
+    const handleExportPDF = async () => {
+        try {
+            toast({ title: "Generating PDF...", description: "Please wait while we prepare your document." });
+            
+            const originalTitle = document.title;
+            document.title = `EFile_${file?.file_number || 'document'}_${new Date().toISOString().split('T')[0]}`;
+            
+            window.print();
+            
+            setTimeout(() => {
+                document.title = originalTitle;
+            }, 1000);
+            
+            toast({ 
+                title: "PDF Export", 
+                description: "Please select 'Save as PDF' in the print dialog to export." 
+            });
+        } catch (error) {
+            console.error('PDF export error:', error);
+            toast({ 
+                title: "Export Failed", 
+                description: "Failed to export PDF. Please try again.", 
+                variant: "destructive" 
+            });
+        }
+    };
 
 	const sanitizeHtml = (html) => {
 		if (!html || typeof html !== "string") return "";
@@ -153,19 +185,65 @@ export default function DocumentViewer() {
 	console.log('Current state:', { workRequest, beforeContent, file });
 
     return (
-        <div className="min-h-screen bg-gray-50">
-            <div className="bg-white border-b border-gray-200 sticky top-0 z-50">
-                <div className="flex items-center justify-between p-4">
-                    <div className="flex items-center space-x-4">
-						<Button variant="ghost" onClick={() => router.back()} className="flex items-center"><ArrowLeft className="w-4 h-4 mr-2"/>Back</Button>
-                        <div>
-                            <h1 className="text-xl font-bold text-gray-900">Document Viewer</h1>
-                            <p className="text-sm text-gray-600">File: {file.file_number}</p>
+        <>
+            <style jsx global>{`
+                @media print {
+                    @page {
+                        size: A4;
+                        margin: 20mm;
+                    }
+                    
+                    body {
+                        print-color-adjust: exact;
+                        -webkit-print-color-adjust: exact;
+                    }
+                    
+                    .no-print {
+                        display: none !important;
+                    }
+                    
+                    .print-only {
+                        display: block !important;
+                    }
+                }
+            `}</style>
+            
+            <div className="min-h-screen bg-gray-50">
+                {/* Enhanced Header with KWSC Logo */}
+                <div className="bg-white border-b border-gray-200 sticky top-0 z-50">
+                    <div className="container mx-auto px-4 py-4">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-4">
+                                <Button variant="ghost" onClick={() => router.back()} className="flex items-center no-print">
+                                    <ArrowLeft className="w-4 h-4 mr-2"/>
+                                    Back
+                                </Button>
+                                <div className="flex items-center space-x-3">
+                                    <Image 
+                                        src="/logo.png" 
+                                        alt="KWSC Logo" 
+                                        width={40} 
+                                        height={40} 
+                                        className="h-10 w-auto"
+                                    />
+                                    <div>
+                                        <h1 className="text-2xl font-bold text-gray-900">Document Viewer</h1>
+                                        <p className="text-sm text-gray-600">Karachi Water & Sewerage Corporation - E-Filing System</p>
+                                        <p className="text-xs text-gray-500">File: {file.file_number} | Subject: {file.subject}</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="flex space-x-2 no-print">
+                                <Button onClick={handlePrint} variant="outline" className="bg-green-50 hover:bg-green-100 text-green-700 border-green-300">
+                                    <Printer className="w-4 h-4 mr-2" />
+                                    Print
+                                </Button>
+                                <Button onClick={handleExportPDF} variant="outline" className="bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-300">
+                                    <FileDown className="w-4 h-4 mr-2" />
+                                    Export PDF
+                                </Button>
+                            </div>
                         </div>
-                    </div>
-                    <div className="flex items-center space-x-2">
-						<Button variant="outline" onClick={() => window.print()}><Eye className="w-4 h-4 mr-2"/>Print</Button>
-						<Button variant="outline" onClick={() => toast({ title: "Download", description: "Download functionality will be implemented" })}><Download className="w-4 h-4 mr-2"/>Download</Button>
                     </div>
                 </div>
             </div>
@@ -540,6 +618,6 @@ export default function DocumentViewer() {
                     </div>
                 </div>
             </div>
-        </div>
+        </>
     );
 }

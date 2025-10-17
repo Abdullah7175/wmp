@@ -128,51 +128,36 @@ export default function AddBeforeImageForm({ workRequestId, onClose }) {
 
     setLoading(true);
     try {
-      const uploadedImages = [];
-      
-      // Upload main image
-      const mainImage = formData.images[0];
-      const mainImageLink = await uploadImageToServer(mainImage.file);
-      uploadedImages.push({
-        link: mainImageLink,
-        description: mainImage.description || formData.description
-      });
-
-      // Upload additional images
-      for (let i = 1; i < formData.images.length; i++) {
+      // Upload images directly to before-images API (similar to other upload forms)
+      for (let i = 0; i < formData.images.length; i++) {
         const image = formData.images[i];
-        const imageLink = await uploadImageToServer(image.file);
-        uploadedImages.push({
-          link: imageLink,
-          description: image.description || ''
+        
+        const data = new FormData();
+        data.append("workRequestId", workRequestId);
+        data.append("description", image.description || formData.description || '');
+        data.append("img", image.file);
+        data.append("latitude", formData.latitude || '0');
+        data.append("longitude", formData.longitude || '0');
+        data.append("creator_id", session.user.id);
+        data.append("creator_type", "socialmedia");
+
+        const response = await fetch('/api/before-images', {
+          method: 'POST',
+          body: data,
         });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error || `Upload failed with status ${response.status}`);
+        }
       }
 
-      const response = await fetch('/api/before-images', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          workRequestId,
-          description: formData.description,
-          link: uploadedImages[0].link,
-          latitude: formData.latitude || '0',
-          longitude: formData.longitude || '0',
-          additionalImages: uploadedImages.slice(1)
-        }),
+      toast({
+        title: "Before images uploaded successfully",
+        description: 'Your before images have been uploaded.',
+        variant: 'success',
       });
-
-      if (response.ok) {
-        toast({
-          title: "Before images uploaded successfully",
-          description: 'Your before images have been uploaded.',
-          variant: 'success',
-        });
-        onClose();
-      } else {
-        throw new Error('Failed to upload before images');
-      }
+      onClose();
     } catch (error) {
       console.error('Error uploading before images:', error);
       toast({
