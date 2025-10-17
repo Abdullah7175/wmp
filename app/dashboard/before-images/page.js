@@ -18,7 +18,7 @@ export default function BeforeContentPage() {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 5;
+  const itemsPerPage = 10;
 
   // Admins and managers can upload, edit, and delete
   const canUpload = true;
@@ -70,11 +70,25 @@ export default function BeforeContentPage() {
     }
   };
 
-  const filteredContent = beforeContent.filter(item => 
-    item.work_description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    item.address?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    item.complaint_type?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredContent = beforeContent.filter(item => {
+    // Text search filter
+    const matchesSearch = !searchTerm || 
+      item.work_description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      item.address?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      item.complaint_type?.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    // Date range filter
+    const itemDate = new Date(item.created_at);
+    const matchesDateFrom = !dateFrom || itemDate >= new Date(dateFrom);
+    const matchesDateTo = !dateTo || itemDate <= new Date(dateTo + 'T23:59:59');
+    
+    return matchesSearch && matchesDateFrom && matchesDateTo;
+  });
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, dateFrom, dateTo]);
 
   if (loading) {
     return <div className="flex items-center justify-center h-96 text-lg">Loading before content...</div>;

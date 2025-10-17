@@ -63,6 +63,11 @@ export default function FinalVideosPage() {
       });
   }, [session?.user?.id, search, dateFrom, dateTo]);
 
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, dateFrom, dateTo]);
+
   const handleDelete = async (videoId) => {
     if (!confirm('Are you sure you want to delete this final video?')) return;
     
@@ -153,23 +158,44 @@ export default function FinalVideosPage() {
         </Button>
       </div>
 
-      {finalVideos.length === 0 ? (
-        <Card className="p-8 text-center">
-          <div className="text-gray-500">
-            <Video className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-            <h3 className="text-lg font-medium mb-2">No final videos yet</h3>
-            <p>You haven&apos;t created any final videos yet.</p>
-            <Link href="/dashboard/final-videos/add">
-              <button className="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
-                Create Your First Final Video
-              </button>
-            </Link>
-          </div>
-        </Card>
-      ) : (
+      {(() => {
+        // Apply client-side filtering
+        const filteredVideos = finalVideos.filter(video => {
+          // Text search filter
+          const matchesSearch = !search || 
+            video.description?.toLowerCase().includes(search.toLowerCase()) ||
+            video.work_request_id?.toString().includes(search) ||
+            video.id?.toString().includes(search);
+          
+          // Date range filter
+          const videoDate = new Date(video.created_at);
+          const matchesDateFrom = !dateFrom || videoDate >= new Date(dateFrom);
+          const matchesDateTo = !dateTo || videoDate <= new Date(dateTo + 'T23:59:59');
+          
+          return matchesSearch && matchesDateFrom && matchesDateTo;
+        });
+
+        if (filteredVideos.length === 0) {
+          return (
+            <Card className="p-8 text-center">
+              <div className="text-gray-500">
+                <Video className="w-16 h-16 mx-auto mb-4 text-gray-300" />
+                <h3 className="text-lg font-medium mb-2">No final videos found</h3>
+                <p>{finalVideos.length === 0 ? "You haven't created any final videos yet." : "No videos match your search criteria."}</p>
+                <Link href="/dashboard/final-videos/add">
+                  <button className="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+                    Create Your First Final Video
+                  </button>
+                </Link>
+              </div>
+            </Card>
+          );
+        }
+
+        return (
         <>
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {finalVideos.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((video) => (
+            {filteredVideos.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((video) => (
             <Card key={video.id} className="p-6 flex flex-col gap-3 bg-white border-2 shadow-md hover:shadow-lg transition-shadow">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -230,10 +256,10 @@ export default function FinalVideosPage() {
           </div>
           
           {/* Pagination */}
-          {finalVideos.length > itemsPerPage && (
+          {filteredVideos.length > itemsPerPage && (
             <div className="flex items-center justify-between mt-6 px-4">
               <div className="text-sm text-gray-500">
-                Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, finalVideos.length)} of {finalVideos.length} entries
+                Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, filteredVideos.length)} of {filteredVideos.length} entries
               </div>
               <div className="flex items-center space-x-2">
                 <Button
@@ -253,21 +279,21 @@ export default function FinalVideosPage() {
                   Previous
                 </Button>
                 <span className="text-sm text-gray-500">
-                  Page {currentPage} of {Math.ceil(finalVideos.length / itemsPerPage)}
+                  Page {currentPage} of {Math.ceil(filteredVideos.length / itemsPerPage)}
                 </span>
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={() => setCurrentPage(currentPage + 1)}
-                  disabled={currentPage === Math.ceil(finalVideos.length / itemsPerPage)}
+                  disabled={currentPage === Math.ceil(filteredVideos.length / itemsPerPage)}
                 >
                   Next
                 </Button>
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setCurrentPage(Math.ceil(finalVideos.length / itemsPerPage))}
-                  disabled={currentPage === Math.ceil(finalVideos.length / itemsPerPage)}
+                  onClick={() => setCurrentPage(Math.ceil(filteredVideos.length / itemsPerPage))}
+                  disabled={currentPage === Math.ceil(filteredVideos.length / itemsPerPage)}
                 >
                   Last
                 </Button>
@@ -275,7 +301,8 @@ export default function FinalVideosPage() {
             </div>
           )}
         </>
-      )}
+        );
+      })()}
       {/* Video Modal */}
       {selectedVideo && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60">

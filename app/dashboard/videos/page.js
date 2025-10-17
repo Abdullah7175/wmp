@@ -12,15 +12,26 @@ export default function Page() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+
+  // Debounce search input
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [search]);
 
   useEffect(() => {
     const fetchVideos = async () => {
       try {
+        setLoading(true);
         let url = '/api/videos';
         const params = [];
-        if (search) params.push(`filter=${encodeURIComponent(search)}`);
+        if (debouncedSearch) params.push(`filter=${encodeURIComponent(debouncedSearch)}`);
         if (dateFrom) params.push(`date_from=${dateFrom}`);
         if (dateTo) params.push(`date_to=${dateTo}`);
         if (params.length) url += '?' + params.join('&');
@@ -29,6 +40,7 @@ export default function Page() {
           const data = await response.json();
           const videosData = Array.isArray(data) ? data : (data.data || []);
           setVideos(videosData);
+          setError(null);
         } else {
           setError('Failed to fetch videos');
         }
@@ -41,7 +53,7 @@ export default function Page() {
     };
 
     fetchVideos();
-  }, [search, dateFrom, dateTo]);
+  }, [debouncedSearch, dateFrom, dateTo]);
 
   if (loading) {
     return (
@@ -109,11 +121,19 @@ export default function Page() {
         </Button>
       </div>
       <div className="bg-white rounded-lg shadow">
-        <EnhancedDataTable 
-          columns={columns} 
-          data={videos}
-          pageSize={5}
-        />
+        {loading ? (
+          <div className="p-8 text-center text-gray-500">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
+            Searching...
+          </div>
+        ) : (
+          <EnhancedDataTable 
+            key={`${debouncedSearch}-${dateFrom}-${dateTo}`}
+            columns={columns} 
+            data={videos}
+            pageSize={10}
+          />
+        )}
       </div>
     </div>
   )
