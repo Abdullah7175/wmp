@@ -122,7 +122,7 @@ export default function DocumentViewer() {
         } finally {
             setLoading(false);
         }
-    }
+	}
 
     async function fetchWorkRequest() {
         if (!file?.work_request_id) return;
@@ -214,12 +214,12 @@ export default function DocumentViewer() {
                 }
             `}</style>
             
-            <div className="min-h-screen bg-gray-50">
+        <div className="min-h-screen bg-gray-50">
                 {/* Enhanced Header with KWSC Logo */}
-                <div className="bg-white border-b border-gray-200 sticky top-0 z-50">
+            <div className="bg-white border-b border-gray-200 sticky top-0 z-50">
                     <div className="container mx-auto px-4 py-4">
                         <div className="flex items-center justify-between">
-                            <div className="flex items-center space-x-4">
+                    <div className="flex items-center space-x-4">
                                 <Button variant="ghost" onClick={() => router.back()} className="flex items-center no-print">
                                     <ArrowLeft className="w-4 h-4 mr-2"/>
                                     Back
@@ -232,7 +232,7 @@ export default function DocumentViewer() {
                                         height={40} 
                                         className="h-10 w-auto"
                                     />
-                                    <div>
+                        <div>
                                         <h1 className="text-2xl font-bold text-gray-900">Document Viewer</h1>
                                         <p className="text-sm text-gray-600">Karachi Water & Sewerage Corporation - E-Filing System</p>
                                         <p className="text-xs text-gray-500">File: {file.file_number} | Subject: {file.subject}</p>
@@ -445,26 +445,26 @@ export default function DocumentViewer() {
 
                             {file?.work_request_id && workRequest && (
                                 <Card>
-                                    <CardHeader>
+                                <CardHeader>
                                         <CardTitle className="text-lg">Work Request Details</CardTitle>
-                                    </CardHeader>
-                                    <CardContent className="space-y-3">
-                                        <div className="flex items-center space-x-2"><FileText className="w-4 h-4 text-gray-500"/><span className="text-sm text-gray-600">Request ID: #{workRequest.id}</span></div>
-                                        <div className="flex items-center space-x-2"><Building2 className="w-4 h-4 text-gray-500"/><span className="text-sm text-gray-600">Address: {workRequest.address || "N/A"}</span></div>
-                                        <div className="flex items-center space-x-2"><User className="w-4 h-4 text-gray-500"/><span className="text-sm text-gray-600">Type: {workRequest.complaint_type || "N/A"}</span></div>
-                                        <div className="flex items-center space-x-2"><Calendar className="w-4 h-4 text-gray-500"/><span className="text-sm text-gray-600">Created: {formatDate(workRequest.request_date)}</span></div>
-                                        <div className="flex items-center space-x-2"><Badge className={statusColor(workRequest.status_name)}>{workRequest.status_name || "Unknown"}</Badge></div>
-                                        {workRequest.description && (
-                                            <div className="mt-3 p-2 bg-white rounded border">
-                                                <div className="text-xs font-semibold text-gray-700 mb-1">Description:</div>
-                                                <div className="text-xs text-gray-600">{workRequest.description}</div>
-                                            </div>
-                                        )}
-                                        {workRequest.contact_number && (
-                                            <div className="flex items-center space-x-2"><span className="text-xs text-gray-500">Contact: {workRequest.contact_number}</span></div>
-                                        )}
-                                    </CardContent>
-                                </Card>
+                                </CardHeader>
+                                <CardContent className="space-y-3">
+                                            <div className="flex items-center space-x-2"><FileText className="w-4 h-4 text-gray-500"/><span className="text-sm text-gray-600">Request ID: #{workRequest.id}</span></div>
+                                            <div className="flex items-center space-x-2"><Building2 className="w-4 h-4 text-gray-500"/><span className="text-sm text-gray-600">Address: {workRequest.address || "N/A"}</span></div>
+                                            <div className="flex items-center space-x-2"><User className="w-4 h-4 text-gray-500"/><span className="text-sm text-gray-600">Type: {workRequest.complaint_type || "N/A"}</span></div>
+                                            <div className="flex items-center space-x-2"><Calendar className="w-4 h-4 text-gray-500"/><span className="text-sm text-gray-600">Created: {formatDate(workRequest.request_date)}</span></div>
+                                            <div className="flex items-center space-x-2"><Badge className={statusColor(workRequest.status_name)}>{workRequest.status_name || "Unknown"}</Badge></div>
+                                            {workRequest.description && (
+                                                <div className="mt-3 p-2 bg-white rounded border">
+                                                    <div className="text-xs font-semibold text-gray-700 mb-1">Description:</div>
+                                                    <div className="text-xs text-gray-600">{workRequest.description}</div>
+                                                </div>
+                                            )}
+                                            {workRequest.contact_number && (
+                                                <div className="flex items-center space-x-2"><span className="text-xs text-gray-500">Contact: {workRequest.contact_number}</span></div>
+                                    )}
+                                </CardContent>
+                            </Card>
                             )}
 
                             {beforeContent.length > 0 && (
@@ -654,9 +654,9 @@ export default function DocumentViewer() {
                                 <div>
                                     <span className="font-medium">Uploaded:</span>
                                     <p className="text-gray-600">{formatDate(selectedAttachment.uploaded_at)}</p>
-                                </div>
-                            </div>
-                        </div>
+                </div>
+            </div>
+        </div>
                     )}
                 </DialogContent>
             </Dialog>

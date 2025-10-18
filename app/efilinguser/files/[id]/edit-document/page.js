@@ -47,6 +47,7 @@ export default function DocumentEditor() {
     const [canEditDocument, setCanEditDocument] = useState(false);
     const [hasUserSigned, setHasUserSigned] = useState(false);
     const [userEfilingId, setUserEfilingId] = useState(null);
+    const [permissionChecked, setPermissionChecked] = useState(false);
 
     // Helper function to convert HTML to plain text
     const htmlToText = (html) => {
@@ -105,33 +106,8 @@ export default function DocumentEditor() {
         if (session?.user) {
             const role = session.user.role || 'user';
             setUserRole(role);
-            // In efilinguser, only file creators can edit (not admins)
-            setCanEditDocument(false); // Will be updated after file fetch
         }
-    }, [session, file]);
-
-    useEffect(() => {
-        if (!loading && file && session?.user?.id) {
-            (async () => {
-                try {
-                    const mapRes = await fetch(`/api/efiling/users/profile?userId=${session.user.id}`);
-                    if (mapRes.ok) {
-                        const map = await mapRes.json();
-                        const efilingUserId = map?.efiling_user_id;
-                        const isCreator = file.created_by === efilingUserId;
-                        // In efilinguser, only file creators can edit (no admin override)
-                        setCanEditDocument(isCreator);
-                        if (!isCreator) {
-                            router.replace(`/efilinguser/files/${params.id}`);
-                        }
-                    }
-                } catch (e) {
-                    // If mapping fails, be safe and block edit
-                    router.replace(`/efilinguser/files/${params.id}`);
-                }
-            })();
-        }
-    }, [loading, file, session?.user?.id]);
+    }, [session]);
 
     const fetchFile = async () => {
         try {
@@ -177,14 +153,28 @@ export default function DocumentEditor() {
                         const isFileCreator = fileData.created_by === efilingUserId;
                         // In efilinguser, only file creators can edit (no admin override)
                         setCanEditDocument(isFileCreator);
+                        setPermissionChecked(true);
                         
                         console.log('Edit access check:', {
                             userId: session.user.id,
                             efilingUserId: efilingUserId,
                             fileCreatedBy: fileData.created_by,
                             isFileCreator: isFileCreator,
-                            canEdit: isFileCreator
+                            canEdit: isFileCreator,
+                            permissionChecked: true
                         });
+                        
+                        // If user is not the creator, redirect them
+                        if (!isFileCreator) {
+                            router.replace(`/efilinguser/files/${params.id}`);
+                            return;
+                        }
+                    } else {
+                        // If mapping fails, be safe and block edit
+                        console.error('Failed to fetch user mapping, blocking edit access');
+                        setCanEditDocument(false);
+                        router.replace(`/efilinguser/files/${params.id}`);
+                        return;
                     }
                 }
             } else {
@@ -616,10 +606,15 @@ export default function DocumentEditor() {
         }
     };
 
-    if (loading) {
+    if (loading || !permissionChecked) {
         return (
             <div className="flex items-center justify-center h-96">
-                <div className="text-lg">Loading document editor...</div>
+                <div className="text-center">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                    <div className="text-lg">
+                        {loading ? 'Loading document editor...' : 'Checking permissions...'}
+                    </div>
+                </div>
             </div>
         );
     }
@@ -739,7 +734,7 @@ export default function DocumentEditor() {
                                         <button
                                             onClick={() => deletePage(page.id)}
                                             className="ml-1 text-red-500 hover:text-red-700 text-sm font-bold w-5 h-5 flex items-center justify-center rounded-full hover:bg-red-100"
-                                            disabled={!canEditDocument}
+                                            disabled={!canEditDocument || !permissionChecked}
                                             title="Delete page"
                                         >
                                             ×
@@ -747,7 +742,7 @@ export default function DocumentEditor() {
                                     )}
                                 </div>
                             ))}
-                            {canEditDocument && (
+                            {canEditDocument && permissionChecked && (
                                 <Button
                                     variant="outline"
                                     size="sm"
@@ -825,7 +820,7 @@ export default function DocumentEditor() {
                                                 value={getCurrentPage().title}
                                                 onChange={(e) => updatePageTitle(currentPageId, e.target.value)}
                                                 className="w-48"
-                                                disabled={!canEditDocument}
+                                                disabled={!canEditDocument || !permissionChecked}
                                             />
                                         <Select value={selectedTemplate.toString()} onValueChange={(value) => selectTemplate(parseInt(value))}>
                                             <SelectTrigger className="w-48">
@@ -871,7 +866,7 @@ export default function DocumentEditor() {
                                                 onChange={(e) => updateCurrentPageContent({ title: e.target.value })}
                                                 className="w-full p-2 border border-gray-300 rounded-md min-h-[40px] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                                 placeholder="Enter document title"
-                                                disabled={!canEditDocument}
+                                                disabled={!canEditDocument || !permissionChecked}
                                             />
                                         </div>
                                         <div>
@@ -883,7 +878,7 @@ export default function DocumentEditor() {
                                                 onChange={(e) => updateCurrentPageContent({ subject: e.target.value })}
                                                 className="w-full p-2 border border-gray-300 rounded-md min-h-[40px] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                                 placeholder="Enter document subject"
-                                                disabled={!canEditDocument}
+                                                disabled={!canEditDocument || !permissionChecked}
                                             />
                                         </div>
                                         <div>
@@ -895,7 +890,7 @@ export default function DocumentEditor() {
                                                 onChange={(e) => updateCurrentPageContent({ date: e.target.value })}
                                                 className="w-full p-2 border border-gray-300 rounded-md min-h-[40px] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                                 placeholder="Enter date"
-                                                disabled={!canEditDocument}
+                                                disabled={!canEditDocument || !permissionChecked}
                                             />
                                         </div>
                                         <div>
@@ -905,9 +900,9 @@ export default function DocumentEditor() {
                                                 onChange={(value) => updateCurrentPageContent({ matter: value })}
                                                 placeholder="Enter main content..."
                                                 className="min-h-[200px]"
-                                                readOnly={!canEditDocument}
+                                                readOnly={!canEditDocument || !permissionChecked}
                                             />
-                                            {!canEditDocument && (
+                                            {(!canEditDocument || !permissionChecked) && (
                                                 <p className="text-sm text-gray-500 mt-1">
                                                     Only the document creator or authorized administrators can edit this content.
                                                 </p>
@@ -918,7 +913,7 @@ export default function DocumentEditor() {
                                             <Select 
                                                 value={(getCurrentPage().content.regards) || ''} 
                                                 onValueChange={(value) => updateCurrentPageContent({ regards: value })}
-                                                disabled={!canEditDocument}
+                                                disabled={!canEditDocument || !permissionChecked}
                                             >
                                                 <SelectTrigger id="regards">
                                                     <SelectValue placeholder="Select regards" />
@@ -938,7 +933,7 @@ export default function DocumentEditor() {
                                                     onChange={(e) => updateCurrentPageContent({ customRegards: e.target.value })}
                                                     className="w-full p-2 border border-gray-300 rounded-md min-h-[40px] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent mt-2"
                                                     placeholder="Enter custom regards"
-                                                    disabled={!canEditDocument}
+                                                    disabled={!canEditDocument || !permissionChecked}
                                                 />
                                             )}
                                         </div>
@@ -951,7 +946,7 @@ export default function DocumentEditor() {
                                                 onChange={(e) => updateCurrentPageContent({ footer: e.target.value })}
                                                 className="w-full p-2 border border-gray-300 rounded-md min-h-[40px] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                                 placeholder="Enter footer text"
-                                                disabled={!canEditDocument}
+                                                disabled={!canEditDocument || !permissionChecked}
                                             />
                                         </div>
                                     </div>

@@ -840,6 +840,66 @@ export default function FileDetail() {
                                     <div className="mt-1"><Badge className={getConfidentialityColor(file.confidentiality_level)}>{file.confidentiality_level}</Badge></div>
                                 </div>
                             </div>
+                            
+                            {/* SLA Status Section */}
+                            {file.sla_deadline && (
+                                <div className="border-t pt-4">
+                                    <label className="text-sm font-medium text-gray-600 mb-3 block">SLA Status (TAT)</label>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="text-xs font-medium text-gray-500">Status</label>
+                                            <div className="mt-1">
+                                                {file.sla_status === 'BREACHED' && (
+                                                    <Badge variant="destructive" className="flex items-center">
+                                                        <AlertCircle className="w-3 h-3 mr-1" />
+                                                        Breached
+                                                    </Badge>
+                                                )}
+                                                {file.sla_status === 'ACTIVE' && (
+                                                    <Badge variant="default" className="flex items-center">
+                                                        <Clock className="w-3 h-3 mr-1" />
+                                                        Active
+                                                    </Badge>
+                                                )}
+                                                {file.sla_status === 'PAUSED' && (
+                                                    <Badge variant="secondary" className="flex items-center">
+                                                        <Clock className="w-3 h-3 mr-1" />
+                                                        Paused
+                                                    </Badge>
+                                                )}
+                                                {file.sla_status === 'COMPLETED' && (
+                                                    <Badge variant="outline" className="flex items-center">
+                                                        <Clock className="w-3 h-3 mr-1" />
+                                                        Completed
+                                                    </Badge>
+                                                )}
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label className="text-xs font-medium text-gray-500">Time Remaining</label>
+                                            <p className={`text-sm font-medium ${
+                                                file.sla_status === 'BREACHED' ? 'text-red-600' : 
+                                                file.sla_status === 'PAUSED' ? 'text-yellow-600' : 
+                                                'text-green-600'
+                                            }`}>
+                                                {file.sla_status === 'PAUSED' ? 'Paused' : 
+                                                 file.hours_remaining !== null ? 
+                                                    `${file.hours_remaining > 0 ? '+' : ''}${file.hours_remaining}h` : 
+                                                    'N/A'}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div className="mt-2 text-xs text-gray-500">
+                                        <div>Deadline: {formatDate(file.sla_deadline)}</div>
+                                        {file.current_stage_name && (
+                                            <div>Current Stage: {file.current_stage_name}</div>
+                                        )}
+                                        {file.sla_paused && (
+                                            <div className="text-yellow-600">⚠️ SLA paused (pending CEO review)</div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
                             {file.work_request_id && (
                                 <div>
                                     <label className="text-sm font-medium text-gray-600">Video Archiving ID</label>
@@ -912,8 +972,8 @@ export default function FileDetail() {
                                         <div className="print-signature-details">
                                             <div><strong>{s.user_name}</strong> <span style={{ color: '#666', fontWeight: 'normal' }}>({s.user_role})</span></div>
                                             <div>{formatDate(s.timestamp)}</div>
-                                        </div>
-                                    </div>
+                    </div>
+                </div>
                                 ))}
                             </div>
                         </div>
@@ -1217,7 +1277,7 @@ export default function FileDetail() {
                                         height={600} 
                                         className="max-w-full max-h-[70vh] object-contain mx-auto rounded-lg shadow-lg" 
                                     />
-                                </div>
+        </div>
                             ) : (
                                 <div className="text-center py-8">
                                     <FileText className="w-16 h-16 mx-auto text-gray-400 mb-4" />

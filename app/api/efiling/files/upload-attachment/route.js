@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/db';
 import { eFileActionLogger, EFILING_ACTION_TYPES, EFILING_ENTITY_TYPES } from '@/lib/efilingActionLogger';
+import { promises as fs } from 'fs';
+import { join } from 'path';
+import { mkdir } from 'fs/promises';
 
 export async function POST(request) {
     let client;
@@ -27,14 +30,30 @@ export async function POST(request) {
         
         const userId = request.headers.get('x-user-id') || 'system';
         
-        // Store attachment information in existing columns
+        // Create upload directory if it doesn't exist
+        const uploadDir = join(process.cwd(), 'public', 'uploads', 'efiling', 'attachments');
+        await mkdir(uploadDir, { recursive: true });
+        
+        // Generate unique filename
+        const fileExtension = fileName.split('.').pop();
+        const uniqueFileName = `${attachmentId}.${fileExtension}`;
+        const filePath = join(uploadDir, uniqueFileName);
+        
+        // Save file to disk
+        const fileBuffer = await file.arrayBuffer();
+        await fs.writeFile(filePath, Buffer.from(fileBuffer));
+        
+        // Generate public URL
+        const fileUrl = `/uploads/efiling/attachments/${uniqueFileName}`;
+        
+        // Store attachment information with file URL
         const result = await client.query(`
             INSERT INTO efiling_file_attachments (
-                id, file_id, file_name, file_size, file_type, 
+                id, file_id, file_name, file_size, file_type, file_url,
                 uploaded_by, uploaded_at, is_active
-            ) VALUES ($1, $2, $3, $4, $5, $6, NOW(), true)
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), true)
             RETURNING *
-        `, [attachmentId, fileId, fileName, fileSize, fileType, userId]);
+        `, [attachmentId, fileId, fileName, fileSize, fileType, fileUrl, userId]);
         
         const attachment = result.rows[0];
         
@@ -77,6 +96,7 @@ export async function POST(request) {
                 name: attachment.file_name,
                 size: attachment.file_size,
                 type: attachment.file_type,
+                url: attachment.file_url,
                 uploadedAt: attachment.uploaded_at
             }
         });

@@ -7,7 +7,7 @@ export async function GET(request, { params }) {
         const { id } = await params;
         client = await connectToDatabase();
 
-        // Fetch file with detailed information
+        // Fetch file with detailed information including SLA data
         const result = await client.query(`
             SELECT 
                 f.*,
@@ -23,7 +23,28 @@ export async function GET(request, { params }) {
                 CASE 
                     WHEN f.work_request_id IS NOT NULL THEN 'Yes'
                     ELSE 'No'
-                END as has_video_request
+                END as has_video_request,
+                wf.sla_deadline,
+                wf.sla_paused,
+                wf.sla_accumulated_hours,
+                wf.sla_pause_count,
+                wf.workflow_status,
+                ws.stage_name as current_stage_name,
+                ws.sla_hours as current_stage_sla_hours,
+                CASE 
+                    WHEN wf.sla_paused THEN 'PAUSED'
+                    WHEN wf.sla_deadline IS NOT NULL AND wf.sla_deadline < NOW() AND wf.workflow_status = 'IN_PROGRESS' THEN 'BREACHED'
+                    WHEN wf.sla_deadline IS NOT NULL AND wf.sla_deadline >= NOW() THEN 'ACTIVE'
+                    ELSE 'COMPLETED'
+                END as sla_status,
+                CASE
+                    WHEN wf.sla_paused THEN NULL
+                    WHEN wf.sla_deadline IS NOT NULL AND wf.sla_deadline >= NOW() THEN 
+                        ROUND(EXTRACT(EPOCH FROM (wf.sla_deadline - NOW()))/3600.0, 2)
+                    WHEN wf.sla_deadline IS NOT NULL THEN 
+                        ROUND(EXTRACT(EPOCH FROM (NOW() - wf.sla_deadline))/3600.0, 2) * -1
+                    ELSE NULL
+                END as hours_remaining
             FROM efiling_files f
             LEFT JOIN efiling_departments d ON f.department_id = d.id
             LEFT JOIN efiling_file_categories c ON f.category_id = c.id
@@ -31,6 +52,8 @@ export async function GET(request, { params }) {
             LEFT JOIN efiling_users ab ON f.assigned_to = ab.id
             LEFT JOIN efiling_users creator_efiling ON f.created_by = creator_efiling.id
             LEFT JOIN users creator_users ON creator_efiling.user_id = creator_users.id
+            LEFT JOIN efiling_file_workflows wf ON wf.file_id = f.id
+            LEFT JOIN efiling_workflow_stages ws ON ws.id = wf.current_stage_id
             WHERE f.id = $1
         `, [id]);
 
