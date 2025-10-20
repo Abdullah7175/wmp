@@ -166,7 +166,12 @@ export async function POST(req) {
                 return createErrorResponse('Work request not found', 404);
             }
 
-            const uploadsDir = path.join(process.cwd(), 'public', UPLOAD_CONFIG.UPLOAD_DIRS.images);
+            // Handle standalone mode - ensure files go to correct public directory
+            let baseDir = process.cwd();
+            if (baseDir.includes('.next/standalone') || baseDir.includes('.next\\standalone')) {
+                baseDir = path.join(baseDir, '..', '..');
+            }
+            const uploadsDir = path.join(baseDir, 'public', UPLOAD_CONFIG.UPLOAD_DIRS.images);
             const uploadedImages = [];
             
             // Process files with optimized handling
@@ -284,7 +289,11 @@ export async function PUT(req) {
             if (file && file.size > 0) {
                 // Delete old file
                 if (currentImage.link) {
-                    const oldFilePath = path.join(process.cwd(), 'public', currentImage.link);
+                    let baseDir = process.cwd();
+                    if (baseDir.includes('.next/standalone') || baseDir.includes('.next\\standalone')) {
+                        baseDir = path.join(baseDir, '..', '..');
+                    }
+                    const oldFilePath = path.join(baseDir, 'public', currentImage.link);
                     try {
                         await fs.unlink(oldFilePath);
                     } catch (error) {
@@ -304,10 +313,16 @@ export async function PUT(req) {
                 if (sanitizedName.length > 50) sanitizedName = sanitizedName.substring(0, 50);
                 
                 const fileName = `${sanitizedName}-${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
-                const filePath = path.join(process.cwd(), 'public/uploads/images', fileName);
+                
+                // Handle standalone mode
+                let baseDir = process.cwd();
+                if (baseDir.includes('.next/standalone') || baseDir.includes('.next\\standalone')) {
+                    baseDir = path.join(baseDir, '..', '..');
+                }
+                const filePath = path.join(baseDir, 'public/uploads/images', fileName);
                 
                 // Ensure directory exists
-                const uploadDir = path.join(process.cwd(), 'public/uploads/images');
+                const uploadDir = path.join(baseDir, 'public/uploads/images');
                 try {
                     await fs.mkdir(uploadDir, { recursive: true });
                 } catch (error) {
@@ -439,7 +454,11 @@ export async function DELETE(req) {
         // Delete the file
         if (image.link) {
             try {
-                const filePath = path.join(process.cwd(), 'public', image.link);
+                let baseDir = process.cwd();
+                if (baseDir.includes('.next/standalone') || baseDir.includes('.next\\standalone')) {
+                    baseDir = path.join(baseDir, '..', '..');
+                }
+                const filePath = path.join(baseDir, 'public', image.link);
                 await fs.unlink(filePath);
             } catch (fileError) {
                 console.error('Error deleting image file:', fileError);

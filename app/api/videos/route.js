@@ -259,7 +259,12 @@ export async function POST(req) {
                 return NextResponse.json({ error: 'Work request not found' }, { status: 404 });
             }
 
-            const uploadsDir = path.join(process.cwd(), 'public', 'uploads', 'videos');
+            // Handle standalone mode - ensure files go to correct public directory
+            let baseDir = process.cwd();
+            if (baseDir.includes('.next/standalone') || baseDir.includes('.next\\standalone')) {
+                baseDir = path.join(baseDir, '..', '..');
+            }
+            const uploadsDir = path.join(baseDir, 'public', 'uploads', 'videos');
             await fs.mkdir(uploadsDir, { recursive: true });
             
             const uploadedVideos = [];
@@ -367,7 +372,11 @@ export async function PUT(req) {
                 
                 // Delete old file
                 if (currentVideo.link) {
-                    const oldFilePath = path.join(process.cwd(), 'public', currentVideo.link);
+                    let baseDir = process.cwd();
+                    if (baseDir.includes('.next/standalone') || baseDir.includes('.next\\standalone')) {
+                        baseDir = path.join(baseDir, '..', '..');
+                    }
+                    const oldFilePath = path.join(baseDir, 'public', currentVideo.link);
                     if (fs.existsSync(oldFilePath)) {
                         fs.unlinkSync(oldFilePath);
                     }
@@ -385,10 +394,16 @@ export async function PUT(req) {
                 if (sanitizedName.length > 50) sanitizedName = sanitizedName.substring(0, 50);
                 
                 const fileName = `${sanitizedName}-${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
-                const filePath = path.join(process.cwd(), 'public/uploads/videos', fileName);
+                
+                // Handle standalone mode
+                let baseDir = process.cwd();
+                if (baseDir.includes('.next/standalone') || baseDir.includes('.next\\standalone')) {
+                    baseDir = path.join(baseDir, '..', '..');
+                }
+                const filePath = path.join(baseDir, 'public/uploads/videos', fileName);
                 
                 // Ensure directory exists
-                const uploadDir = path.join(process.cwd(), 'public/uploads/videos');
+                const uploadDir = path.join(baseDir, 'public/uploads/videos');
                 if (!fs.existsSync(uploadDir)) {
                     fs.mkdirSync(uploadDir, { recursive: true });
                 }

@@ -11,8 +11,15 @@ export async function GET(request, { params }) {
       return NextResponse.json({ error: 'File path is required' }, { status: 400 });
     }
 
+    // Handle standalone mode - get correct base directory
+    let baseDir = process.cwd();
+    if (baseDir.includes('.next/standalone') || baseDir.includes('.next\\standalone')) {
+      // In standalone mode, go up two levels to get to project root
+      baseDir = join(baseDir, '..', '..');
+    }
+
     // Construct the full file path
-    const fullPath = join(process.cwd(), 'public', 'uploads', ...filePath);
+    const fullPath = join(baseDir, 'public', 'uploads', ...filePath);
     
     // Check if file exists
     if (!existsSync(fullPath)) {
