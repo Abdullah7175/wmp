@@ -5,16 +5,23 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { MapPin, Download, Trash2, Plus, Search, Edit } from 'lucide-react';
+import { MapPin, Download, Trash2, Plus, Search, Edit, ChevronLeft, ChevronRight } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 export default function BeforeImagesPage() {
   const { data: session } = useSession();
   const [beforeImages, setBeforeImages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  
+  // Search and pagination state
   const [searchTerm, setSearchTerm] = useState('');
+  const [requestIdFilter, setRequestIdFilter] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(12);
+  const [filteredImages, setFilteredImages] = useState([]);
 
   // Check permissions
   const canEdit = session?.user?.userType === 'user' && [1, 2].includes(session?.user?.role);
@@ -69,11 +76,49 @@ export default function BeforeImagesPage() {
     }
   };
 
-  const filteredImages = beforeImages.filter(img => 
-    img.work_description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    img.address?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    img.complaint_type?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Filter images based on search term and request ID
+  useEffect(() => {
+    let filtered = beforeImages;
+
+    // Apply search filter
+    if (searchTerm) {
+      filtered = filtered.filter(img => 
+        img.work_description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        img.address?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        img.complaint_type?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        img.description?.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    }
+
+    // Apply request ID filter
+    if (requestIdFilter) {
+      filtered = filtered.filter(img => 
+        img.work_request_id?.toString().includes(requestIdFilter)
+      );
+    }
+
+    setFilteredImages(filtered);
+    setCurrentPage(1); // Reset to first page when filters change
+  }, [beforeImages, searchTerm, requestIdFilter]);
+
+  // Pagination calculations
+  const totalPages = Math.ceil(filteredImages.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const currentImages = filteredImages.slice(startIndex, endIndex);
+
+  // Pagination handlers
+  const goToPage = (page) => {
+    setCurrentPage(Math.max(1, Math.min(page, totalPages)));
+  };
+
+  const goToPreviousPage = () => {
+    setCurrentPage(prev => Math.max(1, prev - 1));
+  };
+
+  const goToNextPage = () => {
+    setCurrentPage(prev => Math.min(totalPages, prev + 1));
+  };
 
   if (loading) {
     return <div className="flex items-center justify-center h-96 text-lg">Loading before images...</div>;
@@ -100,18 +145,37 @@ export default function BeforeImagesPage() {
         </Link>
       </div>
 
-      {/* Search */}
-      <div className="mb-6">
-        <div className="relative max-w-md">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-          <Input
-            placeholder="Search by work description, address, or type..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10"
-          />
+      {/* Search and Filter Controls */}
+      <Card className="p-6 mb-6">
+        <div className="flex flex-col md:flex-row gap-4">
+          <div className="flex-1">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+              <Input
+                placeholder="Search by work description, address, complaint type, or description..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Input
+              placeholder="Filter by Request ID..."
+              value={requestIdFilter}
+              onChange={(e) => setRequestIdFilter(e.target.value)}
+              className="w-48"
+            />
+          </div>
         </div>
-      </div>
+        
+        {/* Results summary */}
+        <div className="mt-4 text-sm text-gray-600">
+          Showing {currentImages.length} of {filteredImages.length} images
+          {searchTerm && ` matching "${searchTerm}"`}
+          {requestIdFilter && ` with request ID "${requestIdFilter}"`}
+        </div>
+      </Card>
 
       {filteredImages.length === 0 ? (
         <Card className="p-8 text-center">
@@ -127,8 +191,9 @@ export default function BeforeImagesPage() {
           </div>
         </Card>
       ) : (
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {filteredImages.map((image) => (
+        <>
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {currentImages.map((image) => (
             <Card key={image.id} className="overflow-hidden">
               <div className="relative">
                 <Image
@@ -192,8 +257,69 @@ export default function BeforeImagesPage() {
                 </div>
               </CardContent>
             </Card>
-          ))}
-        </div>
+            ))}
+          </div>
+
+          {/* Pagination Controls */}
+          {totalPages > 1 && (
+            <Card className="p-4 mt-6">
+              <div className="flex items-center justify-between">
+                <div className="text-sm text-gray-600">
+                  Page {currentPage} of {totalPages} ({filteredImages.length} total images)
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={goToPreviousPage}
+                    disabled={currentPage === 1}
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                    Previous
+                  </Button>
+                  
+                  {/* Page numbers */}
+                  <div className="flex items-center gap-1">
+                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                      let pageNum;
+                      if (totalPages <= 5) {
+                        pageNum = i + 1;
+                      } else if (currentPage <= 3) {
+                        pageNum = i + 1;
+                      } else if (currentPage >= totalPages - 2) {
+                        pageNum = totalPages - 4 + i;
+                      } else {
+                        pageNum = currentPage - 2 + i;
+                      }
+                      
+                      return (
+                        <Button
+                          key={pageNum}
+                          variant={currentPage === pageNum ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => goToPage(pageNum)}
+                          className="w-8 h-8 p-0"
+                        >
+                          {pageNum}
+                        </Button>
+                      );
+                    })}
+                  </div>
+                  
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={goToNextPage}
+                    disabled={currentPage === totalPages}
+                  >
+                    Next
+                    <ChevronRight className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+            </Card>
+          )}
+        </>
       )}
     </div>
   );

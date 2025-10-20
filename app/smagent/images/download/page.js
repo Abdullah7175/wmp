@@ -3,9 +3,10 @@
 import { useState, useEffect, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { Card } from "@/components/ui/card";
-import { Download, ArrowLeft, Search, Filter } from "lucide-react";
+import { Download, ArrowLeft, Search, Filter, ChevronLeft, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
+import { Button } from "@/components/ui/button";
 // Using regular img tag instead of Next.js Image for better special character handling
 
 export default function DownloadImagesPage() {
@@ -16,6 +17,8 @@ export default function DownloadImagesPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterRequestId, setFilterRequestId] = useState("");
   const [filteredImages, setFilteredImages] = useState([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(12);
 
   // Check if user has permission (Video Editor or Manager)
   const hasPermission = session?.user?.role === 4 || session?.user?.role === 5; // 4=Video Editor, 5=Manager
@@ -64,7 +67,27 @@ export default function DownloadImagesPage() {
       return matchesSearch && matchesRequestId;
     });
     setFilteredImages(filtered);
+    setCurrentPage(1); // Reset to first page when filters change
   }, [images, searchTerm, filterRequestId]);
+
+  // Pagination calculations
+  const totalPages = Math.ceil(filteredImages.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const currentImages = filteredImages.slice(startIndex, endIndex);
+
+  // Pagination handlers
+  const goToPage = (page) => {
+    setCurrentPage(Math.max(1, Math.min(page, totalPages)));
+  };
+
+  const goToPreviousPage = () => {
+    setCurrentPage(prev => Math.max(1, prev - 1));
+  };
+
+  const goToNextPage = () => {
+    setCurrentPage(prev => Math.min(totalPages, prev + 1));
+  };
 
   // Show loading while session is loading
   if (status === "loading") {
@@ -254,7 +277,7 @@ export default function DownloadImagesPage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {(Array.isArray(filteredImages) ? filteredImages : []).map((image) => (
+            {(Array.isArray(currentImages) ? currentImages : []).map((image) => (
               <div key={image.id} className="bg-white border rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow">
                 <div className="relative">
                   {image.link ? (
@@ -300,12 +323,63 @@ export default function DownloadImagesPage() {
           </div>
         )}
 
-        {/* Summary */}
-        {!loading && filteredImages.length > 0 && (
+        {/* Pagination Controls */}
+        {totalPages > 1 && (
           <div className="mt-6 p-4 bg-gray-50 rounded-lg">
-            <p className="text-sm text-gray-600">
-              Showing {filteredImages.length} of {images.length} total images
-            </p>
+            <div className="flex items-center justify-between">
+              <div className="text-sm text-gray-600">
+                Page {currentPage} of {totalPages} ({filteredImages.length} total images)
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={goToPreviousPage}
+                  disabled={currentPage === 1}
+                  className="px-3 py-1 border border-gray-300 rounded-md hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                  Previous
+                </button>
+                
+                {/* Page numbers */}
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                    let pageNum;
+                    if (totalPages <= 5) {
+                      pageNum = i + 1;
+                    } else if (currentPage <= 3) {
+                      pageNum = i + 1;
+                    } else if (currentPage >= totalPages - 2) {
+                      pageNum = totalPages - 4 + i;
+                    } else {
+                      pageNum = currentPage - 2 + i;
+                    }
+                    
+                    return (
+                      <button
+                        key={pageNum}
+                        onClick={() => goToPage(pageNum)}
+                        className={`w-8 h-8 rounded-md ${
+                          currentPage === pageNum
+                            ? 'bg-blue-600 text-white'
+                            : 'border border-gray-300 hover:bg-gray-100'
+                        }`}
+                      >
+                        {pageNum}
+                      </button>
+                    );
+                  })}
+                </div>
+                
+                <button
+                  onClick={goToNextPage}
+                  disabled={currentPage === totalPages}
+                  className="px-3 py-1 border border-gray-300 rounded-md hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                >
+                  Next
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </Card>

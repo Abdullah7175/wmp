@@ -64,13 +64,10 @@ const Page = ({ params }) => {
             <div className="flex flex-col items-center mt-6">
                 <div className="relative w-full max-w-4xl bg-black rounded-lg shadow-lg overflow-hidden">
                     <div className="aspect-video flex items-center justify-center">
-                        <Image
+                        <img
                             src={imageData.link}
                             alt={imageData.description || 'Work request image'}
-                            width={800}
-                            height={600}
                             className="object-contain max-h-[70vh]"
-                            priority
                         />
                     </div>
                 </div>

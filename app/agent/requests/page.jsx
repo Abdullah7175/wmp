@@ -1,6 +1,9 @@
 "use client"
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Card } from '@/components/ui/card';
+import { Search, Filter, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { DataTable } from './data-table';
 import { columns, getAgentRequestColumns } from './columns';
@@ -8,6 +11,7 @@ import { useSession } from 'next-auth/react';
 import ImageForm from '../images/add/addImageForm';
 import VideoForm from '../videos/add/addVideoForm';
 import AddBeforeContentForm from '../before-images/add/addBeforeImageForm';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 const Modal = ({ children, onClose }) => (
   <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40 p-4">
@@ -36,6 +40,64 @@ const RequestsPage = () => {
     const [showImageForm, setShowImageForm] = useState(false);
     const [showVideoForm, setShowVideoForm] = useState(false);
     const [showBeforeContentForm, setShowBeforeContentForm] = useState(false);
+    
+    // Search and pagination state
+    const [searchTerm, setSearchTerm] = useState("");
+    const [statusFilter, setStatusFilter] = useState("all");
+    const [currentPage, setCurrentPage] = useState(1);
+    const [itemsPerPage] = useState(10);
+    const [filteredRequests, setFilteredRequests] = useState([]);
+
+    // Filter requests based on search term and status
+    useEffect(() => {
+        let filtered = requests;
+
+        // Apply search filter
+        if (searchTerm) {
+            filtered = filtered.filter(req => 
+                req.address?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                req.complaint_type?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                req.complaint_subtype?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                req.town_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                req.id?.toString().includes(searchTerm)
+            );
+        }
+
+        // Apply status filter
+        if (statusFilter !== "all") {
+            filtered = filtered.filter(req => {
+                const statusId = Number(req.status_id);
+                if (statusFilter === "pending") return statusId === 1;
+                if (statusFilter === "assigned") return statusId === 2;
+                if (statusFilter === "in_progress") return statusId === 3;
+                if (statusFilter === "completed") return statusId === 4;
+                if (statusFilter === "cancelled") return statusId === 5;
+                return true;
+            });
+        }
+
+        setFilteredRequests(filtered);
+        setCurrentPage(1); // Reset to first page when filters change
+    }, [requests, searchTerm, statusFilter]);
+
+    // Pagination calculations
+    const totalPages = Math.ceil(filteredRequests.length / itemsPerPage);
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    const currentRequests = filteredRequests.slice(startIndex, endIndex);
+
+    // Pagination handlers
+    const goToPage = (page) => {
+        setCurrentPage(Math.max(1, Math.min(page, totalPages)));
+    };
+
+    const goToPreviousPage = () => {
+        setCurrentPage(prev => Math.max(1, prev - 1));
+    };
+
+    const goToNextPage = () => {
+        setCurrentPage(prev => Math.min(totalPages, prev + 1));
+    };
 
     useEffect(() => {
         if (!session?.user?.id) return;
@@ -116,10 +178,51 @@ const RequestsPage = () => {
                     Create New Request
                 </Button>
             </div>
+            
+            {/* Search and Filter Controls */}
+            <Card className="p-6 mb-6">
+                <div className="flex flex-col md:flex-row gap-4">
+                    <div className="flex-1">
+                        <div className="relative">
+                            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                            <Input
+                                placeholder="Search by address, complaint type, town, or request ID..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                className="pl-10"
+                            />
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <Filter className="w-4 h-4 text-gray-400" />
+                        <Select value={statusFilter} onValueChange={setStatusFilter}>
+                            <SelectTrigger className="w-48">
+                                <SelectValue placeholder="Filter by status" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Status</SelectItem>
+                                <SelectItem value="pending">Pending</SelectItem>
+                                <SelectItem value="assigned">Assigned</SelectItem>
+                                <SelectItem value="in_progress">In Progress</SelectItem>
+                                <SelectItem value="completed">Completed</SelectItem>
+                                <SelectItem value="cancelled">Cancelled</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+                </div>
+                
+                {/* Results summary */}
+                <div className="mt-4 text-sm text-gray-600">
+                    Showing {currentRequests.length} of {filteredRequests.length} requests
+                    {searchTerm && ` matching "${searchTerm}"`}
+                    {statusFilter !== "all" && ` with status "${statusFilter}"`}
+                </div>
+            </Card>
+            
             <div className="bg-white rounded-lg shadow">
                 <DataTable 
                     columns={columns} 
-                    data={requests} 
+                    data={currentRequests} 
                     meta={{
                         onAddImage: (id) => {
                             setSelectedRequestId(id);
@@ -136,6 +239,66 @@ const RequestsPage = () => {
                     }}
                 />
             </div>
+            
+            {/* Pagination Controls */}
+            {totalPages > 1 && (
+                <Card className="p-4 mt-6">
+                    <div className="flex items-center justify-between">
+                        <div className="text-sm text-gray-600">
+                            Page {currentPage} of {totalPages} ({filteredRequests.length} total requests)
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={goToPreviousPage}
+                                disabled={currentPage === 1}
+                            >
+                                <ChevronLeft className="w-4 h-4" />
+                                Previous
+                            </Button>
+                            
+                            {/* Page numbers */}
+                            <div className="flex items-center gap-1">
+                                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                                    let pageNum;
+                                    if (totalPages <= 5) {
+                                        pageNum = i + 1;
+                                    } else if (currentPage <= 3) {
+                                        pageNum = i + 1;
+                                    } else if (currentPage >= totalPages - 2) {
+                                        pageNum = totalPages - 4 + i;
+                                    } else {
+                                        pageNum = currentPage - 2 + i;
+                                    }
+                                    
+                                    return (
+                                        <Button
+                                            key={pageNum}
+                                            variant={currentPage === pageNum ? "default" : "outline"}
+                                            size="sm"
+                                            onClick={() => goToPage(pageNum)}
+                                            className="w-8 h-8 p-0"
+                                        >
+                                            {pageNum}
+                                        </Button>
+                                    );
+                                })}
+                            </div>
+                            
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={goToNextPage}
+                                disabled={currentPage === totalPages}
+                            >
+                                Next
+                                <ChevronRight className="w-4 h-4" />
+                            </Button>
+                        </div>
+                    </div>
+                </Card>
+            )}
             {showImageForm && selectedRequestId && (
                 <Modal onClose={closeForms}>
                   <ImageForm workRequestId={selectedRequestId} onClose={closeForms} />

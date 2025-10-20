@@ -12,10 +12,14 @@ import {
   Calendar,
   FileText,
   MapPin,
-  User
+  User,
+  Search,
+  ChevronLeft,
+  ChevronRight,
+  ArrowLeft
 } from "lucide-react";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { Input } from "@/components/ui/input";
 
 export default function MyUploadsPage() {
   const { data: session } = useSession();
@@ -27,11 +31,56 @@ export default function MyUploadsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState('images');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(12);
 
   // Check if user is editor role (VIDEO EDITOR - role 4)
   const isEditorRole = (roleId) => {
     return roleId === 4; // VIDEO EDITOR
   };
+
+  // Get current tab data
+  const getCurrentTabData = () => {
+    if (activeTab === 'images') return uploads.images;
+    if (activeTab === 'videos') return uploads.videos;
+    if (activeTab === 'finalVideos') return uploads.finalVideos;
+    return [];
+  };
+
+  // Filter current tab data based on search
+  const filteredData = getCurrentTabData().filter(file => {
+    if (!searchTerm) return true;
+    return (
+      file.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      file.file_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      file.work_request_id?.toString().includes(searchTerm)
+    );
+  });
+
+  // Pagination calculations
+  const totalPages = Math.ceil(filteredData.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const currentData = filteredData.slice(startIndex, endIndex);
+
+  // Pagination handlers
+  const goToPage = (page) => {
+    setCurrentPage(Math.max(1, Math.min(page, totalPages)));
+  };
+
+  const goToPreviousPage = () => {
+    setCurrentPage(prev => Math.max(1, prev - 1));
+  };
+
+  const goToNextPage = () => {
+    setCurrentPage(prev => Math.min(totalPages, prev + 1));
+  };
+
+  // Reset to page 1 when tab or search changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeTab, searchTerm]);
 
   useEffect(() => {
     if (!session?.user?.id) return;
@@ -281,6 +330,23 @@ export default function MyUploadsPage() {
         </div>
       </div>
 
+      {/* Search Bar */}
+      <Card className="p-6 mb-6">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+          <Input
+            placeholder="Search by description, file name, or request ID..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+        <div className="mt-4 text-sm text-gray-600">
+          Showing {currentData.length} of {filteredData.length} files
+          {searchTerm && ` matching "${searchTerm}"`}
+        </div>
+      </Card>
+
       {/* Tab Navigation */}
       <div className="mb-6">
         <div className="border-b border-gray-200">
@@ -332,9 +398,15 @@ export default function MyUploadsPage() {
                   <Button>Upload Images</Button>
                 </Link>
               </Card>
+            ) : filteredData.length === 0 ? (
+              <Card className="p-8 text-center">
+                <ImageIcon className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-gray-900 mb-2">No results found</h3>
+                <p className="text-gray-600 mb-4">Try adjusting your search term.</p>
+              </Card>
             ) : (
               <div className="grid gap-4">
-                {uploads.images.map(file => renderFileCard(file, 'images'))}
+                {currentData.map(file => renderFileCard(file, 'images'))}
               </div>
             )}
           </div>
@@ -351,9 +423,15 @@ export default function MyUploadsPage() {
                   <Button>Upload Videos</Button>
                 </Link>
               </Card>
+            ) : filteredData.length === 0 ? (
+              <Card className="p-8 text-center">
+                <Video className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-gray-900 mb-2">No results found</h3>
+                <p className="text-gray-600 mb-4">Try adjusting your search term.</p>
+              </Card>
             ) : (
               <div className="grid gap-4">
-                {uploads.videos.map(file => renderFileCard(file, 'videos'))}
+                {currentData.map(file => renderFileCard(file, 'videos'))}
               </div>
             )}
           </div>
@@ -370,14 +448,80 @@ export default function MyUploadsPage() {
                   <Button>Upload Final Video</Button>
                 </Link>
               </Card>
+            ) : filteredData.length === 0 ? (
+              <Card className="p-8 text-center">
+                <Video className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-gray-900 mb-2">No results found</h3>
+                <p className="text-gray-600 mb-4">Try adjusting your search term.</p>
+              </Card>
             ) : (
               <div className="grid gap-4">
-                {uploads.finalVideos.map(file => renderFileCard(file, 'finalVideos'))}
+                {currentData.map(file => renderFileCard(file, 'finalVideos'))}
               </div>
             )}
           </div>
         )}
       </div>
+
+      {/* Pagination Controls */}
+      {totalPages > 1 && (
+        <Card className="p-4 mt-6">
+          <div className="flex items-center justify-between">
+            <div className="text-sm text-gray-600">
+              Page {currentPage} of {totalPages} ({filteredData.length} total files)
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={goToPreviousPage}
+                disabled={currentPage === 1}
+              >
+                <ChevronLeft className="w-4 h-4" />
+                Previous
+              </Button>
+              
+              {/* Page numbers */}
+              <div className="flex items-center gap-1">
+                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                  let pageNum;
+                  if (totalPages <= 5) {
+                    pageNum = i + 1;
+                  } else if (currentPage <= 3) {
+                    pageNum = i + 1;
+                  } else if (currentPage >= totalPages - 2) {
+                    pageNum = totalPages - 4 + i;
+                  } else {
+                    pageNum = currentPage - 2 + i;
+                  }
+                  
+                  return (
+                    <Button
+                      key={pageNum}
+                      variant={currentPage === pageNum ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => goToPage(pageNum)}
+                      className="w-8 h-8 p-0"
+                    >
+                      {pageNum}
+                    </Button>
+                  );
+                })}
+              </div>
+              
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={goToNextPage}
+                disabled={currentPage === totalPages}
+              >
+                Next
+                <ChevronRight className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
+        </Card>
+      )}
     </div>
   );
 }
