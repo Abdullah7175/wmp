@@ -34,8 +34,12 @@ export async function POST(req) {
             return NextResponse.json({ error: `File size exceeds limit of ${maxSizeMB}` }, { status: 400 });
         }
 
-        // Create upload directory based on content type
-        const uploadsDir = path.join(process.cwd(), 'public', 'uploads', type, contentType);
+        // Create upload directory based on content type (handle standalone mode)
+        let baseDir = process.cwd();
+        if (baseDir.includes('.next/standalone') || baseDir.includes('.next\\standalone')) {
+            baseDir = path.join(baseDir, '..', '..');
+        }
+        const uploadsDir = path.join(baseDir, 'public', 'uploads', type, contentType);
         await fs.mkdir(uploadsDir, { recursive: true });
 
         // Generate unique filename with sanitization

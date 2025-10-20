@@ -108,8 +108,12 @@ export async function POST(request) {
         return NextResponse.json({ error: 'Invalid image file' }, { status: 400 });
       }
 
-      // Create upload directory
-      const uploadDir = join(process.cwd(), 'public', 'uploads', 'before-content', 'image');
+      // Create upload directory (handle standalone mode)
+      let baseDir = process.cwd();
+      if (baseDir.includes('.next/standalone') || baseDir.includes('.next\\standalone')) {
+        baseDir = join(baseDir, '..', '..');
+      }
+      const uploadDir = join(baseDir, 'public', 'uploads', 'before-content', 'image');
       await mkdir(uploadDir, { recursive: true });
 
       // Generate unique filename

@@ -50,7 +50,13 @@ export async function POST(req) {
 async function processMediaFiles(files, descriptions, workRequestId, geoTag, mediaType) {
     const client = await connectToDatabase();
     const results = [];
-    const uploadsDir = path.join(process.cwd(), 'public', 'uploads', mediaType);
+    
+    // Handle standalone mode
+    let baseDir = process.cwd();
+    if (baseDir.includes('.next/standalone') || baseDir.includes('.next\\standalone')) {
+      baseDir = path.join(baseDir, '..', '..');
+    }
+    const uploadsDir = path.join(baseDir, 'public', 'uploads', mediaType);
     await fs.mkdir(uploadsDir, { recursive: true });
 
     for (let i = 0; i < files.length; i++) {
