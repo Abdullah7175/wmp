@@ -196,13 +196,22 @@ export default function BeforeImagesPage() {
             {currentImages.map((image) => (
             <Card key={image.id} className="overflow-hidden">
               <div className="relative">
-                <Image
+                <img
                   src={image.link}
                   alt={image.description || 'Before image'}
-                  width={400}
-                  height={300}
                   className="w-full h-48 object-cover"
+                  onError={(e) => {
+                    e.target.style.display = 'none';
+                    const fallback = e.target.parentElement.querySelector('.fallback-message');
+                    if (fallback) fallback.style.display = 'flex';
+                  }}
                 />
+                <div className="fallback-message hidden w-full h-48 bg-gray-100 items-center justify-center text-gray-500 text-sm">
+                  <div className="text-center">
+                    <MapPin className="w-8 h-8 mx-auto mb-2 text-gray-300" />
+                    <p>Image file not available</p>
+                  </div>
+                </div>
                 <Badge className="absolute top-2 left-2">
                   Request #{image.work_request_id}
                 </Badge>

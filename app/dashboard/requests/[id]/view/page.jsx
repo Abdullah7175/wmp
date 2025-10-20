@@ -399,19 +399,21 @@ const ViewRequestPage = () => {
                             <div className="grid grid-cols-2 gap-4">
                                 {images.map((image, index) => (
                                     <div key={image.id || index} className="relative">
-                                        <Image
+                                        <img
                                             src={image.link}
                                             alt={`Work request image ${index + 1}`}
-                                            width={200}
-                                            height={150}
                                             className="rounded-lg object-cover w-full h-32"
                                             onError={(e) => {
                                                 e.target.style.display = 'none';
-                                                e.target.nextSibling.style.display = 'block';
+                                                const fallback = e.target.nextElementSibling;
+                                                if (fallback && fallback.classList.contains('fallback-placeholder')) {
+                                                    fallback.style.display = 'flex';
+                                                }
                                             }}
                                         />
-                                        <div className="hidden bg-gray-100 rounded-lg w-full h-32 flex items-center justify-center text-gray-500">
-                                            Image not available
+                                        <div className="fallback-placeholder hidden bg-gray-100 rounded-lg w-full h-32 flex items-center justify-center text-gray-500 flex-col">
+                                            <ImageIcon className="w-8 h-8 text-gray-300 mb-1" />
+                                            <span className="text-xs">Image not available</span>
                                         </div>
                                         {image.description && (
                                             <p className="text-xs text-gray-600 mt-1 truncate">
@@ -450,14 +452,20 @@ const ViewRequestPage = () => {
                                                         {video.description}
                                                     </p>
                                                 )}
-                                                <a 
-                                                    href={video.link} 
-                                                    target="_blank" 
-                                                    rel="noopener noreferrer"
-                                                    className="text-blue-600 hover:text-blue-800 text-sm mt-1 inline-block"
-                                                >
-                                                    View Video →
-                                                </a>
+                                                <video
+                                                    src={video.link}
+                                                    className="w-full mt-2 rounded"
+                                                    controls
+                                                    style={{maxHeight: '200px'}}
+                                                    onError={(e) => {
+                                                        e.target.style.display = 'none';
+                                                        const parent = e.target.parentElement;
+                                                        const error = document.createElement('div');
+                                                        error.className = 'text-xs text-red-500 mt-1';
+                                                        error.textContent = 'Video file not available';
+                                                        parent.appendChild(error);
+                                                    }}
+                                                />
                                             </div>
                                         ))}
                                     </div>
@@ -477,14 +485,20 @@ const ViewRequestPage = () => {
                                                         {video.description}
                                                     </p>
                                                 )}
-                                                <a 
-                                                    href={video.link} 
-                                                    target="_blank" 
-                                                    rel="noopener noreferrer"
-                                                    className="text-green-600 hover:text-green-800 text-sm mt-1 inline-block"
-                                                >
-                                                    View Final Video →
-                                                </a>
+                                                <video
+                                                    src={video.link}
+                                                    className="w-full mt-2 rounded"
+                                                    controls
+                                                    style={{maxHeight: '200px'}}
+                                                    onError={(e) => {
+                                                        e.target.style.display = 'none';
+                                                        const parent = e.target.parentElement;
+                                                        const error = document.createElement('div');
+                                                        error.className = 'text-xs text-red-500 mt-1';
+                                                        error.textContent = 'Video file not available';
+                                                        parent.appendChild(error);
+                                                    }}
+                                                />
                                             </div>
                                         ))}
                                     </div>

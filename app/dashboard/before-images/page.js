@@ -170,16 +170,30 @@ export default function BeforeContentPage() {
                     src={item.link}
                     className="w-full h-48 object-cover"
                     controls
+                    onError={(e) => {
+                      e.target.style.display = 'none';
+                      const fallback = e.target.parentElement.querySelector('.fallback-message');
+                      if (fallback) fallback.style.display = 'flex';
+                    }}
                   />
                 ) : (
-                  <Image
+                  <img
                     src={item.link}
                     alt={item.description || 'Before content'}
-                    width={400}
-                    height={300}
                     className="w-full h-48 object-cover"
+                    onError={(e) => {
+                      e.target.style.display = 'none';
+                      const fallback = e.target.parentElement.querySelector('.fallback-message');
+                      if (fallback) fallback.style.display = 'flex';
+                    }}
                   />
                 )}
+                <div className="fallback-message hidden w-full h-48 bg-gray-100 items-center justify-center text-gray-500 text-sm">
+                  <div className="text-center">
+                    <MapPin className="w-8 h-8 mx-auto mb-2 text-gray-300" />
+                    <p>Media file not available</p>
+                  </div>
+                </div>
                 <div className="absolute top-2 left-2 flex gap-1">
                   <Badge>
                     Request #{item.work_request_id}

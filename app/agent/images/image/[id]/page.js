@@ -68,6 +68,15 @@ const Page = ({ params }) => {
                             src={imageData.link}
                             alt={imageData.description || 'Work request image'}
                             className="object-contain max-h-[70vh]"
+                            onError={(e) => {
+                                e.target.style.display = 'none';
+                                const parent = e.target.parentElement;
+                                parent.className = 'aspect-video flex items-center justify-center bg-gray-100';
+                                const error = document.createElement('div');
+                                error.className = 'text-gray-500 text-center';
+                                error.innerHTML = '<div class="text-6xl mb-4">📷</div><p class="text-lg">Image file not available</p><p class="text-sm mt-2">The file may have been moved or deleted</p>';
+                                parent.appendChild(error);
+                            }}
                         />
                     </div>
                 </div>

@@ -16,7 +16,16 @@ export async function GET(request, { params }) {
     
     // Check if file exists
     if (!existsSync(fullPath)) {
-      return NextResponse.json({ error: 'File not found' }, { status: 404 });
+      console.error(`File not found: ${fullPath}`);
+      console.error(`Requested path: ${filePath.join('/')}`);
+      
+      // Return a proper 404 response without JSON for media files
+      return new NextResponse('File not found', { 
+        status: 404,
+        headers: {
+          'Content-Type': 'text/plain',
+        }
+      });
     }
 
     // Read the file
