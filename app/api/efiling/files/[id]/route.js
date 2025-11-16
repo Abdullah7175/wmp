@@ -7,7 +7,55 @@ export async function GET(request, { params }) {
         const { id } = await params;
         client = await connectToDatabase();
 
-        // Fetch file with detailed information including SLA data
+        // Check if SLA columns exist (check each column individually)
+        let hasSlaDeadline = false;
+        let hasSlaPaused = false;
+        let hasSlaAccumulatedHours = false;
+        let hasSlaPauseCount = false;
+        try {
+            const [slaDeadlineCheck, slaPausedCheck, slaAccumulatedHoursCheck, slaPauseCountCheck] = await Promise.all([
+                client.query(`
+                    SELECT EXISTS (
+                        SELECT FROM information_schema.columns 
+                        WHERE table_schema = 'public' 
+                        AND table_name = 'efiling_files'
+                        AND column_name = 'sla_deadline'
+                    );
+                `),
+                client.query(`
+                    SELECT EXISTS (
+                        SELECT FROM information_schema.columns 
+                        WHERE table_schema = 'public' 
+                        AND table_name = 'efiling_files'
+                        AND column_name = 'sla_paused'
+                    );
+                `),
+                client.query(`
+                    SELECT EXISTS (
+                        SELECT FROM information_schema.columns 
+                        WHERE table_schema = 'public' 
+                        AND table_name = 'efiling_files'
+                        AND column_name = 'sla_accumulated_hours'
+                    );
+                `),
+                client.query(`
+                    SELECT EXISTS (
+                        SELECT FROM information_schema.columns 
+                        WHERE table_schema = 'public' 
+                        AND table_name = 'efiling_files'
+                        AND column_name = 'sla_pause_count'
+                    );
+                `)
+            ]);
+            hasSlaDeadline = slaDeadlineCheck.rows[0]?.exists || false;
+            hasSlaPaused = slaPausedCheck.rows[0]?.exists || false;
+            hasSlaAccumulatedHours = slaAccumulatedHoursCheck.rows[0]?.exists || false;
+            hasSlaPauseCount = slaPauseCountCheck.rows[0]?.exists || false;
+        } catch (checkError) {
+            console.warn('Could not check for SLA columns:', checkError.message);
+        }
+
+        // Fetch file with detailed information including SLA data (conditionally)
         const result = await client.query(`
             SELECT 
                 f.*,
@@ -27,20 +75,20 @@ export async function GET(request, { params }) {
                     WHEN f.work_request_id IS NOT NULL THEN 'Yes'
                     ELSE 'No'
                 END AS has_video_request,
-                f.sla_deadline,
-                f.sla_paused,
-                f.sla_accumulated_hours,
-                f.sla_pause_count,
+                ${hasSlaDeadline ? `f.sla_deadline,` : `NULL as sla_deadline,`}
+                ${hasSlaPaused ? `f.sla_paused,` : `false as sla_paused,`}
+                ${hasSlaAccumulatedHours ? `f.sla_accumulated_hours,` : `0 as sla_accumulated_hours,`}
+                ${hasSlaPauseCount ? `f.sla_pause_count,` : `0 as sla_pause_count,`}
                 CASE 
-                    WHEN f.sla_paused THEN 'PAUSED'
-                    WHEN f.sla_deadline IS NOT NULL AND f.sla_deadline < NOW() THEN 'BREACHED'
-                    WHEN f.sla_deadline IS NOT NULL THEN 'ACTIVE'
+                    WHEN ${hasSlaPaused ? 'f.sla_paused' : 'false'} THEN 'PAUSED'
+                    WHEN ${hasSlaDeadline ? 'f.sla_deadline' : 'NULL'} IS NOT NULL AND ${hasSlaDeadline ? 'f.sla_deadline' : 'NULL'} < NOW() THEN 'BREACHED'
+                    WHEN ${hasSlaDeadline ? 'f.sla_deadline' : 'NULL'} IS NOT NULL THEN 'ACTIVE'
                     ELSE 'PENDING'
                 END AS sla_status,
                 CASE
-                    WHEN f.sla_paused THEN NULL
-                    WHEN f.sla_deadline IS NOT NULL THEN 
-                        ROUND(EXTRACT(EPOCH FROM (f.sla_deadline - NOW()))/3600.0, 2)
+                    WHEN ${hasSlaPaused ? 'f.sla_paused' : 'false'} THEN NULL
+                    WHEN ${hasSlaDeadline ? 'f.sla_deadline' : 'NULL'} IS NOT NULL THEN 
+                        ROUND(EXTRACT(EPOCH FROM (${hasSlaDeadline ? 'f.sla_deadline' : 'NULL'} - NOW()))/3600.0, 2)
                     ELSE NULL
                 END AS hours_remaining
             FROM efiling_files f

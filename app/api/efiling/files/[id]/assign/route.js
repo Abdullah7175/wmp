@@ -120,21 +120,53 @@ export async function POST(request, { params }) {
             }
         }
 
-        // Compute SLA deadline from SLA matrix
-        const slaHours = await getSLA(client, fromRoleCode, toRoleCode);
-        const deadline = new Date();
-        deadline.setHours(deadline.getHours() + slaHours);
-        const slaDeadline = deadline.toISOString();
+        // Check if SLA deadline column exists
+        let hasSlaDeadline = false;
+        try {
+            const slaDeadlineCheck = await client.query(`
+                SELECT EXISTS (
+                    SELECT FROM information_schema.columns 
+                    WHERE table_schema = 'public' 
+                    AND table_name = 'efiling_files'
+                    AND column_name = 'sla_deadline'
+                );
+            `);
+            hasSlaDeadline = slaDeadlineCheck.rows[0]?.exists || false;
+        } catch (checkError) {
+            console.warn('Could not check for SLA deadline column:', checkError.message);
+        }
+
+        // Compute SLA deadline from SLA matrix (only if SLA deadline column exists)
+        let slaDeadline = null;
+        if (hasSlaDeadline) {
+            try {
+                const slaHours = await getSLA(client, fromRoleCode, toRoleCode);
+                const deadline = new Date();
+                deadline.setHours(deadline.getHours() + slaHours);
+                slaDeadline = deadline.toISOString();
+            } catch (slaError) {
+                console.warn('Error computing SLA deadline:', slaError.message);
+                // Continue without SLA deadline if computation fails
+            }
+        }
 
         // Begin transaction
         await client.query('BEGIN');
 
         // Update file and assignment
-        await client.query(`
-            UPDATE efiling_files 
-            SET assigned_to = $1, updated_at = NOW(), sla_deadline = COALESCE($2, sla_deadline)
-            WHERE id = $3
-        `, [toUser.id, slaDeadline, id]);
+        const updateQuery = hasSlaDeadline && slaDeadline
+            ? `UPDATE efiling_files 
+               SET assigned_to = $1, updated_at = NOW(), sla_deadline = COALESCE($2, sla_deadline)
+               WHERE id = $3`
+            : `UPDATE efiling_files 
+               SET assigned_to = $1, updated_at = NOW()
+               WHERE id = $2`;
+        
+        const updateParams = hasSlaDeadline && slaDeadline
+            ? [toUser.id, slaDeadline, id]
+            : [toUser.id, id];
+        
+        await client.query(updateQuery, updateParams);
 
         // Log movement
         await client.query(`

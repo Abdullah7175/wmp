@@ -16,10 +16,66 @@ export async function GET(request, { params }) {
 
         client = await connectToDatabase();
 
+        // Check if SLA columns exist (check each column individually)
+        let hasSlaDeadline = false;
+        let hasSlaPaused = false;
+        let hasSlaAccumulatedHours = false;
+        let hasSlaPauseCount = false;
+        try {
+            const [slaDeadlineCheck, slaPausedCheck, slaAccumulatedHoursCheck, slaPauseCountCheck] = await Promise.all([
+                client.query(`
+                    SELECT EXISTS (
+                        SELECT FROM information_schema.columns 
+                        WHERE table_schema = 'public' 
+                        AND table_name = 'efiling_files'
+                        AND column_name = 'sla_deadline'
+                    );
+                `),
+                client.query(`
+                    SELECT EXISTS (
+                        SELECT FROM information_schema.columns 
+                        WHERE table_schema = 'public' 
+                        AND table_name = 'efiling_files'
+                        AND column_name = 'sla_paused'
+                    );
+                `),
+                client.query(`
+                    SELECT EXISTS (
+                        SELECT FROM information_schema.columns 
+                        WHERE table_schema = 'public' 
+                        AND table_name = 'efiling_files'
+                        AND column_name = 'sla_accumulated_hours'
+                    );
+                `),
+                client.query(`
+                    SELECT EXISTS (
+                        SELECT FROM information_schema.columns 
+                        WHERE table_schema = 'public' 
+                        AND table_name = 'efiling_files'
+                        AND column_name = 'sla_pause_count'
+                    );
+                `)
+            ]);
+            hasSlaDeadline = slaDeadlineCheck.rows[0]?.exists || false;
+            hasSlaPaused = slaPausedCheck.rows[0]?.exists || false;
+            hasSlaAccumulatedHours = slaAccumulatedHoursCheck.rows[0]?.exists || false;
+            hasSlaPauseCount = slaPauseCountCheck.rows[0]?.exists || false;
+        } catch (checkError) {
+            console.warn('Could not check for SLA columns:', checkError.message);
+        }
+
         // Get file basic information
+        // Note: We use explicit column selection instead of f.* to avoid errors when SLA columns don't exist
         const fileQuery = await client.query(`
             SELECT 
-                f.*,
+                f.id, f.file_number, f.subject, f.category_id, f.department_id, f.status_id,
+                f.priority, f.confidentiality_level, f.work_request_id, f.created_by, f.assigned_to,
+                f.remarks, f.file_type_id, f.district_id, f.town_id, f.division_id,
+                f.created_at, f.updated_at,
+                ${hasSlaDeadline ? 'f.sla_deadline,' : 'NULL as sla_deadline,'}
+                ${hasSlaPaused ? 'f.sla_paused,' : 'false as sla_paused,'}
+                ${hasSlaAccumulatedHours ? 'f.sla_accumulated_hours,' : '0 as sla_accumulated_hours,'}
+                ${hasSlaPauseCount ? 'f.sla_pause_count,' : '0 as sla_pause_count,'}
                 d.name as department_name,
                 c.name as category_name,
                 s.name as status_name,
@@ -39,7 +95,7 @@ export async function GET(request, { params }) {
         }
 
         const file = fileQuery.rows[0];
-        const slaDeadlineDate = file.sla_deadline ? new Date(file.sla_deadline) : null;
+        const slaDeadlineDate = hasSlaDeadline && file.sla_deadline ? new Date(file.sla_deadline) : null;
         const slaBreached = slaDeadlineDate ? slaDeadlineDate.getTime() < Date.now() : false;
 
         // Get file movements/history
@@ -132,11 +188,11 @@ export async function GET(request, { params }) {
                 confidentiality: file.confidentiality_level,
                 created_at: file.created_at,
                 updated_at: file.updated_at,
-                sla_deadline: file.sla_deadline,
+                sla_deadline: hasSlaDeadline ? file.sla_deadline : null,
                 sla_breached: slaBreached,
-                sla_paused: file.sla_paused,
-                sla_accumulated_hours: file.sla_accumulated_hours,
-                sla_pause_count: file.sla_pause_count
+                sla_paused: hasSlaPaused ? file.sla_paused : false,
+                sla_accumulated_hours: hasSlaAccumulatedHours ? file.sla_accumulated_hours : 0,
+                sla_pause_count: hasSlaPauseCount ? file.sla_pause_count : 0
             },
             timeline: []
         };

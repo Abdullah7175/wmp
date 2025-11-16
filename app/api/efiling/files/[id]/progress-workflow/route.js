@@ -123,14 +123,52 @@ export async function GET(request, { params }) {
         client = await connectToDatabase();
         const { id } = await params;
 
+        // Check if SLA columns exist (check each column individually)
+        let hasSlaDeadline = false;
+        let hasSlaPaused = false;
+        let hasSlaPauseCount = false;
+        try {
+            const [slaDeadlineCheck, slaPausedCheck, slaPauseCountCheck] = await Promise.all([
+                client.query(`
+                    SELECT EXISTS (
+                        SELECT FROM information_schema.columns 
+                        WHERE table_schema = 'public' 
+                        AND table_name = 'efiling_files'
+                        AND column_name = 'sla_deadline'
+                    );
+                `),
+                client.query(`
+                    SELECT EXISTS (
+                        SELECT FROM information_schema.columns 
+                        WHERE table_schema = 'public' 
+                        AND table_name = 'efiling_files'
+                        AND column_name = 'sla_paused'
+                    );
+                `),
+                client.query(`
+                    SELECT EXISTS (
+                        SELECT FROM information_schema.columns 
+                        WHERE table_schema = 'public' 
+                        AND table_name = 'efiling_files'
+                        AND column_name = 'sla_pause_count'
+                    );
+                `)
+            ]);
+            hasSlaDeadline = slaDeadlineCheck.rows[0]?.exists || false;
+            hasSlaPaused = slaPausedCheck.rows[0]?.exists || false;
+            hasSlaPauseCount = slaPauseCountCheck.rows[0]?.exists || false;
+        } catch (checkError) {
+            console.warn('Could not check for SLA columns:', checkError.message);
+        }
+
         const res = await client.query(`
             SELECT 
                 f.id,
                 f.file_number,
                 f.subject,
-                f.sla_deadline,
-                f.sla_paused,
-                f.sla_pause_count,
+                ${hasSlaDeadline ? `f.sla_deadline,` : `NULL as sla_deadline,`}
+                ${hasSlaPaused ? `f.sla_paused,` : `false as sla_paused,`}
+                ${hasSlaPauseCount ? `f.sla_pause_count,` : `0 as sla_pause_count,`}
                 f.updated_at,
                 s.name AS status_name,
                 s.code AS status_code,
@@ -151,11 +189,11 @@ export async function GET(request, { params }) {
         }
 
         const record = res.rows[0];
-        const slaStatus = record.sla_paused
+        const slaStatus = hasSlaPaused && record.sla_paused
             ? 'PAUSED'
-            : record.sla_deadline && new Date(record.sla_deadline).getTime() < Date.now()
+            : hasSlaDeadline && record.sla_deadline && new Date(record.sla_deadline).getTime() < Date.now()
                 ? 'BREACHED'
-                : (record.sla_deadline ? 'ACTIVE' : 'PENDING');
+                : (hasSlaDeadline && record.sla_deadline ? 'ACTIVE' : 'PENDING');
 
         return NextResponse.json({
             workflow_template_name: 'Geographic Routing',
@@ -166,10 +204,10 @@ export async function GET(request, { params }) {
             department_name: record.department_name,
             role_name: record.assignee_role || 'Unassigned',
             assignee_name: record.assignee_name || null,
-            sla_deadline: record.sla_deadline,
+            sla_deadline: hasSlaDeadline ? record.sla_deadline : null,
             sla_status: slaStatus,
-            sla_paused: record.sla_paused,
-            sla_pause_count: record.sla_pause_count || 0,
+            sla_paused: hasSlaPaused ? record.sla_paused : false,
+            sla_pause_count: hasSlaPauseCount ? (record.sla_pause_count || 0) : 0,
             updated_at: record.updated_at
         });
     } catch (error) {

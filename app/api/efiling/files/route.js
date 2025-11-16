@@ -156,9 +156,12 @@ export async function GET(request) {
             // Check if optional tables and columns exist
             let hasDocumentSignaturesTable = false;
             let hasFileTypesTable = false;
-            let hasSlaColumns = false;
+            let hasSlaDeadline = false;
+            let hasSlaPaused = false;
+            let hasSlaAccumulatedHours = false;
+            let hasSlaPauseCount = false;
             try {
-                const [signaturesCheck, fileTypesCheck, slaColumnsCheck] = await Promise.all([
+                const [signaturesCheck, fileTypesCheck, slaDeadlineCheck, slaPausedCheck, slaAccumulatedHoursCheck, slaPauseCountCheck] = await Promise.all([
                     client.query(`
                         SELECT EXISTS (
                             SELECT FROM information_schema.tables 
@@ -180,11 +183,38 @@ export async function GET(request) {
                             AND table_name = 'efiling_files'
                             AND column_name = 'sla_deadline'
                         );
+                    `),
+                    client.query(`
+                        SELECT EXISTS (
+                            SELECT FROM information_schema.columns 
+                            WHERE table_schema = 'public' 
+                            AND table_name = 'efiling_files'
+                            AND column_name = 'sla_paused'
+                        );
+                    `),
+                    client.query(`
+                        SELECT EXISTS (
+                            SELECT FROM information_schema.columns 
+                            WHERE table_schema = 'public' 
+                            AND table_name = 'efiling_files'
+                            AND column_name = 'sla_accumulated_hours'
+                        );
+                    `),
+                    client.query(`
+                        SELECT EXISTS (
+                            SELECT FROM information_schema.columns 
+                            WHERE table_schema = 'public' 
+                            AND table_name = 'efiling_files'
+                            AND column_name = 'sla_pause_count'
+                        );
                     `)
                 ]);
                 hasDocumentSignaturesTable = signaturesCheck.rows[0]?.exists || false;
                 hasFileTypesTable = fileTypesCheck.rows[0]?.exists || false;
-                hasSlaColumns = slaColumnsCheck.rows[0]?.exists || false;
+                hasSlaDeadline = slaDeadlineCheck.rows[0]?.exists || false;
+                hasSlaPaused = slaPausedCheck.rows[0]?.exists || false;
+                hasSlaAccumulatedHours = slaAccumulatedHoursCheck.rows[0]?.exists || false;
+                hasSlaPauseCount = slaPauseCountCheck.rows[0]?.exists || false;
             } catch (checkError) {
                 console.warn('Could not check for optional tables/columns:', checkError.message);
             }
@@ -202,17 +232,14 @@ export async function GET(request) {
                        ${hasDocumentSignaturesTable ? `ls.last_signed_by_name,
                        ls.last_signed_at,` : `NULL as last_signed_by_name,
                        NULL as last_signed_at,`}
-                       ${hasSlaColumns ? `f.sla_deadline,
+                       ${hasSlaDeadline ? `f.sla_deadline,
                        (f.sla_deadline IS NOT NULL AND f.sla_deadline < NOW()) as is_sla_breached,
-                       ROUND(EXTRACT(EPOCH FROM (f.sla_deadline - NOW()))/60.0) as minutes_remaining,
-                       f.sla_paused,
-                       f.sla_accumulated_hours,
-                       f.sla_pause_count,` : `NULL as sla_deadline,
+                       ROUND(EXTRACT(EPOCH FROM (f.sla_deadline - NOW()))/60.0) as minutes_remaining,` : `NULL as sla_deadline,
                        false as is_sla_breached,
-                       NULL as minutes_remaining,
-                       false as sla_paused,
-                       0 as sla_accumulated_hours,
-                       0 as sla_pause_count,`}
+                       NULL as minutes_remaining,`}
+                       ${hasSlaPaused ? `f.sla_paused,` : `false as sla_paused,`}
+                       ${hasSlaAccumulatedHours ? `f.sla_accumulated_hours,` : `0 as sla_accumulated_hours,`}
+                       ${hasSlaPauseCount ? `f.sla_pause_count,` : `0 as sla_pause_count,`}
                        ${hasFileTypesTable ? `ft.name as file_type_name,
                        ft.code as file_type_code,` : `NULL as file_type_name,
                        NULL as file_type_code,`}

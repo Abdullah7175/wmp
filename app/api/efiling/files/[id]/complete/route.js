@@ -25,11 +25,28 @@ export async function POST(request, { params }) {
         client = await connectToDatabase();
         await client.query('BEGIN');
 
+        // Check if SLA columns exist (check each column individually)
+        let hasSlaPaused = false;
+        try {
+            const slaPausedCheck = await client.query(`
+                SELECT EXISTS (
+                    SELECT FROM information_schema.columns 
+                    WHERE table_schema = 'public' 
+                    AND table_name = 'efiling_files'
+                    AND column_name = 'sla_paused'
+                );
+            `);
+            hasSlaPaused = slaPausedCheck.rows[0]?.exists || false;
+        } catch (checkError) {
+            console.warn('Could not check for SLA columns:', checkError.message);
+        }
+
         // Get file and current user details
         const fileRes = await client.query(`
             SELECT f.*, 
                    eu.id AS ceo_efiling_id,
                    r.code as role_code
+                   ${hasSlaPaused ? ', f.sla_paused' : ', false as sla_paused'}
             FROM efiling_files f
             LEFT JOIN efiling_users eu ON eu.user_id = $1 AND eu.is_active = true
             LEFT JOIN efiling_roles r ON r.id = eu.efiling_role_id
@@ -74,19 +91,31 @@ export async function POST(request, { params }) {
         }
 
         // Update file status to completed
-        await client.query(`
-            UPDATE efiling_files 
-            SET status_id = (
-                SELECT id FROM efiling_file_status WHERE code = 'COMPLETED'
-            ), 
-            sla_paused = FALSE,
-            sla_paused_at = NULL,
-            updated_at = CURRENT_TIMESTAMP
-            WHERE id = $1
-        `, [id]);
+        const updateQuery = hasSlaPaused 
+            ? `UPDATE efiling_files 
+               SET status_id = (
+                   SELECT id FROM efiling_file_status WHERE code = 'COMPLETED'
+               ), 
+               sla_paused = FALSE,
+               sla_paused_at = NULL,
+               updated_at = CURRENT_TIMESTAMP
+               WHERE id = $1`
+            : `UPDATE efiling_files 
+               SET status_id = (
+                   SELECT id FROM efiling_file_status WHERE code = 'COMPLETED'
+               ), 
+               updated_at = CURRENT_TIMESTAMP
+               WHERE id = $1`;
         
-        if (fileData.sla_paused) {
-            await resumeSLA(client, id, null, 0);
+        await client.query(updateQuery, [id]);
+        
+        if (hasSlaPaused && fileData.sla_paused) {
+            try {
+                await resumeSLA(client, id, null, 0);
+            } catch (slaError) {
+                console.warn('Error resuming SLA:', slaError.message);
+                // Don't fail the request if SLA resume fails
+            }
         }
 
         // Log the completion action
@@ -164,6 +193,22 @@ export async function GET(request, { params }) {
 
         client = await connectToDatabase();
 
+        // Check if SLA paused column exists
+        let hasSlaPaused = false;
+        try {
+            const slaPausedCheck = await client.query(`
+                SELECT EXISTS (
+                    SELECT FROM information_schema.columns 
+                    WHERE table_schema = 'public' 
+                    AND table_name = 'efiling_files'
+                    AND column_name = 'sla_paused'
+                );
+            `);
+            hasSlaPaused = slaPausedCheck.rows[0]?.exists || false;
+        } catch (checkError) {
+            console.warn('Could not check for SLA columns:', checkError.message);
+        }
+
         // Check if user is CEO and if file is assigned to them
         const result = await client.query(`
             SELECT 
@@ -181,7 +226,7 @@ export async function GET(request, { params }) {
                     ) THEN true
                     ELSE false
                 END as is_marked_to,
-                f.sla_paused
+                ${hasSlaPaused ? 'f.sla_paused' : 'false as sla_paused'}
             FROM efiling_files f
             LEFT JOIN efiling_users eu ON eu.user_id = $1 AND eu.is_active = true
             LEFT JOIN efiling_roles r ON r.id = eu.efiling_role_id

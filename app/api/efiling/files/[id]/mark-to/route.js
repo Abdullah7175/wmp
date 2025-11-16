@@ -39,6 +39,22 @@ export async function POST(request, { params }) {
         client = await connectToDatabase();
         await client.query('BEGIN');
 
+        // Check if SLA deadline column exists
+        let hasSlaDeadline = false;
+        try {
+            const slaDeadlineCheck = await client.query(`
+                SELECT EXISTS (
+                    SELECT FROM information_schema.columns 
+                    WHERE table_schema = 'public' 
+                    AND table_name = 'efiling_files'
+                    AND column_name = 'sla_deadline'
+                );
+            `);
+            hasSlaDeadline = slaDeadlineCheck.rows[0]?.exists || false;
+        } catch (checkError) {
+            console.warn('Could not check for SLA deadline column:', checkError.message);
+        }
+
         // Get file with geographic information
         const fileRes = await client.query(`
             SELECT f.*, 
@@ -48,6 +64,7 @@ export async function POST(request, { params }) {
                    eu_from.town_id as from_town_id,
                    eu_from.division_id as from_division_id,
                    eu_from.efiling_role_id as from_role_id
+                   ${hasSlaDeadline ? ', f.sla_deadline' : ', NULL as sla_deadline'}
             FROM efiling_files f
             LEFT JOIN efiling_users eu_from ON eu_from.id = f.assigned_to
             WHERE f.id = $1
@@ -269,39 +286,53 @@ export async function POST(request, { params }) {
             // Update file assignment
             const newAssignee = userId;
             
-            // Calculate SLA deadline from SLA matrix (only for external workflow)
-            let slaDeadline = fileRow.sla_deadline; // Keep existing deadline by default
+            // Calculate SLA deadline from SLA matrix (only for external workflow and if SLA deadline column exists)
+            let slaDeadline = hasSlaDeadline ? (fileRow.sla_deadline || null) : null;
             
-            if (shouldStartTAT && !isTeamInternal) {
-                // Get role codes for SLA lookup
-                const lastTargetRes = await client.query(`
-                    SELECT eu.efiling_role_id, r.code as role_code
-                    FROM efiling_users eu
-                    LEFT JOIN efiling_roles r ON eu.efiling_role_id = r.id
-                    WHERE eu.id = $1
-                `, [newAssignee]);
-                
-                if (lastTargetRes.rows.length > 0) {
-                    const lastTargetRoleCode = lastTargetRes.rows[0].role_code || '';
-                    const slaHours = await getSLA(client, currentUserRoleCode, lastTargetRoleCode);
+            if (hasSlaDeadline && shouldStartTAT && !isTeamInternal) {
+                try {
+                    // Get role codes for SLA lookup
+                    const lastTargetRes = await client.query(`
+                        SELECT eu.efiling_role_id, r.code as role_code
+                        FROM efiling_users eu
+                        LEFT JOIN efiling_roles r ON eu.efiling_role_id = r.id
+                        WHERE eu.id = $1
+                    `, [newAssignee]);
                     
-                    const deadline = new Date();
-                    deadline.setHours(deadline.getHours() + slaHours);
-                    slaDeadline = deadline.toISOString();
+                    if (lastTargetRes.rows.length > 0) {
+                        const lastTargetRoleCode = lastTargetRes.rows[0].role_code || '';
+                        const slaHours = await getSLA(client, currentUserRoleCode, lastTargetRoleCode);
+                        
+                        const deadline = new Date();
+                        deadline.setHours(deadline.getHours() + slaHours);
+                        slaDeadline = deadline.toISOString();
+                    }
+                } catch (slaError) {
+                    console.warn('Error computing SLA deadline:', slaError.message);
+                    // Continue without SLA deadline if computation fails
                 }
             }
             
             // Update file assignment and workflow state
-            await client.query(`
-                UPDATE efiling_files
-                SET assigned_to = $1, 
-                    updated_at = CURRENT_TIMESTAMP,
-                    sla_deadline = CASE 
-                        WHEN $2 IS NOT NULL THEN $2 
-                        ELSE sla_deadline 
-                    END
-                WHERE id = $3
-            `, [newAssignee, shouldStartTAT ? slaDeadline : null, id]);
+            const updateQuery = hasSlaDeadline
+                ? `UPDATE efiling_files
+                   SET assigned_to = $1, 
+                       updated_at = CURRENT_TIMESTAMP,
+                       sla_deadline = CASE 
+                           WHEN $2 IS NOT NULL THEN $2 
+                           ELSE sla_deadline 
+                       END
+                   WHERE id = $3`
+                : `UPDATE efiling_files
+                   SET assigned_to = $1, 
+                       updated_at = CURRENT_TIMESTAMP
+                   WHERE id = $2`;
+            
+            const updateParams = hasSlaDeadline
+                ? [newAssignee, shouldStartTAT ? slaDeadline : null, id]
+                : [newAssignee, id];
+            
+            await client.query(updateQuery, updateParams);
             
             // Update workflow state
             await updateWorkflowState(client, id, newState, newAssignee, isTeamInternal, shouldStartTAT);
