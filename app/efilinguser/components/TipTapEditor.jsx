@@ -154,6 +154,11 @@ export default function TipTapEditor({
                 listItem: false,
                 // Disable Link in StarterKit to configure it separately
                 link: false,
+                // Disable CodeBlock and HorizontalRule to avoid duplicates
+                codeBlock: false,
+                horizontalRule: false,
+                // Disable Underline to configure it separately
+                underline: false,
             }),
             Underline,
             TextAlign.configure({

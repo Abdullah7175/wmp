@@ -83,15 +83,12 @@ export function SearchableDropdown({
                 const optionValueStr = String(option.value);
                 const currentValueStr = value ? String(value) : '';
                 const isSelected = currentValueStr === optionValueStr;
-                const handleItemClick = (e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
+                const handleItemClick = (selectedValue) => {
                       if (selectingRef.current) return;
                       selectingRef.current = true;
-                      const valueToSet = option.value;
-                      console.log('[SearchableDropdown] Item clicked:', valueToSet, option.label);
+                      console.log('[SearchableDropdown] Item clicked:', selectedValue, option.label);
                       if (onChange) {
-                        onChange(valueToSet);
+                        onChange(selectedValue);
                       }
                       setOpen(false);
                       setSearchTerm("");
@@ -100,21 +97,14 @@ export function SearchableDropdown({
                       }, 200);
                     };
                 return (
-                  <div
+                  <CommandItem
                     key={option.value}
-                    role="option"
-                    aria-selected={isSelected}
-                    onClick={handleItemClick}
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      handleItemClick(e);
-                    }}
+                    value={String(option.value)}
+                    onSelect={() => handleItemClick(option.value)}
                     className={cn2(
-                      "relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none",
-                      "hover:bg-accent hover:text-accent-foreground",
+                      "cursor-pointer",
                       isSelected && "bg-accent text-accent-foreground"
                     )}
-                    style={{ pointerEvents: 'auto' }}
                   >
                     <Check
                       className={cn2(
@@ -123,7 +113,7 @@ export function SearchableDropdown({
                       )}
                     />
                     <span className="flex-1">{option.label}</span>
-                  </div>
+                  </CommandItem>
                 );
               })}
             </CommandGroup>

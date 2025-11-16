@@ -305,6 +305,7 @@ export default function DocumentSignatureSystem({
                 setSignatures(prev => [...prev, newSignature]);
                 onSignatureAdded && onSignatureAdded(newSignature);
                 setShowSignatureModal(false); // Close signature modal after successful application
+                setShowAuthModal(false); // Ensure auth modal is also closed
                 toast({
                     title: "Signature Added",
                     description: "Your signature has been added to the document.",
@@ -365,6 +366,7 @@ export default function DocumentSignatureSystem({
     const handleCreateSignature = (signatureData) => {
         setPendingAction('addSignature');
         setPendingSignatureData(signatureData);
+        setShowSignatureModal(false); // Close signature creation modal before showing auth modal
         setShowAuthModal(true);
     };
 
