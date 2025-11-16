@@ -153,6 +153,42 @@ export async function GET(request) {
             const overallCountQuery = await client.query('SELECT COUNT(*) as total FROM efiling_files');
             console.log('Total files in database:', overallCountQuery.rows[0].total);
             
+            // Check if optional tables and columns exist
+            let hasDocumentSignaturesTable = false;
+            let hasFileTypesTable = false;
+            let hasSlaColumns = false;
+            try {
+                const [signaturesCheck, fileTypesCheck, slaColumnsCheck] = await Promise.all([
+                    client.query(`
+                        SELECT EXISTS (
+                            SELECT FROM information_schema.tables 
+                            WHERE table_schema = 'public' 
+                            AND table_name = 'efiling_document_signatures'
+                        );
+                    `),
+                    client.query(`
+                        SELECT EXISTS (
+                            SELECT FROM information_schema.tables 
+                            WHERE table_schema = 'public' 
+                            AND table_name = 'efiling_file_types'
+                        );
+                    `),
+                    client.query(`
+                        SELECT EXISTS (
+                            SELECT FROM information_schema.columns 
+                            WHERE table_schema = 'public' 
+                            AND table_name = 'efiling_files'
+                            AND column_name = 'sla_deadline'
+                        );
+                    `)
+                ]);
+                hasDocumentSignaturesTable = signaturesCheck.rows[0]?.exists || false;
+                hasFileTypesTable = fileTypesCheck.rows[0]?.exists || false;
+                hasSlaColumns = slaColumnsCheck.rows[0]?.exists || false;
+            } catch (checkError) {
+                console.warn('Could not check for optional tables/columns:', checkError.message);
+            }
+            
             let query = `
                 SELECT DISTINCT ON (f.id)
                        f.*,
@@ -163,36 +199,43 @@ export async function GET(request) {
                        r.name as assigned_to_role_name,
                        cr_users.name as creator_user_name,
                        curr_users.name as current_assignee_user_name,
-                       ls.last_signed_by_name,
-                       ls.last_signed_at,
-                       f.sla_deadline,
+                       ${hasDocumentSignaturesTable ? `ls.last_signed_by_name,
+                       ls.last_signed_at,` : `NULL as last_signed_by_name,
+                       NULL as last_signed_at,`}
+                       ${hasSlaColumns ? `f.sla_deadline,
                        (f.sla_deadline IS NOT NULL AND f.sla_deadline < NOW()) as is_sla_breached,
                        ROUND(EXTRACT(EPOCH FROM (f.sla_deadline - NOW()))/60.0) as minutes_remaining,
-                       ft.name as file_type_name,
-                       ft.code as file_type_code,
-                       r.name as current_stage_name,
-                       r.code as current_stage_code,
-                       r.name as current_stage,
                        f.sla_paused,
                        f.sla_accumulated_hours,
-                       f.sla_pause_count
+                       f.sla_pause_count,` : `NULL as sla_deadline,
+                       false as is_sla_breached,
+                       NULL as minutes_remaining,
+                       false as sla_paused,
+                       0 as sla_accumulated_hours,
+                       0 as sla_pause_count,`}
+                       ${hasFileTypesTable ? `ft.name as file_type_name,
+                       ft.code as file_type_code,` : `NULL as file_type_name,
+                       NULL as file_type_code,`}
+                       r.name as current_stage_name,
+                       r.code as current_stage_code,
+                       r.name as current_stage
                 FROM efiling_files f
                 LEFT JOIN efiling_file_categories c ON f.category_id = c.id
                 LEFT JOIN efiling_departments d ON f.department_id = d.id
                 LEFT JOIN efiling_file_status s ON f.status_id = s.id
-                LEFT JOIN efiling_file_types ft ON f.file_type_id = ft.id
+                ${hasFileTypesTable ? `LEFT JOIN efiling_file_types ft ON f.file_type_id = ft.id` : ''}
                 LEFT JOIN efiling_users ab ON f.assigned_to = ab.id
                 LEFT JOIN efiling_roles r ON ab.efiling_role_id = r.id
                 LEFT JOIN efiling_users cr ON f.created_by = cr.id
                 LEFT JOIN users cr_users ON cr.user_id = cr_users.id
                 LEFT JOIN efiling_users curr ON curr.id = f.assigned_to
                 LEFT JOIN users curr_users ON curr.user_id = curr_users.id
-                LEFT JOIN (
+                ${hasDocumentSignaturesTable ? `LEFT JOIN (
                     SELECT DISTINCT ON (file_id) 
                         file_id, user_name as last_signed_by_name, "timestamp" as last_signed_at
                     FROM efiling_document_signatures
                     ORDER BY file_id, "timestamp" DESC
-                ) ls ON ls.file_id = f.id
+                ) ls ON ls.file_id = f.id` : ''}
             `;
             const params = [];
             const conditions = [];
@@ -279,7 +322,28 @@ export async function GET(request) {
         }
     } catch (error) {
         console.error('Database error:', error);
-        return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+        console.error('Error details:', {
+            message: error.message,
+            code: error.code,
+            detail: error.detail,
+            hint: error.hint,
+            position: error.position,
+            where: error.where
+        });
+        // Return detailed error in development, generic in production
+        const errorMessage = process.env.NODE_ENV === 'development' 
+            ? `Database error: ${error.message}${error.detail ? ` - ${error.detail}` : ''}${error.hint ? ` (${error.hint})` : ''}`
+            : 'Internal server error';
+        return NextResponse.json({ 
+            error: errorMessage,
+            code: error.code,
+            details: process.env.NODE_ENV === 'development' ? {
+                message: error.message,
+                detail: error.detail,
+                hint: error.hint,
+                position: error.position
+            } : undefined
+        }, { status: 500 });
     } finally {
         if (client) await client.release();
     }
