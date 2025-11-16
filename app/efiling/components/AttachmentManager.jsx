@@ -73,10 +73,10 @@ export default function AttachmentManager({ fileId, canEdit = true }) {
             return `File type ${file.type} is not allowed. Only PDF, DOC, DOCX, JPG, JPEG, and PNG files are allowed.`;
         }
 
-        // Check file size (10MB limit)
-        const maxSize = 10 * 1024 * 1024; // 10MB
+        // Check file size (5MB limit)
+        const maxSize = 5 * 1024 * 1024; // 5MB
         if (file.size > maxSize) {
-            return `File size ${(file.size / 1024 / 1024).toFixed(2)}MB exceeds the 10MB limit.`;
+            return `File size exceeds limit. Maximum allowed: 5MB`;
         }
 
         return null;

@@ -16,8 +16,6 @@ import TableCell from '@tiptap/extension-table-cell';
 import TableHeader from '@tiptap/extension-table-header';
 import ImageExtension from '@tiptap/extension-image';
 import Link from '@tiptap/extension-link';
-import CodeBlock from '@tiptap/extension-code-block';
-import HorizontalRule from '@tiptap/extension-horizontal-rule';
 // Explicitly import list extensions
 import BulletList from '@tiptap/extension-bullet-list';
 import OrderedList from '@tiptap/extension-ordered-list';
@@ -154,6 +152,8 @@ export default function TipTapEditor({
                 bulletList: false,
                 orderedList: false,
                 listItem: false,
+                // Disable Link in StarterKit to configure it separately
+                link: false,
             }),
             Underline,
             TextAlign.configure({
@@ -190,14 +190,14 @@ export default function TipTapEditor({
                 allowBase64: true,
                 inline: true,
             }),
+            // Configure Link separately with custom settings
             Link.configure({
                 openOnClick: false,
                 HTMLAttributes: {
                     class: 'text-blue-600 underline cursor-pointer',
                 },
             }),
-            CodeBlock,
-            HorizontalRule,
+            // CodeBlock and HorizontalRule are already included in StarterKit
             // Explicitly configure list extensions
             BulletList.configure({
                 HTMLAttributes: {

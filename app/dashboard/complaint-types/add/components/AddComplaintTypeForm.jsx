@@ -14,9 +14,14 @@ export default function AddComplaintTypeForm() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const [efilingDepartments, setEfilingDepartments] = useState([]);
+  const [divisions, setDivisions] = useState([]);
+  const [selectedDivisionIds, setSelectedDivisionIds] = useState([]);
   const [formData, setFormData] = useState({
     type_name: "",
-    description: ""
+    description: "",
+    efiling_department_id: "",
+    division_id: ""
   });
 
   useEffect(() => {
@@ -32,12 +37,49 @@ export default function AddComplaintTypeForm() {
     }
   }, [status, session]);
 
+  useEffect(() => {
+    if (status === "authenticated") {
+      fetchEfilingDepartments();
+      fetchDivisions();
+    }
+  }, [status]);
+
+  const fetchEfilingDepartments = async () => {
+    try {
+      const res = await fetch("/api/efiling/departments");
+      if (res.ok) {
+        const data = await res.json();
+        // API returns array directly, or empty array if error
+        setEfilingDepartments(Array.isArray(data) ? data : []);
+      }
+    } catch (error) {
+      console.error("Error fetching e-filing departments:", error);
+      setEfilingDepartments([]);
+    }
+  };
+
+  const fetchDivisions = async () => {
+    try {
+      const res = await fetch("/api/efiling/divisions?is_active=true");
+      if (res.ok) {
+        const data = await res.json();
+        // API returns { success: true, divisions: [...] }
+        setDivisions(data.success && data.divisions ? data.divisions : []);
+      }
+    } catch (error) {
+      console.error("Error fetching divisions:", error);
+      setDivisions([]);
+    }
+  };
+
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({
       ...prev,
       [name]: value
     }));
+    // If division_id is set, clear it when efiling_department_id changes (optional logic)
+    // If division_id is set, it means this is division-based, so we might want to keep it
   };
 
   const validateForm = () => {
@@ -72,12 +114,17 @@ export default function AddComplaintTypeForm() {
     setLoading(true);
 
     try {
+      const payload = {
+        ...formData,
+        division_ids: selectedDivisionIds.length > 0 ? selectedDivisionIds : (formData.division_id ? [parseInt(formData.division_id)] : [])
+      };
+      
       const res = await fetch("/api/admin/complaint-types", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(payload),
       });
 
       const data = await res.json();
@@ -156,7 +203,60 @@ export default function AddComplaintTypeForm() {
                 />
                 <p className="text-xs text-gray-500 mt-1">
                   Optional: Provide additional details about this Department
-                                  </p>
+                </p>
+              </div>
+
+              <div>
+                <Label htmlFor="efiling_department_id">E-Filing Department (Optional)</Label>
+                <select
+                  id="efiling_department_id"
+                  name="efiling_department_id"
+                  value={formData.efiling_department_id}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                >
+                  <option value="">Select e-filing department...</option>
+                  {efilingDepartments.map((dept) => (
+                    <option key={dept.id} value={dept.id}>
+                      {dept.name}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-gray-500 mt-1">
+                  Optional: Link this department to an e-filing department
+                </p>
+              </div>
+
+              <div>
+                <Label>Divisions (Multi-select)</Label>
+                <p className="text-xs text-gray-500 mb-2">Select one or more divisions. Leave empty if this department is town-based.</p>
+                <div className="max-h-48 overflow-y-auto border rounded p-3 grid grid-cols-1 md:grid-cols-2 gap-2">
+                  {divisions.map((div) => (
+                    <label key={div.id} className="flex items-center gap-2 text-sm cursor-pointer hover:bg-gray-50 p-1 rounded">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4"
+                        checked={selectedDivisionIds.includes(div.id)}
+                        onChange={() => {
+                          if (selectedDivisionIds.includes(div.id)) {
+                            setSelectedDivisionIds(prev => prev.filter(id => id !== div.id));
+                          } else {
+                            setSelectedDivisionIds(prev => [...prev, div.id]);
+                          }
+                        }}
+                      />
+                      <span>{div.name}</span>
+                    </label>
+                  ))}
+                </div>
+                {selectedDivisionIds.length > 0 && (
+                  <p className="text-xs text-blue-600 mt-1">
+                    {selectedDivisionIds.length} division(s) selected
+                  </p>
+                )}
+                <p className="text-xs text-gray-500 mt-1">
+                  Optional: If divisions are selected, this department will be division-based instead of town-based. Work requests for this department will use divisions instead of towns/subtowns.
+                </p>
               </div>
             </div>
 

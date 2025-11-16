@@ -62,6 +62,11 @@ export async function POST(req) {
       if (fileSize && Math.abs(combinedBuffer.length - fileSize) > 1024) { // Allow 1KB variance
         throw new Error(`File size mismatch. Expected ${fileSize}, got ${combinedBuffer.length}`);
       }
+      
+      // Validate final file size (videos can be up to 100MB)
+      if (combinedBuffer.length > UPLOAD_CONFIG.MAX_VIDEO_SIZE) {
+        throw new Error(`Final file size (${(combinedBuffer.length / (1024 * 1024)).toFixed(2)}MB) exceeds limit of ${UPLOAD_CONFIG.MAX_VIDEO_SIZE / (1024 * 1024)}MB`);
+      }
 
       // Generate final filename and save to uploads directory
       const finalFilename = generateUniqueFilename(fileName);

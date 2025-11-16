@@ -88,7 +88,27 @@ const VideoForm = ({ workRequestId: propWorkRequestId, onClose }) => {
 
     const handleFileChange = (e) => {
         const files = Array.from(e.target.files);
-        setFileInputs(files.map(file => ({
+        const validFiles = [];
+        const errors = [];
+
+        files.forEach(file => {
+            // Validate file size (100MB max for videos)
+            if (file.size > 100 * 1024 * 1024) {
+                errors.push(`${file.name}: File size exceeds limit. Maximum allowed: 100MB`);
+            } else {
+                validFiles.push(file);
+            }
+        });
+
+        if (errors.length > 0) {
+            toast({
+                title: "Invalid Files",
+                description: errors.join('\n'),
+                variant: "destructive",
+            });
+        }
+
+        setFileInputs(validFiles.map(file => ({
             file,
             description: '',
             latitude: '',

@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/db';
 import { eFileActionLogger } from '@/lib/efilingActionLogger';
+import { getToken } from 'next-auth/jwt';
+import { getUserGeography, isGlobalRoleCode } from '@/lib/efilingGeographicRouting';
 
 export async function GET(request) {
     try {
@@ -11,6 +13,21 @@ export async function GET(request) {
         const client = await connectToDatabase();
 
         try {
+            const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
+            let userGeography = null;
+            let canSeeAll = false;
+
+            if (token?.user) {
+                if ([1, 2].includes(token.user.role)) {
+                    canSeeAll = true;
+                } else {
+                    userGeography = await getUserGeography(client, token.user.id);
+                    if (userGeography && isGlobalRoleCode(userGeography.role_code)) {
+                        canSeeAll = true;
+                    }
+                }
+            }
+
             if (id) {
                 // Fetch single role by ID
                 const query = `
@@ -33,18 +50,48 @@ export async function GET(request) {
             } else {
                 // Fetch all roles
                 let query = `
-                    SELECT r.*, d.name as department_name
+                    SELECT DISTINCT r.*, d.name as department_name
                     FROM efiling_roles r
                     LEFT JOIN efiling_departments d ON r.department_id = d.id
+                    LEFT JOIN efiling_role_locations rl ON rl.role_id = r.id
                 `;
                 
-                let params = [];
-                let paramCount = 1;
+                const params = [];
+                const conditions = [];
 
                 if (isActive !== null) {
-                    query += ` WHERE r.is_active = $${paramCount}`;
+                    conditions.push(`r.is_active = $${params.length + 1}`);
                     params.push(isActive === 'true');
-                    paramCount++;
+                }
+
+                if (!canSeeAll && userGeography) {
+                    const locationParts = [];
+                    const pushParam = (value) => {
+                        params.push(value);
+                        return `$${params.length}`;
+                    };
+
+                    if (userGeography.zone_ids && userGeography.zone_ids.length > 0) {
+                        const placeholder = pushParam(userGeography.zone_ids);
+                        locationParts.push(`rl.zone_id = ANY(${placeholder}::int[])`);
+                    }
+                    if (userGeography.division_id) {
+                        locationParts.push(`rl.division_id = ${pushParam(userGeography.division_id)}`);
+                    }
+                    if (userGeography.district_id) {
+                        locationParts.push(`rl.district_id = ${pushParam(userGeography.district_id)}`);
+                    }
+                    if (userGeography.town_id) {
+                        locationParts.push(`rl.town_id = ${pushParam(userGeography.town_id)}`);
+                    }
+
+                    if (locationParts.length > 0) {
+                        conditions.push(`(rl.id IS NULL OR ${locationParts.join(' OR ')})`);
+                    }
+                }
+
+                if (conditions.length > 0) {
+                    query += ` WHERE ${conditions.join(' AND ')}`;
                 }
 
                 query += ` ORDER BY r.name ASC`;

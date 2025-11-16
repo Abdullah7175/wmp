@@ -71,7 +71,30 @@ export default function AddFinalVideoPage() {
     
     fileInput.onchange = (e) => {
       const files = Array.from(e.target.files);
-      const newVideos = files.map(file => ({
+      const maxVideoSize = 100 * 1024 * 1024; // 100MB
+      
+      const validFiles = [];
+      const invalidFiles = [];
+      
+      files.forEach(file => {
+        if (file.size > maxVideoSize) {
+          invalidFiles.push(file.name);
+        } else {
+          validFiles.push(file);
+        }
+      });
+      
+      if (invalidFiles.length > 0) {
+        toast({
+          title: "Invalid File Size",
+          description: `${invalidFiles.length} video(s) exceed size limit. Maximum allowed: 100MB`,
+          variant: "destructive",
+        });
+        e.target.value = ''; // Clear the input
+        return;
+      }
+      
+      const newVideos = validFiles.map(file => ({
         file,
         id: Date.now() + Math.random(),
         name: file.name,
@@ -124,6 +147,7 @@ export default function AddFinalVideoPage() {
         data.append("creator_name", session.user.name);
 
         await uploadFile(video.file, "/api/final-videos", data, {
+          maxFileSize: 100 * 1024 * 1024, // 100MB max for videos
           onProgress: (progress) => {
             // Calculate overall progress across all files
             const overallProgress = Math.round(((i + progress / 100) / formData.videos.length) * 100);

@@ -42,7 +42,11 @@ export default function CreateEfilingUser() {
         preferred_signature_method: 'SMS_OTP',
         signature_settings: {},
         notification_preferences: {},
-        google_email: ''
+        google_email: '',
+        district_id: '',
+        town_id: '',
+        subtown_id: '',
+        division_id: ''
     });
 
     const getApprovalLevelName = (level) => {
@@ -126,6 +130,59 @@ export default function CreateEfilingUser() {
             ...prev,
             [field]: value
         }));
+    };
+
+    // Auto-populate geographic fields when department is selected
+    const handleDepartmentChange = async (departmentId) => {
+        handleInputChange('department_id', parseInt(departmentId));
+        
+        // Clear existing geographic fields
+        handleInputChange('division_id', '');
+        handleInputChange('district_id', '');
+        handleInputChange('town_id', '');
+        handleInputChange('subtown_id', '');
+
+        if (!departmentId || isConsultant) {
+            return;
+        }
+
+        try {
+            // Fetch department locations
+            const response = await fetch(`/api/efiling/departments/locations?department_id=${departmentId}`);
+            if (response.ok) {
+                const data = await response.json();
+                const locations = data.success ? data.locations : [];
+                
+                if (locations.length > 0) {
+                    // Use the first location to auto-populate
+                    // Priority: division > town > district
+                    const firstLocation = locations[0];
+                    
+                    if (firstLocation.division_id) {
+                        handleInputChange('division_id', firstLocation.division_id);
+                    } else if (firstLocation.town_id) {
+                        handleInputChange('town_id', firstLocation.town_id);
+                        if (firstLocation.district_id) {
+                            handleInputChange('district_id', firstLocation.district_id);
+                        }
+                    } else if (firstLocation.district_id) {
+                        handleInputChange('district_id', firstLocation.district_id);
+                    }
+                    
+                    // Show toast if multiple locations exist
+                    if (locations.length > 1) {
+                        toast({
+                            title: "Multiple locations found",
+                            description: `Department has ${locations.length} locations. Using the first one. You can update manually if needed.`,
+                            variant: "default",
+                        });
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('Error fetching department locations:', error);
+            // Don't show error toast as this is auto-population
+        }
     };
 
     const validateForm = () => {
@@ -371,7 +428,7 @@ export default function CreateEfilingUser() {
                                         <Label htmlFor="department_id">Department *</Label>
                                         <Select
                                             value={formData.department_id?.toString() || ''}
-                                            onValueChange={(value) => handleInputChange('department_id', parseInt(value))}
+                                            onValueChange={handleDepartmentChange}
                                         >
                                             <SelectTrigger>
                                                 <SelectValue placeholder={Array.isArray(departments) && departments.length > 0 ? "Select department" : "Loading departments..."} />

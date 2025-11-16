@@ -48,6 +48,10 @@ export async function GET(request, { params }) {
                     eu.created_at,
                     eu.updated_at,
                     eu.google_email,
+                    eu.district_id,
+                    eu.town_id,
+                    eu.subtown_id,
+                    eu.division_id,
                     d.name as department_name,
                     r.name as role_name
                 FROM users u
@@ -126,7 +130,11 @@ export async function PUT(request, { params }) {
             signature_settings,
             notification_preferences,
             is_active,
-            google_email
+            google_email,
+            district_id,
+            town_id,
+            subtown_id,
+            division_id
         } = await request.json();
 
         if (!id) {
@@ -348,6 +356,69 @@ export async function PUT(request, { params }) {
                 efilingUpdateQuery += `, is_active = $${paramCount}`;
                 efilingParams.push(is_active);
                 paramCount++;
+            }
+
+            // Handle geographic fields
+            if (district_id !== undefined) {
+                efilingUpdateQuery += `, district_id = $${paramCount}`;
+                efilingParams.push(district_id || null);
+                paramCount++;
+            }
+
+            if (town_id !== undefined) {
+                efilingUpdateQuery += `, town_id = $${paramCount}`;
+                efilingParams.push(town_id || null);
+                paramCount++;
+            }
+
+            if (subtown_id !== undefined) {
+                efilingUpdateQuery += `, subtown_id = $${paramCount}`;
+                efilingParams.push(subtown_id || null);
+                paramCount++;
+            }
+
+            if (division_id !== undefined) {
+                efilingUpdateQuery += `, division_id = $${paramCount}`;
+                efilingParams.push(division_id || null);
+                paramCount++;
+            }
+
+            // Auto-populate geographic fields from department if not provided and department changed
+            if (department_id !== undefined && division_id === undefined && town_id === undefined && district_id === undefined) {
+                const deptLocRes = await client.query(
+                    `SELECT division_id, district_id, town_id 
+                     FROM efiling_department_locations 
+                     WHERE department_id = $1 
+                     ORDER BY 
+                         CASE WHEN division_id IS NOT NULL THEN 1 ELSE 2 END,
+                         CASE WHEN town_id IS NOT NULL THEN 1 ELSE 2 END,
+                         CASE WHEN district_id IS NOT NULL THEN 1 ELSE 2 END
+                     LIMIT 1`,
+                    [department_id]
+                );
+
+                if (deptLocRes.rows.length > 0) {
+                    const loc = deptLocRes.rows[0];
+                    // Priority: division > town > district
+                    if (loc.division_id) {
+                        efilingUpdateQuery += `, division_id = $${paramCount}`;
+                        efilingParams.push(loc.division_id);
+                        paramCount++;
+                    } else if (loc.town_id) {
+                        efilingUpdateQuery += `, town_id = $${paramCount}`;
+                        efilingParams.push(loc.town_id);
+                        paramCount++;
+                        if (loc.district_id) {
+                            efilingUpdateQuery += `, district_id = $${paramCount}`;
+                            efilingParams.push(loc.district_id);
+                            paramCount++;
+                        }
+                    } else if (loc.district_id) {
+                        efilingUpdateQuery += `, district_id = $${paramCount}`;
+                        efilingParams.push(loc.district_id);
+                        paramCount++;
+                    }
+                }
             }
 
             efilingUpdateQuery += ` WHERE id = $${paramCount}`;

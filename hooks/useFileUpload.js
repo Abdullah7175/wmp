@@ -14,7 +14,8 @@ export function useFileUpload() {
       onSuccess = () => {},
       onError = () => {},
       chunkSize = 5 * 1024 * 1024, // 5MB chunks
-      maxRetries = 3
+      maxRetries = 3,
+      maxFileSize = 100 * 1024 * 1024 // 100MB default max for videos
     } = options;
 
     setUploading(true);
@@ -23,6 +24,20 @@ export function useFileUpload() {
     setUploadStatus('Preparing upload...');
 
     try {
+      // Validate file size before upload
+      if (file.size > maxFileSize) {
+        const error = new Error(`File size (${(file.size / (1024 * 1024)).toFixed(2)}MB) exceeds maximum allowed size of ${maxFileSize / (1024 * 1024)}MB`);
+        setError(error.message);
+        setUploadStatus('Upload failed');
+        onError(error);
+        toast({
+          title: "File Too Large",
+          description: error.message,
+          variant: "destructive"
+        });
+        throw error;
+      }
+
       // For files larger than 50MB, use chunked upload
       if (file.size > 50 * 1024 * 1024) {
         return await uploadFileChunked(file, endpoint, formData, {

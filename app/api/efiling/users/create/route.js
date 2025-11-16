@@ -28,7 +28,11 @@ export async function POST(request) {
             signature_settings,
             notification_preferences,
             is_consultant,
-            google_email
+            google_email,
+            district_id,
+            town_id,
+            subtown_id,
+            division_id
         } = await request.json();
 
         // Validate required fields
@@ -95,6 +99,42 @@ export async function POST(request) {
 
             const userId = userResult.rows[0].id;
 
+            // Auto-populate geographic fields from department if not provided
+            let finalDistrictId = district_id || null;
+            let finalTownId = town_id || null;
+            let finalSubtownId = subtown_id || null;
+            let finalDivisionId = division_id || null;
+
+            if (!is_consultant && department_id && !finalDivisionId && !finalTownId && !finalDistrictId) {
+                // Fetch department locations to auto-populate
+                const deptLocRes = await client.query(
+                    `SELECT division_id, district_id, town_id 
+                     FROM efiling_department_locations 
+                     WHERE department_id = $1 
+                     ORDER BY 
+                         CASE WHEN division_id IS NOT NULL THEN 1 ELSE 2 END,
+                         CASE WHEN town_id IS NOT NULL THEN 1 ELSE 2 END,
+                         CASE WHEN district_id IS NOT NULL THEN 1 ELSE 2 END
+                     LIMIT 1`,
+                    [department_id]
+                );
+
+                if (deptLocRes.rows.length > 0) {
+                    const loc = deptLocRes.rows[0];
+                    // Priority: division > town > district
+                    if (loc.division_id) {
+                        finalDivisionId = loc.division_id;
+                    } else if (loc.town_id) {
+                        finalTownId = loc.town_id;
+                        if (loc.district_id) {
+                            finalDistrictId = loc.district_id;
+                        }
+                    } else if (loc.district_id) {
+                        finalDistrictId = loc.district_id;
+                    }
+                }
+            }
+
             // 2. Create e-filing user record
             const efilingUserResult = await client.query(
                 `INSERT INTO efiling_users (
@@ -102,8 +142,10 @@ export async function POST(request) {
                     approval_level, can_sign, can_create_files, can_approve_files, 
                     can_reject_files, can_transfer_files, max_concurrent_files,
                     preferred_signature_method, signature_settings, notification_preferences,
-                    is_consultant, google_email, created_at, updated_at
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, NOW(), NOW())
+                    is_consultant, google_email,
+                    district_id, town_id, subtown_id, division_id,
+                    created_at, updated_at
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, NOW(), NOW())
                 RETURNING id`,
                 [
                     userId,
@@ -122,7 +164,11 @@ export async function POST(request) {
                     JSON.stringify(signature_settings || {}),
                     JSON.stringify(notification_preferences || {}),
                     is_consultant || false,
-                    google_email || null
+                    google_email || null,
+                    is_consultant ? null : finalDistrictId,
+                    is_consultant ? null : finalTownId,
+                    is_consultant ? null : finalSubtownId,
+                    is_consultant ? null : finalDivisionId
                 ]
             );
 

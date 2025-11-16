@@ -1,7 +1,7 @@
 "use client"
 import { columns } from "./columns"
 import { EnhancedDataTable } from "@/components/ui/enhanced-data-table"
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
@@ -18,6 +18,21 @@ export default function Page() {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const limit = 20;
+  const prevFiltersRef = useRef({ search, dateFrom, dateTo });
+
+  // Reset page to 1 when filters change
+  useEffect(() => {
+    const filtersChanged = 
+      prevFiltersRef.current.search !== search ||
+      prevFiltersRef.current.dateFrom !== dateFrom ||
+      prevFiltersRef.current.dateTo !== dateTo;
+    
+    if (filtersChanged && page !== 1) {
+      setPage(1);
+    }
+    
+    prevFiltersRef.current = { search, dateFrom, dateTo };
+  }, [search, dateFrom, dateTo, page]);
 
   useEffect(() => {
     const timeout = setTimeout(() => {
@@ -35,7 +50,28 @@ export default function Page() {
             const responseData = await response.json();
             const agentsData = Array.isArray(responseData) ? responseData : (responseData.data || []);
             const totalCount = responseData.total || agentsData.length;
-            setAgents(agentsData);
+            const normalizedAgents = agentsData.map((agent) => ({
+              ...agent,
+              division_name:
+                agent.division_name ||
+                agent.division ||
+                agent.divisionName ||
+                (agent.division && agent.division.name) ||
+                "",
+              town_name:
+                agent.town_name ||
+                agent.town ||
+                agent.townName ||
+                (agent.town && agent.town.name) ||
+                "",
+              complaint_type_name:
+                agent.complaint_type_name ||
+                agent.complaint_type ||
+                agent.type_name ||
+                agent.complaint_type_id ||
+                "",
+            }));
+            setAgents(normalizedAgents);
             setTotal(totalCount);
           } else {
             const errorData = await response.json().catch(() => ({}));
@@ -69,10 +105,10 @@ export default function Page() {
   return (
     <div className="container mx-auto py-6">
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Engineers</h1>
+        <h1 className="text-2xl font-bold">Engineers / Contractors</h1>
         <Link href={"/dashboard/agents/add"}>
           <Button variant="primary" className="border px-3">
-            <Plus /> Add Engineer
+            <Plus /> Add Engineer/Contractor
           </Button>
         </Link>
       </div>
@@ -107,7 +143,22 @@ export default function Page() {
         <EnhancedDataTable 
           columns={columns} 
           data={agents}
-          pageSize={5}
+          pageSize={limit}
+          totalItems={total}
+          state={{
+            pagination: {
+              pageIndex: page - 1, // Convert to 0-based index
+              pageSize: limit,
+            },
+          }}
+          onPaginationChange={(updater) => {
+            const newState = typeof updater === 'function' 
+              ? updater({ pageIndex: page - 1, pageSize: limit })
+              : updater;
+            if (newState?.pageIndex !== undefined && newState.pageIndex !== page - 1) {
+              setPage(newState.pageIndex + 1); // Convert back to 1-based index
+            }
+          }}
         />
       </div>
       

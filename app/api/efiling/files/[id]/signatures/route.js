@@ -22,11 +22,18 @@ export async function GET(request, { params }) {
                 content TEXT NOT NULL,
                 position JSONB NOT NULL,
                 font VARCHAR(100),
+                color VARCHAR(20) DEFAULT 'black',
                 timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 is_active BOOLEAN DEFAULT TRUE,
                 FOREIGN KEY (file_id) REFERENCES efiling_files(id),
                 FOREIGN KEY (user_id) REFERENCES users(id)
             )
+        `);
+        
+        // Add color column if it doesn't exist
+        await client.query(`
+            ALTER TABLE efiling_document_signatures 
+            ADD COLUMN IF NOT EXISTS color VARCHAR(20) DEFAULT 'black'
         `);
 
         // Fetch signatures for the file
@@ -81,31 +88,40 @@ export async function POST(request, { params }) {
                 content TEXT NOT NULL,
                 position JSONB NOT NULL,
                 font VARCHAR(100),
+                color VARCHAR(20) DEFAULT 'black',
                 timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 is_active BOOLEAN DEFAULT TRUE,
                 FOREIGN KEY (file_id) REFERENCES efiling_files(id),
                 FOREIGN KEY (user_id) REFERENCES users(id)
             )
         `);
+        
+        // Add color column if it doesn't exist
+        await client.query(`
+            ALTER TABLE efiling_document_signatures 
+            ADD COLUMN IF NOT EXISTS color VARCHAR(20) DEFAULT 'black'
+        `);
+
+        const { color } = body;
+        const signatureColor = color || 'black';
 
         // Insert new signature
         const result = await client.query(`
             INSERT INTO efiling_document_signatures 
-            (file_id, user_id, user_name, user_role, type, content, position, font)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            (file_id, user_id, user_name, user_role, type, content, position, font, color)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
             RETURNING *
-        `, [id, user_id, user_name, user_role, type, content, position, font]);
+        `, [id, user_id, user_name, user_role, type, content, position, font, signatureColor]);
 
         // Notify creator and current assignee
         try {
             const meta = await client.query(`
-                SELECT f.created_by, wf.current_assignee_id
+                SELECT f.created_by, f.assigned_to
                 FROM efiling_files f
-                LEFT JOIN efiling_file_workflows wf ON wf.file_id = f.id
                 WHERE f.id = $1
             `, [id]);
             const createdBy = meta.rows[0]?.created_by;
-            const currentAssignee = meta.rows[0]?.current_assignee_id;
+            const currentAssignee = meta.rows[0]?.assigned_to;
             const message = `${user_name} added a ${type} signature`;
             if (createdBy) {
                 await client.query(`

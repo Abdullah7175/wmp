@@ -6,7 +6,14 @@ export async function GET(request) {
     const client = await connectToDatabase();
 
     try {
-        const query = 'SELECT * FROM complaint_types';
+        const query = `
+            SELECT 
+                ct.*,
+                d.name as division_name
+            FROM complaint_types ct
+            LEFT JOIN divisions d ON ct.division_id = d.id
+            ORDER BY ct.type_name ASC
+        `;
         const result = await client.query(query);
         return NextResponse.json(result.rows, { status: 200 });
     } catch (error) {

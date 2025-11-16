@@ -81,6 +81,21 @@ export const columns = [
     header: "Department",
   },
   {
+    id: "location",
+    header: "Location",
+    cell: ({ row }) => {
+      const divisionName = row.original.division_name;
+      const townName = row.original.town_name;
+      if (divisionName) {
+        return <span>Division: {divisionName}</span>;
+      }
+      if (townName) {
+        return <span>Town: {townName}</span>;
+      }
+      return <span>-</span>;
+    },
+  },
+  {
     accessorKey: "email",
     header: "Email",
   },
@@ -96,7 +111,10 @@ export const columns = [
     accessorKey: "complaint_type",
     header: "Complaint Type",
     cell: ({ row }) => {
-      const type = row.original.complaint_type;
+      const type =
+        row.original.complaint_type_name ||
+        row.original.complaint_type ||
+        row.original.type_name;
       return <span>{type || row.original.complaint_type_id || '-'}</span>;
     },
   },

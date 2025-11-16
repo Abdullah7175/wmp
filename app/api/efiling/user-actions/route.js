@@ -113,6 +113,80 @@ export async function POST(request) {
 
         client = await connectToDatabase();
         
+        // Fetch user information from efiling_users and users tables
+        // Handle both users.id and efiling_users.id
+        let actualUserName = user_name;
+        let actualUserEmail = user_email;
+        let actualUserRole = user_role;
+        let actualEfilingUserId = userIdString;
+        
+        try {
+            // First, try to find efiling_user by efiling_users.id
+            let userInfoQuery = `
+                SELECT 
+                    eu.id,
+                    u.name,
+                    u.email,
+                    eu.efiling_role_id,
+                    r.code as role_code,
+                    r.name as role_name,
+                    eu.division_id,
+                    eu.district_id,
+                    eu.town_id
+                FROM efiling_users eu
+                LEFT JOIN users u ON eu.user_id = u.id
+                LEFT JOIN efiling_roles r ON eu.efiling_role_id = r.id
+                WHERE eu.id = $1
+            `;
+            let userInfoResult = await client.query(userInfoQuery, [userIdString]);
+            
+            // If not found, try to find by users.id
+            if (userInfoResult.rows.length === 0) {
+                userInfoQuery = `
+                    SELECT 
+                        eu.id,
+                        u.name,
+                        u.email,
+                        eu.efiling_role_id,
+                        r.code as role_code,
+                        r.name as role_name,
+                        eu.division_id,
+                        eu.district_id,
+                        eu.town_id
+                    FROM efiling_users eu
+                    LEFT JOIN users u ON eu.user_id = u.id
+                    LEFT JOIN efiling_roles r ON eu.efiling_role_id = r.id
+                    WHERE u.id = $1
+                `;
+                userInfoResult = await client.query(userInfoQuery, [userIdString]);
+            }
+            
+            if (userInfoResult.rows.length > 0) {
+                const userInfo = userInfoResult.rows[0];
+                actualEfilingUserId = userInfo.id.toString(); // Use efiling_users.id
+                actualUserName = userInfo.name || user_name;
+                actualUserEmail = userInfo.email || user_email;
+                actualUserRole = userInfo.efiling_role_id || user_role;
+                
+                // Add user geographic info to details
+                if (!details.division_id && userInfo.division_id) {
+                    details.division_id = userInfo.division_id;
+                }
+                if (!details.district_id && userInfo.district_id) {
+                    details.district_id = userInfo.district_id;
+                }
+                if (!details.town_id && userInfo.town_id) {
+                    details.town_id = userInfo.town_id;
+                }
+                if (!details.role_code && userInfo.role_code) {
+                    details.role_code = userInfo.role_code;
+                }
+            }
+        } catch (userInfoError) {
+            console.warn('Failed to fetch user info for action logging:', userInfoError);
+            // Continue with provided values if fetch fails
+        }
+        
         const query = `
             INSERT INTO efiling_user_actions 
             (file_id, user_id, action_type, description, timestamp, created_at,
@@ -123,8 +197,8 @@ export async function POST(request) {
         `;
         
         const result = await client.query(query, [
-            file_id, userIdString, action_type, description, user_type, user_role,
-            user_name, user_email, entity_type, entity_name, JSON.stringify(details),
+            file_id, actualEfilingUserId, action_type, description, user_type, actualUserRole,
+            actualUserName, actualUserEmail, entity_type, entity_name, JSON.stringify(details),
             ip_address, user_agent
         ]);
         

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/db';
 import { logAction, ENTITY_TYPES } from '@/lib/actionLogger';
 import { getToken } from 'next-auth/jwt';
+import { canEditFile } from '@/lib/efilingWorkflowStateManager';
 
 export async function POST(request, { params }) {
     let client;
@@ -10,7 +11,36 @@ export async function POST(request, { params }) {
         const body = await request.json();
         const { content, template } = body;
 
+        const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
+        if (!token?.user?.id) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
         client = await connectToDatabase();
+        
+        // Check if user can edit (workflow state check)
+        const isAdmin = [1, 2].includes(token.user.role);
+        if (!isAdmin) {
+            // Get user's efiling ID
+            const userRes = await client.query(`
+                SELECT eu.id
+                FROM efiling_users eu
+                JOIN users u ON eu.user_id = u.id
+                WHERE u.id = $1 AND eu.is_active = true
+            `, [token.user.id]);
+            
+            if (userRes.rows.length === 0) {
+                return NextResponse.json({ error: 'User not found in e-filing system' }, { status: 403 });
+            }
+            
+            const canEdit = await canEditFile(client, id, userRes.rows[0].id);
+            if (!canEdit) {
+                return NextResponse.json({
+                    error: 'You cannot edit this file. File is in external workflow or not returned to creator.',
+                    code: 'EDIT_NOT_ALLOWED'
+                }, { status: 403 });
+            }
+        }
 
         try {
             await client.query(`
@@ -142,22 +172,41 @@ export async function PUT(request, { params }) {
     try {
         const { id } = await params;
         const body = await request.json();
-        client = await connectToDatabase();
-
-        // Authorization: only creator or admin (role 1 or 2)
-        const token = await getToken({ req: request });
-        const currentUserId = token?.id;
-        const currentUserRole = token?.role;
-        if (!currentUserId) {
+        
+        const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
+        if (!token?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
+        
+        client = await connectToDatabase();
+
+        // Check if user can edit (workflow state check)
+        const isAdmin = [1, 2].includes(token.user.role);
+        if (!isAdmin) {
+            // Get user's efiling ID
+            const userRes = await client.query(`
+                SELECT eu.id
+                FROM efiling_users eu
+                JOIN users u ON eu.user_id = u.id
+                WHERE u.id = $1 AND eu.is_active = true
+            `, [token.user.id]);
+            
+            if (userRes.rows.length === 0) {
+                return NextResponse.json({ error: 'User not found in e-filing system' }, { status: 403 });
+            }
+            
+            const canEdit = await canEditFile(client, id, userRes.rows[0].id);
+            if (!canEdit) {
+                return NextResponse.json({
+                    error: 'You cannot edit this file. File is in external workflow or not returned to creator.',
+                    code: 'EDIT_NOT_ALLOWED'
+                }, { status: 403 });
+            }
+        }
+        
         const fileRes = await client.query(`SELECT created_by FROM efiling_files WHERE id = $1`, [id]);
         if (fileRes.rows.length === 0) {
             return NextResponse.json({ error: 'File not found' }, { status: 404 });
-        }
-        const isAdmin = currentUserRole === 1 || currentUserRole === 2;
-        if (!isAdmin && fileRes.rows[0].created_by !== currentUserId) {
-            return NextResponse.json({ error: 'Forbidden: only creator or admin can edit document' }, { status: 403 });
         }
 
         const result = await client.query(`

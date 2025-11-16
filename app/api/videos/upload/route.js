@@ -82,9 +82,9 @@ export async function POST(req) {
         const latitudes = formData.getAll('latitude');
         const longitudes = formData.getAll('longitude');
 
-        // Increased limits: up to 15 videos, 1GB each
+        // Increased limits: up to 15 videos, 100MB each
         const MAX_VIDEOS = 15;
-        const MAX_FILE_SIZE = UPLOAD_CONFIG.MAX_FILE_SIZE; // 1GB
+        const MAX_FILE_SIZE = UPLOAD_CONFIG.MAX_VIDEO_SIZE; // 100MB
 
         if (!workRequestId || files.length === 0) {
             return createErrorResponse('Work Request ID and at least one video are required', 400);

@@ -122,6 +122,11 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/pages/api/auth/[...nextauth]';
+import {
+    resolveEfilingScope,
+    appendGeographyFilters,
+    recordMatchesGeography,
+} from '@/lib/efilingGeographyFilters';
 
 export async function GET(request) {
     const { searchParams } = new URL(request.url);
@@ -138,11 +143,26 @@ export async function GET(request) {
     const client = await connectToDatabase();
 
     try {
+        const scopeInfo = await resolveEfilingScope(request, client, { scopeKeys: ['scope', 'efiling', 'efilingScoped'] });
+        if (scopeInfo.apply && scopeInfo.error) {
+            return NextResponse.json({ error: scopeInfo.error.message }, { status: scopeInfo.error.status });
+        }
+
         if (id) {
             const query = `
-                SELECT v.*, wr.request_date, wr.address ,ST_Y(v.geo_tag) as latitude,ST_X(v.geo_tag) as longitude
+                SELECT 
+                    v.*, 
+                    wr.request_date, 
+                    wr.address,
+                    wr.zone_id,
+                    wr.division_id,
+                    wr.town_id,
+                    t.district_id AS town_district_id,
+                    ST_Y(v.geo_tag) as latitude,
+                    ST_X(v.geo_tag) as longitude
                 FROM videos v
                 JOIN work_requests wr ON v.work_request_id = wr.id
+                LEFT JOIN town t ON wr.town_id = t.id
                 WHERE v.id = $1
             `;
             const result = await client.query(query, [id]);
@@ -151,33 +171,149 @@ export async function GET(request) {
                 return NextResponse.json({ error: 'Video not found' }, { status: 404 });
             }
 
+            if (scopeInfo.apply && !scopeInfo.isGlobal) {
+                const record = result.rows[0];
+                const allowed = recordMatchesGeography(record, scopeInfo.geography, {
+                    getDistrict: (row) => row.town_district_id,
+                });
+                if (!allowed) {
+                    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+                }
+            }
+
             return NextResponse.json(result.rows[0], { status: 200 });
         } else if (creatorId && creatorType) {
             const query = `
-                SELECT v.*, wr.request_date, wr.address, ST_Y(v.geo_tag) as latitude, ST_X(v.geo_tag) as longitude
+                SELECT 
+                    v.*, 
+                    wr.request_date, 
+                    wr.address,
+                    wr.zone_id,
+                    wr.division_id,
+                    wr.town_id,
+                    t.district_id AS town_district_id,
+                    ST_Y(v.geo_tag) as latitude, 
+                    ST_X(v.geo_tag) as longitude
                 FROM videos v
                 JOIN work_requests wr ON v.work_request_id = wr.id
+                LEFT JOIN town t ON wr.town_id = t.id
                 WHERE v.creator_id = $1 AND v.creator_type = $2
-                ORDER BY v.created_at DESC
             `;
-            const result = await client.query(query, [creatorId, creatorType]);
+            const params = [creatorId, creatorType];
+
+            const whereClauses = [];
+            let paramIdx = params.length + 1;
+            if (scopeInfo.apply && !scopeInfo.isGlobal) {
+                const beforeLength = whereClauses.length;
+                paramIdx = appendGeographyFilters(
+                    whereClauses,
+                    params,
+                    paramIdx,
+                    scopeInfo.geography,
+                    {
+                        zone: 'wr.zone_id',
+                        division: 'wr.division_id',
+                        town: 'wr.town_id',
+                        district: 't.district_id',
+                    }
+                );
+                if (whereClauses.length === beforeLength) {
+                    return NextResponse.json({ error: 'User geography not configured for scoped access' }, { status: 403 });
+                }
+            }
+
+            let scopedQuery = query;
+            if (whereClauses.length > 0) {
+                scopedQuery += ' AND ' + whereClauses.join(' AND ');
+            }
+            scopedQuery += ' ORDER BY v.created_at DESC';
+
+            const result = await client.query(scopedQuery, params);
             return NextResponse.json({ data: result.rows, total: result.rows.length }, { status: 200 });
         } else if (workRequestId) {
             const query = `
-                SELECT v.*, wr.request_date, wr.address ,ST_Y(v.geo_tag) as latitude,ST_X(v.geo_tag) as longitude
+                SELECT 
+                    v.*, 
+                    wr.request_date, 
+                    wr.address,
+                    wr.zone_id,
+                    wr.division_id,
+                    wr.town_id,
+                    t.district_id AS town_district_id,
+                    ST_Y(v.geo_tag) as latitude,
+                    ST_X(v.geo_tag) as longitude
                 FROM videos v
                 JOIN work_requests wr ON v.work_request_id = wr.id
+                LEFT JOIN town t ON wr.town_id = t.id
                 WHERE v.work_request_id = $1
-                ORDER BY v.created_at DESC
             `;
-            const result = await client.query(query, [workRequestId]);
+            const params = [workRequestId];
+            const whereClauses = [];
+            let paramIdx = params.length + 1;
+
+            if (scopeInfo.apply && !scopeInfo.isGlobal) {
+                const beforeLength = whereClauses.length;
+                paramIdx = appendGeographyFilters(
+                    whereClauses,
+                    params,
+                    paramIdx,
+                    scopeInfo.geography,
+                    {
+                        zone: 'wr.zone_id',
+                        division: 'wr.division_id',
+                        town: 'wr.town_id',
+                        district: 't.district_id',
+                    }
+                );
+                if (whereClauses.length === beforeLength) {
+                    return NextResponse.json({ error: 'User geography not configured for scoped access' }, { status: 403 });
+                }
+            }
+
+            let scopedQuery = query;
+            if (whereClauses.length > 0) {
+                scopedQuery += ' AND ' + whereClauses.join(' AND ');
+            }
+            scopedQuery += ' ORDER BY v.created_at DESC';
+
+            const result = await client.query(scopedQuery, params);
+            if (scopeInfo.apply && !scopeInfo.isGlobal && result.rows.length > 0) {
+                const allowed = recordMatchesGeography(result.rows[0], scopeInfo.geography, {
+                    getDistrict: (row) => row.town_district_id,
+                });
+                if (!allowed) {
+                    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+                }
+            }
             return NextResponse.json({ data: result.rows, total: result.rows.length }, { status: 200 });
         } else {
-            let countQuery = 'SELECT COUNT(*) FROM videos v JOIN work_requests wr ON v.work_request_id = wr.id';
-            let dataQuery = `SELECT v.*, wr.request_date, wr.address ,ST_Y(v.geo_tag) as latitude,ST_X(v.geo_tag) as longitude FROM videos v JOIN work_requests wr ON v.work_request_id = wr.id`;
+            let countQuery = `
+                SELECT COUNT(*) 
+                FROM videos v 
+                JOIN work_requests wr ON v.work_request_id = wr.id
+                LEFT JOIN town t ON wr.town_id = t.id
+            `;
+            let dataQuery = `
+                SELECT 
+                    v.*, 
+                    wr.request_date, 
+                    wr.address,
+                    wr.zone_id,
+                    wr.division_id,
+                    wr.town_id,
+                    t.district_id AS town_district_id,
+                    ST_Y(v.geo_tag) as latitude,
+                    ST_X(v.geo_tag) as longitude
+                FROM videos v 
+                JOIN work_requests wr ON v.work_request_id = wr.id
+                LEFT JOIN town t ON wr.town_id = t.id
+            `;
             let whereClauses = [];
             let params = [];
             let paramIdx = 1;
+            let dataWhereClauses = [];
+            let dataParams = [];
+            let dataParamIdx = 1;
             if (filter) {
                 whereClauses.push(`(
                     CAST(v.id AS TEXT) ILIKE $${paramIdx} OR
@@ -187,29 +323,71 @@ export async function GET(request) {
                 )`);
                 params.push(`%${filter}%`);
                 paramIdx++;
+
+                dataWhereClauses.push(`(
+                    CAST(v.id AS TEXT) ILIKE $${dataParamIdx} OR
+                    v.description ILIKE $${dataParamIdx} OR
+                    wr.address ILIKE $${dataParamIdx} OR
+                    CAST(v.work_request_id AS TEXT) ILIKE $${dataParamIdx}
+                )`);
+                dataParams.push(`%${filter}%`);
+                dataParamIdx++;
             }
             if (dateFrom) {
                 whereClauses.push(`v.created_at >= $${paramIdx}`);
                 params.push(dateFrom);
                 paramIdx++;
+
+                dataWhereClauses.push(`v.created_at >= $${dataParamIdx}`);
+                dataParams.push(dateFrom);
+                dataParamIdx++;
             }
             if (dateTo) {
                 whereClauses.push(`v.created_at <= $${paramIdx}`);
                 params.push(dateTo);
                 paramIdx++;
+
+                dataWhereClauses.push(`v.created_at <= $${dataParamIdx}`);
+                dataParams.push(dateTo);
+                dataParamIdx++;
             }
+
+            if (scopeInfo.apply && !scopeInfo.isGlobal) {
+                const beforeLength = whereClauses.length;
+                const geoAliases = {
+                    zone: 'wr.zone_id',
+                    division: 'wr.division_id',
+                    town: 'wr.town_id',
+                    district: 't.district_id',
+                };
+                paramIdx = appendGeographyFilters(whereClauses, params, paramIdx, scopeInfo.geography, geoAliases);
+                dataParamIdx = appendGeographyFilters(
+                    dataWhereClauses,
+                    dataParams,
+                    dataParamIdx,
+                    scopeInfo.geography,
+                    geoAliases
+                );
+
+                if (whereClauses.length === beforeLength) {
+                    return NextResponse.json({ error: 'User geography not configured for scoped access' }, { status: 403 });
+                }
+            }
+
             if (whereClauses.length > 0) {
                 countQuery += ' WHERE ' + whereClauses.join(' AND ');
-                dataQuery += ' WHERE ' + whereClauses.join(' AND ');
+            }
+            if (dataWhereClauses.length > 0) {
+                dataQuery += ' WHERE ' + dataWhereClauses.join(' AND ');
             }
             dataQuery += ' ORDER BY v.created_at DESC';
             if (limit > 0) {
-                dataQuery += ` LIMIT $${paramIdx} OFFSET $${paramIdx + 1}`;
-                params.push(limit, offset);
+                dataQuery += ` LIMIT $${dataParamIdx} OFFSET $${dataParamIdx + 1}`;
+                dataParams.push(limit, offset);
             }
-            const countResult = await client.query(countQuery, params.slice(0, params.length - (limit > 0 ? 2 : 0)));
+            const countResult = await client.query(countQuery, params);
             const total = parseInt(countResult.rows[0].count, 10);
-            const result = await client.query(dataQuery, params);
+            const result = await client.query(dataQuery, dataParams);
             return NextResponse.json({ data: result.rows, total }, { status: 200 });
         }
     } catch (error) {
@@ -244,6 +422,10 @@ export async function POST(req) {
         for (const file of files) {
             if (!file || file.size === 0) {
                 return NextResponse.json({ error: 'Invalid video file' }, { status: 400 });
+            }
+            // Validate file size (100MB max for videos)
+            if (file.size > 100 * 1024 * 1024) {
+                return NextResponse.json({ error: `File ${file.name}: File size exceeds limit. Maximum allowed: 100MB` }, { status: 400 });
             }
         }
 
@@ -367,6 +549,11 @@ export async function PUT(req) {
 
             // Handle file upload if provided
             if (file && file.size > 0) {
+                // Validate file size (100MB max for videos)
+                if (file.size > 100 * 1024 * 1024) {
+                    return NextResponse.json({ error: 'File size exceeds limit. Maximum allowed: 100MB' }, { status: 400 });
+                }
+
                 const fs = require('fs');
                 const path = require('path');
                 

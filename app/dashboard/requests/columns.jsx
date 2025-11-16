@@ -42,17 +42,44 @@ export const columns = [
     },
   },
   {
-    accessorKey: "town_name",
+    accessorKey: "location_label",
     header: ({ column }) => {
       return (
         <Button
           variant="ghost"
           onClick={() => column.toggleSorting(column.getIsSorted() === "desc")}
         >
-          Town
+          Division / Town
           <ArrowUpDown className="ml-2 h-4 w-4" />
         </Button>
       )
+    },
+    cell: ({ row }) => {
+      const divisionName = row.original.division_name;
+      const townName = row.original.town_name;
+      if (divisionName) {
+        return (
+          <div>
+            <div className="font-medium text-slate-900">{divisionName}</div>
+            {townName && (
+              <div className="text-xs text-slate-500">Linked town: {townName}</div>
+            )}
+          </div>
+        );
+      }
+
+      return townName ? townName : <span className="text-slate-400">—</span>;
+    },
+    sortingFn: (rowA, rowB, columnId) => {
+      const a =
+        rowA.original.division_name ||
+        rowA.original.town_name ||
+        "";
+      const b =
+        rowB.original.division_name ||
+        rowB.original.town_name ||
+        "";
+      return a.localeCompare(b);
     },
   },
   {

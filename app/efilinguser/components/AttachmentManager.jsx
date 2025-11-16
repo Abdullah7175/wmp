@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { useSession } from "next-auth/react";
+import { useEfilingUser } from "@/context/EfilingUserContext";
 import { 
     Paperclip, 
     Upload, 
@@ -22,6 +23,7 @@ import {
 export default function AttachmentManager({ fileId, canEdit = true }) {
     const { toast } = useToast();
     const { data: session } = useSession();
+    const { efilingUserId } = useEfilingUser();
     const [attachments, setAttachments] = useState([]);
     const [loading, setLoading] = useState(false);
     const [showUploadModal, setShowUploadModal] = useState(false);
@@ -73,10 +75,10 @@ export default function AttachmentManager({ fileId, canEdit = true }) {
             return `File type ${file.type} is not allowed. Only PDF, DOC, DOCX, JPG, JPEG, and PNG files are allowed.`;
         }
 
-        // Check file size (10MB limit)
-        const maxSize = 10 * 1024 * 1024; // 10MB
+        // Check file size (5MB limit)
+        const maxSize = 5 * 1024 * 1024; // 5MB
         if (file.size > maxSize) {
-            return `File size ${(file.size / 1024 / 1024).toFixed(2)}MB exceeds the 10MB limit.`;
+            return `File size exceeds limit. Maximum allowed: 5MB`;
         }
 
         return null;
@@ -126,6 +128,15 @@ export default function AttachmentManager({ fileId, canEdit = true }) {
             return;
         }
 
+        if (!efilingUserId) {
+            toast({
+                title: "Cannot upload",
+                description: "Your e-filing profile is not available. Please refresh and try again.",
+                variant: "destructive",
+            });
+            return;
+        }
+
         setUploading(true);
         try {
             const uploadPromises = selectedFiles.map(async (file) => {
@@ -137,7 +148,7 @@ export default function AttachmentManager({ fileId, canEdit = true }) {
                 const response = await fetch('/api/efiling/files/upload-attachment', {
                     method: 'POST',
                     headers: {
-                        'x-user-id': session?.user?.id || 'system'
+                        'x-user-id': efilingUserId || session?.user?.id || 'system'
                     },
                     body: formData,
                 });
@@ -181,11 +192,20 @@ export default function AttachmentManager({ fileId, canEdit = true }) {
             return;
         }
 
+        if (!efilingUserId) {
+            toast({
+                title: "Cannot delete",
+                description: "Your e-filing profile is not available. Please refresh and try again.",
+                variant: "destructive",
+            });
+            return;
+        }
+
         try {
             const response = await fetch(`/api/efiling/files/delete-attachment/${attachmentId}`, {
                 method: 'DELETE',
                 headers: {
-                    'x-user-id': session?.user?.id || 'system'
+                    'x-user-id': efilingUserId || session?.user?.id || 'system'
                 }
             });
 

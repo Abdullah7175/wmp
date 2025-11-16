@@ -167,6 +167,7 @@ function AddVideoPage() {
         data.append("creator_type", "socialmedia");
 
         await uploadFile(video.file, "/api/videos/upload", data, {
+          maxFileSize: 100 * 1024 * 1024, // 100MB max for videos
           onProgress: (progress) => {
             // Calculate overall progress across all files
             const overallProgress = Math.round(((i + progress / 100) / formData.videos.length) * 100);

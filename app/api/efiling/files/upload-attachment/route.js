@@ -26,6 +26,14 @@ export async function POST(request) {
         const fileSize = file.size;
         const fileType = file.type;
         
+        // Validate file size (5MB max for attachments)
+        if (fileSize > 5 * 1024 * 1024) {
+            return NextResponse.json(
+                { error: 'File size exceeds limit. Maximum allowed: 5MB' },
+                { status: 400 }
+            );
+        }
+        
         const attachmentId = Date.now().toString();
         
         const userId = request.headers.get('x-user-id') || 'system';

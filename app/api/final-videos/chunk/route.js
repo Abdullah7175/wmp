@@ -32,11 +32,11 @@ export async function POST(req) {
       return createErrorResponse('Missing required chunk data', 400);
     }
 
-    // Validate file size
-    if (fileSize > UPLOAD_CONFIG.MAX_FILE_SIZE) {
-      return createErrorResponse(`File size exceeds limit of ${UPLOAD_CONFIG.MAX_FILE_SIZE / (1024 * 1024 * 1024)}GB`, 400);
+    // Validate file size (videos can be up to 100MB)
+    if (fileSize > UPLOAD_CONFIG.MAX_VIDEO_SIZE) {
+      return createErrorResponse(`File size exceeds limit of ${UPLOAD_CONFIG.MAX_VIDEO_SIZE / (1024 * 1024)}MB`, 400);
     }
-
+    
     // Validate file extension (since frontend doesn't send fileType)
     const fileExt = fileName.toLowerCase().split('.').pop();
     const allowedExtensions = ['mp4', 'mkv', 'webm', 'avi', 'mov', 'm4v'];
@@ -54,11 +54,19 @@ export async function POST(req) {
     const tempDir = path.join(baseDir, 'temp', 'chunks', uploadId);
     await ensureUploadDir(tempDir);
 
-    // Save chunk
-    const chunkPath = path.join(tempDir, `chunk_${chunkIndex}`);
+    // Read chunk data once
     const arrayBuffer = await chunk.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
     
+    // Validate individual chunk size (chunks should not exceed 10MB each for safety)
+    const chunkSize = buffer.length;
+    const maxChunkSize = 10 * 1024 * 1024; // 10MB max per chunk
+    if (chunkSize > maxChunkSize) {
+      return createErrorResponse(`Chunk size (${(chunkSize / (1024 * 1024)).toFixed(2)}MB) exceeds limit of ${maxChunkSize / (1024 * 1024)}MB`, 400);
+    }
+
+    // Save chunk
+    const chunkPath = path.join(tempDir, `chunk_${chunkIndex}`);
     await fs.writeFile(chunkPath, buffer);
 
     // Always return success for chunks

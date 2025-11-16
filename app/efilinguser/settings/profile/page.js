@@ -7,13 +7,17 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import { UserCheck, Save, ArrowLeft, Eye, EyeOff, Lock } from "lucide-react";
+import { UserCheck, Save, ArrowLeft, Eye, EyeOff, Lock, Pen, Shield, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useEfilingUser } from "@/context/EfilingUserContext";
+import SignatureCanvas from "react-signature-canvas";
+import { useRef } from "react";
 
 export default function ProfileSettings() {
     const { data: session } = useSession();
     const router = useRouter();
     const { toast } = useToast();
+    const { efilingUserId } = useEfilingUser();
     const [loading, setLoading] = useState(false);
     const [profile, setProfile] = useState({
         name: '',
@@ -34,11 +38,56 @@ export default function ProfileSettings() {
         new: false,
         confirm: false
     });
+    
+    // E-Signature management states
+    const [userSignature, setUserSignature] = useState(null);
+    const [showSignatureModal, setShowSignatureModal] = useState(false);
+    const [showAuthModal, setShowAuthModal] = useState(false);
+    const [signatureMethod, setSignatureMethod] = useState("otp");
+    const [otpCode, setOtpCode] = useState("");
+    const [googleAuthCode, setGoogleAuthCode] = useState("");
+    const [otpSent, setOtpSent] = useState(false);
+    const [countdown, setCountdown] = useState(0);
+    const [authLoading, setAuthLoading] = useState(false);
+    const [showEmailRegistration, setShowEmailRegistration] = useState(false);
+    const [registrationEmail, setRegistrationEmail] = useState("");
+    
+    // Signature creation states
+    const [signatureText, setSignatureText] = useState("");
+    const [signatureFont, setSignatureFont] = useState("Arial");
+    const [signatureColor, setSignatureColor] = useState("black");
+    const [scannedSignatureFile, setScannedSignatureFile] = useState(null);
+    const [activeSignatureTab, setActiveSignatureTab] = useState("draw");
+    
+    const sigCanvasRef = useRef(null);
+    
+    const signatureFonts = [
+        { value: "Arial", label: "Arial" },
+        { value: "Times New Roman", label: "Times New Roman" },
+        { value: "Courier New", label: "Courier New" },
+        { value: "Georgia", label: "Georgia" },
+        { value: "Verdana", label: "Verdana" },
+        { value: "Palatino", label: "Palatino" },
+        { value: "Garamond", label: "Garamond" },
+        { value: "Bookman", label: "Bookman" }
+    ];
 
     useEffect(() => {
         if (!session?.user?.id) return;
         fetchProfile();
-    }, [session?.user?.id]);
+        if (efilingUserId) {
+            fetchUserSignature();
+        }
+    }, [session?.user?.id, efilingUserId]);
+    
+    // Countdown timer for OTP
+    useEffect(() => {
+        let timer;
+        if (countdown > 0) {
+            timer = setTimeout(() => setCountdown(countdown - 1), 1000);
+        }
+        return () => clearTimeout(timer);
+    }, [countdown]);
 
     const fetchProfile = async () => {
         try {
@@ -185,6 +234,318 @@ export default function ProfileSettings() {
             ...prev,
             [field]: !prev[field]
         }));
+    };
+    
+    const fetchUserSignature = async () => {
+        if (!efilingUserId) return;
+        try {
+            const response = await fetch(`/api/efiling/signatures/manage?userId=${efilingUserId}`);
+            if (response.ok) {
+                const data = await response.json();
+                const active = data.signatures?.find(sig => sig.is_active);
+                setUserSignature(active || null);
+            }
+        } catch (error) {
+            console.error('Error fetching user signature:', error);
+        }
+    };
+    
+    const sendOTP = async () => {
+        try {
+            setAuthLoading(true);
+            const response = await fetch('/api/efiling/send-otp', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ method: 'sms' })
+            });
+
+            if (response.ok) {
+                setOtpSent(true);
+                setCountdown(60);
+                toast({
+                    title: "OTP Sent",
+                    description: "OTP has been sent to your registered mobile number.",
+                });
+            } else {
+                throw new Error('Failed to send OTP');
+            }
+        } catch (error) {
+            toast({
+                title: "Error",
+                description: "Failed to send OTP. Please try again.",
+                variant: "destructive",
+            });
+        } finally {
+            setAuthLoading(false);
+        }
+    };
+    
+    const verifyAuthentication = async () => {
+        try {
+            setAuthLoading(true);
+            
+            let response;
+            
+            if (signatureMethod === 'googleOAuth') {
+                response = await fetch('/api/efiling/google-auth', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        email: googleAuthCode,
+                        userId: session?.user?.id
+                    })
+                });
+
+                if (response.status === 402) {
+                    const errorData = await response.json();
+                    setShowEmailRegistration(true);
+                    setRegistrationEmail(googleAuthCode);
+                    setAuthLoading(false);
+                    return;
+                }
+            } else {
+                response = await fetch('/api/efiling/verify-auth', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        method: signatureMethod,
+                        code: signatureMethod === 'otp' ? otpCode : googleAuthCode
+                    })
+                });
+            }
+
+            if (response.ok) {
+                setShowAuthModal(false);
+                setOtpCode("");
+                setGoogleAuthCode("");
+                setShowSignatureModal(true);
+                toast({
+                    title: "Authentication Successful",
+                    description: "Your identity has been verified.",
+                });
+            } else {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Authentication failed');
+            }
+        } catch (error) {
+            toast({
+                title: "Authentication Failed",
+                description: error.message || "Invalid code. Please try again.",
+                variant: "destructive",
+            });
+        } finally {
+            setAuthLoading(false);
+        }
+    };
+    
+    const registerGoogleEmail = async () => {
+        try {
+            setAuthLoading(true);
+            
+            const response = await fetch('/api/efiling/google-auth', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    email: registrationEmail,
+                    userId: session?.user?.id
+                })
+            });
+
+            if (response.ok) {
+                setShowEmailRegistration(false);
+                setRegistrationEmail("");
+                
+                toast({
+                    title: "Email Registered",
+                    description: "Your Google email has been registered successfully.",
+                });
+                
+                setGoogleAuthCode(registrationEmail);
+                await verifyAuthentication();
+            } else {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Failed to register email');
+            }
+        } catch (error) {
+            toast({
+                title: "Registration Failed",
+                description: error.message || "Failed to register Google email. Please try again.",
+                variant: "destructive",
+            });
+        } finally {
+            setAuthLoading(false);
+        }
+    };
+    
+    const handleChangeSignature = () => {
+        setShowAuthModal(true);
+    };
+    
+    const handleDrawnSignature = async () => {
+        if (!sigCanvasRef.current || !efilingUserId) return;
+        
+        try {
+            const canvas = sigCanvasRef.current.getCanvas();
+            const ctx = canvas.getContext('2d');
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const hasContent = imageData.data.some(channel => channel !== 0);
+
+            if (!hasContent) {
+                toast({
+                    title: "No Signature",
+                    description: "Please draw a signature first.",
+                    variant: "destructive",
+                });
+                return;
+            }
+
+            // Apply color filter
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = canvas.width;
+            tempCanvas.height = canvas.height;
+            const tempCtx = tempCanvas.getContext('2d');
+            tempCtx.putImageData(imageData, 0, 0);
+            
+            const colorMap = {
+                'black': { r: 0, g: 0, b: 0 },
+                'blue': { r: 0, g: 0, b: 255 },
+                'red': { r: 255, g: 0, b: 0 }
+            };
+            const targetColor = colorMap[signatureColor] || colorMap['black'];
+            
+            const imgData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
+            const data = imgData.data;
+            for (let i = 0; i < data.length; i += 4) {
+                if (data[i + 3] > 0) {
+                    data[i] = targetColor.r;
+                    data[i + 1] = targetColor.g;
+                    data[i + 2] = targetColor.b;
+                }
+            }
+            tempCtx.putImageData(imgData, 0, 0);
+            
+            const dataURL = tempCanvas.toDataURL("image/png");
+            
+            const uploadResponse = await fetch('/api/efiling/signatures/upload', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    signatureData: dataURL,
+                    userId: efilingUserId,
+                    userName: session?.user?.name,
+                    signatureType: 'drawn',
+                    signatureColor: signatureColor
+                }),
+            });
+
+            if (uploadResponse.ok) {
+                await fetchUserSignature();
+                setShowSignatureModal(false);
+                toast({
+                    title: "Signature Updated",
+                    description: "Your signature has been updated successfully.",
+                });
+            } else {
+                throw new Error('Failed to upload signature');
+            }
+        } catch (error) {
+            console.error('Error updating signature:', error);
+            toast({
+                title: "Error",
+                description: "Failed to update signature. Please try again.",
+                variant: "destructive",
+            });
+        }
+    };
+    
+    const handleTypedSignature = async () => {
+        if (!signatureText.trim() || !efilingUserId) return;
+        
+        try {
+            const uploadResponse = await fetch('/api/efiling/signatures/upload', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    signatureText: signatureText,
+                    signatureFont: signatureFont,
+                    signatureColor: signatureColor,
+                    userId: efilingUserId,
+                    userName: session?.user?.name,
+                    signatureType: 'typed'
+                }),
+            });
+
+            if (uploadResponse.ok) {
+                await fetchUserSignature();
+                setShowSignatureModal(false);
+                toast({
+                    title: "Signature Updated",
+                    description: "Your signature has been updated successfully.",
+                });
+            } else {
+                throw new Error('Failed to upload signature');
+            }
+        } catch (error) {
+            console.error('Error updating signature:', error);
+            toast({
+                title: "Error",
+                description: "Failed to update signature. Please try again.",
+                variant: "destructive",
+            });
+        }
+    };
+    
+    const handleFileUpload = (event) => {
+        const file = event.target.files[0];
+        if (file && file.type.startsWith('image/')) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                setScannedSignatureFile(e.target.result);
+            };
+            reader.readAsDataURL(file);
+        } else {
+            toast({
+                title: "Invalid File",
+                description: "Please upload an image file.",
+                variant: "destructive",
+            });
+        }
+    };
+    
+    const handleScannedSignature = async () => {
+        if (!scannedSignatureFile || !efilingUserId) return;
+        
+        try {
+            const uploadResponse = await fetch('/api/efiling/signatures/upload', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    signatureData: scannedSignatureFile,
+                    userId: efilingUserId,
+                    userName: session?.user?.name,
+                    signatureType: 'scanned',
+                    signatureColor: signatureColor
+                }),
+            });
+
+            if (uploadResponse.ok) {
+                await fetchUserSignature();
+                setShowSignatureModal(false);
+                toast({
+                    title: "Signature Updated",
+                    description: "Your signature has been updated successfully.",
+                });
+            } else {
+                throw new Error('Failed to upload signature');
+            }
+        } catch (error) {
+            console.error('Error updating signature:', error);
+            toast({
+                title: "Error",
+                description: "Failed to update signature. Please try again.",
+                variant: "destructive",
+            });
+        }
     };
 
     return (
@@ -425,7 +786,386 @@ export default function ProfileSettings() {
                         </form>
                     </CardContent>
                 </Card>
+                
+                {/* E-Signature Management */}
+                <Card className="lg:col-span-2">
+                    <CardHeader>
+                        <CardTitle className="flex items-center">
+                            <Shield className="w-5 h-5 mr-2" />
+                            E-Signature Management
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        {userSignature ? (
+                            <div className="space-y-4">
+                                <div className="border rounded-lg p-4 bg-gray-50">
+                                    <Label className="text-sm font-medium mb-2 block">Your Current Signature</Label>
+                                    <div className="flex items-center gap-4">
+                                        <div className="border rounded bg-white p-2 flex items-center justify-center" style={{ minWidth: '200px', minHeight: '80px' }}>
+                                            {userSignature.signature_type === 'typed' ? (
+                                                <span 
+                                                    className="text-2xl font-bold"
+                                                    style={{ 
+                                                        fontFamily: userSignature.signature_font || signatureFont,
+                                                        color: userSignature.signature_color === 'black' ? '#000' : userSignature.signature_color === 'blue' ? '#2563eb' : '#dc2626'
+                                                    }}
+                                                >
+                                                    {userSignature.signature_text}
+                                                </span>
+                                            ) : (
+                                                <img
+                                                    src={userSignature.file_url || userSignature.signature_data}
+                                                    alt="Signature"
+                                                    className="max-h-16 max-w-48 object-contain"
+                                                />
+                                            )}
+                                        </div>
+                                        <div className="flex-1">
+                                            <p className="text-sm text-gray-600 mb-2">
+                                                Type: {userSignature.signature_type} • Color: {userSignature.signature_color || 'black'}
+                                            </p>
+                                            <Button onClick={handleChangeSignature} variant="outline">
+                                                <Pen className="w-4 h-4 mr-2" />
+                                                Change Signature
+                                            </Button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="text-center py-8">
+                                <p className="text-gray-600 mb-4">You don't have a signature yet.</p>
+                                <Button onClick={handleChangeSignature}>
+                                    <Pen className="w-4 h-4 mr-2" />
+                                    Create E-Signature
+                                </Button>
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
             </div>
+            
+            {/* Authentication Modal */}
+            {showAuthModal && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                    <Card className="w-full max-w-md">
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2">
+                                <Shield className="w-5 h-5" />
+                                Verify Your Identity
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                            <div className="space-y-4">
+                                <div>
+                                    <Label>Authentication Method</Label>
+                                    <select
+                                        value={signatureMethod}
+                                        onChange={(e) => setSignatureMethod(e.target.value)}
+                                        className="w-full p-2 border rounded-md mt-1"
+                                    >
+                                        <option value="otp">SMS OTP</option>
+                                        <option value="google">Google Authenticator</option>
+                                        <option value="googleOAuth">Google OAuth</option>
+                                    </select>
+                                </div>
+
+                                {signatureMethod === 'otp' && (
+                                    <div className="space-y-2">
+                                        <div className="flex justify-between items-center">
+                                            <Label htmlFor="otpCode">OTP Code</Label>
+                                            {!otpSent && (
+                                                <Button 
+                                                    variant="outline" 
+                                                    size="sm" 
+                                                    onClick={sendOTP}
+                                                    disabled={authLoading || countdown > 0}
+                                                >
+                                                    {countdown > 0 ? `Resend in ${countdown}s` : "Send OTP"}
+                                                </Button>
+                                            )}
+                                        </div>
+                                        <Input
+                                            id="otpCode"
+                                            value={otpCode}
+                                            onChange={(e) => setOtpCode(e.target.value)}
+                                            placeholder="Enter 6-digit OTP"
+                                            maxLength={6}
+                                        />
+                                    </div>
+                                )}
+
+                                {signatureMethod === 'google' && (
+                                    <div>
+                                        <Label htmlFor="googleAuthCode">Google Authenticator Code</Label>
+                                        <Input
+                                            id="googleAuthCode"
+                                            value={googleAuthCode}
+                                            onChange={(e) => setGoogleAuthCode(e.target.value)}
+                                            placeholder="Enter 6-digit code"
+                                            maxLength={6}
+                                        />
+                                    </div>
+                                )}
+
+                                {signatureMethod === 'googleOAuth' && (
+                                    <div>
+                                        <Label htmlFor="googleEmail">Email Address</Label>
+                                        <Input
+                                            id="googleEmail"
+                                            type="email"
+                                            placeholder="Enter your Google account email"
+                                            onChange={(e) => setGoogleAuthCode(e.target.value)}
+                                        />
+                                        <p className="text-sm text-gray-500 mt-1">
+                                            Enter the email address associated with your Google account
+                                        </p>
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="flex justify-end gap-2 pt-4">
+                                <Button variant="outline" onClick={() => setShowAuthModal(false)}>
+                                    Cancel
+                                </Button>
+                                <Button 
+                                    onClick={verifyAuthentication}
+                                    disabled={authLoading || (signatureMethod === 'otp' && !otpCode) || (signatureMethod === 'google' && !googleAuthCode) || (signatureMethod === 'googleOAuth' && !googleAuthCode)}
+                                >
+                                    {authLoading ? "Verifying..." : "Verify"}
+                                </Button>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </div>
+            )}
+            
+            {/* Signature Creation Modal */}
+            {showSignatureModal && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                    <Card className="w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+                            <CardTitle>Change E-Signature</CardTitle>
+                            <Button variant="ghost" size="sm" onClick={() => {
+                                setShowSignatureModal(false);
+                                setActiveSignatureTab("draw");
+                            }}>
+                                <X className="w-4 h-4" />
+                            </Button>
+                        </CardHeader>
+                        <CardContent className="space-y-6">
+                            <div className="flex space-x-2 border-b">
+                                <Button
+                                    variant={activeSignatureTab === "draw" ? "default" : "ghost"}
+                                    onClick={() => setActiveSignatureTab("draw")}
+                                    className="flex items-center gap-2"
+                                >
+                                    <Pen className="w-4 h-4" />
+                                    Draw Signature
+                                </Button>
+                                <Button
+                                    variant={activeSignatureTab === "type" ? "default" : "ghost"}
+                                    onClick={() => setActiveSignatureTab("type")}
+                                    className="flex items-center gap-2"
+                                >
+                                    <Pen className="w-4 h-4" />
+                                    Type Signature
+                                </Button>
+                                <Button
+                                    variant={activeSignatureTab === "scan" ? "default" : "ghost"}
+                                    onClick={() => setActiveSignatureTab("scan")}
+                                    className="flex items-center gap-2"
+                                >
+                                    <Shield className="w-4 h-4" />
+                                    Upload Scanned
+                                </Button>
+                            </div>
+
+                            {activeSignatureTab === "draw" && (
+                                <div className="space-y-4">
+                                    <div>
+                                        <Label>Signature Color</Label>
+                                        <div className="flex gap-2 mt-2">
+                                            {['black', 'blue', 'red'].map((color) => (
+                                                <Button
+                                                    key={color}
+                                                    type="button"
+                                                    variant={signatureColor === color ? "default" : "outline"}
+                                                    onClick={() => {
+                                                        setSignatureColor(color);
+                                                        if (sigCanvasRef.current) {
+                                                            sigCanvasRef.current.penColor = color;
+                                                        }
+                                                    }}
+                                                    className="capitalize"
+                                                    style={signatureColor === color ? {
+                                                        backgroundColor: color === 'black' ? '#000' : color === 'blue' ? '#2563eb' : '#dc2626',
+                                                        color: 'white'
+                                                    } : {}}
+                                                >
+                                                    {color}
+                                                </Button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                    <div className="border-2 border-dashed border-gray-300 rounded-lg p-4">
+                                        <Label>Draw Your Signature</Label>
+                                        <SignatureCanvas
+                                            ref={sigCanvasRef}
+                                            penColor={signatureColor}
+                                            canvasProps={{
+                                                width: 400,
+                                                height: 150,
+                                                className: "border rounded mx-auto mt-2"
+                                            }}
+                                        />
+                                        <div className="flex gap-2 justify-center mt-2">
+                                            <Button 
+                                                variant="outline" 
+                                                size="sm"
+                                                onClick={() => sigCanvasRef.current?.clear()}
+                                            >
+                                                Clear
+                                            </Button>
+                                        </div>
+                                    </div>
+                                    <div className="flex justify-end">
+                                        <Button onClick={handleDrawnSignature} className="bg-blue-600 hover:bg-blue-700">
+                                            Save Signature
+                                        </Button>
+                                    </div>
+                                </div>
+                            )}
+
+                            {activeSignatureTab === "type" && (
+                                <div className="space-y-4">
+                                    <div>
+                                        <Label htmlFor="signatureText">Signature Text</Label>
+                                        <Input
+                                            id="signatureText"
+                                            value={signatureText}
+                                            onChange={(e) => setSignatureText(e.target.value)}
+                                            placeholder="Enter your signature text"
+                                            className="mt-1"
+                                        />
+                                    </div>
+                                    <div>
+                                        <Label htmlFor="signatureFont">Signature Font</Label>
+                                        <select
+                                            id="signatureFont"
+                                            value={signatureFont}
+                                            onChange={(e) => setSignatureFont(e.target.value)}
+                                            className="w-full p-2 border rounded-md mt-1"
+                                        >
+                                            {signatureFonts.map((font) => (
+                                                <option key={font.value} value={font.value}>
+                                                    {font.label}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <Label>Signature Color</Label>
+                                        <div className="flex gap-2 mt-2">
+                                            {['black', 'blue', 'red'].map((color) => (
+                                                <Button
+                                                    key={color}
+                                                    type="button"
+                                                    variant={signatureColor === color ? "default" : "outline"}
+                                                    onClick={() => setSignatureColor(color)}
+                                                    className="capitalize"
+                                                    style={signatureColor === color ? {
+                                                        backgroundColor: color === 'black' ? '#000' : color === 'blue' ? '#2563eb' : '#dc2626',
+                                                        color: 'white'
+                                                    } : {}}
+                                                >
+                                                    {color}
+                                                </Button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                    {signatureText && (
+                                        <div className="text-center p-4 border rounded-lg">
+                                            <Label>Preview:</Label>
+                                            <div
+                                                className="text-3xl font-bold mt-2"
+                                                style={{ 
+                                                    fontFamily: signatureFont,
+                                                    color: signatureColor === 'black' ? '#000' : signatureColor === 'blue' ? '#2563eb' : '#dc2626'
+                                                }}
+                                            >
+                                                {signatureText}
+                                            </div>
+                                        </div>
+                                    )}
+                                    <div className="flex justify-end">
+                                        <Button onClick={handleTypedSignature} disabled={!signatureText.trim()}>
+                                            Save Signature
+                                        </Button>
+                                    </div>
+                                </div>
+                            )}
+
+                            {activeSignatureTab === "scan" && (
+                                <div className="space-y-4">
+                                    <div>
+                                        <Label htmlFor="scannedSignature">Upload Scanned Signature</Label>
+                                        <Input
+                                            id="scannedSignature"
+                                            type="file"
+                                            accept="image/*"
+                                            onChange={handleFileUpload}
+                                            className="mt-1"
+                                        />
+                                    </div>
+                                    {scannedSignatureFile && (
+                                        <div className="text-center">
+                                            <Label>Preview:</Label>
+                                            <img
+                                                src={scannedSignatureFile}
+                                                alt="Scanned signature"
+                                                className="mx-auto mt-2 border rounded max-w-xs"
+                                            />
+                                        </div>
+                                    )}
+                                    <div className="flex justify-end">
+                                        <Button onClick={handleScannedSignature} disabled={!scannedSignatureFile}>
+                                            Save Signature
+                                        </Button>
+                                    </div>
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
+                </div>
+            )}
+            
+            {/* Email Registration Modal */}
+            {showEmailRegistration && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]">
+                    <Card className="w-full max-w-md">
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2">
+                                <Shield className="w-5 h-5" />
+                                Register Your Google Email
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                            <p className="text-sm text-gray-700">
+                                Please register this email address ({registrationEmail}) to complete your Google authentication.
+                            </p>
+                            <div className="flex justify-end gap-2">
+                                <Button variant="outline" onClick={() => setShowEmailRegistration(false)}>
+                                    Cancel
+                                </Button>
+                                <Button onClick={registerGoogleEmail} disabled={authLoading}>
+                                    {authLoading ? "Registering..." : "Register Email"}
+                                </Button>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </div>
+            )}
         </div>
     );
 } 

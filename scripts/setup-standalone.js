@@ -1,5 +1,25 @@
-const fs = require('fs-extra');
+const fs = require('fs');
+const fsp = require('fs').promises;
 const path = require('path');
+
+/**
+ * Recursively copy directory
+ */
+async function copyDir(src, dest) {
+  await fsp.mkdir(dest, { recursive: true });
+  const entries = await fsp.readdir(src, { withFileTypes: true });
+
+  for (const entry of entries) {
+    const srcPath = path.join(src, entry.name);
+    const destPath = path.join(dest, entry.name);
+
+    if (entry.isDirectory()) {
+      await copyDir(srcPath, destPath);
+    } else {
+      await fsp.copyFile(srcPath, destPath);
+    }
+  }
+}
 
 async function setupStandalone() {
   console.log('🔧 Setting up standalone deployment...');
@@ -20,12 +40,12 @@ async function setupStandalone() {
     
     // Create .next directory in standalone if it doesn't exist
     const standaloneNextDir = path.join(standaloneDir, '.next');
-    await fs.ensureDir(standaloneNextDir);
+    await fsp.mkdir(standaloneNextDir, { recursive: true });
 
     // Copy static files
     if (fs.existsSync(staticDir)) {
       const targetStaticDir = path.join(standaloneNextDir, 'static');
-      await fs.copy(staticDir, targetStaticDir, { overwrite: true });
+      await copyDir(staticDir, targetStaticDir);
       console.log('✅ Static files copied');
     } else {
       console.warn('⚠️  Static directory not found');
@@ -34,7 +54,7 @@ async function setupStandalone() {
     // Copy public files
     if (fs.existsSync(publicDir)) {
       const targetPublicDir = path.join(standaloneDir, 'public');
-      await fs.copy(publicDir, targetPublicDir, { overwrite: true });
+      await copyDir(publicDir, targetPublicDir);
       console.log('✅ Public files copied');
     } else {
       console.warn('⚠️  Public directory not found');
@@ -50,4 +70,3 @@ async function setupStandalone() {
 }
 
 setupStandalone();
-

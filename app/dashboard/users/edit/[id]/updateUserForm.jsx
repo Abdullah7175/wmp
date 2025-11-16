@@ -138,6 +138,16 @@ const UserForm = () => {
     const handleImageChange = (event) => {
         const file = event.currentTarget.files[0];
         if (file) {
+            // Validate file size (5MB max for profile images)
+            if (file.size > 5 * 1024 * 1024) {
+                toast({
+                    title: "Invalid File",
+                    description: "File size exceeds limit. Maximum allowed: 5MB",
+                    variant: "destructive",
+                });
+                event.target.value = ''; // Clear the input
+                return;
+            }
             formik.setFieldValue('image', file);
             const reader = new FileReader();
             reader.onload = () => {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -8,22 +8,18 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { 
-    Plus, 
-    Search, 
-    Filter, 
-    FileText, 
-    Edit, 
-    Eye, 
-    Send, 
-    CheckCircle, 
-    Clock, 
+import { Label } from "@/components/ui/label";
+import {
+    Plus,
+    Search,
+    FileText,
+    Eye,
+    CheckCircle,
+    Clock,
     AlertCircle,
-    Building2,
-    User,
     Calendar,
-    ArrowRight,
-    FileEdit
+    FileEdit,
+    Send
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { logEfilingUserAction, EFILING_ACTIONS } from '@/lib/efilingUserActionLogger';
@@ -36,248 +32,66 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Pagination } from "@/components/ui/pagination";
+import MarkToModal from "../components/MarkToModal";
+import { useEfilingUser } from "@/context/EfilingUserContext";
 
 export default function FilesPage() {
     const { data: session } = useSession();
     const router = useRouter();
     const { toast } = useToast();
-    const [files, setFiles] = useState([]);
+    const { efilingUserId, profile: userProfile, isGlobal } = useEfilingUser();
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
     const [departmentFilter, setDepartmentFilter] = useState('all');
-    const [filteredFiles, setFilteredFiles] = useState([]);
     const [departments, setDepartments] = useState([]);
     const [statuses, setStatuses] = useState([]);
-    const [profile, setProfile] = useState(null);
     const [myFiles, setMyFiles] = useState([]);
     const [assignedToMe, setAssignedToMe] = useState([]);
-    
-    // Pagination state
+    const [activeTab, setActiveTab] = useState('mine');
     const [currentPage, setCurrentPage] = useState(1);
-    const [itemsPerPage, setItemsPerPage] = useState(5);
-
-    // Assign modal state
-    const [assignOpen, setAssignOpen] = useState(false);
-    const [assignFileId, setAssignFileId] = useState(null);
-    const [candidateUsers, setCandidateUsers] = useState([]);
-    const [selectedToUserId, setSelectedToUserId] = useState('');
-
-    const ROLE = { XEN: 18, SE: 19, CE: 25, COO: 26, CEO: 24, PC: 28, IAO_II: 27, BUDGET: 31, ADLFA: 30, FINANCE: 29 };
-
-    const filterFilesByDepartment = (files, userProfile) => {
-        if (!userProfile) return files;
-        
-        const userRole = userProfile.efiling_role?.code;
-        const userDepartment = userProfile.department_id;
-        
-        console.log('Filtering files for user:', {
-            userDepartment,
-            userRole,
-            totalFiles: files.length,
-            fileTypes: files.map(f => ({ id: f.id, file_type_code: f.file_type_code, file_type_id: f.file_type_id }))
-        });
-        
-        // TEMPORARILY DISABLE DEPARTMENT FILTERING TO DEBUG
-        console.log('Department filtering temporarily disabled for debugging');
-        return files;
-        
-        // Water department users can only see water files
-        if ([6, 7, 8, 9].includes(userDepartment)) {
-            const filtered = files.filter(file => ['WB', 'WTM', 'WD', 'WE_EM'].includes(file.file_type_code));
-            console.log('Water dept filter applied:', {
-                original: files.length,
-                filtered: filtered.length
-            });
-            return filtered;
-        }
-        
-        // Sewerage department users can only see sewerage files
-        if ([10, 19].includes(userDepartment)) {
-            const filtered = files.filter(file => ['SEP', 'SEW_EM'].includes(file.file_type_code));
-            console.log('Sewerage dept filter applied:', {
-                original: files.length,
-                filtered: filtered.length
-            });
-            return filtered;
-        }
-        
-        // Admin users can see all files
-        if (userRole === 'SYS_ADMIN') {
-            return files;
-        }
-        
-        return files;
-    };
-
-    const getRoleDisplayName = (roleCode) => {
-        const roleMap = {
-            'WAT_XEN_MMB': 'XEN MIR BAHAR',
-            'WAT_XEN_SHAH': 'XEN SHAHFAISAL',
-            'WAT_XEN_KOR': 'XEN KORANGI',
-            'WAT_XEN_NAZ': 'XEN NAZIMABAD',
-            'WAT_XEN_LIA': 'XEN LIAQATABAD',
-            'WAT_XEN_JIN': 'XEN JINNAH',
-            'WAT_XEN_NN': 'XEN NORTH NAZIMABAD',
-            'WAT_XEN_MAL': 'XEN MALIR',
-            'WAT_XEN_CHE': 'XEN CHANESAR',
-            'WAT_XEN_GULS': 'XEN GULSHANIQBAL',
-            'WAT_XEN_SAD': 'XEN SADDAR',
-            'WAT_XEN_MAN': 'XEN MANGOPIR',
-            'WAT_XEN_LAN': 'XEN LANDHI',
-            'WAT_XEN_MOM': 'XEN MOMINABAD',
-            'WAT_XEN_BAL': 'XEN BALDIA',
-            'WAT_XEN_NK': 'XEN NEWKARACHI',
-            'WAT_XEN_MOD': 'XEN MODEL',
-            'WAT_XEN_LIAR': 'XEN LIARI',
-            'WAT_XEN_KEA': 'XEN KEAMARI',
-            'WAT_XEN_GAD': 'XEN GADAP',
-            'WAT_XEN_CLI': 'XEN CLIFTON',
-            'WAT_XEN_IH': 'XEN IBRAHIM HYDERI',
-            'WAT_XEN_ORA': 'XEN ORANGI',
-            'WAT_XEN_SAF': 'XEN SAFOORA',
-            'WAT_XEN_SOG': 'XEN SOHRAB GOTH',
-            'SEW_XEN_MMB': 'SEW XEN MIR BAHAR',
-            'SEW_XEN_SHAH': 'SEW XEN SHAHFAISAL',
-            'SEW_XEN_KOR': 'SEW XEN KORANGI',
-            'SEW_XEN_NAZ': 'SEW XEN NAZIMABAD',
-            'SEW_XEN_LIA': 'SEW XEN LIAQATABAD',
-            'SEW_XEN_JIN': 'SEW XEN JINNAH',
-            'SEW_XEN_NN': 'SEW XEN NORTH NAZIMABAD',
-            'SEW_XEN_MAL': 'SEW XEN MALIR',
-            'SEW_XEN_CHE': 'SEW XEN CHANESAR',
-            'SEW_XEN_GULS': 'SEW XEN GULSHANIQBAL',
-            'SEW_XEN_SAD': 'SEW XEN SADDAR',
-            'SEW_XEN_MAN': 'SEW XEN MANGOPIR',
-            'SEW_XEN_LAN': 'SEW XEN LANDHI',
-            'SEW_XEN_MOM': 'SEW XEN MOMINABAD',
-            'SEW_XEN_BAL': 'SEW XEN BALDIA',
-            'SEW_XEN_NK': 'SEW XEN NEWKARACHI',
-            'SEW_XEN_MOD': 'SEW XEN MODEL',
-            'SEW_XEN_LIAR': 'SEW XEN LIARI',
-            'SEW_XEN_KEA': 'SEW XEN KEAMARI',
-            'SEW_XEN_GAD': 'SEW XEN GADAP',
-            'SEW_XEN_CLI': 'SEW XEN CLIFTON',
-            'SEW_XEN_IH': 'SEW XEN IBRAHIM HYDERI',
-            'SEW_XEN_ORA': 'SEW XEN ORANGI',
-            'SEW_XEN_SAF': 'SEW XEN SAFOORA',
-            'SEW_XEN_SOG': 'SEW XEN SOHRAB GOTH',
-            'SE_CEN': 'SE CENTRAL',
-            'SE_EAST': 'SE EAST',
-            'SE_WEST': 'SE WEST',
-            'SE_SOUTH': 'SE SOUTH',
-            'SE_KOR': 'SE KORANGI',
-            'SE_MAL': 'SE MALIR',
-            'SE_KEA': 'SE KEAMARI',
-            'CE_WAT': 'CE WATER',
-            'CE_SEW': 'CE SEWERAGE',
-            'COO': 'COO',
-            'CEO': 'CEO',
-            'PC': 'PC',
-            'IAO_II': 'IAO II',
-            'BUDGET': 'BUDGET',
-            'ADLFA': 'ADLFA',
-            'FINANCE': 'FINANCE',
-            'CON_': 'CONSULTANT'
-        };
-        
-        return roleMap[roleCode] || roleCode;
-    };
+    const [itemsPerPage, setItemsPerPage] = useState(10);
+    const [markModalFile, setMarkModalFile] = useState(null);
 
     useEffect(() => {
-        if (session?.user?.id) {
-            fetchProfile();
-        }
-    }, [session?.user?.id]);
-
-    const fetchProfile = async () => {
-        try {
-            const res = await fetch(`/api/efiling/users/profile?userId=${session.user.id}`);
-            if (res.ok) {
-                const p = await res.json();
-                setProfile(p);
-            }
-        } catch (e) {
-            console.error('Failed to load profile', e);
-        }
-    };
-
-    useEffect(() => {
-        if (session?.user?.id) {
+        if (efilingUserId) {
             fetchFiles();
-            fetchDepartments();
-            fetchStatuses();
         }
-    }, [session?.user?.id]);
+    }, [efilingUserId]);
 
     useEffect(() => {
-        filterFiles();
-    }, [searchTerm, statusFilter, departmentFilter, files]);
+        fetchDepartments();
+        fetchStatuses();
+    }, []);
 
     useEffect(() => {
-        setCurrentPage(1); // Reset to first page when filters change
-    }, [searchTerm, statusFilter, departmentFilter]);
+        setCurrentPage(1);
+    }, [searchTerm, statusFilter, departmentFilter, activeTab]);
 
     const fetchFiles = async () => {
+        if (!efilingUserId) return;
         setLoading(true);
         try {
-            // First, get the efiling_users.id for this user
-            const userMappingRes = await fetch(`/api/efiling/users/profile?userId=${session.user.id}`);
-            let efilingUserId = session.user.id; // fallback
-            let userProfile = null;
-            
-            if (userMappingRes.ok) {
-                const userMapping = await userMappingRes.json();
-                efilingUserId = userMapping.efiling_user_id || session.user.id;
-                userProfile = userMapping;
-                console.log('Files page - Mapped user ID:', session.user.id, 'to efiling user ID:', efilingUserId);
-            }
-            
-            // Fetch user's created files and assigned files using efiling_users.id
-            console.log('Fetching files for efiling user ID:', efilingUserId);
-            const [myFilesRes, assignedFilesRes] = await Promise.all([
-                fetch(`/api/efiling/files?created_by=${efilingUserId}`),
-                fetch(`/api/efiling/files?assigned_to=${efilingUserId}`)
+            const [createdRes, assignedRes] = await Promise.all([
+                fetch(`/api/efiling/files?created_by=${efilingUserId}&limit=200`),
+                fetch(`/api/efiling/files?assigned_to=${efilingUserId}&limit=200`)
             ]);
 
-            console.log('API Response Status - My Files:', myFilesRes.status);
-            console.log('API Response Status - Assigned Files:', assignedFilesRes.status);
+            const createdJson = createdRes.ok ? await createdRes.json() : { files: [] };
+            const assignedJson = assignedRes.ok ? await assignedRes.json() : { files: [] };
 
-            const myFiles = myFilesRes.ok ? await myFilesRes.json() : { files: [] };
-            const assignedFiles = assignedFilesRes.ok ? await assignedFilesRes.json() : { files: [] };
-            
-            console.log('Raw API Response - My Files:', myFiles);
-            console.log('Raw API Response - Assigned Files:', assignedFiles);
-            
-            // Filter files based on user's department and role
-            const filteredMyFiles = filterFilesByDepartment(myFiles.files || [], userProfile);
-            const filteredAssignedFiles = filterFilesByDepartment(assignedFiles.files || [], userProfile);
-            
-            const isAdmin = session?.user?.role === 1;
-            const enrich = (arr) => (arr || []).map(f => ({
-                ...f,
-                is_admin: isAdmin,
-                is_creator: f.created_by === efilingUserId
-            }));
+            const createdList = Array.isArray(createdJson.files) ? createdJson.files : [];
+            const assignedList = Array.isArray(assignedJson.files) ? assignedJson.files : [];
 
-            setMyFiles(enrich(filteredMyFiles));
-            setAssignedToMe(enrich(filteredAssignedFiles));
-            
-            // Combine and deduplicate files for unified filtering if needed
-            const allFiles = [...enrich(filteredMyFiles), ...enrich(filteredAssignedFiles)];
-            const uniqueFiles = allFiles.filter((file, index, self) => 
-                index === self.findIndex(f => f.id === file.id)
-            );
-            
-            console.log('My files fetched from API:', uniqueFiles);
-            setFiles(uniqueFiles);
-            
-            // Log files access
+            setMyFiles(createdList);
+            setAssignedToMe(assignedList);
+
             if (session?.user?.id) {
+                const uniqueCount = new Set([...createdList, ...assignedList].map((file) => file.id)).size;
                 logEfilingUserAction({
                     user_id: session.user.id,
                     action_type: EFILING_ACTIONS.FILE_VIEWED,
-                    description: `Accessed files list - found ${uniqueFiles.length} files`,
+                    description: `Accessed files list - found ${uniqueCount} files`,
                     entity_type: 'files_list',
                     entity_name: 'My Files List'
                 });
@@ -318,33 +132,22 @@ export default function FilesPage() {
         }
     };
 
-    const filterFiles = () => {
-        let filtered = files;
+    const filterRows = (rows) => {
+        return rows.filter((file) => {
+            const matchesSearch = searchTerm
+                ? [file.file_number, file.subject, file.department_name, file.category_name]
+                    .some((value) => (value || "").toString().toLowerCase().includes(searchTerm.toLowerCase()))
+                : true;
 
-        if (searchTerm) {
-            filtered = filtered.filter(file =>
-                file.file_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                file.subject?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                file.department_name?.toLowerCase().includes(searchTerm.toLowerCase())
-            );
-        }
+            const matchesStatus = statusFilter === 'all' || String(file.status_id) === String(statusFilter);
+            const matchesDepartment = departmentFilter === 'all' || String(file.department_id) === String(departmentFilter);
 
-        if (statusFilter && statusFilter !== 'all') {
-            filtered = filtered.filter(file => file.status_id == statusFilter);
-        }
-
-        if (departmentFilter && departmentFilter !== 'all') {
-            filtered = filtered.filter(file => file.department_id == departmentFilter);
-        }
-
-        setFilteredFiles(filtered);
+            return matchesSearch && matchesStatus && matchesDepartment;
+        });
     };
 
-    // Calculate pagination
-    const totalPages = Math.ceil(filteredFiles.length / itemsPerPage);
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    const endIndex = startIndex + itemsPerPage;
-    const paginatedFiles = filteredFiles.slice(startIndex, endIndex);
+    const filteredMyFiles = useMemo(() => filterRows(myFiles), [myFiles, searchTerm, statusFilter, departmentFilter]);
+    const filteredAssignedFiles = useMemo(() => filterRows(assignedToMe), [assignedToMe, searchTerm, statusFilter, departmentFilter]);
 
     const handlePageChange = (page) => {
         setCurrentPage(page);
@@ -355,7 +158,8 @@ export default function FilesPage() {
         setCurrentPage(1);
     };
 
-    const getStatusBadge = (status) => {
+    const getStatusBadge = (file) => {
+        const status = file.status_code;
         const statusConfig = {
             'DRAFT': { variant: 'secondary', icon: FileText },
             'IN_PROGRESS': { variant: 'default', icon: Clock },
@@ -369,95 +173,33 @@ export default function FilesPage() {
         const IconComponent = config.icon;
 
         return (
-            <Badge variant={config.variant} className="flex items-center gap-1">
+            <Badge
+                variant={config.variant}
+                className="flex items-center gap-1"
+                style={file.status_color ? { backgroundColor: file.status_color, color: '#fff' } : undefined}
+            >
                 <IconComponent className="w-3 h-3" />
-                {status?.replace('_', ' ')}
+                {(file.status_name || status || '').replace('_', ' ')}
             </Badge>
         );
     };
 
-    const formatTimeRemaining = (deadline, breached) => {
-        if (!deadline) return '-';
-        const now = Date.now();
-        const diffMs = new Date(deadline).getTime() - now;
-        if (breached || diffMs <= 0) return 'Breached';
-        const mins = Math.floor(diffMs / 60000);
-        const days = Math.floor(mins / 1440);
-        const hours = Math.floor((mins % 1440) / 60);
-        const minutes = mins % 60;
+    const formatTimeRemaining = (file) => {
+        if (!file?.sla_deadline) return '-';
+        if (file.sla_paused) return 'Paused';
+        if (file.is_sla_breached) return 'Breached';
+
+        const minutesRemaining = file.minutes_remaining ?? Math.floor((new Date(file.sla_deadline).getTime() - Date.now()) / 60000);
+        if (Number.isNaN(minutesRemaining)) return '-';
+        if (minutesRemaining <= 0) return 'Breached';
+
+        const days = Math.floor(minutesRemaining / 1440);
+        const hours = Math.floor((minutesRemaining % 1440) / 60);
+        const minutes = minutesRemaining % 60;
+
         if (days > 0) return `${days}d ${hours}h`;
         if (hours > 0) return `${hours}h ${minutes}m`;
         return `${minutes}m`;
-    };
-
-    const openAssignModal = async (fileId) => {
-        if (!profile) {
-            toast({ title: 'Profile not loaded', variant: 'destructive' });
-            return;
-        }
-        setAssignFileId(fileId);
-        setSelectedToUserId('');
-        setAssignOpen(true);
-        try {
-            const res = await fetch('/api/efiling/users?is_active=true');
-            const users = res.ok ? await res.json() : [];
-            // Filter candidates based on rules from current user role
-            const myRole = profile.efiling_role_id;
-            const myDept = profile.department_id;
-            const isConsultant = profile.is_consultant === true;
-
-            let rolesAllowed = [];
-            let requireSameDept = false;
-            let allowConsultant = false;
-            if (myRole === ROLE.XEN) { rolesAllowed = [ROLE.SE]; requireSameDept = true; }
-            else if (myRole === ROLE.SE) { rolesAllowed = [ROLE.CE]; requireSameDept = true; allowConsultant = true; }
-            else if (myRole === ROLE.CE) { rolesAllowed = [ROLE.COO, ROLE.XEN, ROLE.PC]; }
-            else if (myRole === ROLE.COO) { rolesAllowed = [ROLE.CEO]; }
-            else if (myRole === ROLE.CEO) { rolesAllowed = [ROLE.CE]; }
-            else if (myRole === ROLE.PC) { rolesAllowed = [ROLE.IAO_II]; }
-            else if (myRole === ROLE.IAO_II) { rolesAllowed = [ROLE.COO]; }
-            else if (myRole === ROLE.BUDGET) { rolesAllowed = [ROLE.ADLFA]; }
-            else if (myRole === ROLE.ADLFA) { rolesAllowed = [ROLE.FINANCE]; }
-
-            const candidates = users.filter(u => {
-                const roleOk = rolesAllowed.includes(u.efiling_role_id) || (allowConsultant && u.is_consultant === true);
-                const deptOk = requireSameDept ? (u.department_id === myDept) : true;
-                // For consultant path: if selecting consultant from SE, allow only consultants
-                if (allowConsultant && rolesAllowed.includes(ROLE.CE) === false) {
-                    // SE -> Consultant case
-                    return (u.is_consultant === true) && deptOk;
-                }
-                return roleOk && deptOk;
-            });
-            setCandidateUsers(candidates);
-        } catch (e) {
-            console.error('Failed to load users', e);
-            setCandidateUsers([]);
-        }
-    };
-
-    const submitAssign = async () => {
-        if (!assignFileId || !selectedToUserId) {
-            toast({ title: 'Please select a user', variant: 'destructive' });
-            return;
-        }
-        try {
-            const res = await fetch(`/api/efiling/files/${assignFileId}/assign`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ to_user_id: parseInt(selectedToUserId), current_user_id: session.user.id, remarks: '' })
-            });
-            if (!res.ok) {
-                const err = await res.json().catch(() => ({}));
-                throw new Error(err.error || 'Assignment failed');
-            }
-            toast({ title: 'Assigned', description: 'File has been assigned.' });
-            setAssignOpen(false);
-            setAssignFileId(null);
-            await fetchFiles();
-        } catch (e) {
-            toast({ title: 'Error', description: e.message, variant: 'destructive' });
-        }
     };
 
     const handleCreateFile = () => {
@@ -500,10 +242,6 @@ export default function FilesPage() {
         router.push(`/efilinguser/files/${fileId}`);
     };
 
-    const handleMarkTo = (fileId) => {
-        openAssignModal(fileId);
-    };
-
     if (loading) {
         return (
             <div className="flex items-center justify-center h-96">
@@ -526,25 +264,140 @@ export default function FilesPage() {
                 </Button>
             </div>
 
-            <Tabs defaultValue="mine">
+            <Card className="mb-6">
+                <CardContent className="pt-6">
+                    <div className="grid gap-4 md:grid-cols-4">
+                        <div className="md:col-span-2">
+                            <Label htmlFor="file-search" className="mb-1 block text-sm font-medium">Search</Label>
+                            <div className="relative">
+                                <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                                <Input
+                                    id="file-search"
+                                    placeholder="Search by file number, subject, department, or category"
+                                    value={searchTerm}
+                                    onChange={(event) => setSearchTerm(event.target.value)}
+                                    className="pl-9"
+                                />
+                            </div>
+                        </div>
+                        <div>
+                            <Label className="mb-1 block text-sm font-medium">Status</Label>
+                            <Select value={statusFilter} onValueChange={setStatusFilter}>
+                                <SelectTrigger>
+                                    <SelectValue placeholder="All statuses" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All statuses</SelectItem>
+                                    {statuses.map((status) => (
+                                        <SelectItem key={status.id} value={String(status.id)}>
+                                            {status.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div>
+                            <Label className="mb-1 block text-sm font-medium">Department</Label>
+                            <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
+                                <SelectTrigger>
+                                    <SelectValue placeholder="All departments" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All departments</SelectItem>
+                                    {departments.map((department) => (
+                                        <SelectItem key={department.id} value={String(department.id)}>
+                                            {department.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </div>
+                    <div className="flex justify-end mt-4">
+                        <Button
+                            variant="outline"
+                            onClick={() => {
+                                setSearchTerm('');
+                                setStatusFilter('all');
+                                setDepartmentFilter('all');
+                            }}
+                        >
+                            Reset Filters
+                        </Button>
+                    </div>
+                </CardContent>
+            </Card>
+
+            <Tabs value={activeTab} onValueChange={(value) => { setActiveTab(value); setCurrentPage(1); }}>
                 <TabsList>
                     <TabsTrigger value="mine">My Files</TabsTrigger>
                     <TabsTrigger value="assigned">Marked To Me</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="mine">
-                    {renderFilesTable(myFiles, getStatusBadge, formatTimeRemaining, getRoleDisplayName, currentPage, itemsPerPage, handlePageChange, handleItemsPerPageChange)}
+                    {renderFilesTable(
+                        filteredMyFiles,
+                        currentPage,
+                        itemsPerPage,
+                        handlePageChange,
+                        handleItemsPerPageChange,
+                        (fileId) => router.push(`/efilinguser/files/${fileId}`),
+                        (fileId) => router.push(`/efilinguser/files/${fileId}/edit-document`),
+                        setMarkModalFile,
+                        efilingUserId,
+                        isGlobal,
+                        getStatusBadge,
+                        formatTimeRemaining
+                    )}
                 </TabsContent>
 
                 <TabsContent value="assigned">
-                    {renderFilesTable(assignedToMe, getStatusBadge, formatTimeRemaining, getRoleDisplayName, currentPage, itemsPerPage, handlePageChange, handleItemsPerPageChange)}
+                    {renderFilesTable(
+                        filteredAssignedFiles,
+                        currentPage,
+                        itemsPerPage,
+                        handlePageChange,
+                        handleItemsPerPageChange,
+                        (fileId) => router.push(`/efilinguser/files/${fileId}`),
+                        (fileId) => router.push(`/efilinguser/files/${fileId}/edit-document`),
+                        setMarkModalFile,
+                        efilingUserId,
+                        isGlobal,
+                        getStatusBadge,
+                        formatTimeRemaining
+                    )}
                 </TabsContent>
             </Tabs>
-                        </div>
+            {markModalFile && (
+                <MarkToModal
+                    showMarkToModal={Boolean(markModalFile)}
+                    fileId={markModalFile.id}
+                    fileNumber={markModalFile.file_number}
+                    subject={markModalFile.subject}
+                    onClose={() => {
+                        setMarkModalFile(null);
+                        fetchFiles();
+                    }}
+                />
+            )}
+        </div>
     );
 }
 
-function renderFilesTable(rows, getStatusBadge, formatTimeRemaining, getRoleDisplayName, currentPage, itemsPerPage, handlePageChange, handleItemsPerPageChange) {
+function renderFilesTable(
+    rows,
+    currentPage,
+    itemsPerPage,
+    handlePageChange,
+    handleItemsPerPageChange,
+    handleView,
+    handleEdit,
+    handleMark,
+    efilingUserId,
+    isGlobal,
+    getStatusBadge,
+    formatTimeRemaining
+) {
     // Calculate pagination for this specific table
     const totalPages = Math.ceil(rows.length / itemsPerPage);
     const startIndex = (currentPage - 1) * itemsPerPage;
@@ -552,38 +405,43 @@ function renderFilesTable(rows, getStatusBadge, formatTimeRemaining, getRoleDisp
     const paginatedRows = rows.slice(startIndex, endIndex);
 
     return (
-            <Card>
-                <CardHeader>
-                    <CardTitle className="flex items-center">
-                        <FileText className="w-5 h-5 mr-2" />
+        <Card>
+            <CardHeader>
+                <CardTitle className="flex items-center">
+                    <FileText className="w-5 h-5 mr-2" />
                     Files ({rows.length})
-                    </CardTitle>
-                </CardHeader>
-                <CardContent>
+                </CardTitle>
+            </CardHeader>
+            <CardContent>
                 {rows.length === 0 ? (
-                        <div className="text-center py-12 text-gray-500">
-                            <FileText className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-                            <h3 className="text-lg font-medium mb-2">No files found</h3>
+                    <div className="text-center py-12 text-gray-500">
+                        <FileText className="w-16 h-16 mx-auto mb-4 text-gray-300" />
+                        <h3 className="text-lg font-medium mb-2">No files found</h3>
                         <p className="text-sm mb-4">No files in this list</p>
-                        </div>
-                    ) : (
-                        <div className="overflow-x-auto">
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>File Number</TableHead>
-                                        <TableHead>Subject</TableHead>
+                    </div>
+                ) : (
+                    <div className="overflow-x-auto">
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>File Number</TableHead>
+                                    <TableHead>Subject</TableHead>
                                     <TableHead>Created By</TableHead>
                                     <TableHead>Currently Marked To</TableHead>
                                     <TableHead>Last Signed By</TableHead>
-                                        <TableHead>Status</TableHead>
+                                    <TableHead>Status</TableHead>
                                     <TableHead>TAT</TableHead>
-                                        <TableHead>Created</TableHead>
-                                        <TableHead>Actions</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                {paginatedRows.map((file) => (
+                                    <TableHead>Created</TableHead>
+                                    <TableHead>Actions</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {paginatedRows.map((file) => {
+                                    const isCreator = Number(file.created_by) === Number(efilingUserId);
+                                    const isAssignee = Number(file.assigned_to) === Number(efilingUserId);
+                                    const canEdit = isCreator || isGlobal;
+                                    const canMark = (handleMark && (isCreator || isAssignee || isGlobal));
+                                    return (
                                         <TableRow key={file.id} className="hover:bg-gray-50">
                                             <TableCell className="font-medium">
                                                 <div className="flex items-center space-x-2">
@@ -597,74 +455,78 @@ function renderFilesTable(rows, getStatusBadge, formatTimeRemaining, getRoleDisp
                                                 </div>
                                             </TableCell>
                                             <TableCell>
-                                            <span className="text-sm">{file.creator_user_name || '-'}</span>
-                                        </TableCell>
-                                        <TableCell>
-                                            <div className="flex items-center gap-2 text-sm">
-                                                { (file.current_assignee_user_name || file.assigned_to_name) ? (
-                                                    <>
-                                                        {file.assigned_to_role_name && (
-                                                            <Badge variant="secondary">{getRoleDisplayName(file.assigned_to_role_name)}</Badge>
-                                                        )}
-                                                        <span>{getRoleDisplayName(file.assigned_to_role_name) || file.current_assignee_user_name || file.assigned_to_name}</span>
-                                                    </>
-                                                ) : (
-                                                    <span className="text-gray-500">Unassigned</span>
-                                                )}
-                                                </div>
-                                            </TableCell>
-                                        <TableCell>
-                                            <span className="text-sm">{getRoleDisplayName(file.last_signed_by_role_name) || file.last_signed_by_name || '-'}</span>
+                                                <span className="text-sm">{file.creator_user_name || '-'}</span>
                                             </TableCell>
                                             <TableCell>
-                                                {getStatusBadge(file.status_code)}
+                                                <div className="flex items-center gap-2 text-sm">
+                                                    {file.current_assignee_user_name ? (
+                                                        <>
+                                                            {file.assigned_to_role_name && (
+                                                                <Badge variant="secondary">{file.assigned_to_role_name}</Badge>
+                                                            )}
+                                                            <span>{file.current_assignee_user_name}</span>
+                                                        </>
+                                                    ) : (
+                                                        <span className="text-gray-500">Unassigned</span>
+                                                    )}
+                                                </div>
                                             </TableCell>
-                                        <TableCell>
-                                            <span className={`text-sm ${file.sla_breached ? 'text-red-600' : 'text-gray-700'}`}>
-                                                {formatTimeRemaining(file.sla_deadline, file.sla_breached)}
-                                            </span>
+                                            <TableCell>
+                                                <span className="text-sm">{file.last_signed_by_name || '-'}</span>
+                                            </TableCell>
+                                            <TableCell>{getStatusBadge(file)}</TableCell>
+                                            <TableCell>
+                                                <span className={`text-sm ${file.is_sla_breached ? 'text-red-600' : 'text-gray-700'}`}>
+                                                    {formatTimeRemaining(file)}
+                                                </span>
                                             </TableCell>
                                             <TableCell>
                                                 <div className="flex items-center space-x-2">
                                                     <Calendar className="w-4 h-4 text-gray-500" />
-                                                <span className="text-sm">{new Date(file.created_at).toLocaleDateString()}</span>
+                                                    <span className="text-sm">{new Date(file.created_at).toLocaleDateString()}</span>
                                                 </div>
                                             </TableCell>
                                             <TableCell>
                                                 <div className="flex items-center space-x-2">
-                                                <Button variant="outline" size="sm" onClick={() => window.location.href = `/efilinguser/files/${file.id}` }>
-                                                                <Eye className="w-4 h-4 mr-1" />
-                                                                View
-                                                            </Button>
-                                                {(file.is_creator || file.is_admin) && (
-                                                    <Button variant="outline" size="sm" onClick={() => window.location.href = `/efilinguser/files/${file.id}/edit-document` }>
-                                                        <FileEdit className="w-4 h-4 mr-1" />
-                                                        Edit
-                                                            </Button>
+                                                    <Button variant="outline" size="sm" onClick={() => handleView(file.id)}>
+                                                        <Eye className="w-4 h-4 mr-1" />
+                                                        View
+                                                    </Button>
+                                                    {canEdit && (
+                                                        <Button variant="outline" size="sm" onClick={() => handleEdit(file.id)}>
+                                                            <FileEdit className="w-4 h-4 mr-1" />
+                                                            Edit
+                                                        </Button>
+                                                    )}
+                                                    {canMark && (
+                                                        <Button variant="outline" size="sm" onClick={() => handleMark(file)}>
+                                                            <Send className="w-4 h-4 mr-1" />
+                                                            Mark To
+                                                        </Button>
                                                     )}
                                                 </div>
                                             </TableCell>
                                         </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
-                        </div>
-                    )}
-                    
-                    {/* Pagination */}
-                    {rows.length > 0 && (
-                        <div className="mt-4">
-                            <Pagination
-                                currentPage={currentPage}
-                                totalPages={totalPages}
-                                totalItems={rows.length}
-                                itemsPerPage={itemsPerPage}
-                                onPageChange={handlePageChange}
-                                onItemsPerPageChange={handleItemsPerPageChange}
-                            />
-                        </div>
-                    )}
-                </CardContent>
-            </Card>
+                                    );
+                                })}
+                            </TableBody>
+                        </Table>
+                    </div>
+                )}
+
+                {rows.length > 0 && (
+                    <div className="mt-4">
+                        <Pagination
+                            currentPage={currentPage}
+                            totalPages={totalPages}
+                            totalItems={rows.length}
+                            itemsPerPage={itemsPerPage}
+                            onPageChange={handlePageChange}
+                            onItemsPerPageChange={handleItemsPerPageChange}
+                        />
+                    </div>
+                )}
+            </CardContent>
+        </Card>
     );
 } 

@@ -350,7 +350,7 @@ export function AppSidebar() {
                                                         }`}
                                                 >
                                                     <Link href="/dashboard/agents">
-                                                        <span>Agents</span>
+                                                        <span>Engineers/Contractors</span>
                                                     </Link>
                                                 </SidebarMenuSubItem>
                                                 <SidebarMenuSubItem

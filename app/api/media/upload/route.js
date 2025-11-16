@@ -27,11 +27,11 @@ export async function POST(req) {
             return NextResponse.json({ error: 'Invalid video format. Allowed: MP4, AVI, MOV, WMV, WebM' }, { status: 400 });
         }
 
-        // Check file size (10MB for images, 100MB for videos)
-        const maxSize = contentType === 'image' ? 10 * 1024 * 1024 : 100 * 1024 * 1024;
+        // Check file size (5MB for images, 100MB for videos)
+        const maxSize = contentType === 'image' ? 5 * 1024 * 1024 : 100 * 1024 * 1024;
         if (file.size > maxSize) {
-            const maxSizeMB = contentType === 'image' ? '10MB' : '100MB';
-            return NextResponse.json({ error: `File size exceeds limit of ${maxSizeMB}` }, { status: 400 });
+            const maxSizeMB = contentType === 'image' ? '5MB' : '100MB';
+            return NextResponse.json({ error: `File size exceeds limit. Maximum allowed: ${maxSizeMB}` }, { status: 400 });
         }
 
         // Create upload directory based on content type (handle standalone mode)

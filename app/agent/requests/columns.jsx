@@ -35,7 +35,22 @@ export function getAgentRequestColumns({ onAddImage, onAddVideo, onAddBeforeCont
     },
     {
       accessorKey: "town_name",
-      header: "Town",
+      header: "Division / Town",
+      cell: ({ row }) => {
+        const divisionName = row.original.division_name;
+        const townName = row.original.town_name;
+        if (divisionName) {
+          return (
+            <div>
+              <div className="font-medium text-slate-900">{divisionName}</div>
+              {townName && (
+                <div className="text-xs text-slate-500">Linked town: {townName}</div>
+              )}
+            </div>
+          );
+        }
+        return townName ? townName : <span className="text-slate-400">—</span>;
+      },
     },
     {
       accessorKey: "complaint_type",

@@ -58,7 +58,7 @@ export async function GET(request, { params }) {
         wra.ceo_comments,
         s.name as status_name,
         ee.name as executive_engineer_name,
-        c.name as contractor_name
+        COALESCE(c.company_name, c.name) as contractor_name
       FROM work_requests wr
       LEFT JOIN work_request_approvals wra ON wr.id = wra.work_request_id
       LEFT JOIN complaint_types ct ON wr.complaint_type_id = ct.id

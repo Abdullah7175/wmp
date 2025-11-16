@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Download, Eye, FileText, User, Calendar, Building2, Shield, MessageSquare, Paperclip, Printer, FileDown, X, Maximize2 } from "lucide-react";
+import { ArrowLeft, Download, Eye, FileText, User, Calendar, Building2, Shield, MessageSquare, Paperclip, Printer, FileDown, X, Maximize2, Clock } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import DocumentSignatureSystem from "../../../components/DocumentSignatureSystem";
 import Image from "next/image";
@@ -31,6 +31,7 @@ export default function DocumentViewer() {
     const [beforeContent, setBeforeContent] = useState([]);
     const [selectedAttachment, setSelectedAttachment] = useState(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [timeline, setTimeline] = useState([]);
 
     const handlePrint = () => {
         window.print();
@@ -115,6 +116,11 @@ export default function DocumentViewer() {
 			if (comRes.ok) {
 				const coms = await comRes.json();
 				setComments(Array.isArray(coms) ? coms : []);
+			}
+			const timelineRes = await fetch(`/api/efiling/files/${params.id}/timeline`);
+			if (timelineRes.ok) {
+				const timelineData = await timelineRes.json();
+				setTimeline(Array.isArray(timelineData.events) ? timelineData.events : []);
 			}
 		} catch (e) {
 			console.error(e);
@@ -558,6 +564,48 @@ export default function DocumentViewer() {
                                         canEditDocument={false}
                                         viewOnly={true}
                                     />
+                                </CardContent>
+                            </Card>
+
+                            <Card>
+								<CardHeader><CardTitle className="text-lg flex items-center"><Clock className="w-4 h-4 mr-2"/>Status Timeline ({timeline.length})</CardTitle></CardHeader>
+                                <CardContent>
+                                    <div className="space-y-4 max-h-80 overflow-auto pr-2">
+                                        {timeline.length > 0 ? (
+                                            <div className="relative">
+                                                <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-gray-200"></div>
+                                                {timeline.map((event, index) => (
+                                                    <div key={index} className="relative pl-10 pb-4">
+                                                        <div className="absolute left-3 top-1 w-2 h-2 bg-blue-500 rounded-full border-2 border-white"></div>
+                                                        <div className="bg-white rounded-lg border border-gray-200 p-3 shadow-sm">
+                                                            <div className="flex items-start justify-between mb-1">
+                                                                <div className="text-sm font-semibold text-gray-900">{event.title}</div>
+                                                                <Badge variant="outline" className="text-xs">
+                                                                    {event.type}
+                                                                </Badge>
+                                                            </div>
+                                                            <div className="text-xs text-gray-500 mb-2">{formatDate(event.timestamp)}</div>
+                                                            {event.meta && Object.keys(event.meta).length > 0 && (
+                                                                <div className="text-xs text-gray-600 mt-2 space-y-1">
+                                                                    {event.meta.from && event.meta.to && (
+                                                                        <div>From: <span className="font-medium">{event.meta.from}</span> → To: <span className="font-medium">{event.meta.to}</span></div>
+                                                                    )}
+                                                                    {event.meta.role && (
+                                                                        <div>Role: <span className="font-medium">{event.meta.role}</span></div>
+                                                                    )}
+                                                                    {event.meta.remarks && (
+                                                                        <div className="mt-1 italic text-gray-500">"{event.meta.remarks}"</div>
+                                                                    )}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <p className="text-sm text-gray-500">No timeline events yet</p>
+                                        )}
+                                    </div>
                                 </CardContent>
                             </Card>
 

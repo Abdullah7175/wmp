@@ -16,22 +16,71 @@ export async function GET(request) {
       );
     }
 
-    // Fetch all complaint types
-    const complaintTypes = await query(`
-      SELECT 
-        ct.id,
-        ct.type_name,
-        ct.description,
-        ct.created_date,
-        ct.updated_date,
-        COUNT(cst.id) as subtype_count,
-        COUNT(ceud.id) as assigned_ce_count
-      FROM complaint_types ct
-      LEFT JOIN complaint_subtypes cst ON ct.id = cst.complaint_type_id
-      LEFT JOIN ce_user_departments ceud ON ct.id = ceud.complaint_type_id
-      GROUP BY ct.id, ct.type_name, ct.description, ct.created_date, ct.updated_date
-      ORDER BY ct.type_name ASC
+    // Check if complaint_type_divisions table exists
+    const tableCheck = await query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'complaint_type_divisions'
+      );
     `);
+    
+    const hasBridgeTable = tableCheck.rows[0]?.exists || false;
+    
+    // Fetch all complaint types with multiple divisions (if bridge table exists) or single division
+    let complaintTypes;
+    if (hasBridgeTable) {
+      complaintTypes = await query(`
+        SELECT 
+          ct.id,
+          ct.type_name,
+          ct.description,
+          ct.created_date,
+          ct.updated_date,
+          ct.efiling_department_id,
+          ct.division_id as single_division_id,
+          ed.name as efiling_department_name,
+          (SELECT COUNT(*) FROM complaint_subtypes WHERE complaint_type_id = ct.id) as subtype_count,
+          (SELECT COUNT(*) FROM ce_user_departments WHERE complaint_type_id = ct.id) as assigned_ce_count,
+          -- Multiple divisions
+          COALESCE(
+            (SELECT json_agg(jsonb_build_object('id', d.id, 'name', d.name))
+             FROM complaint_type_divisions ctd
+             LEFT JOIN divisions d ON ctd.division_id = d.id
+             WHERE ctd.complaint_type_id = ct.id AND d.id IS NOT NULL),
+            '[]'::json
+          ) as divisions
+        FROM complaint_types ct
+        LEFT JOIN efiling_departments ed ON ct.efiling_department_id = ed.id
+        ORDER BY ct.type_name ASC
+      `);
+    } else {
+      // Fallback query when bridge table doesn't exist yet
+      complaintTypes = await query(`
+        SELECT 
+          ct.id,
+          ct.type_name,
+          ct.description,
+          ct.created_date,
+          ct.updated_date,
+          ct.efiling_department_id,
+          ct.division_id as single_division_id,
+          ed.name as efiling_department_name,
+          d.name as division_name,
+          (SELECT COUNT(*) FROM complaint_subtypes WHERE complaint_type_id = ct.id) as subtype_count,
+          (SELECT COUNT(*) FROM ce_user_departments WHERE complaint_type_id = ct.id) as assigned_ce_count,
+          -- Single division as array for consistency
+          CASE 
+            WHEN ct.division_id IS NOT NULL THEN 
+              json_build_array(jsonb_build_object('id', ct.division_id, 'name', d.name))
+            ELSE '[]'::json
+          END as divisions
+        FROM complaint_types ct
+        LEFT JOIN efiling_departments ed ON ct.efiling_department_id = ed.id
+        LEFT JOIN divisions d ON ct.division_id = d.id
+        ORDER BY ct.type_name ASC
+      `);
+    }
 
     return NextResponse.json({
       success: true,
@@ -60,7 +109,12 @@ export async function POST(request) {
     }
 
     const body = await request.json();
-    const { type_name, description } = body;
+    const { type_name, description, efiling_department_id, division_id, division_ids } = body;
+
+    // Support both single and multiple divisions
+    const finalDivisionIds = division_ids && Array.isArray(division_ids) && division_ids.length > 0 
+      ? division_ids.filter(id => id).map(id => parseInt(id)) 
+      : (division_id ? [parseInt(division_id)] : []);
 
     // Validate required fields
     if (!type_name || !type_name.trim()) {
@@ -82,12 +136,47 @@ export async function POST(request) {
       );
     }
 
-    // Create new complaint type
+    // Create new complaint type (keep single division_id for backward compatibility)
+    const singleDivisionId = finalDivisionIds.length === 1 ? finalDivisionIds[0] : null;
+    
     const result = await query(`
-      INSERT INTO complaint_types (type_name, description, created_date, updated_date)
-      VALUES ($1, $2, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      INSERT INTO complaint_types (type_name, description, efiling_department_id, division_id, created_date, updated_date)
+      VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
       RETURNING *
-    `, [type_name.trim(), description?.trim() || null]);
+    `, [
+      type_name.trim(), 
+      description?.trim() || null,
+      efiling_department_id ? parseInt(efiling_department_id) : null,
+      singleDivisionId
+    ]);
+
+    const complaintTypeId = result.rows[0].id;
+
+    // Insert multiple divisions (only if bridge table exists)
+    const tableCheck = await query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'complaint_type_divisions'
+      );
+    `);
+    
+    const hasBridgeTable = tableCheck.rows[0]?.exists || false;
+    
+    if (hasBridgeTable && finalDivisionIds.length > 0) {
+      for (const divId of finalDivisionIds) {
+        try {
+          await query(`
+            INSERT INTO complaint_type_divisions (complaint_type_id, division_id)
+            VALUES ($1, $2)
+            ON CONFLICT (complaint_type_id, division_id) DO NOTHING
+          `, [complaintTypeId, divId]);
+        } catch (err) {
+          console.error('Error inserting division:', err);
+          // Continue even if insertion fails
+        }
+      }
+    }
 
     // Log the action
     await logUserAction({

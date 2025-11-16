@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/db';
 import { eFileActionLogger, EFILING_ACTION_TYPES, EFILING_ENTITY_TYPES } from '@/lib/efilingActionLogger';
+import { getToken } from 'next-auth/jwt';
+import { getUserGeography, isGlobalRoleCode } from '@/lib/efilingGeographicRouting';
 
 export async function GET(request) {
     const { searchParams } = new URL(request.url);
@@ -33,14 +35,30 @@ export async function GET(request) {
             return NextResponse.json([]);
         }
         
+        const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
+        let userGeography = null;
+        let canSeeAll = false;
+
+        if (token?.user) {
+            if ([1, 2].includes(token.user.role)) {
+                canSeeAll = true;
+            } else {
+                userGeography = await getUserGeography(client, token.user.id);
+                if (userGeography && isGlobalRoleCode(userGeography.role_code)) {
+                    canSeeAll = true;
+                }
+            }
+        }
+
         if (id) {
             const query = `
                 SELECT d.*, 
                        p.name as parent_department_name,
-                       COUNT(u.id) as user_count
+                       COUNT(DISTINCT u.id) as user_count
                 FROM efiling_departments d
                 LEFT JOIN efiling_departments p ON d.parent_department_id = p.id
                 LEFT JOIN efiling_users u ON d.id = u.department_id AND u.is_active = true
+                LEFT JOIN efiling_department_locations dl ON dl.department_id = d.id
                 WHERE d.id = $1
                 GROUP BY d.id, p.name
             `;
@@ -55,10 +73,11 @@ export async function GET(request) {
             let query = `
                 SELECT d.*, 
                        p.name as parent_department_name,
-                       COUNT(u.id) as user_count
+                       COUNT(DISTINCT u.id) as user_count
                 FROM efiling_departments d
                 LEFT JOIN efiling_departments p ON d.parent_department_id = p.id
                 LEFT JOIN efiling_users u ON d.id = u.department_id AND u.is_active = true
+                LEFT JOIN efiling_department_locations dl ON dl.department_id = d.id
             `;
             const params = [];
             const conditions = [];
@@ -68,6 +87,32 @@ export async function GET(request) {
                 conditions.push(`d.is_active = $${paramIndex}`);
                 params.push(is_active === 'true');
                 paramIndex++;
+            }
+
+            if (!canSeeAll && userGeography) {
+                const locationParts = [];
+                const pushParam = (value) => {
+                    params.push(value);
+                    return `$${params.length}`;
+                };
+
+                if (userGeography.zone_ids && userGeography.zone_ids.length > 0) {
+                    const placeholder = pushParam(userGeography.zone_ids);
+                    locationParts.push(`dl.zone_id = ANY(${placeholder}::int[])`);
+                }
+                if (userGeography.division_id) {
+                    locationParts.push(`dl.division_id = ${pushParam(userGeography.division_id)}`);
+                }
+                if (userGeography.district_id) {
+                    locationParts.push(`dl.district_id = ${pushParam(userGeography.district_id)}`);
+                }
+                if (userGeography.town_id) {
+                    locationParts.push(`dl.town_id = ${pushParam(userGeography.town_id)}`);
+                }
+
+                if (locationParts.length > 0) {
+                    conditions.push(`(dl.id IS NULL OR ${locationParts.join(' OR ')})`);
+                }
             }
             
             if (conditions.length > 0) {

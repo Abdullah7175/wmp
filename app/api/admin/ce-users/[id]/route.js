@@ -5,6 +5,116 @@ import { query, connectToDatabase } from "@/lib/db";
 import bcrypt from "bcryptjs";
 import { logUserAction } from "@/lib/userActionLogger";
 
+export async function GET(request, { params }) {
+  try {
+    const session = await getServerSession(authOptions);
+    
+    // Only allow admin users (role 1) to access this endpoint
+    if (!session?.user || session.user.userType !== 'user' || parseInt(session.user.role) !== 1) {
+      return NextResponse.json(
+        { success: false, message: "Unauthorized. Admin access required." },
+        { status: 401 }
+      );
+    }
+
+    const { id } = await params;
+
+    // Fetch CE user with departments and geographic assignments
+    const ceUser = await query(`
+      SELECT 
+        cu.id,
+        cu.user_id,
+        cu.designation,
+        cu.address,
+        cu.created_at,
+        cu.updated_at,
+        u.name,
+        u.email,
+        u.contact_number,
+        u.created_date,
+        -- Departments
+        COALESCE(
+          (SELECT json_agg(jsonb_build_object('id', ct.id, 'type_name', ct.type_name))
+           FROM ce_user_departments cud
+           LEFT JOIN complaint_types ct ON cud.complaint_type_id = ct.id
+           WHERE cud.ce_user_id = cu.id AND ct.id IS NOT NULL),
+          '[]'::json
+        ) as departments,
+        -- Zones
+        COALESCE(
+          (SELECT json_agg(jsonb_build_object('id', ez.id, 'name', ez.name))
+           FROM ce_user_zones cuz
+           LEFT JOIN efiling_zones ez ON cuz.zone_id = ez.id
+           WHERE cuz.ce_user_id = cu.id AND ez.id IS NOT NULL),
+          '[]'::json
+        ) as zones,
+        -- Divisions
+        COALESCE(
+          (SELECT json_agg(jsonb_build_object('id', d.id, 'name', d.name))
+           FROM ce_user_divisions cudiv
+           LEFT JOIN divisions d ON cudiv.division_id = d.id
+           WHERE cudiv.ce_user_id = cu.id AND d.id IS NOT NULL),
+          '[]'::json
+        ) as divisions,
+        -- Districts
+        COALESCE(
+          (SELECT json_agg(jsonb_build_object('id', dist.id, 'title', dist.title))
+           FROM ce_user_districts cudist
+           LEFT JOIN district dist ON cudist.district_id = dist.id
+           WHERE cudist.ce_user_id = cu.id AND dist.id IS NOT NULL),
+          '[]'::json
+        ) as districts,
+        -- Towns
+        COALESCE(
+          (SELECT json_agg(jsonb_build_object('id', t.id, 'town', t.town, 'district_id', t.district_id))
+           FROM ce_user_towns cut
+           LEFT JOIN town t ON cut.town_id = t.id
+           WHERE cut.ce_user_id = cu.id AND t.id IS NOT NULL),
+          '[]'::json
+        ) as towns
+      FROM ce_users cu
+      LEFT JOIN users u ON cu.user_id = u.id
+      WHERE cu.id = $1
+    `, [id]);
+
+    if (ceUser.rows.length === 0) {
+      return NextResponse.json(
+        { success: false, message: "CE user not found." },
+        { status: 404 }
+      );
+    }
+
+    const userData = ceUser.rows[0];
+    
+    // Process arrays to remove null values
+    const processedData = {
+      ...userData,
+      departments: userData.departments.filter(d => d.id !== null),
+      zones: userData.zones.filter(z => z.id !== null),
+      divisions: userData.divisions.filter(d => d.id !== null),
+      districts: userData.districts.filter(d => d.id !== null),
+      towns: userData.towns.filter(t => t.id !== null),
+      assigned_department_ids: userData.departments.filter(d => d.id !== null).map(d => d.id),
+      assigned_zone_ids: userData.zones.filter(z => z.id !== null).map(z => z.id),
+      assigned_division_ids: userData.divisions.filter(d => d.id !== null).map(d => d.id),
+      assigned_district_ids: userData.districts.filter(d => d.id !== null).map(d => d.id),
+      assigned_town_ids: userData.towns.filter(t => t.id !== null).map(t => t.id)
+    };
+
+    return NextResponse.json({
+      success: true,
+      data: processedData
+    });
+
+  } catch (error) {
+    console.error('Error in CE user GET API:', error);
+    return NextResponse.json(
+      { success: false, message: "Internal server error" },
+      { status: 500 }
+    );
+  }
+}
+
 export async function PUT(request, { params }) {
   try {
     const session = await getServerSession(authOptions);
@@ -19,7 +129,10 @@ export async function PUT(request, { params }) {
 
     const { id } = await params;
     const body = await request.json();
-    const { name, email, password, contact_number, designation, address, departments } = body;
+    const { 
+      name, email, password, contact_number, designation, address, departments,
+      zone_ids, division_ids, district_ids, town_ids 
+    } = body;
 
     // Validate required fields
     if (!name || !email) {
@@ -111,6 +224,53 @@ export async function PUT(request, { params }) {
         `, [id, departmentId]);
       }
 
+      // Delete existing geographic assignments
+      await client.query(`DELETE FROM ce_user_zones WHERE ce_user_id = $1`, [id]);
+      await client.query(`DELETE FROM ce_user_divisions WHERE ce_user_id = $1`, [id]);
+      await client.query(`DELETE FROM ce_user_districts WHERE ce_user_id = $1`, [id]);
+      await client.query(`DELETE FROM ce_user_towns WHERE ce_user_id = $1`, [id]);
+
+      // Create new geographic assignments
+      if (zone_ids && Array.isArray(zone_ids) && zone_ids.length > 0) {
+        for (const zoneId of zone_ids) {
+          await client.query(`
+            INSERT INTO ce_user_zones (ce_user_id, zone_id, created_at)
+            VALUES ($1, $2, CURRENT_TIMESTAMP)
+            ON CONFLICT (ce_user_id, zone_id) DO NOTHING
+          `, [id, zoneId]);
+        }
+      }
+
+      if (division_ids && Array.isArray(division_ids) && division_ids.length > 0) {
+        for (const divisionId of division_ids) {
+          await client.query(`
+            INSERT INTO ce_user_divisions (ce_user_id, division_id, created_at)
+            VALUES ($1, $2, CURRENT_TIMESTAMP)
+            ON CONFLICT (ce_user_id, division_id) DO NOTHING
+          `, [id, divisionId]);
+        }
+      }
+
+      if (district_ids && Array.isArray(district_ids) && district_ids.length > 0) {
+        for (const districtId of district_ids) {
+          await client.query(`
+            INSERT INTO ce_user_districts (ce_user_id, district_id, created_at)
+            VALUES ($1, $2, CURRENT_TIMESTAMP)
+            ON CONFLICT (ce_user_id, district_id) DO NOTHING
+          `, [id, districtId]);
+        }
+      }
+
+      if (town_ids && Array.isArray(town_ids) && town_ids.length > 0) {
+        for (const townId of town_ids) {
+          await client.query(`
+            INSERT INTO ce_user_towns (ce_user_id, town_id, created_at)
+            VALUES ($1, $2, CURRENT_TIMESTAMP)
+            ON CONFLICT (ce_user_id, town_id) DO NOTHING
+          `, [id, townId]);
+        }
+      }
+
       // Commit transaction
       await client.query('COMMIT');
 
@@ -191,6 +351,12 @@ export async function DELETE(request, { params }) {
       await client.query(`
         DELETE FROM ce_user_departments WHERE ce_user_id = $1
       `, [id]);
+
+      // Delete geographic assignments
+      await client.query(`DELETE FROM ce_user_zones WHERE ce_user_id = $1`, [id]);
+      await client.query(`DELETE FROM ce_user_divisions WHERE ce_user_id = $1`, [id]);
+      await client.query(`DELETE FROM ce_user_districts WHERE ce_user_id = $1`, [id]);
+      await client.query(`DELETE FROM ce_user_towns WHERE ce_user_id = $1`, [id]);
 
       // Delete CE user record
       await client.query(`

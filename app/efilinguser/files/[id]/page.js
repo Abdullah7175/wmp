@@ -835,10 +835,10 @@ export default function FileDetail() {
                                     <label className="text-sm font-medium text-gray-600">Priority</label>
                                     <div className="mt-1"><Badge className={getPriorityColor(file.priority)}>{file.priority}</Badge></div>
                                 </div>
-                                <div>
+                                {/* <div>
                                     <label className="text-sm font-medium text-gray-600">Confidentiality Level</label>
                                     <div className="mt-1"><Badge className={getConfidentialityColor(file.confidentiality_level)}>{file.confidentiality_level}</Badge></div>
-                                </div>
+                                </div> */}
                             </div>
                             
                             {/* SLA Status Section */}

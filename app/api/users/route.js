@@ -22,6 +22,10 @@ async function ensureUploadDir() {
 
 // Save uploaded file to disk
 async function saveUploadedFile(file) {
+  // Validate file size (5MB max for profile images)
+  if (file.size > 5 * 1024 * 1024) {
+    throw new Error('File size exceeds limit. Maximum allowed: 5MB');
+  }
   await ensureUploadDir();
   
   try {

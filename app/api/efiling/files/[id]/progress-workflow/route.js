@@ -2,161 +2,113 @@ import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/db';
 import { logAction, ENTITY_TYPES } from '@/lib/actionLogger';
 
+const STATUS_CODE_MAP = {
+    APPROVE: 'APPROVED',
+    REJECT: 'REJECTED',
+    RETURN: 'DRAFT'
+};
+
 export async function POST(request, { params }) {
-    const client = await connectToDatabase();
-    
+    let client;
     try {
+        client = await connectToDatabase();
         const { id } = await params;
         const body = await request.json();
         const { action, userId, remarks } = body;
 
-        // Start transaction
+        if (!action) {
+            return NextResponse.json({ error: 'Action is required' }, { status: 400 });
+        }
+
+        const upperAction = action.toUpperCase();
+
+        if (upperAction === 'FORWARD') {
+            return NextResponse.json({
+                message: 'Use the mark-to flow to forward files under geographic routing.'
+            });
+        }
+
+        if (!STATUS_CODE_MAP[upperAction]) {
+            return NextResponse.json({ error: `Unsupported action: ${action}` }, { status: 400 });
+        }
+
         await client.query('BEGIN');
 
-        // Get file details with workflow information
-        const fileQuery = await client.query(`
-            SELECT f.*, wf.current_stage_id, wt.id as template_id
+        const fileRes = await client.query(`
+            SELECT f.id, f.file_number, f.status_id, f.assigned_to, f.department_id
             FROM efiling_files f
-            LEFT JOIN efiling_file_workflows wf ON f.workflow_id = wf.id
-            LEFT JOIN efiling_workflow_templates wt ON f.workflow_id = wt.id
             WHERE f.id = $1
         `, [id]);
 
-        if (fileQuery.rows.length === 0) {
+        if (fileRes.rows.length === 0) {
+            await client.query('ROLLBACK');
             return NextResponse.json({ error: 'File not found' }, { status: 404 });
         }
 
-        const file = fileQuery.rows[0];
-        
-        if (!file.workflow_id) {
-            return NextResponse.json({ error: 'File is not connected to any workflow' }, { status: 400 });
+        const file = fileRes.rows[0];
+        const statusCode = STATUS_CODE_MAP[upperAction];
+
+        const statusRes = await client.query(`
+            SELECT id FROM efiling_file_status WHERE code = $1
+        `, [statusCode]);
+
+        if (statusRes.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return NextResponse.json({ error: `Status not configured for code ${statusCode}` }, { status: 500 });
         }
 
-        // Get current stage details
-        const currentStageQuery = await client.query(`
-            SELECT ws.*, d.name as department_name, r.name as role_name
-            FROM efiling_workflow_stages ws
-            LEFT JOIN efiling_departments d ON ws.department_id = d.id
-            LEFT JOIN efiling_roles r ON ws.role_id = r.id
-            WHERE ws.id = $1
-        `, [file.current_stage_id]);
+        const newStatusId = statusRes.rows[0].id;
 
-        if (currentStageQuery.rows.length === 0) {
-            return NextResponse.json({ error: 'Current workflow stage not found' }, { status: 404 });
-        }
-
-        const currentStage = currentStageQuery.rows[0];
-
-        // Get next stage based on action
-        let nextStageId = null;
-        let nextStage = null;
-
-        if (action === 'APPROVE' || action === 'FORWARD') {
-            // Get next stage in sequence
-            const nextStageQuery = await client.query(`
-                SELECT ws.*, d.name as department_name, r.name as role_name
-                FROM efiling_workflow_stages ws
-                WHERE ws.template_id = $1 AND ws.stage_order > $2
-                ORDER BY ws.stage_order ASC
-                LIMIT 1
-            `, [file.template_id, currentStage.stage_order]);
-
-            if (nextStageQuery.rows.length > 0) {
-                nextStage = nextStageQuery.rows[0];
-                nextStageId = nextStage.id;
-            }
-        } else if (action === 'REJECT' || action === 'RETURN') {
-            // Get previous stage or stay in current stage
-            const prevStageQuery = await client.query(`
-                SELECT ws.*, d.name as department_name, r.name as role_name
-                FROM efiling_workflow_stages ws
-                WHERE ws.template_id = $1 AND ws.stage_order < $2
-                ORDER BY ws.stage_order DESC
-                LIMIT 1
-            `, [file.template_id, currentStage.stage_order]);
-
-            if (prevStageQuery.rows.length > 0) {
-                nextStage = prevStageQuery.rows[0];
-                nextStageId = nextStage.id;
-            }
-        }
-
-        // Update workflow stage
-        if (nextStageId) {
-            await client.query(`
-                UPDATE efiling_file_workflows 
-                SET current_stage_id = $1, updated_at = CURRENT_TIMESTAMP
-                WHERE id = $2
-            `, [nextStageId, file.workflow_id]);
-
-            // Update file current stage
-            await client.query(`
-                UPDATE efiling_files 
-                SET current_stage_id = $1, updated_at = CURRENT_TIMESTAMP
-                WHERE id = $2
-            `, [nextStageId, file.id]);
-        }
-
-        // Create workflow action record
         await client.query(`
-            INSERT INTO efiling_workflow_actions (
-                workflow_id, stage_instance_id, from_stage_id, to_stage_id,
-                action_type, action_data, performed_by, performed_at
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP)
-        `, [
-            file.workflow_id,
-            file.current_stage_id,
-            file.current_stage_id,
-            nextStageId,
-            action,
-            JSON.stringify({ remarks, nextStage: nextStage?.stage_name }),
-            userId
-        ]);
+            UPDATE efiling_files
+            SET status_id = $1,
+                updated_at = NOW(),
+                remarks = COALESCE($2, remarks)
+            WHERE id = $3
+        `, [newStatusId, remarks || null, file.id]);
 
-        // Create file movement record
+        if (remarks) {
+            await client.query(`
+                INSERT INTO efiling_comments (
+                    file_id, user_id, comment, is_internal, created_at
+                ) VALUES ($1, $2, $3, true, NOW())
+            `, [file.id, userId || null, remarks]);
+        }
+
         await client.query(`
             INSERT INTO efiling_file_movements (
-                file_id, from_user_id, to_user_id, action_type, remarks, workflow_action_id
-            ) VALUES ($1, $2, $3, $4, $5, $6)
+                file_id, from_user_id, to_user_id, action_type, remarks, created_at
+            ) VALUES ($1, $2, $3, $4, $5, NOW())
         `, [
             file.id,
-            userId,
-            nextStage?.role_id ? null : userId, // If next stage has specific role, mark as unassigned
-            action,
-            remarks,
-            file.workflow_id
+            userId || null,
+            file.assigned_to || null,
+            upperAction,
+            remarks || null
         ]);
 
-        // Commit transaction
         await client.query('COMMIT');
 
-        // Log the action
-        await logAction(request, 'WORKFLOW_PROGRESS', ENTITY_TYPES.EFILING_FILE, {
+        await logAction(request, 'FILE_STATUS_CHANGE', ENTITY_TYPES.EFILING_FILE, {
             entityId: file.id,
             entityName: file.file_number,
-            details: { 
-                action, 
-                fromStage: currentStage.stage_name,
-                toStage: nextStage?.stage_name || 'No change',
-                remarks 
+            details: {
+                action: upperAction,
+                newStatus: statusCode,
+                remarks
             }
         });
 
-        return NextResponse.json({ 
-            message: `File workflow progressed successfully`,
-            action: action,
-            fromStage: currentStage.stage_name,
-            toStage: nextStage?.stage_name || 'No change',
-            nextStageId
+        return NextResponse.json({
+            success: true,
+            action: upperAction,
+            status_code: statusCode
         });
-
     } catch (error) {
-        // Rollback transaction on error
         if (client) {
-            await client.query('ROLLBACK');
+            try { await client.query('ROLLBACK'); } catch {}
         }
-        
-        console.error('Database error:', error);
+        console.error('Progress workflow error:', error);
         return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
     } finally {
         if (client) {
@@ -166,36 +118,62 @@ export async function POST(request, { params }) {
 }
 
 export async function GET(request, { params }) {
-    const client = await connectToDatabase();
-    
+    let client;
     try {
+        client = await connectToDatabase();
         const { id } = await params;
 
-        // Get file workflow status
-        const result = await client.query(`
+        const res = await client.query(`
             SELECT 
-                f.id, f.file_number, f.subject,
-                wf.current_stage_id, wf.workflow_status,
-                ws.stage_name, ws.stage_order, ws.description,
-                d.name as department_name, r.name as role_name,
-                wt.name as workflow_template_name
+                f.id,
+                f.file_number,
+                f.subject,
+                f.sla_deadline,
+                f.sla_paused,
+                f.sla_pause_count,
+                f.updated_at,
+                s.name AS status_name,
+                s.code AS status_code,
+                d.name AS department_name,
+                assignee_user.name AS assignee_name,
+                assignee_role.name AS assignee_role
             FROM efiling_files f
-            LEFT JOIN efiling_file_workflows wf ON f.workflow_id = wf.id
-            LEFT JOIN efiling_workflow_stages ws ON wf.current_stage_id = ws.id
-            LEFT JOIN efiling_departments d ON ws.department_id = d.id
-            LEFT JOIN efiling_roles r ON ws.role_id = r.id
-            LEFT JOIN efiling_workflow_templates wt ON f.workflow_id = wt.id
+            LEFT JOIN efiling_file_status s ON f.status_id = s.id
+            LEFT JOIN efiling_departments d ON f.department_id = d.id
+            LEFT JOIN efiling_users assignee ON f.assigned_to = assignee.id
+            LEFT JOIN users assignee_user ON assignee.user_id = assignee_user.id
+            LEFT JOIN efiling_roles assignee_role ON assignee.efiling_role_id = assignee_role.id
             WHERE f.id = $1
         `, [id]);
 
-        if (result.rows.length === 0) {
+        if (res.rows.length === 0) {
             return NextResponse.json({ error: 'File not found' }, { status: 404 });
         }
 
-        return NextResponse.json(result.rows[0]);
+        const record = res.rows[0];
+        const slaStatus = record.sla_paused
+            ? 'PAUSED'
+            : record.sla_deadline && new Date(record.sla_deadline).getTime() < Date.now()
+                ? 'BREACHED'
+                : (record.sla_deadline ? 'ACTIVE' : 'PENDING');
 
+        return NextResponse.json({
+            workflow_template_name: 'Geographic Routing',
+            stage_name: record.assignee_role || 'Unassigned',
+            stage_order: null,
+            workflow_status: record.status_code || 'UNKNOWN',
+            description: 'Workflow stages have been replaced with geographic routing rules.',
+            department_name: record.department_name,
+            role_name: record.assignee_role || 'Unassigned',
+            assignee_name: record.assignee_name || null,
+            sla_deadline: record.sla_deadline,
+            sla_status: slaStatus,
+            sla_paused: record.sla_paused,
+            sla_pause_count: record.sla_pause_count || 0,
+            updated_at: record.updated_at
+        });
     } catch (error) {
-        console.error('Database error:', error);
+        console.error('Workflow status fetch error:', error);
         return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
     } finally {
         if (client) {

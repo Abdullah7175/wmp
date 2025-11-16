@@ -28,14 +28,22 @@ export async function POST(request, { params }) {
       );
     }
 
-    // Check if CE user has access to this request's department
+    // Check if CE user has access to this request's department and geography
     const ceUserQuery = await query(`
       SELECT 
         cu.id as ce_user_id,
         cu.user_id,
-        array_agg(cud.complaint_type_id) as department_ids
+        array_agg(DISTINCT cud.complaint_type_id) FILTER (WHERE cud.complaint_type_id IS NOT NULL) as department_ids,
+        array_agg(DISTINCT cuz.zone_id) FILTER (WHERE cuz.zone_id IS NOT NULL) as zone_ids,
+        array_agg(DISTINCT cudiv.division_id) FILTER (WHERE cudiv.division_id IS NOT NULL) as division_ids,
+        array_agg(DISTINCT cudist.district_id) FILTER (WHERE cudist.district_id IS NOT NULL) as district_ids,
+        array_agg(DISTINCT cut.town_id) FILTER (WHERE cut.town_id IS NOT NULL) as town_ids
       FROM ce_users cu
       LEFT JOIN ce_user_departments cud ON cu.id = cud.ce_user_id
+      LEFT JOIN ce_user_zones cuz ON cu.id = cuz.ce_user_id
+      LEFT JOIN ce_user_divisions cudiv ON cu.id = cudiv.ce_user_id
+      LEFT JOIN ce_user_districts cudist ON cu.id = cudist.ce_user_id
+      LEFT JOIN ce_user_towns cut ON cu.id = cut.ce_user_id
       WHERE cu.user_id = $1
       GROUP BY cu.id, cu.user_id
     `, [session.user.id]);
@@ -48,11 +56,21 @@ export async function POST(request, { params }) {
     }
 
     const ceUser = ceUserQuery.rows[0];
-    const departmentIds = ceUser.department_ids.filter(id => id !== null);
+    const departmentIds = ceUser.department_ids?.filter(id => id !== null) || [];
+    const zoneIds = ceUser.zone_ids?.filter(id => id !== null) || [];
+    const divisionIds = ceUser.division_ids?.filter(id => id !== null) || [];
+    const districtIds = ceUser.district_ids?.filter(id => id !== null) || [];
+    const townIds = ceUser.town_ids?.filter(id => id !== null) || [];
 
-    // Get the work request to check if CE has access to its department
+    // Get the work request to check if CE has access
     const workRequestQuery = await query(`
-      SELECT complaint_type_id FROM work_requests WHERE id = $1
+      SELECT 
+        complaint_type_id,
+        town_id,
+        division_id,
+        zone_id,
+        district_id
+      FROM work_requests WHERE id = $1
     `, [id]);
 
     if (workRequestQuery.rows.length === 0) {
@@ -64,11 +82,56 @@ export async function POST(request, { params }) {
 
     const workRequest = workRequestQuery.rows[0];
     
+    // Check department access (required)
     if (!departmentIds.includes(workRequest.complaint_type_id)) {
       return NextResponse.json(
         { success: false, message: "You don't have permission to approve this request. It's not in your assigned departments." },
         { status: 403 }
       );
+    }
+
+    // Check geographic access (if CE has geographic assignments)
+    const hasGeographicFilters = zoneIds.length > 0 || divisionIds.length > 0 || districtIds.length > 0 || townIds.length > 0;
+    
+    if (hasGeographicFilters) {
+      let hasGeographicAccess = false;
+      
+      // Check zone access
+      if (zoneIds.length > 0 && workRequest.zone_id && zoneIds.includes(workRequest.zone_id)) {
+        hasGeographicAccess = true;
+      }
+      
+      // Check division access
+      if (!hasGeographicAccess && divisionIds.length > 0 && workRequest.division_id && divisionIds.includes(workRequest.division_id)) {
+        hasGeographicAccess = true;
+      }
+      
+      // Check district access
+      if (!hasGeographicAccess && districtIds.length > 0) {
+        if (workRequest.district_id && districtIds.includes(workRequest.district_id)) {
+          hasGeographicAccess = true;
+        } else if (workRequest.town_id) {
+          // Check if town belongs to assigned district
+          const townDistrictQuery = await query(`
+            SELECT district_id FROM town WHERE id = $1
+          `, [workRequest.town_id]);
+          if (townDistrictQuery.rows.length > 0 && districtIds.includes(townDistrictQuery.rows[0].district_id)) {
+            hasGeographicAccess = true;
+          }
+        }
+      }
+      
+      // Check town access
+      if (!hasGeographicAccess && townIds.length > 0 && workRequest.town_id && townIds.includes(workRequest.town_id)) {
+        hasGeographicAccess = true;
+      }
+      
+      if (!hasGeographicAccess) {
+        return NextResponse.json(
+          { success: false, message: "You don't have permission to approve this request. It's not within your assigned geographic scope." },
+          { status: 403 }
+        );
+      }
     }
 
     // Check if CE approval already exists

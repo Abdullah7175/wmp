@@ -18,7 +18,7 @@ export async function GET(request) {
       );
     }
 
-    // Fetch all CE users with their departments
+    // Fetch all CE users with their departments and geographic assignments
     client = await connectToDatabase();
     const ceUsers = await client.query(`
       SELECT 
@@ -32,25 +32,59 @@ export async function GET(request) {
         u.email,
         u.contact_number,
         u.created_date,
-        array_agg(
-          json_build_object(
-            'id', ct.id,
-            'type_name', ct.type_name
-          )
-        ) as departments
+        -- Departments
+        COALESCE(
+          (SELECT json_agg(jsonb_build_object('id', ct.id, 'type_name', ct.type_name))
+           FROM ce_user_departments cud
+           LEFT JOIN complaint_types ct ON cud.complaint_type_id = ct.id
+           WHERE cud.ce_user_id = cu.id AND ct.id IS NOT NULL),
+          '[]'::json
+        ) as departments,
+        -- Zones
+        COALESCE(
+          (SELECT json_agg(jsonb_build_object('id', ez.id, 'name', ez.name))
+           FROM ce_user_zones cuz
+           LEFT JOIN efiling_zones ez ON cuz.zone_id = ez.id
+           WHERE cuz.ce_user_id = cu.id AND ez.id IS NOT NULL),
+          '[]'::json
+        ) as zones,
+        -- Divisions
+        COALESCE(
+          (SELECT json_agg(jsonb_build_object('id', d.id, 'name', d.name))
+           FROM ce_user_divisions cudiv
+           LEFT JOIN divisions d ON cudiv.division_id = d.id
+           WHERE cudiv.ce_user_id = cu.id AND d.id IS NOT NULL),
+          '[]'::json
+        ) as divisions,
+        -- Districts
+        COALESCE(
+          (SELECT json_agg(jsonb_build_object('id', dist.id, 'title', dist.title))
+           FROM ce_user_districts cudist
+           LEFT JOIN district dist ON cudist.district_id = dist.id
+           WHERE cudist.ce_user_id = cu.id AND dist.id IS NOT NULL),
+          '[]'::json
+        ) as districts,
+        -- Towns
+        COALESCE(
+          (SELECT json_agg(jsonb_build_object('id', t.id, 'town', t.town))
+           FROM ce_user_towns cut
+           LEFT JOIN town t ON cut.town_id = t.id
+           WHERE cut.ce_user_id = cu.id AND t.id IS NOT NULL),
+          '[]'::json
+        ) as towns
       FROM ce_users cu
       LEFT JOIN users u ON cu.user_id = u.id
-      LEFT JOIN ce_user_departments cud ON cu.id = cud.ce_user_id
-      LEFT JOIN complaint_types ct ON cud.complaint_type_id = ct.id
-      GROUP BY cu.id, cu.user_id, cu.designation, cu.address, cu.created_at, cu.updated_at,
-               u.name, u.email, u.contact_number, u.created_date
       ORDER BY cu.created_at DESC
     `);
 
-    // Process the departments array to remove null values
+    // Process the arrays to remove null values
     const processedUsers = ceUsers.rows.map(user => ({
       ...user,
-      departments: user.departments.filter(dept => dept.id !== null)
+      departments: user.departments.filter(d => d.id !== null),
+      zones: user.zones.filter(z => z.id !== null),
+      divisions: user.divisions.filter(d => d.id !== null),
+      districts: user.districts.filter(d => d.id !== null),
+      towns: user.towns.filter(t => t.id !== null)
     }));
 
     client.release();
@@ -86,7 +120,10 @@ export async function POST(request) {
     }
 
     const body = await request.json();
-    const { name, email, password, contact_number, designation, address, departments } = body;
+    const { 
+      name, email, password, contact_number, designation, address, departments,
+      zone_ids, division_ids, district_ids, town_ids 
+    } = body;
 
     // Validate required fields
     if (!name || !email || !password) {
@@ -147,6 +184,47 @@ export async function POST(request) {
           INSERT INTO ce_user_departments (ce_user_id, complaint_type_id, created_at)
           VALUES ($1, $2, CURRENT_TIMESTAMP)
         `, [ceUserId, departmentId]);
+      }
+
+      // Create geographic assignments
+      if (zone_ids && Array.isArray(zone_ids) && zone_ids.length > 0) {
+        for (const zoneId of zone_ids) {
+          await client.query(`
+            INSERT INTO ce_user_zones (ce_user_id, zone_id, created_at)
+            VALUES ($1, $2, CURRENT_TIMESTAMP)
+            ON CONFLICT (ce_user_id, zone_id) DO NOTHING
+          `, [ceUserId, zoneId]);
+        }
+      }
+
+      if (division_ids && Array.isArray(division_ids) && division_ids.length > 0) {
+        for (const divisionId of division_ids) {
+          await client.query(`
+            INSERT INTO ce_user_divisions (ce_user_id, division_id, created_at)
+            VALUES ($1, $2, CURRENT_TIMESTAMP)
+            ON CONFLICT (ce_user_id, division_id) DO NOTHING
+          `, [ceUserId, divisionId]);
+        }
+      }
+
+      if (district_ids && Array.isArray(district_ids) && district_ids.length > 0) {
+        for (const districtId of district_ids) {
+          await client.query(`
+            INSERT INTO ce_user_districts (ce_user_id, district_id, created_at)
+            VALUES ($1, $2, CURRENT_TIMESTAMP)
+            ON CONFLICT (ce_user_id, district_id) DO NOTHING
+          `, [ceUserId, districtId]);
+        }
+      }
+
+      if (town_ids && Array.isArray(town_ids) && town_ids.length > 0) {
+        for (const townId of town_ids) {
+          await client.query(`
+            INSERT INTO ce_user_towns (ce_user_id, town_id, created_at)
+            VALUES ($1, $2, CURRENT_TIMESTAMP)
+            ON CONFLICT (ce_user_id, town_id) DO NOTHING
+          `, [ceUserId, townId]);
+        }
       }
 
       // Commit transaction

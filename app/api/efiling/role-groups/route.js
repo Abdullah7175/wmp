@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/db';
 import { getToken } from 'next-auth/jwt';
+import { getUserGeography, isGlobalRoleCode } from '@/lib/efilingGeographicRouting';
 
 export async function GET(request) {
     let client;
@@ -9,6 +10,20 @@ export async function GET(request) {
         const { searchParams } = new URL(request.url);
         const id = searchParams.get('id');
         const isActive = searchParams.get('is_active');
+
+        const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
+        let userGeography = null;
+        let canSeeAll = false;
+        if (token?.user) {
+            if ([1, 2].includes(token.user.role)) {
+                canSeeAll = true;
+            } else {
+                userGeography = await getUserGeography(client, token.user.id);
+                if (userGeography && isGlobalRoleCode(userGeography.role_code)) {
+                    canSeeAll = true;
+                }
+            }
+        }
 
         if (id) {
             const res = await client.query(
@@ -21,13 +36,48 @@ export async function GET(request) {
             return NextResponse.json(res.rows[0]);
         }
 
-        let query = 'SELECT * FROM efiling_role_groups WHERE 1=1';
+        let query = `
+            SELECT DISTINCT rg.*
+            FROM efiling_role_groups rg
+            LEFT JOIN efiling_role_group_locations rgl ON rgl.role_group_id = rg.id
+        `;
         const params = [];
+        const conditions = [];
         if (isActive !== null) {
-            query += ` AND is_active = $${params.length + 1}`;
+            conditions.push(`rg.is_active = $${params.length + 1}`);
             params.push(isActive === 'true');
         }
-        query += ' ORDER BY name ASC';
+
+        if (!canSeeAll && userGeography) {
+            const parts = [];
+            const pushParam = (value) => {
+                params.push(value);
+                return `$${params.length}`;
+            };
+
+            if (userGeography.zone_ids && userGeography.zone_ids.length > 0) {
+                const placeholder = pushParam(userGeography.zone_ids);
+                parts.push(`rgl.zone_id = ANY(${placeholder}::int[])`);
+            }
+            if (userGeography.division_id) {
+                parts.push(`rgl.division_id = ${pushParam(userGeography.division_id)}`);
+            }
+            if (userGeography.district_id) {
+                parts.push(`rgl.district_id = ${pushParam(userGeography.district_id)}`);
+            }
+            if (userGeography.town_id) {
+                parts.push(`rgl.town_id = ${pushParam(userGeography.town_id)}`);
+            }
+
+            if (parts.length > 0) {
+                conditions.push(`(rgl.id IS NULL OR ${parts.join(' OR ')})`);
+            }
+        }
+
+        if (conditions.length > 0) {
+            query += ` WHERE ${conditions.join(' AND ')}`;
+        }
+        query += ' ORDER BY rg.name ASC';
         const res = await client.query(query, params);
         return NextResponse.json({ success: true, roleGroups: res.rows });
     } catch (error) {

@@ -14,6 +14,7 @@ import {
   CommandGroup,
   CommandInput,
   CommandItem,
+  CommandList,
 } from '@/components/ui/command';
 import { cn2 } from '@/lib/utils';
 
@@ -23,14 +24,28 @@ export function SearchableDropdown({
   onChange,
   placeholder = "Select an item...",
   className,
+  onSearch,
+  isLoading = false,
+  emptyMessage = "No results found.",
 }) {
   const [open, setOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const popoverRef = useRef(null);
+  const selectingRef = useRef(false);
 
-  const filteredOptions = options.filter((option) =>
-    option.label.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  useEffect(() => {
+    if (!onSearch) return;
+    const handle = setTimeout(() => {
+      onSearch(searchTerm);
+    }, 250);
+    return () => clearTimeout(handle);
+  }, [searchTerm, onSearch]);
+
+  const filteredOptions = onSearch
+    ? options
+    : options.filter((option) =>
+        option.label.toLowerCase().includes(searchTerm.toLowerCase())
+      );
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -41,41 +56,78 @@ export function SearchableDropdown({
           aria-expanded={open}
           className={`w-full justify-between ${className}`}
         >
-          {value
-            ? options.find((option) => option.value === value)?.label
+          {value && value !== 'none'
+            ? options.find((option) => String(option.value) === String(value))?.label || placeholder
             : placeholder}
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[400px] p-0" ref={popoverRef}>
-        <Command>
+      <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" ref={popoverRef} align="start" onOpenAutoFocus={(e) => e.preventDefault()}>
+        <Command shouldFilter={false} filter={() => 1}>
           <CommandInput
-            placeholder="Search work requests..."
+            placeholder="Search..."
             value={searchTerm}
             onValueChange={setSearchTerm}
           />
-          <CommandEmpty>No work request found.</CommandEmpty>
-          <CommandGroup className="max-h-[300px] overflow-y-auto">
-            {filteredOptions.map((option) => (
-              <CommandItem
-                key={option.value}
-                value={option.value}
-                onSelect={() => {
-                  onChange(option.value);
-                  setOpen(false);
-                  setSearchTerm("");
-                }}
-              >
-                <Check
-                  className={cn2(
-                    "mr-2 h-4 w-4",
-                    value === option.value ? "opacity-100" : "opacity-0"
-                  )}
-                />
-                {option.label}
-              </CommandItem>
-            ))}
-          </CommandGroup>
+          <CommandList>
+            <CommandEmpty>
+              {isLoading ? "Loading..." : emptyMessage}
+            </CommandEmpty>
+            <CommandGroup>
+              {filteredOptions.length === 0 && !isLoading && (
+                <div className="px-2 py-1.5 text-sm text-muted-foreground text-center">
+                  {emptyMessage}
+                </div>
+              )}
+              {filteredOptions.map((option) => {
+                const optionValueStr = String(option.value);
+                const currentValueStr = value ? String(value) : '';
+                const isSelected = currentValueStr === optionValueStr;
+                const handleItemClick = (e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      if (selectingRef.current) return;
+                      selectingRef.current = true;
+                      const valueToSet = option.value;
+                      console.log('[SearchableDropdown] Item clicked:', valueToSet, option.label);
+                      if (onChange) {
+                        onChange(valueToSet);
+                      }
+                      setOpen(false);
+                      setSearchTerm("");
+                      setTimeout(() => {
+                        selectingRef.current = false;
+                      }, 200);
+                    };
+                return (
+                  <div
+                    key={option.value}
+                    role="option"
+                    aria-selected={isSelected}
+                    onClick={handleItemClick}
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      handleItemClick(e);
+                    }}
+                    className={cn2(
+                      "relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none",
+                      "hover:bg-accent hover:text-accent-foreground",
+                      isSelected && "bg-accent text-accent-foreground"
+                    )}
+                    style={{ pointerEvents: 'auto' }}
+                  >
+                    <Check
+                      className={cn2(
+                        "mr-2 h-4 w-4",
+                        isSelected ? "opacity-100" : "opacity-0"
+                      )}
+                    />
+                    <span className="flex-1">{option.label}</span>
+                  </div>
+                );
+              })}
+            </CommandGroup>
+          </CommandList>
         </Command>
       </PopoverContent>
     </Popover>

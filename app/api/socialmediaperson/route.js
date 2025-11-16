@@ -11,6 +11,10 @@ async function ensureUploadDir() {
   await fs.mkdir(uploadDir, { recursive: true });
 }
 async function saveUploadedFile(file) {
+  // Validate file size (5MB max for profile images)
+  if (file.size > 5 * 1024 * 1024) {
+    throw new Error('File size exceeds limit. Maximum allowed: 5MB');
+  }
   await ensureUploadDir();
   const buffer = await file.arrayBuffer();
   const uniqueName = `${uuidv4()}${path.extname(file.name)}`;

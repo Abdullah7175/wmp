@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useFormik } from "formik";
@@ -26,6 +26,9 @@ import {
     AlertCircle
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useEfilingUser } from "@/context/EfilingUserContext";
+import { SearchableDropdown } from "@/components/SearchableDropdown";
+import { getFiscalYear } from "@/lib/utils";
 
 const validationSchema = Yup.object({
     subject: Yup.string()
@@ -47,92 +50,202 @@ const validationSchema = Yup.object({
 });
 
 export default function CreateNewFile() {
-    const { data: session } = useSession();
+    const { data: session, status: sessionStatus } = useSession();
     const router = useRouter();
     const { toast } = useToast();
+    const { profile: userProfile, isGlobal } = useEfilingUser();
+
     const [loading, setLoading] = useState(false);
     const [departments, setDepartments] = useState([]);
     const [categories, setCategories] = useState([]);
     const [fileTypes, setFileTypes] = useState([]);
     const [users, setUsers] = useState([]);
-    const [selectedDepartment, setSelectedDepartment] = useState(null);
-    const [selectedWorkflow, setSelectedWorkflow] = useState(null);
-    const [workRequests, setWorkRequests] = useState([]);
+    const [workRequestOptions, setWorkRequestOptions] = useState([]);
+    const [workRequestLoading, setWorkRequestLoading] = useState(false);
+    const workRequestCacheRef = useRef(new Map());
+    const dataFetchedRef = useRef(false);
 
-    const filterFileTypesByDepartment = (fileTypes, userProfile) => {
-        if (!userProfile) return fileTypes;
-        
-        const userRole = userProfile.efiling_role?.code;
-        const userDepartment = userProfile.department_id;
-        
-        // Water department users can only create water files (use actual codes from DB)
-        if ([6, 7, 8, 9].includes(userDepartment)) {
-            return fileTypes.filter(type => ['WSP', 'WB_MW', 'PLM', 'OFN', 'ITP', 'TED'].includes(type.code));
+    const userDepartmentId = userProfile?.department_id ? Number(userProfile.department_id) : null;
+
+    const formatWorkRequestLabel = useCallback((req) => {
+        const idPart = `#${req.id}`;
+        const addressPart = req.address ? req.address : 'No address';
+        const typePart = req.complaint_type ? req.complaint_type : 'No type';
+        return `${idPart} - ${addressPart} (${typePart})`;
+    }, []);
+
+    const selectedWorkRequestIdRef = useRef(null);
+
+    const mergeWorkRequestOptions = useCallback((requests, { replace = false } = {}) => {
+        setWorkRequestOptions((prev) => {
+            const map = replace ? new Map() : new Map(prev.map((opt) => [opt.value, opt]));
+
+            const selectedKey = selectedWorkRequestIdRef.current;
+            if (replace && selectedKey && workRequestCacheRef.current.has(selectedKey)) {
+                const selectedRecord = workRequestCacheRef.current.get(selectedKey);
+                map.set(selectedKey, {
+                    value: selectedKey,
+                    label: formatWorkRequestLabel(selectedRecord),
+                });
+            }
+
+            const entries = Array.isArray(requests) ? requests : [requests];
+            entries.forEach((req) => {
+                if (!req || !req.id) return;
+                const value = req.id.toString();
+                workRequestCacheRef.current.set(value, req);
+                map.set(value, {
+                    value,
+                    label: formatWorkRequestLabel(req),
+                });
+            });
+
+            return Array.from(map.values()).sort((a, b) => Number(b.value) - Number(a.value));
+        });
+    }, [formatWorkRequestLabel]);
+
+    const fetchWorkRequests = useCallback(async (searchTerm = '', replaceExisting = false) => {
+        // Don't make API calls if user is not authenticated or session is loading
+        if (sessionStatus !== 'authenticated' || !session?.user?.id) {
+            return;
         }
         
-        // Sewerage department users can only create sewerage files
-        if ([10, 19].includes(userDepartment)) {
-            return fileTypes.filter(type => ['SEP'].includes(type.code));
-        }
-        
-        // Admin users can create all files
-        if (userRole === 'SYS_ADMIN') {
-            return fileTypes;
-        }
-        
-        return fileTypes;
-    };
-
-    useEffect(() => {
-        if (!session?.user?.id) return;
-        fetchInitialData();
-    }, [session?.user?.id]);
-
-    const fetchInitialData = async () => {
+        setWorkRequestLoading(true);
         try {
-            // First get user profile to filter data based on department
-            let userProfile = null;
-            try {
-                const profileRes = await fetch(`/api/efiling/users/profile?userId=${session.user.id}`);
-                if (profileRes.ok) {
-                    userProfile = await profileRes.json();
+            const params = new URLSearchParams({ limit: '25', scope: 'efiling' });
+            if (searchTerm) {
+                params.set('filter', searchTerm);
+            }
+            const res = await fetch(`/api/requests?${params.toString()}`);
+            if (res.ok) {
+                const payload = await res.json();
+                const list = Array.isArray(payload?.data) ? payload.data : [];
+                mergeWorkRequestOptions(list, { replace: replaceExisting || Boolean(searchTerm) });
+            } else if (res.status === 401 || res.status === 403) {
+                // User is not authenticated or doesn't have e-filing profile - silently handle
+                if (replaceExisting || searchTerm) {
+                    mergeWorkRequestOptions([], { replace: true });
                 }
-            } catch (error) {
-                console.error('Error fetching user profile:', error);
-            }
-
-            const [deptRes, catRes, typeRes, workRes] = await Promise.all([
-                fetch('/api/efiling/departments'),
-                fetch('/api/efiling/categories'),
-                fetch('/api/efiling/file-types'),
-                fetch('/api/requests?limit=1000')
-            ]);
-
-            if (deptRes.ok) {
-                const deptData = await deptRes.json();
-                setDepartments(Array.isArray(deptData) ? deptData : []);
-            }
-            if (catRes.ok) {
-                const catData = await catRes.json();
-                setCategories(Array.isArray(catData) ? catData : []);
-            }
-            if (typeRes.ok) {
-                const typeData = await typeRes.json();
-                const list = Array.isArray(typeData) ? typeData : (Array.isArray(typeData.fileTypes) ? typeData.fileTypes : []);
-                
-                // Filter file types based on user's department and role
-                const filteredTypes = filterFileTypesByDepartment(list, userProfile);
-                setFileTypes(filteredTypes);
-            }
-            if (workRes.ok) {
-                const workData = await workRes.json();
-                setWorkRequests(Array.isArray(workData.data) ? workData.data : []);
+            } else if (replaceExisting || searchTerm) {
+                mergeWorkRequestOptions([], { replace: true });
             }
         } catch (error) {
-            console.error('Error fetching initial data:', error);
-            toast({ title: "Error", description: "Failed to load form data", variant: "destructive" });
+            // Only log non-authentication errors
+            if (error.name !== 'AbortError') {
+                console.error('Error fetching work requests:', error);
+            }
+        } finally {
+            setWorkRequestLoading(false);
         }
+    }, [mergeWorkRequestOptions, session?.user?.id, sessionStatus]);
+
+    const filterDepartmentsByUser = (rawDepartments = []) => {
+        if (isGlobal) return rawDepartments;
+        if (!userDepartmentId) return [];
+        return rawDepartments.filter((dept) => Number(dept.id) === userDepartmentId);
     };
+
+    const filterCategoriesByUser = (rawCategories = []) => {
+        if (isGlobal) return rawCategories;
+        if (!userDepartmentId) return [];
+        return rawCategories.filter((category) => Number(category.department_id) === userDepartmentId);
+    };
+
+    const filterFileTypesByUser = (rawFileTypes = []) => {
+        if (isGlobal) return rawFileTypes;
+        if (!userDepartmentId) return [];
+        return rawFileTypes.filter((type) => {
+            if (type.department_id && Number(type.department_id) !== userDepartmentId) {
+                return false;
+            }
+            return true;
+        });
+    };
+
+    const profileReady = isGlobal || Boolean(userProfile);
+    const fetchInitialData = useCallback(async () => {
+        // Don't make API calls if user is not authenticated or session is loading
+        if (sessionStatus !== 'authenticated' || !session?.user?.id || !profileReady) {
+            return;
+        }
+        
+        // Prevent multiple fetches
+        if (dataFetchedRef.current) {
+            return;
+        }
+        
+        dataFetchedRef.current = true;
+        
+        try {
+            const [deptRes, catRes, typeRes] = await Promise.allSettled([
+                fetch('/api/efiling/departments').catch(err => {
+                    console.error('Error fetching departments:', err);
+                    return { ok: false, status: 500 };
+                }),
+                fetch('/api/efiling/categories').catch(err => {
+                    console.error('Error fetching categories:', err);
+                    return { ok: false, status: 500 };
+                }),
+                fetch('/api/efiling/file-types').catch(err => {
+                    console.error('Error fetching file types:', err);
+                    return { ok: false, status: 500 };
+                }),
+            ]);
+
+            if (deptRes.status === 'fulfilled' && deptRes.value.ok) {
+                try {
+                    const deptData = await deptRes.value.json();
+                    const list = Array.isArray(deptData?.departments) ? deptData.departments : Array.isArray(deptData) ? deptData : [];
+                    setDepartments(filterDepartmentsByUser(list));
+                } catch (err) {
+                    console.error('Error parsing departments response:', err);
+                }
+            }
+            if (catRes.status === 'fulfilled' && catRes.value.ok) {
+                try {
+                    const catData = await catRes.value.json();
+                    const list = Array.isArray(catData?.categories) ? catData.categories : Array.isArray(catData) ? catData : [];
+                    setCategories(filterCategoriesByUser(list));
+                } catch (err) {
+                    console.error('Error parsing categories response:', err);
+                }
+            }
+            if (typeRes.status === 'fulfilled' && typeRes.value.ok) {
+                try {
+                    const typeData = await typeRes.value.json();
+                    const list = Array.isArray(typeData?.fileTypes) ? typeData.fileTypes : Array.isArray(typeData) ? typeData : [];
+                    setFileTypes(filterFileTypesByUser(list));
+                } catch (err) {
+                    console.error('Error parsing file types response:', err);
+                }
+            }
+
+            // Fetch work requests separately to avoid blocking on errors
+            try {
+                await fetchWorkRequests('', true);
+            } catch (err) {
+                console.error('Error fetching work requests:', err);
+                // Don't show error toast for work requests as it's optional
+            }
+        } catch (error) {
+            // Only log errors if session is still authenticated (to avoid logging logout-related errors)
+            if (sessionStatus === 'authenticated' && !loading) {
+                console.error('Error fetching initial data:', error);
+                // Don't show toast if we're navigating away (file was just created)
+                toast({ title: "Error", description: "Failed to load some form data. Please refresh if needed.", variant: "destructive" });
+            }
+        } finally {
+            // Reset the flag after a delay to allow refetch if needed
+            setTimeout(() => {
+                dataFetchedRef.current = false;
+            }, 5000);
+        }
+    }, [filterDepartmentsByUser, filterCategoriesByUser, filterFileTypesByUser, fetchWorkRequests, toast, session?.user?.id, sessionStatus, profileReady, loading]);
+
+    useEffect(() => {
+        if (sessionStatus !== 'authenticated' || !session?.user?.id || !profileReady) return;
+        fetchInitialData();
+    }, [sessionStatus, session?.user?.id, profileReady, fetchInitialData]);
 
     const fetchUsersByDepartment = async (departmentId) => {
         if (!departmentId) { setUsers([]); return; }
@@ -144,6 +257,18 @@ export default function CreateNewFile() {
             setUsers([]);
         }
     };
+
+    const handleWorkRequestSearch = useCallback(
+        (term) => {
+            // Don't make API calls if user is not authenticated or session is loading
+            if (sessionStatus !== 'authenticated' || !session?.user?.id) {
+                return;
+            }
+            const sanitized = (term ?? '').trim();
+            fetchWorkRequests(sanitized, true);
+        },
+        [fetchWorkRequests, session?.user?.id, sessionStatus]
+    );
 
     const formik = useFormik({
         initialValues: {
@@ -176,8 +301,13 @@ export default function CreateNewFile() {
 
                 if (response.ok) {
                     const result = await response.json();
+                    // Prevent further data fetching since we're navigating away
+                    dataFetchedRef.current = true;
                     toast({ title: "Success", description: `File ticket created successfully with number: ${result.file_number}` });
-                    router.push(`/efilinguser/files/${result.id}/edit-document`);
+                    // Small delay to ensure toast is visible before navigation
+                    setTimeout(() => {
+                        router.push(`/efilinguser/files/${result.id}/edit-document`);
+                    }, 100);
                 } else {
                     const error = await response.json();
                     toast({ title: "Error", description: error.error || "Failed to create file ticket", variant: "destructive" });
@@ -191,33 +321,151 @@ export default function CreateNewFile() {
         },
     });
 
+    const selectedWorkRequestId = formik.values.work_request_id;
+    useEffect(() => {
+        selectedWorkRequestIdRef.current = selectedWorkRequestId ? selectedWorkRequestId.toString() : null;
+    }, [selectedWorkRequestId]);
+
+    useEffect(() => {
+        if (!selectedWorkRequestId) return;
+        const key = selectedWorkRequestId.toString();
+        if (workRequestCacheRef.current.has(key)) return;
+
+        const fetchById = async () => {
+            try {
+                const params = new URLSearchParams({ id: key, scope: 'efiling' });
+                const res = await fetch(`/api/requests?${params.toString()}`);
+                if (res.ok) {
+                    const record = await res.json();
+                    if (record && record.id) {
+                        mergeWorkRequestOptions(record);
+                    }
+                }
+            } catch (error) {
+                console.error('Error fetching selected work request:', error);
+            }
+        };
+
+        fetchById();
+    }, [selectedWorkRequestId, mergeWorkRequestOptions]);
+
+    const selectedDepartmentId = formik.values.department_id ? Number(formik.values.department_id) : null;
+    const selectedCategoryId = formik.values.category_id ? Number(formik.values.category_id) : null;
+
+    const availableCategories = useMemo(() => {
+        return categories.filter((category) => {
+            if (!selectedDepartmentId) return true;
+            return Number(category.department_id) === selectedDepartmentId;
+        });
+    }, [categories, selectedDepartmentId]);
+
+    const availableFileTypes = useMemo(() => {
+        return fileTypes.filter((type) => {
+            if (selectedDepartmentId && type.department_id && Number(type.department_id) !== selectedDepartmentId) {
+                return false;
+            }
+            if (selectedCategoryId && type.category_id && Number(type.category_id) !== selectedCategoryId) {
+                return false;
+            }
+            return true;
+        });
+    }, [fileTypes, selectedDepartmentId, selectedCategoryId]);
+
+    const workRequestDropdownOptions = useMemo(() => {
+        const base = [{ value: 'none', label: 'No Video Request' }];
+        if (workRequestOptions.length > 0) {
+            base.push(...workRequestOptions);
+        }
+        return base;
+    }, [workRequestOptions]);
+
     const handleDepartmentChange = (departmentId) => {
         formik.setFieldValue('department_id', departmentId);
+        formik.setFieldValue('category_id', '');
+        formik.setFieldValue('file_type_id', '');
         formik.setFieldValue('assigned_to', null);
-        setSelectedDepartment(departmentId);
-        fetchUsersByDepartment(departmentId);
+        const numericId = Number(departmentId);
+        fetchUsersByDepartment(Number.isNaN(numericId) ? null : numericId);
     };
 
     const handleCategoryChange = (categoryId) => {
         formik.setFieldValue('category_id', categoryId);
+        formik.setFieldValue('file_type_id', '');
     };
 
     const handleFileTypeChange = async (fileTypeId) => {
         formik.setFieldValue('file_type_id', fileTypeId);
-        if (fileTypeId) {
-            try {
-                const response = await fetch(`/api/efiling/workflow-templates?file_type_id=${fileTypeId}`);
-                if (response.ok) {
-                    const data = await response.json();
-                    setSelectedWorkflow(data && data.length ? data[0] : null);
-                }
-            } catch {
-                setSelectedWorkflow(null);
-            }
-        } else {
-            setSelectedWorkflow(null);
-        }
     };
+
+    useEffect(() => {
+        if (!profileReady || !departments.length) return;
+
+        const currentValue = formik.values.department_id;
+        if (currentValue) {
+            const numericCurrent = Number(currentValue);
+            if (!departments.some((dept) => Number(dept.id) === numericCurrent)) {
+                formik.setFieldValue('department_id', '');
+                formik.setFieldValue('category_id', '');
+                formik.setFieldValue('file_type_id', '');
+            } else {
+                fetchUsersByDepartment(numericCurrent);
+            }
+            return;
+        }
+
+        let target = null;
+        if (!isGlobal && userDepartmentId && departments.some((dept) => Number(dept.id) === userDepartmentId)) {
+            target = userDepartmentId;
+        } else if (departments.length === 1) {
+            target = Number(departments[0].id);
+        }
+
+        if (target !== null) {
+            formik.setFieldValue('department_id', target.toString());
+            fetchUsersByDepartment(target);
+        }
+    }, [departments, profileReady, isGlobal, userDepartmentId]);
+
+    useEffect(() => {
+        const current = formik.values.category_id;
+        if (current) {
+            const numericCurrent = Number(current);
+            if (!availableCategories.some((category) => Number(category.id) === numericCurrent)) {
+                formik.setFieldValue('category_id', '');
+                formik.setFieldValue('file_type_id', '');
+            }
+        } else if (availableCategories.length === 1) {
+            const target = availableCategories[0].id.toString();
+            if (formik.values.category_id !== target) {
+                formik.setFieldValue('category_id', target);
+            }
+        }
+    }, [availableCategories]);
+
+    useEffect(() => {
+        const current = formik.values.file_type_id;
+        if (current) {
+            const numericCurrent = Number(current);
+            if (!availableFileTypes.some((type) => Number(type.id) === numericCurrent)) {
+                formik.setFieldValue('file_type_id', '');
+            }
+        } else if (availableFileTypes.length === 1) {
+            const target = availableFileTypes[0].id.toString();
+            if (formik.values.file_type_id !== target) {
+                formik.setFieldValue('file_type_id', target);
+            }
+        }
+    }, [availableFileTypes]);
+
+    const workRequestSelectValue = selectedWorkRequestId ? selectedWorkRequestId.toString() : 'none';
+
+    if (!profileReady) {
+        return (
+            <div className="flex items-center justify-center h-96">
+                <div className="text-lg">Loading your profile…</div>
+            </div>
+        );
+    }
 
     return (
         <div className="container mx-auto px-4 py-6">
@@ -275,12 +523,12 @@ export default function CreateNewFile() {
                                             <SelectTrigger id="category_id">
                                                 <SelectValue placeholder="Select Category" />
                                             </SelectTrigger>
-                                            <SelectContent>
-                                                {categories.filter(cat => !selectedDepartment || cat.department_id == selectedDepartment).map((cat) => (
-                                                    <SelectItem key={cat.id} value={cat.id.toString()}>
-                                                        {cat.name}
-                                                    </SelectItem>
-                                                ))}
+                                        <SelectContent>
+                                            {availableCategories.map((cat) => (
+                                                <SelectItem key={cat.id} value={cat.id.toString()}>
+                                                    {cat.name}
+                                                </SelectItem>
+                                            ))}
                                             </SelectContent>
                                         </Select>
                                         {formik.touched.category_id && formik.errors.category_id && (<p className="text-red-500 text-sm mt-1">{formik.errors.category_id}</p>)}
@@ -294,14 +542,14 @@ export default function CreateNewFile() {
                                             <SelectValue placeholder="Select File Type" />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            {fileTypes.map((ft) => (
+                                            {availableFileTypes.map((ft) => (
                                                 <SelectItem key={ft.id} value={ft.id.toString()}>
                                                     {ft.name} ({ft.code})
                                                 </SelectItem>
                                             ))}
                                         </SelectContent>
                                     </Select>
-                                    <p className="text-sm text-gray-500 mt-1">Workflow will be attached based on the selected file type</p>
+                                    <p className="text-sm text-gray-500 mt-1">Marking rules and SLA deadlines will be applied automatically for this file type.</p>
                                     {formik.touched.file_type_id && formik.errors.file_type_id && (<p className="text-red-500 text-sm mt-1">{formik.errors.file_type_id}</p>)}
                                 </div>
 
@@ -325,21 +573,27 @@ export default function CreateNewFile() {
 
                                 <div>
                                     <Label htmlFor="work_request_id">Video Request ID (Optional)</Label>
-                                    <Select value={formik.values.work_request_id ? formik.values.work_request_id.toString() : "none"} onValueChange={(value) => formik.setFieldValue('work_request_id', value === "none" ? "" : value)}>
-                                        <SelectTrigger id="work_request_id">
-                                            <SelectValue placeholder="Select Video Request ID (Optional)" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="none">No Video Request</SelectItem>
-                                            {workRequests.map((req) => (
-                                                <SelectItem key={req.id} value={req.id.toString()}>
-                                                    #{req.id} - {req.address || 'No address'} ({req.complaint_type || 'No type'})
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
+                                    <SearchableDropdown
+                                        value={workRequestSelectValue}
+                                        onChange={(selectedValue) => {
+                                            console.log('[SearchableDropdown] onChange called with:', selectedValue, typeof selectedValue);
+                                            const finalValue = selectedValue === 'none' || selectedValue === '' ? '' : String(selectedValue);
+                                            console.log('[SearchableDropdown] Setting work_request_id to:', finalValue);
+                                            formik.setFieldValue('work_request_id', finalValue);
+                                            formik.setFieldTouched('work_request_id', true);
+                                        }}
+                                        options={workRequestDropdownOptions}
+                                        onSearch={sessionStatus === 'authenticated' && session?.user?.id ? handleWorkRequestSearch : undefined}
+                                        isLoading={workRequestLoading}
+                                        emptyMessage="No work request found."
+                                        placeholder="Search or select a video request"
+                                        className={formik.touched.work_request_id && formik.errors.work_request_id ? 'border-red-500' : ''}
+                                    />
                                     <p className="text-sm text-gray-500 mt-1">Link this file to a specific video request for reference</p>
                                     {formik.touched.work_request_id && formik.errors.work_request_id && (<p className="text-red-500 text-sm mt-1">{formik.errors.work_request_id}</p>)}
+                                    {formik.values.work_request_id && (
+                                        <p className="text-xs text-green-600 mt-1">Selected: {formik.values.work_request_id}</p>
+                                    )}
                                 </div>
 
                                 <div>
@@ -359,47 +613,26 @@ export default function CreateNewFile() {
                             <CardContent className="space-y-3">
                                 <div>
                                     <Label className="text-sm font-medium text-gray-600">File Number</Label>
-                                    <p className="text-sm text-gray-900">{formik.values.department_id && departments.find(d => d.id == formik.values.department_id)?.code ? `${departments.find(d => d.id == formik.values.department_id).code}/${new Date().getFullYear()}/XXXX` : 'Will be generated'}</p>
+                                    <p className="text-sm text-gray-900">
+                                        {formik.values.department_id && departments.find(d => d.id == formik.values.department_id)?.code 
+                                            ? `${departments.find(d => d.id == formik.values.department_id).code}/${getFiscalYear()}/XXXX` 
+                                            : 'Will be generated'}
+                                    </p>
                                 </div>
                                 <div>
                                     <Label className="text-sm font-medium text-gray-600">Subject</Label>
                                     <p className="text-sm text-gray-900 truncate">{formik.values.subject || 'Not specified'}</p>
                                 </div>
-                                <div>
-                                    <Label className="text-sm font-medium text-gray-600">Department</Label>
-                                    <p className="text-sm text-gray-900">{departments.find(d => d.id == formik.values.department_id)?.name || 'Not selected'}</p>
-                                </div>
+                        <div>
+                            <Label className="text-sm font-medium text-gray-600">Department</Label>
+                            <p className="text-sm text-gray-900">{departments.find(d => d.id == formik.values.department_id)?.name || 'Not selected'}</p>
+                        </div>
                                 <div>
                                     <Label className="text-sm font-medium text-gray-600">Priority</Label>
                                     <p className="text-sm text-gray-900 font-semibold text-red-600">High (Default)</p>
                                 </div>
                             </CardContent>
                         </Card>
-
-                        {selectedWorkflow && (
-                            <Card>
-                                <CardHeader>
-                                    <CardTitle className="flex items-center">
-                                        <AlertCircle className="w-4 h-4 mr-2 text-blue-600" />
-                                        Workflow Preview
-                                    </CardTitle>
-                                </CardHeader>
-                                <CardContent className="space-y-3">
-                                    <div>
-                                        <Label className="text-sm font-medium text-gray-600">Workflow Name</Label>
-                                        <p className="text-sm text-gray-900 font-medium">{selectedWorkflow.name}</p>
-                                    </div>
-                                    <div>
-                                        <Label className="text-sm font-medium text-gray-600">Description</Label>
-                                        <p className="text-sm text-gray-900">{selectedWorkflow.description || 'No description available'}</p>
-                                    </div>
-                                    <div>
-                                        <Label className="text-sm font-medium text-gray-600">Status</Label>
-                                        <p className="text-sm text-green-600 font-medium">✓ Auto-assigned</p>
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        )}
 
                         <Card>
                             <CardHeader>
@@ -413,7 +646,7 @@ export default function CreateNewFile() {
                             </CardContent>
                         </Card>
 
-                        <Card>
+                        {/* <Card>
                             <CardHeader>
                                 <CardTitle className="flex items-center"><AlertCircle className="w-5 h-5 mr-2" />Help</CardTitle>
                             </CardHeader>
@@ -424,7 +657,7 @@ export default function CreateNewFile() {
                                 <p>• You can format and create the actual document there</p>
                                 <p>• E-signatures will be applied during document processing</p>
                             </CardContent>
-                        </Card>
+                        </Card> */}
                     </div>
                 </div>
             </form>

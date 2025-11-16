@@ -1,8 +1,23 @@
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/db';
 import { logAction, ENTITY_TYPES } from '@/lib/actionLogger';
-import { pauseSLA, resumeSLA, isCEORole } from '@/lib/efilingSLAManager';
+import { getAllowedRecipients, getSLA, validateGeographicMatch } from '@/lib/efilingGeographicRouting';
+import { isCEORole } from '@/lib/efilingSLAManager';
 import { getToken } from 'next-auth/jwt';
+import { 
+    isWithinTeamWorkflow, 
+    getTeamMembersForMarking, 
+    canMarkFile,
+    getAssistantsForManager 
+} from '@/lib/efilingTeamManager';
+import {
+    initializeWorkflowState,
+    getWorkflowState,
+    updateWorkflowState,
+    canMarkFileForward,
+    markReturnToCreator,
+    startTAT
+} from '@/lib/efilingWorkflowStateManager';
 
 export async function POST(request, { params }) {
     let client;
@@ -24,47 +39,117 @@ export async function POST(request, { params }) {
         client = await connectToDatabase();
         await client.query('BEGIN');
 
+        // Get file with geographic information
         const fileRes = await client.query(`
             SELECT f.*, 
-                   eu_from.department_id as from_department_id, 
                    eu_from.id as from_user_efiling_id,
                    eu_from.user_id as from_user_system_id,
-                   wf.id as workflow_id,
-                   wf.current_stage_id
+                   eu_from.district_id as from_district_id,
+                   eu_from.town_id as from_town_id,
+                   eu_from.division_id as from_division_id,
+                   eu_from.efiling_role_id as from_role_id
             FROM efiling_files f
             LEFT JOIN efiling_users eu_from ON eu_from.id = f.assigned_to
-            LEFT JOIN efiling_file_workflows wf ON wf.file_id = f.id
             WHERE f.id = $1
         `, [id]);
+        
         if (fileRes.rows.length === 0) {
             await client.query('ROLLBACK');
             return NextResponse.json({ error: 'File not found' }, { status: 404 });
         }
+        
         const fileRow = fileRes.rows[0];
+        const fromUserEfilingId = fileRow.assigned_to || fileRow.created_by;
+        
+        // Initialize workflow state if not exists
+        if (!fileRow.workflow_state_id) {
+            await initializeWorkflowState(client, id, fileRow.created_by);
+            // Reload file to get workflow_state_id
+            const reloadRes = await client.query(`SELECT workflow_state_id FROM efiling_files WHERE id = $1`, [id]);
+            fileRow.workflow_state_id = reloadRes.rows[0]?.workflow_state_id;
+        }
+        
+        // Get current user's efiling info
+        const currentUserRes = await client.query(`
+            SELECT eu.id, eu.efiling_role_id, r.code as role_code
+            FROM efiling_users eu
+            JOIN users u ON eu.user_id = u.id
+            LEFT JOIN efiling_roles r ON eu.efiling_role_id = r.id
+            WHERE u.id = $1 AND eu.is_active = true
+        `, [token.user.id]);
 
-        // ========== E-SIGNATURE VALIDATION ==========
-        // Check if file creator has signed (unless user is admin)
+        if (currentUserRes.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return NextResponse.json({ error: 'Current user not found in e-filing system' }, { status: 403 });
+        }
+
+        const currentUser = currentUserRes.rows[0];
+        const currentUserRoleCode = (currentUser.role_code || '').toUpperCase();
+        const isCEO = isCEORole(currentUserRoleCode);
+        const isCOO = currentUserRoleCode === 'COO';
+        
+        const workflowState = await getWorkflowState(client, id);
+
+        // ========== E-SIGNATURE VALIDATION (Updated for Team Workflow) ==========
         const isAdmin = [1, 2].includes(token.user.role);
         
         if (!isAdmin) {
-            const creatorSignatureCheck = await client.query(`
-                SELECT COUNT(*) as count
-                FROM efiling_document_signatures eds
-                JOIN efiling_users eu ON eds.user_id = eu.user_id
-                WHERE eds.file_id = $1 AND eu.id = $2 AND eds.is_active = true
-            `, [id, fileRow.created_by]);
-
-            if (creatorSignatureCheck.rows[0].count === 0) {
+            // Check if e-signature is required for this marking
+            // Only one user_id for now (sequential workflow)
+            const toUserId = user_ids[0];
+            
+            const signatureCheck = await canMarkFileForward(client, id, currentUser.id, toUserId);
+            
+            if (signatureCheck.requiresSignature && !signatureCheck.canMark) {
                 await client.query('ROLLBACK');
                 return NextResponse.json({
-                    error: 'File creator must add e-signature before marking to others',
+                    error: signatureCheck.reason || 'E-signature required before marking forward',
                     code: 'SIGNATURE_REQUIRED'
                 }, { status: 403 });
             }
         }
         // ========== END E-SIGNATURE VALIDATION ==========
 
+        // Pre-compute allowed recipients for validation and populate marking dropdowns
+        const allowedRecipients = await getAllowedRecipients(client, {
+            fromUserEfilingId,
+            fileId: id,
+            fileDepartmentId: fileRow.department_id,
+            fileDistrictId: fileRow.district_id,
+            fileTownId: fileRow.town_id,
+            fileDivisionId: fileRow.division_id
+        });
+
+        // Add team members to allowed recipients if file is within team workflow
+        if (workflowState && workflowState.is_within_team) {
+            const teamMembers = await getTeamMembersForMarking(client, fileRow.created_by);
+            teamMembers.forEach(member => {
+                if (!allowedRecipients.find(r => r.id === member.id)) {
+                    allowedRecipients.push({
+                        id: member.id,
+                        name: member.name,
+                        role_code: member.role_code,
+                        is_team_member: true
+                    });
+                }
+            });
+        }
+
+        const allowedRecipientMap = new Map(allowedRecipients.map((recipient) => [recipient.id, recipient]));
+
+        // Validate that current user can mark file (updated for team workflow)
+        if (!isAdmin) {
+            const canMark = await canMarkFile(client, id, currentUser.id);
+            if (!canMark) {
+                await client.query('ROLLBACK');
+                return NextResponse.json({ 
+                    error: 'You do not have permission to mark this file' 
+                }, { status: 403 });
+            }
+        }
+
         try {
+            // Update file status from DRAFT to IN_PROGRESS if needed
             await client.query(`
                 UPDATE efiling_files 
                 SET status_id = (
@@ -76,99 +161,159 @@ export async function POST(request, { params }) {
                 RETURNING id
             `, [id]);
 
-            const movementPromises = user_ids.map(async (userId) => {
-                const target = await client.query(`
-                    SELECT eu.id, eu.department_id, eu.efiling_role_id, r.code as role_code
+            // Process only first user_id (sequential workflow - one at a time)
+            const userId = user_ids[0];
+            const targetRecipient = allowedRecipientMap.get(userId);
+
+            if (!targetRecipient) {
+                throw new Error('Selected user is not allowed based on SLA matrix/location rules');
+            }
+
+            const target = await client.query(`
+                SELECT eu.id, eu.department_id, eu.efiling_role_id, 
+                       eu.district_id, eu.town_id, eu.division_id,
+                       r.code as role_code
+                FROM efiling_users eu
+                LEFT JOIN efiling_roles r ON eu.efiling_role_id = r.id
+                WHERE eu.id = $1 AND eu.is_active = true
+            `, [userId]);
+            
+            if (target.rows.length === 0) {
+                throw new Error('Target user not found or inactive');
+            }
+            
+            const targetUser = target.rows[0];
+            const toRoleCode = (targetUser.role_code || '').toUpperCase();
+
+            // Check if movement is within team workflow
+            const isTeamInternal = await isWithinTeamWorkflow(client, id, currentUser.id, userId);
+            
+            // Check if this is a return to creator
+            const isReturnToCreator = (userId === fileRow.created_by) && 
+                                     workflowState && 
+                                     workflowState.current_state === 'EXTERNAL';
+            
+            // Check if this is moving to external (SE or higher)
+            const externalRoles = ['SE', 'CE', 'CFO', 'COO', 'CEO'];
+            const isMovingToExternal = externalRoles.includes(toRoleCode) && 
+                                       !isTeamInternal &&
+                                       !isReturnToCreator;
+            
+            // Determine new workflow state
+            let newState = workflowState?.current_state || 'TEAM_INTERNAL';
+            let shouldStartTAT = false;
+            
+            if (isReturnToCreator) {
+                newState = 'RETURNED_TO_CREATOR';
+                await markReturnToCreator(client, id, fileRow.created_by);
+            } else if (isMovingToExternal) {
+                newState = 'EXTERNAL';
+                shouldStartTAT = true;
+                await startTAT(client, id);
+            } else if (isTeamInternal) {
+                newState = 'TEAM_INTERNAL';
+                // Update workflow state to keep it within team
+                await updateWorkflowState(client, id, 'TEAM_INTERNAL', userId, true, false);
+            }
+
+            // Validate geographic match (CEO/COO bypass, skip for team internal)
+            if (!isCEO && !isCOO && !isTeamInternal) {
+                const expectedScope = targetRecipient.allowed_level_scope || 'district';
+                const isValid = validateGeographicMatch(
+                    {
+                        district_id: fileRow.district_id,
+                        town_id: fileRow.town_id,
+                        division_id: fileRow.division_id
+                    },
+                    {
+                        district_id: targetUser.district_id,
+                        town_id: targetUser.town_id,
+                        division_id: targetUser.division_id
+                    },
+                    expectedScope
+                );
+
+                if (!isValid) {
+                    throw new Error(
+                        `Geographic mismatch: File location does not match target user location. ` +
+                        `Required scope: ${expectedScope}`
+                    );
+                }
+            }
+
+            // Create movement record with team workflow flags
+            const movementRes = await client.query(`
+                INSERT INTO efiling_file_movements (
+                    file_id, from_user_id, to_user_id, 
+                    from_department_id, to_department_id, 
+                    action_type, remarks,
+                    is_team_internal, is_return_to_creator, tat_started
+                )
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+                RETURNING id
+            `, [
+                id, 
+                fromUserEfilingId, 
+                userId, 
+                fileRow.department_id,
+                targetUser.department_id,
+                'MARK_TO', 
+                remarks || null,
+                isTeamInternal,
+                isReturnToCreator,
+                shouldStartTAT
+            ]);
+            
+            const movements = [movementRes];
+
+            // Update file assignment
+            const newAssignee = userId;
+            
+            // Calculate SLA deadline from SLA matrix (only for external workflow)
+            let slaDeadline = fileRow.sla_deadline; // Keep existing deadline by default
+            
+            if (shouldStartTAT && !isTeamInternal) {
+                // Get role codes for SLA lookup
+                const lastTargetRes = await client.query(`
+                    SELECT eu.efiling_role_id, r.code as role_code
                     FROM efiling_users eu
                     LEFT JOIN efiling_roles r ON eu.efiling_role_id = r.id
                     WHERE eu.id = $1
-                `, [userId]);
-                if (target.rows.length === 0) throw new Error('Target user not found');
-                const t = target.rows[0];
-
-                const actorRes = await client.query(`
-                    SELECT eu.id, eu.department_id, r.code as role_code
-                    FROM efiling_users eu
-                    LEFT JOIN efiling_roles r ON r.id = eu.efiling_role_id
-                    WHERE eu.id = $1
-                `, [fileRow.assigned_to || fileRow.created_by]);
-                const actor = actorRes.rows[0] || {};
-
-                const allowedNext = {
-                    XEN: ['SE'],
-                    SE: ['CONSULTANT','CE'],
-                    CONSULTANT: ['SE'],
-                    CE: ['COO'],
-                    COO: ['CEO'],
-                    CEO: ['CE','PC'],
-                    PC: ['IAO_II'],
-                    IAO_II: ['COO'],
-                    BUDGET: ['ADLFA'],
-                    ADLFA: ['FINANCE'],
-                    FINANCE: []
-                };
-
-                const fromRole = (actor.role_code || '').toUpperCase();
-                const toRole = (t.role_code || '').toUpperCase();
-
-                // ========== SLA PAUSE/RESUME LOGIC ==========
-                // Check if we're moving FROM CEO role - Resume SLA
-                if (isCEORole(fromRole) && fileRow.workflow_id) {
-                    console.log('Resuming SLA - File leaving CEO');
-                    // Get next stage ID from transitions
-                    const nextStageRes = await client.query(`
-                        SELECT to_stage_id 
-                        FROM efiling_stage_transitions 
-                        WHERE from_stage_id = $1 AND is_active = true
-                        ORDER BY id LIMIT 1
-                    `, [fileRow.current_stage_id]);
-                    
-                    if (nextStageRes.rows.length > 0) {
-                        await resumeSLA(client, id, fileRow.workflow_id, nextStageRes.rows[0].to_stage_id);
-                    }
-                }
+                `, [newAssignee]);
                 
-                // Check if we're moving TO CEO role - Pause SLA
-                if (isCEORole(toRole) && fileRow.workflow_id) {
-                    console.log('Pausing SLA - File moving to CEO');
-                    await pauseSLA(client, id, fileRow.workflow_id, userId, fileRow.current_stage_id);
+                if (lastTargetRes.rows.length > 0) {
+                    const lastTargetRoleCode = lastTargetRes.rows[0].role_code || '';
+                    const slaHours = await getSLA(client, currentUserRoleCode, lastTargetRoleCode);
+                    
+                    const deadline = new Date();
+                    deadline.setHours(deadline.getHours() + slaHours);
+                    slaDeadline = deadline.toISOString();
                 }
-                // ========== END SLA PAUSE/RESUME LOGIC ==========
-                if (allowedNext[fromRole] && allowedNext[fromRole].length > 0) {
-                    if (!allowedNext[fromRole].includes(toRole)) {
-                        throw new Error(`Assignment not allowed: ${fromRole} → ${toRole}`);
-                    }
-                }
-
-                if (fromRole === 'XEN' && toRole === 'SE') {
-                    if (actor.department_id && t.department_id && actor.department_id !== t.department_id) {
-                        throw new Error('XEN can assign only to SE within same department');
-                    }
-                }
-                return await client.query(`
-                    INSERT INTO efiling_file_movements (
-                        file_id, from_user_id, to_user_id, action_type, remarks
-                    )
-                    VALUES ($1, $2, $3, $4, $5)
-                    RETURNING id
-                `, [id, fileRow.assigned_to || fileRow.created_by, userId, 'forward', remarks]);
-            });
-
-            const movements = await Promise.all(movementPromises);
-
-            const newAssignee = user_ids[user_ids.length - 1];
+            }
+            
+            // Update file assignment and workflow state
             await client.query(`
                 UPDATE efiling_files
-                SET assigned_to = $1, updated_at = CURRENT_TIMESTAMP
-                WHERE id = $2
-            `, [newAssignee, id]);
+                SET assigned_to = $1, 
+                    updated_at = CURRENT_TIMESTAMP,
+                    sla_deadline = CASE 
+                        WHEN $2 IS NOT NULL THEN $2 
+                        ELSE sla_deadline 
+                    END
+                WHERE id = $3
+            `, [newAssignee, shouldStartTAT ? slaDeadline : null, id]);
+            
+            // Update workflow state
+            await updateWorkflowState(client, id, newState, newAssignee, isTeamInternal, shouldStartTAT);
+            
+            // Special handling: If marked to SE/CE, also assign to their assistants (for simultaneous visibility)
+            if ((toRoleCode === 'SE' || toRoleCode === 'CE') && !isTeamInternal) {
+                const assistants = await getAssistantsForManager(client, userId);
+                // Note: We don't create separate movements for assistants, but they will see the file
+                // The file is assigned to SE/CE, and assistants can see it via their manager relationship
+            }
 
-            await client.query(`
-                UPDATE efiling_file_workflows
-                SET current_assignee_id = $1, updated_at = CURRENT_TIMESTAMP
-                WHERE file_id = $2
-            `, [newAssignee, id]);
-
+            // Get target user info for notification
             const lastTarget = await client.query(`
                 SELECT eu.id, u.name as user_name, r.code as role_code
                 FROM efiling_users eu
@@ -176,67 +321,64 @@ export async function POST(request, { params }) {
                 LEFT JOIN efiling_roles r ON r.id = eu.efiling_role_id
                 WHERE eu.id = $1
             `, [newAssignee]);
-            let addHours = 0;
-            const roleCode = lastTarget.rows[0]?.role_code || '';
+            
             const assigneeDisplayName = lastTarget.rows[0]?.user_name || 'User';
-            if (roleCode === 'SE') addHours = 0;
-            else if (roleCode === 'CONSULTANT') addHours = 48;
-            else if (roleCode === 'IAO_II') addHours = 24;
-            else if (roleCode === 'PROCUREMENT_COMMITTEE') addHours = 7 * 24;
-            if (addHours >= 0) {
-                await client.query(`
-                    UPDATE efiling_file_workflows
-                    SET sla_deadline = NOW() + ($1 || ' hours')::interval
-                    WHERE file_id = $2
-                `, [addHours.toString(), id]);
-            }
+            const assigneeRole = (lastTarget.rows[0]?.role_code || '').toUpperCase();
 
             // Notify new assignee
             try {
                 await client.query(`
                     INSERT INTO efiling_notifications (user_id, file_id, type, message, priority, action_required, created_at)
                     VALUES ($1, $2, $3, $4, 'normal', true, NOW())
-                `, [newAssignee, id, 'file_assigned', `A file has been assigned to you: File ${id}`]);
+                `, [newAssignee, id, 'file_assigned', `A file has been assigned to you: File ${fileRow.file_number || id}`]);
             } catch (e) {
-                console.warn('Notify assignee on forward failed', e);
+                console.warn('Notify assignee on mark-to failed', e);
+            }
+            
+            // Notify SE/CE assistants if file is marked to SE/CE
+            if ((toRoleCode === 'SE' || toRoleCode === 'CE') && !isTeamInternal) {
+                try {
+                    const assistants = await getAssistantsForManager(client, userId);
+                    for (const assistant of assistants) {
+                        await client.query(`
+                            INSERT INTO efiling_notifications (user_id, file_id, type, message, priority, action_required, created_at)
+                            VALUES ($1, $2, $3, $4, 'normal', false, NOW())
+                        `, [assistant.team_member_id, id, 'file_assigned', 
+                            `A file has been assigned to your manager (${assigneeDisplayName}): File ${fileRow.file_number || id}`]);
+                    }
+                } catch (e) {
+                    console.warn('Notify assistants on mark-to failed', e);
+                }
             }
 
             // Notify creator that the file has been forwarded
             try {
-                const meta = await client.query(`
-                    SELECT f.created_by, u.name as assignee_name, r.code as assignee_role_code
-                    FROM efiling_files f
-                    LEFT JOIN efiling_users eu ON eu.id = $1
-                    LEFT JOIN users u ON eu.user_id = u.id
-                    LEFT JOIN efiling_roles r ON r.id = eu.efiling_role_id
-                    WHERE f.id = $2
-            `, [newAssignee, id]);
-                const createdBy = meta.rows[0]?.created_by;
-                const assigneeName = meta.rows[0]?.assignee_name || assigneeDisplayName;
-                const assigneeRole = (meta.rows[0]?.assignee_role_code || '').toUpperCase();
-
-                const actorId = fileRow.assigned_to || fileRow.created_by;
-                if (createdBy && createdBy !== actorId) {
+                const createdBy = fileRow.created_by;
+                if (createdBy && createdBy !== newAssignee) {
                 await client.query(`
                         INSERT INTO efiling_notifications (user_id, file_id, type, message, priority, action_required, created_at)
                         VALUES ($1, $2, $3, $4, 'low', false, NOW())
-                    `, [createdBy, id, 'file_forwarded', `Your file has been forwarded to ${assigneeName} (${assigneeRole})`]);
+                    `, [createdBy, id, 'file_forwarded', `Your file has been marked to ${assigneeDisplayName} (${assigneeRole})`]);
                 }
             } catch (e) {
-                console.warn('Notify creator on forward failed', e);
+                console.warn('Notify creator on mark-to failed', e);
             }
 
             await client.query('COMMIT');
 
             await logAction(request, 'MARK_TO', ENTITY_TYPES.EFILING_FILE, {
                 entityId: id,
-                entityName: `File ${id}`,
+                entityName: `File ${fileRow.file_number || id}`,
                 details: { user_ids, remarks, movements_created: movements.length }
             });
 
             return NextResponse.json({ 
-                message: `File marked to ${user_ids.length} user(s) successfully`,
-                movements: movements.map((m) => m.rows[0])
+                message: `File marked successfully`,
+                movement: movements[0].rows[0],
+                workflow_state: newState,
+                is_team_internal: isTeamInternal,
+                tat_started: shouldStartTAT,
+                allowed_recipients: allowedRecipients
             });
         } catch (error) {
             await client.query('ROLLBACK');
@@ -244,7 +386,9 @@ export async function POST(request, { params }) {
         }
     } catch (error) {
         console.error('Database error:', error);
-        return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+        return NextResponse.json({ 
+            error: error.message || 'Internal server error' 
+        }, { status: 500 });
     } finally {
         if (client) await client.release();
     }
@@ -255,7 +399,51 @@ export async function GET(request, { params }) {
     try {
         const { id } = await params;
         client = await connectToDatabase();
-        const result = await client.query(`
+        
+        // Get file with geographic info
+        const fileRes = await client.query(`
+            SELECT f.*, eu.id as from_user_efiling_id
+            FROM efiling_files f
+            LEFT JOIN efiling_users eu ON eu.id = f.assigned_to
+            WHERE f.id = $1
+        `, [id]);
+        
+        if (fileRes.rows.length === 0) {
+            return NextResponse.json({ error: 'File not found' }, { status: 404 });
+        }
+        
+        const file = fileRes.rows[0];
+        const fromUserEfilingId = file.assigned_to || file.created_by;
+        
+        // Get allowed recipients using geographic routing
+        let allowedRecipients = await getAllowedRecipients(client, {
+            fromUserEfilingId,
+            fileId: id,
+            fileDepartmentId: file.department_id,
+            fileTypeId: file.file_type_id,
+            fileDistrictId: file.district_id,
+            fileTownId: file.town_id,
+            fileDivisionId: file.division_id
+        });
+        
+        // Add team members if file is within team workflow
+        const workflowState = await getWorkflowState(client, id);
+        if (workflowState && workflowState.is_within_team) {
+            const teamMembers = await getTeamMembersForMarking(client, file.created_by);
+            teamMembers.forEach(member => {
+                if (!allowedRecipients.find(r => r.id === member.id)) {
+                    allowedRecipients.push({
+                        id: member.id,
+                        name: member.name,
+                        role_code: member.role_code,
+                        is_team_member: true
+                    });
+                }
+            });
+        }
+        
+        // Also get movement history
+        const movementsRes = await client.query(`
             SELECT 
                 fm.*,
                 u1.name as from_user_name,
@@ -272,7 +460,12 @@ export async function GET(request, { params }) {
             WHERE fm.file_id = $1
             ORDER BY fm.created_at DESC
         `, [id]);
-        return NextResponse.json({ file_id: id, movements: result.rows });
+        
+        return NextResponse.json({ 
+            file_id: id, 
+            allowed_recipients: allowedRecipients,
+            movements: movementsRes.rows 
+        });
     } catch (error) {
         console.error('Database error:', error);
         return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

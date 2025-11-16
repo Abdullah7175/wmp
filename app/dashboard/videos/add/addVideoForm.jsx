@@ -98,7 +98,27 @@ const VideoForm = () => {
 
     const handleFileChange = (e) => {
         const files = Array.from(e.target.files);
-        setFileInputs(files.map(file => ({
+        const validFiles = [];
+        const errors = [];
+
+        files.forEach(file => {
+            // Validate file size (100MB max for videos)
+            if (file.size > 100 * 1024 * 1024) {
+                errors.push(`${file.name}: File size exceeds limit. Maximum allowed: 100MB`);
+            } else {
+                validFiles.push(file);
+            }
+        });
+
+        if (errors.length > 0) {
+            toast({
+                title: "Invalid Files",
+                description: errors.join('\n'),
+                variant: "destructive",
+            });
+        }
+
+        setFileInputs(validFiles.map(file => ({
             file,
             description: '',
             latitude: '',
@@ -140,6 +160,7 @@ const VideoForm = () => {
                 data.append('longitude', item.longitude);
 
                 await uploadFile(item.file, '/api/videos/upload', data, {
+                    maxFileSize: 100 * 1024 * 1024, // 100MB max for videos
                     onProgress: (progress) => {
                         // Calculate overall progress across all files
                         const overallProgress = Math.round(((i + progress / 100) / fileInputs.length) * 100);

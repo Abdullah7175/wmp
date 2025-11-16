@@ -98,7 +98,27 @@ const ImageForm = () => {
 
     const handleFileChange = (e) => {
         const files = Array.from(e.target.files);
-        setFileInputs(files.map(file => ({
+        const validFiles = [];
+        const errors = [];
+
+        files.forEach(file => {
+            // Validate file size (5MB max for images)
+            if (file.size > 5 * 1024 * 1024) {
+                errors.push(`${file.name}: File size exceeds limit. Maximum allowed: 5MB`);
+            } else {
+                validFiles.push(file);
+            }
+        });
+
+        if (errors.length > 0) {
+            toast({
+                title: "Invalid Files",
+                description: errors.join('\n'),
+                variant: "destructive",
+            });
+        }
+
+        setFileInputs(validFiles.map(file => ({
             file,
             description: '',
             latitude: '',

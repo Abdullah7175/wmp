@@ -37,10 +37,19 @@ export async function GET(request) {
         
         if (id) {
             const query = `
-                SELECT u.*, d.name as department_name, r.name as role_name
+                SELECT u.*, d.name as department_name, d.department_type,
+                       r.name as role_name, r.code as role_code,
+                       dist.title as district_name,
+                       t.town as town_name,
+                       st.subtown as subtown_name,
+                       div.name as division_name
                 FROM efiling_users u
                 LEFT JOIN efiling_departments d ON u.department_id = d.id
                 LEFT JOIN efiling_roles r ON u.efiling_role_id = r.id
+                LEFT JOIN district dist ON u.district_id = dist.id
+                LEFT JOIN town t ON u.town_id = t.id
+                LEFT JOIN subtown st ON u.subtown_id = st.id
+                LEFT JOIN divisions div ON u.division_id = div.id
                 WHERE u.id = $1
             `;
             const result = await client.query(query, [id]);
@@ -52,10 +61,19 @@ export async function GET(request) {
             return NextResponse.json(result.rows[0]);
         } else {
             let query = `
-                SELECT u.*, d.name as department_name, r.name as role_name, r.code as role_code
+                SELECT u.*, d.name as department_name, d.department_type, 
+                       r.name as role_name, r.code as role_code,
+                       dist.title as district_name,
+                       t.town as town_name,
+                       st.subtown as subtown_name,
+                       div.name as division_name
                 FROM efiling_users u
                 LEFT JOIN efiling_departments d ON u.department_id = d.id
                 LEFT JOIN efiling_roles r ON u.efiling_role_id = r.id
+                LEFT JOIN district dist ON u.district_id = dist.id
+                LEFT JOIN town t ON u.town_id = t.id
+                LEFT JOIN subtown st ON u.subtown_id = st.id
+                LEFT JOIN divisions div ON u.division_id = div.id
             `;
             const params = [];
             const conditions = [];
@@ -116,7 +134,11 @@ export async function POST(request) {
             designation, 
             department_id, 
             efiling_role_id, 
-            supervisor_id 
+            supervisor_id,
+            district_id,
+            town_id,
+            subtown_id,
+            division_id
         } = body;
         
         // Validate required fields
@@ -152,18 +174,25 @@ export async function POST(request) {
             }
         }
         
+        const districtId = body.district_id || null;
+        const townId = body.town_id || null;
+        const subtownId = body.subtown_id || null;
+        const divisionId = body.division_id || null;
+
         const query = `
             INSERT INTO efiling_users (
                 user_id, employee_id, designation, department_id, 
-                efiling_role_id, supervisor_id
+                efiling_role_id, supervisor_id,
+                district_id, town_id, subtown_id, division_id
             )
-            VALUES ($1, $2, $3, $4, $5, $6)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
             RETURNING *
         `;
         
         const result = await client.query(query, [
             user_id, employee_id, designation, department_id, 
-            efiling_role_id, supervisor_id
+            efiling_role_id, supervisor_id,
+            districtId, townId, subtownId, divisionId
         ]);
         
         // Log the action
@@ -191,7 +220,8 @@ export async function PUT(request) {
         const body = await request.json();
         const { 
             id, employee_id, designation, department_id, 
-            efiling_role_id, supervisor_id, is_active, is_consultant
+            efiling_role_id, supervisor_id, is_active, is_consultant,
+            district_id, town_id, subtown_id, division_id
         } = body;
         
         if (!id) {
@@ -245,6 +275,10 @@ export async function PUT(request) {
                 supervisor_id = $6,
                 is_active = $7,
                 is_consultant = $8,
+                district_id = $9,
+                town_id = $10,
+                subtown_id = $11,
+                division_id = $12,
                 updated_at = CURRENT_TIMESTAMP
             WHERE id = $1
             RETURNING *
@@ -258,7 +292,11 @@ export async function PUT(request) {
             efiling_role_id, 
             supervisor_id, 
             is_active,
-            is_consultant
+            is_consultant,
+            is_consultant ? null : (district_id || null),
+            is_consultant ? null : (town_id || null),
+            is_consultant ? null : (subtown_id || null),
+            is_consultant ? null : (division_id || null)
         ]);
         
         // Log the action

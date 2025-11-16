@@ -22,7 +22,9 @@ import {
     BookOpen,
     Shield,
     Bell,
-    LogOut
+    LogOut,
+    MapPin,
+    Map
 } from "lucide-react";
 import { useSidebar } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
@@ -59,17 +61,19 @@ const links = [
             // { href: "/efiling/departments/roles/create", label: "Create Role", icon: <FileText className="w-4 h-4" /> },
             { href: "/efiling/departments/users", label: "Users", icon: <UserCheck className="w-4 h-4" /> },
             // { href: "/efiling/departments/users/create", label: "Create User", icon: <FileText className="w-4 h-4" /> },
+            { href: "/efiling/teams", label: "Team Management", icon: <Users className="w-4 h-4" /> },
+            { href: "/efiling/templates", label: "Templates", icon: <FileText className="w-4 h-4" /> },
         ]
     },
-    {
-        href: "/efiling/workflow-templates",
-        label: "Workflow Templates",
-        icon: <Wrench className="w-5 h-5 mr-2" />,
-        subItems: [
-            { href: "/efiling/workflow-templates", label: "Manage Templates", icon: <Settings className="w-4 h-4" /> },
-            { href: "/efiling/workflow-templates/create", label: "Create Template", icon: <FileEdit className="w-4 h-4" /> },
-        ]
-    },
+    // {
+    //     href: "/efiling/workflow-templates",
+    //     label: "Workflow Templates",
+    //     icon: <Wrench className="w-5 h-5 mr-2" />,
+    //     subItems: [
+    //         { href: "/efiling/workflow-templates", label: "Manage Templates", icon: <Settings className="w-4 h-4" /> },
+    //         { href: "/efiling/workflow-templates/create", label: "Create Template", icon: <FileEdit className="w-4 h-4" /> },
+    //     ]
+    // },
     {
         href: "/efiling/role-groups",
         label: "Role Groups",
@@ -89,6 +93,18 @@ const links = [
         ]
     },
     {
+        href: "/efiling/geography",
+        label: "Geography",
+        icon: <MapPin className="w-5 h-5 mr-2" />,
+        subItems: [
+            { href: "/efiling/zones", label: "Zones", icon: <Map className="w-4 h-4" /> },
+            { href: "/efiling/divisions", label: "Divisions", icon: <Map className="w-4 h-4" /> },
+            { href: "/efiling/departments/locations", label: "Department Locations", icon: <Map className="w-4 h-4" /> },
+            { href: "/efiling/roles/locations", label: "Role Locations", icon: <Map className="w-4 h-4" /> },
+            { href: "/efiling/role-groups/locations", label: "Role Group Locations", icon: <Map className="w-4 h-4" /> },
+        ]
+    },
+    {
         href: "/efiling/categories",
         label: "Categories",
         icon: <FolderOpen className="w-5 h-5 mr-2" />,
@@ -96,6 +112,11 @@ const links = [
             { href: "/efiling/categories", label: "Manage Categories", icon: <Settings className="w-4 h-4" /> },
             { href: "/efiling/categories/create", label: "Create Category", icon: <FileEdit className="w-4 h-4" /> },
         ]
+    },
+    {
+        href: "/efiling/sla-tat",
+        label: "SLA (TAT) Management",
+        icon: <Clock className="w-5 h-5 mr-2" />,
     },
     // {
     //     href: "/efiling/tools",

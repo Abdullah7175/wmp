@@ -25,18 +25,12 @@ export async function GET(request, { params }) {
                 s.name as status_name,
                 s.code as status_code,
                 s.color as status_color,
-                ft.name as file_type_name,
-                wf.workflow_status,
-                wf.started_at as workflow_started,
-                wf.completed_at as workflow_completed,
-                wf.sla_deadline,
-                wf.sla_breached
+                ft.name as file_type_name
             FROM efiling_files f
             LEFT JOIN efiling_departments d ON f.department_id = d.id
             LEFT JOIN efiling_file_categories c ON f.category_id = c.id
             LEFT JOIN efiling_file_status s ON f.status_id = s.id
             LEFT JOIN efiling_file_types ft ON f.file_type_id = ft.id
-            LEFT JOIN efiling_file_workflows wf ON f.workflow_id = wf.id
             WHERE f.id = $1
         `, [fileId]);
 
@@ -45,6 +39,8 @@ export async function GET(request, { params }) {
         }
 
         const file = fileQuery.rows[0];
+        const slaDeadlineDate = file.sla_deadline ? new Date(file.sla_deadline) : null;
+        const slaBreached = slaDeadlineDate ? slaDeadlineDate.getTime() < Date.now() : false;
 
         // Get file movements/history
         const movementsQuery = await client.query(`
@@ -66,50 +62,6 @@ export async function GET(request, { params }) {
             WHERE fm.file_id = $1
             ORDER BY fm.created_at ASC
         `, [fileId]);
-
-        // Get workflow stage instances
-        const stageInstancesQuery = await client.query(`
-            SELECT 
-                si.*,
-                ws.stage_name,
-                ws.stage_code,
-                ws.stage_order,
-                ws.stage_type,
-                ws.sla_hours,
-                ws.requirements,
-                ws.can_attach_files,
-                ws.can_comment,
-                ws.can_escalate,
-                u.name as assigned_user_name,
-                u.designation as assigned_user_designation,
-                d.name as department_name,
-                r.name as role_name
-            FROM efiling_workflow_stage_instances si
-            LEFT JOIN efiling_workflow_stages ws ON si.stage_id = ws.id
-            LEFT JOIN efiling_users u ON si.assigned_to = u.id
-            LEFT JOIN users usr ON u.user_id = usr.id
-            LEFT JOIN efiling_departments d ON u.department_id = d.id
-            LEFT JOIN efiling_roles r ON u.efiling_role_id = r.id
-            WHERE si.workflow_id = $1
-            ORDER BY ws.stage_order ASC, si.created_at ASC
-        `, [file.workflow_id || 0]);
-
-        // Get workflow actions
-        const workflowActionsQuery = await client.query(`
-            SELECT 
-                wa.*,
-                u.name as performed_by_name,
-                u.designation as performed_by_designation,
-                ws1.stage_name as from_stage_name,
-                ws2.stage_name as to_stage_name
-            FROM efiling_workflow_actions wa
-            LEFT JOIN efiling_users u ON wa.performed_by = u.id
-            LEFT JOIN users usr ON u.user_id = usr.id
-            LEFT JOIN efiling_workflow_stages ws1 ON wa.from_stage_id = ws1.id
-            LEFT JOIN efiling_workflow_stages ws2 ON wa.to_stage_id = ws2.id
-            WHERE wa.workflow_id = $1
-            ORDER BY wa.performed_at ASC
-        `, [file.workflow_id || 0]);
 
         // Get file comments
         const commentsQuery = await client.query(`
@@ -180,11 +132,11 @@ export async function GET(request, { params }) {
                 confidentiality: file.confidentiality_level,
                 created_at: file.created_at,
                 updated_at: file.updated_at,
-                workflow_status: file.workflow_status,
-                workflow_started: file.workflow_started,
-                workflow_completed: file.workflow_completed,
                 sla_deadline: file.sla_deadline,
-                sla_breached: file.sla_breached
+                sla_breached: slaBreached,
+                sla_paused: file.sla_paused,
+                sla_accumulated_hours: file.sla_accumulated_hours,
+                sla_pause_count: file.sla_pause_count
             },
             timeline: []
         };
@@ -219,69 +171,6 @@ export async function GET(request, { params }) {
                     to_user: movement.to_user_name,
                     to_department: movement.to_department_name,
                     remarks: movement.remarks
-                }
-            });
-        });
-
-        // Add workflow stage instances
-        stageInstancesQuery.rows.forEach((stage, index) => {
-            history.timeline.push({
-                id: `stage_${stage.id}`,
-                type: 'workflow_stage',
-                timestamp: stage.started_at || stage.created_at,
-                user: stage.assigned_user_name || 'System',
-                action: `Stage: ${stage.stage_name}`,
-                description: `File moved to stage "${stage.stage_name}"`,
-                details: {
-                    stage_name: stage.stage_name,
-                    stage_code: stage.stage_code,
-                    stage_order: stage.stage_order,
-                    stage_type: stage.stage_type,
-                    assigned_to: stage.assigned_user_name,
-                    department: stage.department_name,
-                    role: stage.role_name,
-                    status: stage.stage_status,
-                    started_at: stage.started_at,
-                    completed_at: stage.completed_at,
-                    sla_deadline: stage.sla_deadline,
-                    sla_breached: stage.sla_breached
-                }
-            });
-
-            // Add stage completion if completed
-            if (stage.completed_at) {
-                history.timeline.push({
-                    id: `stage_completed_${stage.id}`,
-                    type: 'stage_completed',
-                    timestamp: stage.completed_at,
-                    user: stage.assigned_user_name || 'System',
-                    action: `Stage Completed: ${stage.stage_name}`,
-                    description: `Stage "${stage.stage_name}" was completed`,
-                    details: {
-                        stage_name: stage.stage_name,
-                        completed_by: stage.assigned_user_name,
-                        completion_time: stage.completed_at
-                    }
-                });
-            }
-        });
-
-        // Add workflow actions
-        workflowActionsQuery.rows.forEach((action, index) => {
-            history.timeline.push({
-                id: `workflow_action_${action.id}`,
-                type: 'workflow_action',
-                timestamp: action.performed_at,
-                user: action.performed_by_name || 'System',
-                action: action.action_type,
-                description: `${action.action_type} performed`,
-                details: {
-                    action_type: action.action_type,
-                    from_stage: action.from_stage_name,
-                    to_stage: action.to_stage_name,
-                    time_taken_hours: action.time_taken_hours,
-                    sla_breached: action.sla_breached,
-                    action_data: action.action_data
                 }
             });
         });

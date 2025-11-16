@@ -16,16 +16,24 @@ export async function GET(request) {
       );
     }
 
-    // Get CE user departments (complaint types)
+    // Get CE user departments (complaint types) and geographic assignments
     const ceUserQuery = await query(`
       SELECT 
         cu.id as ce_user_id,
         cu.user_id,
         cu.designation,
         cu.address,
-        array_agg(cud.complaint_type_id) as department_ids
+        array_agg(DISTINCT cud.complaint_type_id) FILTER (WHERE cud.complaint_type_id IS NOT NULL) as department_ids,
+        array_agg(DISTINCT cuz.zone_id) FILTER (WHERE cuz.zone_id IS NOT NULL) as zone_ids,
+        array_agg(DISTINCT cudiv.division_id) FILTER (WHERE cudiv.division_id IS NOT NULL) as division_ids,
+        array_agg(DISTINCT cudist.district_id) FILTER (WHERE cudist.district_id IS NOT NULL) as district_ids,
+        array_agg(DISTINCT cut.town_id) FILTER (WHERE cut.town_id IS NOT NULL) as town_ids
       FROM ce_users cu
       LEFT JOIN ce_user_departments cud ON cu.id = cud.ce_user_id
+      LEFT JOIN ce_user_zones cuz ON cu.id = cuz.ce_user_id
+      LEFT JOIN ce_user_divisions cudiv ON cu.id = cudiv.ce_user_id
+      LEFT JOIN ce_user_districts cudist ON cu.id = cudist.ce_user_id
+      LEFT JOIN ce_user_towns cut ON cu.id = cut.ce_user_id
       WHERE cu.user_id = $1
       GROUP BY cu.id, cu.user_id, cu.designation, cu.address
     `, [session.user.id]);
@@ -38,7 +46,11 @@ export async function GET(request) {
     }
 
     const ceUser = ceUserQuery.rows[0];
-    const departmentIds = ceUser.department_ids.filter(id => id !== null);
+    const departmentIds = ceUser.department_ids?.filter(id => id !== null) || [];
+    const zoneIds = ceUser.zone_ids?.filter(id => id !== null) || [];
+    const divisionIds = ceUser.division_ids?.filter(id => id !== null) || [];
+    const districtIds = ceUser.district_ids?.filter(id => id !== null) || [];
+    const townIds = ceUser.town_ids?.filter(id => id !== null) || [];
 
     if (departmentIds.length === 0) {
       return NextResponse.json({
@@ -77,8 +89,75 @@ export async function GET(request) {
       ip_address: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown'
     });
 
-    // Build the WHERE clause for department filtering
-    const departmentPlaceholders = departmentIds.map((_, index) => `$${index + 1}`).join(',');
+    // Build WHERE clause conditions for filtering
+    const conditions = [];
+    const params = [];
+    let paramIndex = 1;
+
+    // Department filter (required)
+    if (departmentIds.length > 0) {
+      const deptPlaceholders = departmentIds.map(() => `$${paramIndex++}`).join(',');
+      conditions.push(`wr.complaint_type_id IN (${deptPlaceholders})`);
+      params.push(...departmentIds);
+    }
+
+    // Geographic filters (if any are assigned)
+    const hasGeographicFilters = zoneIds.length > 0 || divisionIds.length > 0 || districtIds.length > 0 || townIds.length > 0;
+    
+    if (hasGeographicFilters) {
+      const geoConditions = [];
+      
+      // Zone filter (via zone_locations or direct zone_id)
+      if (zoneIds.length > 0) {
+        const zonePlaceholders = zoneIds.map(() => `$${paramIndex++}`).join(',');
+        geoConditions.push(`(
+          wr.zone_id IN (${zonePlaceholders})
+          OR EXISTS (
+            SELECT 1 FROM efiling_zone_locations ezl
+            WHERE ezl.zone_id IN (${zonePlaceholders})
+            AND (
+              (wr.town_id IS NOT NULL AND ezl.town_id = wr.town_id)
+              OR (wr.district_id IS NOT NULL AND ezl.district_id = wr.district_id)
+            )
+          )
+        )`);
+        params.push(...zoneIds, ...zoneIds);
+      }
+      
+      // Division filter
+      if (divisionIds.length > 0) {
+        const divPlaceholders = divisionIds.map(() => `$${paramIndex++}`).join(',');
+        geoConditions.push(`wr.division_id IN (${divPlaceholders})`);
+        params.push(...divisionIds);
+      }
+      
+      // District filter (via town)
+      if (districtIds.length > 0) {
+        const distPlaceholders = districtIds.map(() => `$${paramIndex++}`).join(',');
+        geoConditions.push(`(
+          wr.district_id IN (${distPlaceholders})
+          OR EXISTS (
+            SELECT 1 FROM town t2
+            WHERE t2.id = wr.town_id
+            AND t2.district_id IN (${distPlaceholders})
+          )
+        )`);
+        params.push(...districtIds, ...districtIds);
+      }
+      
+      // Town filter
+      if (townIds.length > 0) {
+        const townPlaceholders = townIds.map(() => `$${paramIndex++}`).join(',');
+        geoConditions.push(`wr.town_id IN (${townPlaceholders})`);
+        params.push(...townIds);
+      }
+      
+      if (geoConditions.length > 0) {
+        conditions.push(`(${geoConditions.join(' OR ')})`);
+      }
+    }
+    
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
     
     const requests = await query(`
       SELECT 
@@ -92,12 +171,17 @@ export async function GET(request) {
         wr.budget_code,
         wr.file_type,
         wr.creator_type,
+        wr.town_id,
+        wr.division_id,
+        wr.zone_id,
         ct.type_name as complaint_type,
         ct.id as complaint_type_id,
         cst.subtype_name as complaint_subtype,
         t.town,
         st.subtown,
         d.title as district,
+        div.name as division_name,
+        ez.name as zone_name,
         CASE 
           WHEN wr.creator_type = 'user' THEN u.name
           WHEN wr.creator_type = 'agent' THEN a.name
@@ -142,6 +226,8 @@ export async function GET(request) {
       LEFT JOIN town t ON wr.town_id = t.id
       LEFT JOIN subtown st ON wr.subtown_id = st.id
       LEFT JOIN district d ON t.district_id = d.id
+      LEFT JOIN divisions div ON wr.division_id = div.id
+      LEFT JOIN efiling_zones ez ON wr.zone_id = ez.id
       LEFT JOIN users u ON wr.creator_id = u.id AND wr.creator_type = 'user'
       LEFT JOIN agents a ON wr.creator_id = a.id AND wr.creator_type = 'agent'
       LEFT JOIN socialmediaperson sm ON wr.creator_id = sm.id AND wr.creator_type = 'socialmedia'
@@ -170,9 +256,9 @@ export async function GET(request) {
         FROM final_videos 
         GROUP BY work_request_id
       ) fv_count ON wr.id = fv_count.work_request_id
-      WHERE wr.complaint_type_id IN (${departmentPlaceholders})
+      ${whereClause}
       ORDER BY wr.created_date DESC
-    `, departmentIds);
+    `, params);
 
     return NextResponse.json({
       success: true,

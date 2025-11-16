@@ -108,6 +108,11 @@ export async function POST(request) {
         return NextResponse.json({ error: 'Invalid image file' }, { status: 400 });
       }
 
+      // Validate file size (5MB max for images)
+      if (img.size > 5 * 1024 * 1024) {
+        return NextResponse.json({ error: 'File size exceeds limit. Maximum allowed: 5MB' }, { status: 400 });
+      }
+
       // Create upload directory (handle standalone mode)
       let baseDir = process.cwd();
       if (baseDir.includes('.next/standalone') || baseDir.includes('.next\\standalone')) {

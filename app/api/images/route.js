@@ -5,15 +5,20 @@ import { connectToDatabase } from '@/lib/db';
 import { actionLogger, ENTITY_TYPES } from '@/lib/actionLogger';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/pages/api/auth/[...nextauth]';
-import { 
-  UPLOAD_CONFIG, 
-  validateFile, 
-  generateUniqueFilename, 
-  saveFileStream, 
+import {
+  UPLOAD_CONFIG,
+  validateFile,
+  generateUniqueFilename,
+  saveFileStream,
   getDatabaseConnectionWithRetry,
   createErrorResponse,
-  createSuccessResponse 
+  createSuccessResponse
 } from '@/lib/fileUploadOptimized';
+import {
+  resolveEfilingScope,
+  appendGeographyFilters,
+  recordMatchesGeography,
+} from '@/lib/efilingGeographyFilters';
 
 export async function GET(request) {
     const { searchParams } = new URL(request.url);
@@ -25,16 +30,30 @@ export async function GET(request) {
     const filter = searchParams.get('filter') || '';
     const dateFrom = searchParams.get('date_from');
     const dateTo = searchParams.get('date_to');
-    const client = await connectToDatabase();
     const creatorId = searchParams.get('creator_id');
     const creatorType = searchParams.get('creator_type');
 
+    const client = await connectToDatabase();
+
     try {
+        const scopeInfo = await resolveEfilingScope(request, client, { scopeKeys: ['scope', 'efiling', 'efilingScoped'] });
+        if (scopeInfo.apply && scopeInfo.error) {
+            return NextResponse.json({ error: scopeInfo.error.message }, { status: scopeInfo.error.status });
+        }
+
         if (id) {
             const query = `
-                SELECT i.*, wr.request_date, wr.address, ST_AsGeoJSON(i.geo_tag) as geo_tag
+                SELECT i.*, 
+                       wr.request_date, 
+                       wr.address, 
+                       wr.zone_id,
+                       wr.division_id,
+                       wr.town_id,
+                       t.district_id AS town_district_id,
+                       ST_AsGeoJSON(i.geo_tag) AS geo_tag
                 FROM images i
                 JOIN work_requests wr ON i.work_request_id = wr.id
+                LEFT JOIN town t ON wr.town_id = t.id
                 WHERE i.id = $1
             `;
             const result = await client.query(query, [id]);
@@ -43,77 +62,142 @@ export async function GET(request) {
                 return NextResponse.json({ error: 'Image not found' }, { status: 404 });
             }
 
+            if (scopeInfo.apply && !scopeInfo.isGlobal) {
+                const allowed = recordMatchesGeography(result.rows[0], scopeInfo.geography, {
+                    getDistrict: (row) => row.town_district_id,
+                });
+                if (!allowed) {
+                    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+                }
+            }
+
             return NextResponse.json(result.rows[0], { status: 200 });
-        } else if (creatorId && creatorType) {
-            const query = `
-                SELECT i.*, wr.request_date, wr.address, ST_AsGeoJSON(i.geo_tag) as geo_tag
-                FROM images i
-                JOIN work_requests wr ON i.work_request_id = wr.id
-                WHERE i.creator_id = $1 AND i.creator_type = $2
-                ORDER BY i.created_at DESC
-            `;
-            const result = await client.query(query, [creatorId, creatorType]);
-            return NextResponse.json({ data: result.rows, total: result.rows.length }, { status: 200 });
-        } else if (workRequestId) {
-            const query = `
-                SELECT i.*, wr.request_date, wr.address, ST_AsGeoJSON(i.geo_tag) as geo_tag
-                FROM images i
-                JOIN work_requests wr ON i.work_request_id = wr.id
-                WHERE i.work_request_id = $1
-                ORDER BY i.created_at DESC
-            `;
-            const result = await client.query(query, [workRequestId]);
-            return NextResponse.json({ data: result.rows, total: result.rows.length }, { status: 200 });
-        } else {
-            let countQuery = 'SELECT COUNT(*) FROM images i JOIN work_requests wr ON i.work_request_id = wr.id';
-            let dataQuery = `SELECT i.*, wr.request_date, wr.address, ST_AsGeoJSON(i.geo_tag) as geo_tag FROM images i JOIN work_requests wr ON i.work_request_id = wr.id`;
-            let whereClauses = [];
-            let params = [];
-            let paramIdx = 1;
-            if (creatorId && creatorType) {
-                whereClauses.push(`i.creator_id = $${paramIdx} AND i.creator_type = $${paramIdx + 1}`);
-                params.push(creatorId, creatorType);
-                paramIdx += 2;
-            }
-            if (workRequestId) {
-                whereClauses.push(`i.work_request_id = $${paramIdx}`);
-                params.push(workRequestId);
-                paramIdx++;
-            }
-            if (filter) {
-                whereClauses.push(`(
-                    CAST(i.id AS TEXT) ILIKE $${paramIdx} OR
-                    i.description ILIKE $${paramIdx} OR
-                    wr.address ILIKE $${paramIdx} OR
-                    CAST(i.work_request_id AS TEXT) ILIKE $${paramIdx}
-                )`);
-                params.push(`%${filter}%`);
-                paramIdx++;
-            }
-            if (dateFrom) {
-                whereClauses.push(`i.created_at >= $${paramIdx}`);
-                params.push(dateFrom);
-                paramIdx++;
-            }
-            if (dateTo) {
-                whereClauses.push(`i.created_at <= $${paramIdx}`);
-                params.push(dateTo);
-                paramIdx++;
-            }
-            if (whereClauses.length > 0) {
-                countQuery += ' WHERE ' + whereClauses.join(' AND ');
-                dataQuery += ' WHERE ' + whereClauses.join(' AND ');
-            }
-            dataQuery += ' ORDER BY i.created_at DESC';
-            if (limit > 0) {
-                dataQuery += ` LIMIT $${paramIdx} OFFSET $${paramIdx + 1}`;
-                params.push(limit, offset);
-            }
-            const countResult = await client.query(countQuery, params.slice(0, params.length - (limit > 0 ? 2 : 0)));
-            const total = parseInt(countResult.rows[0].count, 10);
-            const result = await client.query(dataQuery, params);
-            return NextResponse.json({ data: result.rows, total }, { status: 200 });
         }
+
+        let countQuery = `
+            SELECT COUNT(*)
+            FROM images i
+            JOIN work_requests wr ON i.work_request_id = wr.id
+            LEFT JOIN town t ON wr.town_id = t.id
+        `;
+        let dataQuery = `
+            SELECT i.*, 
+                   wr.request_date, 
+                   wr.address,
+                   wr.zone_id,
+                   wr.division_id,
+                   wr.town_id,
+                   t.district_id AS town_district_id,
+                   ST_AsGeoJSON(i.geo_tag) AS geo_tag
+            FROM images i
+            JOIN work_requests wr ON i.work_request_id = wr.id
+            LEFT JOIN town t ON wr.town_id = t.id
+        `;
+
+        let countWhereClauses = [];
+        let dataWhereClauses = [];
+        let countParams = [];
+        let dataParams = [];
+        let countIdx = 1;
+        let dataIdx = 1;
+
+        if (creatorId && creatorType) {
+            countWhereClauses.push(`i.creator_id = $${countIdx} AND i.creator_type = $${countIdx + 1}`);
+            countParams.push(creatorId, creatorType);
+            countIdx += 2;
+
+            dataWhereClauses.push(`i.creator_id = $${dataIdx} AND i.creator_type = $${dataIdx + 1}`);
+            dataParams.push(creatorId, creatorType);
+            dataIdx += 2;
+        }
+
+        if (workRequestId) {
+            countWhereClauses.push(`i.work_request_id = $${countIdx}`);
+            countParams.push(workRequestId);
+            countIdx += 1;
+
+            dataWhereClauses.push(`i.work_request_id = $${dataIdx}`);
+            dataParams.push(workRequestId);
+            dataIdx += 1;
+        }
+
+        if (filter) {
+            const countClause = `(
+                CAST(i.id AS TEXT) ILIKE $${countIdx} OR
+                i.description ILIKE $${countIdx} OR
+                wr.address ILIKE $${countIdx} OR
+                CAST(i.work_request_id AS TEXT) ILIKE $${countIdx}
+            )`;
+            countWhereClauses.push(countClause);
+            countParams.push(`%${filter}%`);
+            countIdx += 1;
+
+            const dataClause = `(
+                CAST(i.id AS TEXT) ILIKE $${dataIdx} OR
+                i.description ILIKE $${dataIdx} OR
+                wr.address ILIKE $${dataIdx} OR
+                CAST(i.work_request_id AS TEXT) ILIKE $${dataIdx}
+            )`;
+            dataWhereClauses.push(dataClause);
+            dataParams.push(`%${filter}%`);
+            dataIdx += 1;
+        }
+
+        if (dateFrom) {
+            countWhereClauses.push(`i.created_at >= $${countIdx}`);
+            countParams.push(dateFrom);
+            countIdx += 1;
+
+            dataWhereClauses.push(`i.created_at >= $${dataIdx}`);
+            dataParams.push(dateFrom);
+            dataIdx += 1;
+        }
+
+        if (dateTo) {
+            countWhereClauses.push(`i.created_at <= $${countIdx}`);
+            countParams.push(dateTo);
+            countIdx += 1;
+
+            dataWhereClauses.push(`i.created_at <= $${dataIdx}`);
+            dataParams.push(dateTo);
+            dataIdx += 1;
+        }
+
+        if (scopeInfo.apply && !scopeInfo.isGlobal) {
+            const beforeCountLen = countWhereClauses.length;
+            const geoAliases = {
+                zone: 'wr.zone_id',
+                division: 'wr.division_id',
+                town: 'wr.town_id',
+                district: 't.district_id',
+            };
+
+            countIdx = appendGeographyFilters(countWhereClauses, countParams, countIdx, scopeInfo.geography, geoAliases);
+            dataIdx = appendGeographyFilters(dataWhereClauses, dataParams, dataIdx, scopeInfo.geography, geoAliases);
+
+            if (countWhereClauses.length === beforeCountLen) {
+                return NextResponse.json({ error: 'User geography not configured for scoped access' }, { status: 403 });
+            }
+        }
+
+        if (countWhereClauses.length > 0) {
+            countQuery += ' WHERE ' + countWhereClauses.join(' AND ');
+        }
+        if (dataWhereClauses.length > 0) {
+            dataQuery += ' WHERE ' + dataWhereClauses.join(' AND ');
+        }
+
+        dataQuery += ' ORDER BY i.created_at DESC';
+
+        if (limit > 0) {
+            dataQuery += ` LIMIT $${dataIdx} OFFSET $${dataIdx + 1}`;
+            dataParams.push(limit, offset);
+        }
+
+        const countResult = await client.query(countQuery, countParams);
+        const total = parseInt(countResult.rows[0].count, 10);
+        const result = await client.query(dataQuery, dataParams);
+        return NextResponse.json({ data: result.rows, total }, { status: 200 });
     } catch (error) {
         console.error('Error fetching data:', error);
         return NextResponse.json({ error: 'Failed to fetch data' }, { status: 500 });
@@ -147,7 +231,7 @@ export async function POST(req) {
 
         // Validate files with improved error handling
         for (const file of files) {
-            const validation = validateFile(file, UPLOAD_CONFIG.ALLOWED_IMAGE_TYPES, UPLOAD_CONFIG.MAX_FILE_SIZE);
+            const validation = validateFile(file, UPLOAD_CONFIG.ALLOWED_IMAGE_TYPES, UPLOAD_CONFIG.MAX_IMAGE_SIZE);
             if (!validation.isValid) {
                 return createErrorResponse(`File ${file.name}: ${validation.errors.join(', ')}`, 400);
             }
@@ -287,6 +371,11 @@ export async function PUT(req) {
 
             // Handle file upload if provided
             if (file && file.size > 0) {
+                // Validate file size (5MB max for images)
+                if (file.size > 5 * 1024 * 1024) {
+                    return NextResponse.json({ error: 'File size exceeds limit. Maximum allowed: 5MB' }, { status: 400 });
+                }
+
                 // Delete old file
                 if (currentImage.link) {
                     let baseDir = process.cwd();

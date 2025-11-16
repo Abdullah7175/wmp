@@ -84,7 +84,37 @@ export default function AddBeforeContentForm({ workRequestId, onClose }) {
 
   const handleContentUpload = (e) => {
     const files = Array.from(e.target.files);
-    const newContent = files.map(file => ({
+    
+    // Validate file sizes
+    const maxImageSize = 5 * 1024 * 1024; // 5MB
+    const maxVideoSize = 100 * 1024 * 1024; // 100MB
+    
+    const validFiles = [];
+    const invalidFiles = [];
+    
+    files.forEach(file => {
+      const isVideo = file.type.startsWith('video/');
+      const maxSize = isVideo ? maxVideoSize : maxImageSize;
+      const maxSizeMB = isVideo ? '100MB' : '5MB';
+      
+      if (file.size > maxSize) {
+        invalidFiles.push({ name: file.name, maxSize: maxSizeMB });
+      } else {
+        validFiles.push(file);
+      }
+    });
+    
+    if (invalidFiles.length > 0) {
+      toast({
+        title: "Invalid File Size",
+        description: `${invalidFiles.length} file(s) exceed size limit. Maximum allowed: ${invalidFiles[0].maxSize}`,
+        variant: "destructive",
+      });
+      e.target.value = ''; // Clear the input
+      return;
+    }
+    
+    const newContent = validFiles.map(file => ({
       id: Date.now() + Math.random(),
       file,
       preview: URL.createObjectURL(file),

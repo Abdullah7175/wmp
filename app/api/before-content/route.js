@@ -1,12 +1,14 @@
 import { NextResponse } from 'next/server';
-import { query } from '@/lib/db';
+import { connectToDatabase, query } from '@/lib/db';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/pages/api/auth/[...nextauth]';
 import { logUserAction } from '@/lib/userActionLogger';
 import { writeFile, mkdir } from 'fs/promises';
 import { join } from 'path';
+import { resolveEfilingScope, appendGeographyFilters } from '@/lib/efilingGeographyFilters';
 
 export async function GET(request) {
+  let client;
   try {
     const session = await getServerSession(authOptions);
     const { searchParams } = new URL(request.url);
@@ -14,12 +16,58 @@ export async function GET(request) {
     const creatorId = searchParams.get('creator_id');
     const creatorType = searchParams.get('creator_type');
 
+    client = await connectToDatabase();
+
+    const scopeInfo = await resolveEfilingScope(request, client, { scopeKeys: ['scope', 'efiling', 'efilingScoped'] });
+    if (scopeInfo.apply && scopeInfo.error) {
+      return NextResponse.json({ error: scopeInfo.error.message }, { status: scopeInfo.error.status });
+    }
+
+    const whereClauses = [];
+    const params = [];
+    let paramIdx = 1;
+
+    if (workRequestId) {
+      whereClauses.push(`bc.work_request_id = $${paramIdx}`);
+      params.push(workRequestId);
+      paramIdx += 1;
+    }
+
+    if (creatorId && creatorType) {
+      whereClauses.push(`bc.creator_id = $${paramIdx} AND bc.creator_type = $${paramIdx + 1}`);
+      params.push(creatorId, creatorType);
+      paramIdx += 2;
+    }
+
+    if (scopeInfo.apply && !scopeInfo.isGlobal) {
+      const beforeLength = whereClauses.length;
+      paramIdx = appendGeographyFilters(
+        whereClauses,
+        params,
+        paramIdx,
+        scopeInfo.geography,
+        {
+          zone: 'wr.zone_id',
+          division: 'wr.division_id',
+          town: 'wr.town_id',
+          district: 't.district_id',
+        }
+      );
+      if (whereClauses.length === beforeLength) {
+        return NextResponse.json({ error: 'User geography not configured for scoped access' }, { status: 403 });
+      }
+    }
+
     let queryText = `
       SELECT 
         bc.*,
         CASE WHEN bc.link IS NOT NULL THEN CONCAT('http://202.61.47.29:3000', bc.link) ELSE NULL END as link,
         wr.address,
         wr.description as work_description,
+        wr.zone_id,
+        wr.division_id,
+        wr.town_id,
+        t.district_id as town_district_id,
         ct.type_name as complaint_type,
         t.town,
         st.subtown
@@ -31,24 +79,13 @@ export async function GET(request) {
       WHERE 1=1
     `;
 
-    const params = [];
-    let paramCount = 1;
-
-    if (workRequestId) {
-      queryText += ` AND bc.work_request_id = $${paramCount}`;
-      params.push(workRequestId);
-      paramCount++;
+    if (whereClauses.length > 0) {
+      queryText += ' AND ' + whereClauses.join(' AND ');
     }
 
-    if (creatorId && creatorType) {
-      queryText += ` AND bc.creator_id = $${paramCount} AND bc.creator_type = $${paramCount + 1}`;
-      params.push(creatorId, creatorType);
-      paramCount += 2;
-    }
+    queryText += ' ORDER BY bc.created_at DESC';
 
-    queryText += ` ORDER BY bc.created_at DESC`;
-
-    const result = await query(queryText, params);
+    const result = await client.query(queryText, params);
 
     // Log view action if user is authenticated
     if (session?.user) {
@@ -65,7 +102,7 @@ export async function GET(request) {
         details: {
           work_request_id: workRequestId,
           creator_filter: creatorId ? { creator_id: creatorId, creator_type: creatorType } : null,
-          result_count: result.length
+          result_count: result.rows.length
         },
         ip_address: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip'),
         user_agent: request.headers.get('user-agent')
@@ -76,6 +113,10 @@ export async function GET(request) {
   } catch (error) {
     console.error('Error fetching before content:', error);
     return NextResponse.json({ error: 'Failed to fetch before content' }, { status: 500 });
+  } finally {
+    if (client && typeof client.release === 'function') {
+      client.release();
+    }
   }
 }
 
@@ -246,6 +287,13 @@ export async function POST(request) {
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       if (!file || file.size === 0) continue;
+
+      // Validate file size based on content type
+      const maxSize = contentTypeValue === 'video' ? 100 * 1024 * 1024 : 5 * 1024 * 1024; // 100MB for videos, 5MB for images
+      if (file.size > maxSize) {
+        const maxSizeMB = contentTypeValue === 'video' ? '100MB' : '5MB';
+        return NextResponse.json({ error: `File ${file.name}: File size exceeds limit. Maximum allowed: ${maxSizeMB}` }, { status: 400 });
+      }
 
       // Generate unique filename
       const fileExtension = file.name.split('.').pop();

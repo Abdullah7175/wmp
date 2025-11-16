@@ -206,6 +206,22 @@ export default function LoginPage() {
                 return;
               }
               
+              // Check role-based redirects first (for users with specific roles)
+              if (userType === "user") {
+                const role = parseInt(userRole);
+                if (role === 5) {
+                  window.location.href = "/ceo";
+                  return;
+                } else if (role === 6) {
+                  window.location.href = "/coo";
+                  return;
+                } else if (role === 7) {
+                  window.location.href = "/ce";
+                  return;
+                }
+              }
+              
+              // Then check userType-based redirects
               switch (userType) {
                 case "agent":
                   window.location.href = "/agent";
@@ -217,15 +233,6 @@ export default function LoginPage() {
                 case "user":
                 default:
                   window.location.href = "/dashboard";
-                  break;
-                case "ceo":
-                  window.location.href = "/ceo";
-                  break;
-                case "coo":
-                  window.location.href = "/coo";
-                  break;
-                case "ce":
-                  window.location.href = "/ce";
                   break;
               }
             } catch (error) {

@@ -19,16 +19,36 @@ export default function Layout({ children }) {
 
     useEffect(() => {
       if (!session?.user?.id) return;
-      // Only fetch notifications for the logged-in user
+
       const fetchNotifications = async () => {
-        const res = await fetch("/api/notifications");
-        if (res.ok) {
-          const data = await res.json();
-          // Only show notifications for this user (should be handled by backend, but double-check here)
-          const filtered = (data.data || []).filter(n => n.user_id === session.user.id);
+        try {
+          const res = await fetch("/api/notifications");
+          if (!res.ok) {
+            console.error("Failed to fetch notifications", res.status);
+            setNotifications([]);
+            return;
+          }
+
+          const payload = await res.json();
+          const list = Array.isArray(payload)
+            ? payload
+            : Array.isArray(payload?.data)
+              ? payload.data
+              : [];
+
+          const userId = session.user.id;
+          const filtered = list.filter((n) => {
+            const targetId = n.user_id ?? n.userId ?? n.recipient_id ?? n.recipientId;
+            return !userId || targetId === userId;
+          });
+
           setNotifications(filtered);
+        } catch (error) {
+          console.error("Error fetching notifications:", error);
+          setNotifications([]);
         }
       };
+
       fetchNotifications();
     }, [session?.user?.id]);
 

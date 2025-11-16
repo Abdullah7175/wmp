@@ -5,6 +5,7 @@ import { useToast } from "@/hooks/use-toast";
 import Image from "next/image";
 import QRCode from 'react-qr-code';
 import { useSession } from 'next-auth/react';
+import { getFiscalYear } from '@/lib/utils';
 
 const Page = () => {
     const [data, setData] = useState(null);
@@ -80,6 +81,12 @@ const Page = () => {
         videoLink = window.location.origin + videoLink;
     }
 
+    // Calculate fiscal year based on performa date (or request date as fallback)
+    const dateForFiscalYear = performaDate ? new Date(performaDate) : (data?.request_date ? new Date(data.request_date) : new Date());
+    const fiscalYearRaw = getFiscalYear(dateForFiscalYear); // Returns format "YYYY-YY" (e.g., "2025-26")
+    // Format fiscal year as FY(YYYY/YY) for display
+    const fiscalYearFormatted = fiscalYearRaw ? `FY(${fiscalYearRaw.replace('-', '/')})` : '';
+
     // Modal for selecting performa date
     if (showDateModal) {
         return (
@@ -125,7 +132,7 @@ const Page = () => {
                     <div className='font-bold'>For The <span className='font-bold'>{data.nature_of_work}</span></div>
                     <div className='font-bold'>Assign to: <span className='font-light'>Media Cell</span></div>
                     <div className='font-bold'>Date: <span className='font-light'>{performaDate}</span></div>
-                    <div className='font-bold'>Case No: SMW-{requestId}</div>
+                    <div className='font-bold'>Case No: SMW-{fiscalYearFormatted}-{requestId}</div>
                 </div>
                 <div className="flex flex-col items-center gap-2 min-w-[140px]">
                     <Image src="/logo.png" className="py-2 px-1" width="90" height="90" alt="logo" />
@@ -204,7 +211,7 @@ const Page = () => {
                             // ["Completion Date", data.completion_date ? new Date(data.completion_date).toLocaleDateString() : 'N/A'],
                             ["Assistant", currentUserName],
                             ["Geo Tag", data.latitude && data.longitude ? `${data.latitude}, ${data.longitude}` : 'N/A'],
-                            ["Contractor", data.contractor_name || 'N/A'],
+                            ["Contractor Company", data.contractor_name || 'N/A'],
                             ["QR Code", 
                                 <div key="qr-codes" className="space-y-4">
                                     {/* Internal Link QR Code */}

@@ -28,10 +28,18 @@ export function EnhancedDataTable({
   pageSize = 5, 
   totalItems,
   initialState,
+  state,
   onSortingChange,
   onPaginationChange 
 }) {
   const router = useRouter()
+  // Use controlled state if provided, otherwise use initialState
+  const paginationState = state?.pagination || initialState?.pagination || {
+    pageIndex: 0,
+    pageSize: pageSize,
+  };
+  const sortingState = state?.sorting || initialState?.sorting || [];
+  
   const table = useReactTable({
     data,
     columns,
@@ -43,11 +51,8 @@ export function EnhancedDataTable({
     manualPagination: totalItems !== undefined,
     pageCount: totalItems !== undefined ? Math.ceil(totalItems / pageSize) : undefined,
     state: {
-      pagination: initialState?.pagination || {
-        pageIndex: 0,
-        pageSize: pageSize,
-      },
-      sorting: initialState?.sorting || [],
+      pagination: paginationState,
+      sorting: sortingState,
     },
     onSortingChange: onSortingChange,
     onPaginationChange: onPaginationChange,

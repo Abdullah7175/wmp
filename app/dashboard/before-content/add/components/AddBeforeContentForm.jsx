@@ -113,6 +113,22 @@ const AddBeforeContentForm = () => {
   };
 
   const handleFileChange = (index, file) => {
+    if (!file) return;
+    
+    // Validate file size based on content type
+    const contentType = formik.values.contentType;
+    const maxSize = contentType === 'video' ? 100 * 1024 * 1024 : 5 * 1024 * 1024; // 100MB for videos, 5MB for images
+    const maxSizeMB = contentType === 'video' ? '100MB' : '5MB';
+    
+    if (file.size > maxSize) {
+      toast({
+        title: "Invalid File",
+        description: `File size exceeds limit. Maximum allowed: ${maxSizeMB}`,
+        variant: "destructive",
+      });
+      return;
+    }
+    
     const newFileInputs = [...fileInputs];
     newFileInputs[index].file = file;
     setFileInputs(newFileInputs);

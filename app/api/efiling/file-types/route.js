@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/db';
 import { eFileActionLogger } from '@/lib/efilingActionLogger';
 import { getToken } from 'next-auth/jwt';
+import { getUserGeography, isGlobalRoleCode } from '@/lib/efilingGeographicRouting';
 
 export async function GET(request) {
     let client;
@@ -13,6 +14,20 @@ export async function GET(request) {
 
 
         client = await connectToDatabase();
+
+        const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
+        let userGeography = null;
+        let canSeeAll = false;
+        if (token?.user) {
+            if ([1, 2].includes(token.user.role)) {
+                canSeeAll = true;
+            } else {
+                userGeography = await getUserGeography(client, token.user.id);
+                if (userGeography && isGlobalRoleCode(userGeography.role_code)) {
+                    canSeeAll = true;
+                }
+            }
+        }
 
         if (id) {
             // Fetch single file type
@@ -38,7 +53,6 @@ export async function GET(request) {
 
             // Log the action
             try {
-                const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
                 await eFileActionLogger.logAction({
                     entityId: null,
                     userId: token?.user?.id || 'system',
@@ -59,7 +73,7 @@ export async function GET(request) {
         } else {
             // Fetch all file types
             let query = `
-                SELECT 
+                SELECT DISTINCT
                     ft.*,
                     fc.name as category_name,
                     fc.description as category_description,
@@ -68,19 +82,42 @@ export async function GET(request) {
                 FROM efiling_file_types ft
                 LEFT JOIN efiling_file_categories fc ON ft.category_id = fc.id
                 LEFT JOIN efiling_departments d ON ft.department_id = d.id
+                LEFT JOIN efiling_department_locations dl ON dl.department_id = d.id
                 WHERE 1=1
             `;
             
             const params = [];
-            let paramCount = 1;
 
             if (categoryId) {
-                query += ` AND ft.category_id = $${paramCount}`;
+                query += ` AND ft.category_id = $${params.length + 1}`;
                 params.push(categoryId);
-                paramCount++;
             }
 
+            if (!canSeeAll && userGeography) {
+                const parts = [];
+                const pushParam = (value) => {
+                    params.push(value);
+                    return `$${params.length}`;
+                };
 
+                if (userGeography.zone_ids && userGeography.zone_ids.length > 0) {
+                    const placeholder = pushParam(userGeography.zone_ids);
+                    parts.push(`dl.zone_id = ANY(${placeholder}::int[])`);
+                }
+                if (userGeography.division_id) {
+                    parts.push(`dl.division_id = ${pushParam(userGeography.division_id)}`);
+                }
+                if (userGeography.district_id) {
+                    parts.push(`dl.district_id = ${pushParam(userGeography.district_id)}`);
+                }
+                if (userGeography.town_id) {
+                    parts.push(`dl.town_id = ${pushParam(userGeography.town_id)}`);
+                }
+
+                if (parts.length > 0) {
+                    query += ` AND (dl.id IS NULL OR ${parts.join(' OR ')})`;
+                }
+            }
 
             query += ` ORDER BY ft.name ASC`;
 
@@ -88,7 +125,6 @@ export async function GET(request) {
 
             // Log the action
             try {
-                const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
                 await eFileActionLogger.logAction({
                     entityId: null,
                     userId: token?.user?.id || 'system',

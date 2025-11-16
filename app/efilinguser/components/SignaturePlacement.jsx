@@ -125,6 +125,17 @@ export default function SignaturePlacement({
     const handleFileUpload = (event) => {
         const file = event.target.files[0];
         if (file) {
+            // Validate file size (5MB max for signature images)
+            if (file.size > 5 * 1024 * 1024) {
+                toast({
+                    title: "Invalid File",
+                    description: "File size exceeds limit. Maximum allowed: 5MB",
+                    variant: "destructive",
+                });
+                event.target.value = ''; // Clear the input
+                return;
+            }
+            
             if (file.type.startsWith('image/')) {
                 const reader = new FileReader();
                 reader.onload = (e) => {

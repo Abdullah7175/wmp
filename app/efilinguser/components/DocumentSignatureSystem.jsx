@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
+import { useEfilingUser } from "@/context/EfilingUserContext";
 import { Pen, MessageSquare, User, Calendar, X, Edit, Trash2, Shield, Settings, Eye, EyeOff, CheckCircle, AlertCircle } from "lucide-react";
 import SignatureCanvas from "react-signature-canvas";
 import { useSession } from "next-auth/react";
@@ -19,6 +20,7 @@ export default function DocumentSignatureSystem({
 }) {
     const { data: session } = useSession();
     const { toast } = useToast();
+    const { efilingUserId } = useEfilingUser();
     const [signatures, setSignatures] = useState([]);
     const [comments, setComments] = useState([]);
     const [showSignatureModal, setShowSignatureModal] = useState(false);
@@ -44,9 +46,11 @@ export default function DocumentSignatureSystem({
     // New signature creation states
     const [signatureText, setSignatureText] = useState("");
     const [signatureFont, setSignatureFont] = useState("Arial");
+    const [signatureColor, setSignatureColor] = useState("black");
     const [scannedSignatureFile, setScannedSignatureFile] = useState(null);
     const [activeSignatureTab, setActiveSignatureTab] = useState("draw");
     const [editingSignatureId, setEditingSignatureId] = useState(null);
+    const [activeSignature, setActiveSignature] = useState(null);
     
     const sigCanvasRef = useRef(null);
     const documentRef = useRef(null);
@@ -80,7 +84,7 @@ export default function DocumentSignatureSystem({
             loadComments();
             loadUserSignatures();
         }
-    }, [fileId]);
+    }, [fileId, efilingUserId]);
 
     // Initialize canvas when signature modal opens
     useEffect(() => {
@@ -120,11 +124,15 @@ export default function DocumentSignatureSystem({
     };
 
     const loadUserSignatures = async () => {
+        if (!efilingUserId) return;
         try {
-            const response = await fetch(`/api/efiling/signatures/manage?userId=${session?.user?.id}`);
+            const response = await fetch(`/api/efiling/signatures/manage?userId=${efilingUserId}`);
             if (response.ok) {
                 const data = await response.json();
                 setUserSignatures(data.signatures || []);
+                // Find active signature
+                const active = data.signatures?.find(sig => sig.is_active);
+                setActiveSignature(active || null);
             }
         } catch (error) {
             console.error('Error loading user signatures:', error);
@@ -281,7 +289,8 @@ export default function DocumentSignatureSystem({
                 type: signatureData.type,
                 content: signatureData.content,
                 position: signatureData.position,
-                font: signatureData.font,
+                font: signatureData.font || signatureFont,
+                color: signatureData.color || signatureColor,
                 timestamp: new Date().toISOString(),
                 file_id: fileId
             };
@@ -295,6 +304,7 @@ export default function DocumentSignatureSystem({
             if (response.ok) {
                 setSignatures(prev => [...prev, newSignature]);
                 onSignatureAdded && onSignatureAdded(newSignature);
+                setShowSignatureModal(false); // Close signature modal after successful application
                 toast({
                     title: "Signature Added",
                     description: "Your signature has been added to the document.",
@@ -358,6 +368,24 @@ export default function DocumentSignatureSystem({
         setShowAuthModal(true);
     };
 
+    // Handle using saved signature
+    const handleUseSavedSignature = () => {
+        if (!activeSignature) return;
+        
+        const signatureData = {
+            type: activeSignature.signature_type === 'drawn' || activeSignature.signature_type === 'scanned' ? 'image' : 'text',
+            content: activeSignature.file_url || activeSignature.signature_data || activeSignature.signature_text,
+            position: { x: 100, y: 100 },
+            font: activeSignature.signature_font || signatureFont,
+            color: activeSignature.signature_color || signatureColor,
+            signatureId: activeSignature.id
+        };
+        
+        setPendingAction('addSignature');
+        setPendingSignatureData(signatureData);
+        setShowAuthModal(true);
+    };
+
     // Handle drawn signature
     const handleDrawnSignature = async () => {
         if (!sigCanvasRef.current) {
@@ -370,9 +398,17 @@ export default function DocumentSignatureSystem({
         }
 
         try {
+            if (!efilingUserId) {
+                toast({
+                    title: "Unable to save",
+                    description: "Your e-filing profile is not available. Please refresh and try again.",
+                    variant: "destructive",
+                });
+                return;
+            }
             // Check if canvas has content by getting image data
-            const canvas = sigCanvasRef.current.getCanvas();
-            if (!canvas) {
+            const sourceCanvas = sigCanvasRef.current.getCanvas();
+            if (!sourceCanvas) {
                 toast({
                     title: "Canvas Error",
                     description: "Canvas element not found. Please try again.",
@@ -381,9 +417,9 @@ export default function DocumentSignatureSystem({
                 return;
             }
 
-            const ctx = canvas.getContext('2d');
-            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            const hasContent = imageData.data.some(channel => channel !== 0);
+            const sourceCtx = sourceCanvas.getContext('2d');
+            const sourceImageData = sourceCtx.getImageData(0, 0, sourceCanvas.width, sourceCanvas.height);
+            const hasContent = sourceImageData.data.some(channel => channel !== 0);
 
             if (!hasContent) {
                 toast({
@@ -394,8 +430,34 @@ export default function DocumentSignatureSystem({
                 return;
             }
 
-            // Convert to PNG
-            const dataURL = sigCanvasRef.current.toDataURL("image/png");
+            // Convert to PNG with selected color
+            // Create a new canvas to apply color
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = sourceCanvas.width;
+            tempCanvas.height = sourceCanvas.height;
+            const tempCtx = tempCanvas.getContext('2d');
+            tempCtx.putImageData(sourceImageData, 0, 0);
+            
+            // Apply color filter
+            const colorMap = {
+                'black': { r: 0, g: 0, b: 0 },
+                'blue': { r: 0, g: 0, b: 255 },
+                'red': { r: 255, g: 0, b: 0 }
+            };
+            const targetColor = colorMap[signatureColor] || colorMap['black'];
+            
+            const imgData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
+            const data = imgData.data;
+            for (let i = 0; i < data.length; i += 4) {
+                if (data[i + 3] > 0) { // If pixel is not transparent
+                    data[i] = targetColor.r;     // R
+                    data[i + 1] = targetColor.g; // G
+                    data[i + 2] = targetColor.b; // B
+                }
+            }
+            tempCtx.putImageData(imgData, 0, 0);
+            
+            const dataURL = tempCanvas.toDataURL("image/png");
             
             // Save to file storage first
             const uploadResponse = await fetch('/api/efiling/signatures/upload', {
@@ -405,9 +467,10 @@ export default function DocumentSignatureSystem({
                 },
                 body: JSON.stringify({
                     signatureData: dataURL,
-                    userId: session?.user?.id,
+                    userId: efilingUserId,
                     userName: session?.user?.name,
-                    signatureType: 'drawn'
+                    signatureType: 'drawn',
+                    signatureColor: signatureColor
                 }),
             });
 
@@ -426,7 +489,8 @@ export default function DocumentSignatureSystem({
                 content: uploadResult.fileUrl, // Use the file URL instead of base64
                 position: { x: 100, y: 100 },
                 filePath: uploadResult.fileUrl,
-                signatureId: uploadResult.signatureId
+                signatureId: uploadResult.signatureId,
+                color: signatureColor
             });
 
             toast({
@@ -445,7 +509,7 @@ export default function DocumentSignatureSystem({
     };
 
     // Handle typed signature
-    const handleTypedSignature = () => {
+    const handleTypedSignature = async () => {
         if (!signatureText.trim()) {
             toast({
                 title: "No Signature Text",
@@ -454,16 +518,68 @@ export default function DocumentSignatureSystem({
             });
             return;
         }
-        handleCreateSignature({
-            type: 'text',
-            content: signatureText,
-            font: signatureFont,
-            position: { x: 100, y: 100 }
-        });
+        
+        if (!efilingUserId) {
+            toast({
+                title: "Unable to save",
+                description: "Your e-filing profile is not available. Please refresh and try again.",
+                variant: "destructive",
+            });
+            return;
+        }
+        
+        // Save typed signature to database
+        try {
+            const uploadResponse = await fetch('/api/efiling/signatures/upload', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    signatureText: signatureText,
+                    signatureFont: signatureFont,
+                    signatureColor: signatureColor,
+                    userId: efilingUserId,
+                    userName: session?.user?.name,
+                    signatureType: 'typed'
+                }),
+            });
+
+            if (!uploadResponse.ok) {
+                throw new Error('Failed to upload signature');
+            }
+
+            const uploadResult = await uploadResponse.json();
+            loadUserSignatures();
+
+            handleCreateSignature({
+                type: 'text',
+                content: signatureText,
+                font: signatureFont,
+                color: signatureColor,
+                position: { x: 100, y: 100 },
+                signatureId: uploadResult.signatureId
+            });
+        } catch (error) {
+            console.error('Error saving typed signature:', error);
+            toast({
+                title: "Error",
+                description: "Failed to save signature. Please try again.",
+                variant: "destructive",
+            });
+        }
     };
 
     // Handle signature management (activate/deactivate)
     const manageSignature = async (action, signatureId) => {
+        if (!efilingUserId) {
+            toast({
+                title: "Unable to update signature",
+                description: "Your e-filing profile is not available. Please refresh and try again.",
+                variant: "destructive",
+            });
+            return;
+        }
         try {
             const response = await fetch('/api/efiling/signatures/manage', {
                 method: 'POST',
@@ -473,7 +589,7 @@ export default function DocumentSignatureSystem({
                 body: JSON.stringify({
                     action,
                     signatureId,
-                    userId: session?.user?.id
+                    userId: efilingUserId
                 }),
             });
 
@@ -519,6 +635,17 @@ export default function DocumentSignatureSystem({
     const handleFileUpload = (event) => {
         const file = event.target.files[0];
         if (file) {
+            // Validate file size (5MB max for signature images)
+            if (file.size > 5 * 1024 * 1024) {
+                toast({
+                    title: "Invalid File",
+                    description: "File size exceeds limit. Maximum allowed: 5MB",
+                    variant: "destructive",
+                });
+                event.target.value = ''; // Clear the input
+                return;
+            }
+            
             if (file.type.startsWith('image/')) {
                 const reader = new FileReader();
                 reader.onload = (e) => {
@@ -609,8 +736,8 @@ export default function DocumentSignatureSystem({
 
     // Check if user can edit comment
     const canEditComment = (comment) => {
-        return comment.user_id === session?.user?.id || 
-               ['superadmin', 'CEO', 'Chief IT Officer'].includes(userRole);
+        return (comment.user_id && efilingUserId && Number(comment.user_id) === Number(efilingUserId)) ||
+            ['superadmin', 'CEO', 'Chief IT Officer'].includes(userRole);
     };
 
     return (
@@ -623,23 +750,23 @@ export default function DocumentSignatureSystem({
                     data-signature-button
                 >
                     <Pen className="w-4 h-4" />
-                    Add E-Signature
+                    E-Signature
                 </Button>
-                <Button
+                {/* <Button
                     onClick={() => setShowSignatureManager(true)}
                     variant="outline"
                     className="flex items-center justify-center gap-2 w-full"
                 >
                     <Settings className="w-4 h-4" />
                     Manage Signatures
-                </Button>
+                </Button> */}
                 <Button
                     onClick={() => setShowCommentModal(true)}
                     variant="outline"
                     className="flex items-center justify-center gap-2 w-full"
                 >
                     <MessageSquare className="w-4 h-4" />
-                    Add Comment
+                    Comment
                 </Button>
             </div>
 
@@ -660,8 +787,11 @@ export default function DocumentSignatureSystem({
                                         <div className="w-12 h-8 border rounded bg-white flex items-center justify-center">
                                             {signature.type === 'text' ? (
                                                 <span 
-                                                    className="text-sm font-bold text-blue-600"
-                                                    style={{ fontFamily: signature.font }}
+                                                    className="text-sm font-bold"
+                                                    style={{ 
+                                                        fontFamily: signature.font || signatureFont,
+                                                        color: signature.color === 'black' ? '#000' : signature.color === 'blue' ? '#2563eb' : signature.color === 'red' ? '#dc2626' : '#000'
+                                                    }}
                                                 >
                                                     {signature.content}
                                                 </span>
@@ -778,17 +908,69 @@ export default function DocumentSignatureSystem({
                 </Card>
             )}
 
-            {/* Signature Creation Modal */}
+            {/* Signature Selection/Creation Modal */}
             {showSignatureModal && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
                     <Card className="w-full max-w-4xl max-h-[90vh] overflow-y-auto">
                         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
-                            <CardTitle>Create E-Signature</CardTitle>
-                            <Button variant="ghost" size="sm" onClick={() => setShowSignatureModal(false)}>
+                            <CardTitle>Add E-Signature</CardTitle>
+                            <Button variant="ghost" size="sm" onClick={() => {
+                                setShowSignatureModal(false);
+                                setActiveSignatureTab("draw");
+                            }}>
                                 <X className="w-4 h-4" />
                             </Button>
                         </CardHeader>
                         <CardContent className="space-y-6">
+                            {/* Show saved signature if available */}
+                            {activeSignature && (
+                                <div className="border rounded-lg p-4 bg-gray-50">
+                                    <Label className="text-sm font-medium mb-2 block">Your Saved Signature</Label>
+                                    <div className="flex items-center gap-4">
+                                        <div className="border rounded bg-white p-2 flex items-center justify-center" style={{ minWidth: '200px', minHeight: '80px' }}>
+                                            {activeSignature.signature_type === 'typed' ? (
+                                                <span 
+                                                    className="text-2xl font-bold"
+                                                    style={{ 
+                                                        fontFamily: activeSignature.signature_font || signatureFont,
+                                                        color: activeSignature.signature_color || signatureColor
+                                                    }}
+                                                >
+                                                    {activeSignature.signature_text || signatureText}
+                                                </span>
+                                            ) : (
+                                                <img
+                                                    src={activeSignature.file_url || activeSignature.signature_data}
+                                                    alt="Signature"
+                                                    className="max-h-16 max-w-48 object-contain"
+                                                />
+                                            )}
+                                        </div>
+                                        <div className="flex-1">
+                                            <p className="text-sm text-gray-600 mb-2">
+                                                Use your saved signature to sign this document. You'll only need to verify your identity.
+                                            </p>
+                                            <div className="flex gap-2">
+                                                <Button 
+                                                    onClick={handleUseSavedSignature}
+                                                    className="bg-blue-600 hover:bg-blue-700"
+                                                >
+                                                    Use This Signature
+                                                </Button>
+                                                <Button 
+                                                    variant="outline"
+                                                    onClick={() => setActiveSignature(null)}
+                                                >
+                                                    Create New Signature
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                            
+                            {!activeSignature && (
+                                <>
                             {/* Signature Type Tabs */}
                             <div className="flex space-x-2 border-b">
                                 <Button
@@ -820,11 +1002,36 @@ export default function DocumentSignatureSystem({
                             {/* Draw Signature Tab */}
                             {activeSignatureTab === "draw" && (
                                 <div className="space-y-4">
+                                    <div>
+                                        <Label>Signature Color</Label>
+                                        <div className="flex gap-2 mt-2">
+                                            {['black', 'blue', 'red'].map((color) => (
+                                                <Button
+                                                    key={color}
+                                                    type="button"
+                                                    variant={signatureColor === color ? "default" : "outline"}
+                                                    onClick={() => {
+                                                        setSignatureColor(color);
+                                                        if (sigCanvasRef.current) {
+                                                            sigCanvasRef.current.penColor = color;
+                                                        }
+                                                    }}
+                                                    className="capitalize"
+                                                    style={signatureColor === color ? {
+                                                        backgroundColor: color === 'black' ? '#000' : color === 'blue' ? '#2563eb' : '#dc2626',
+                                                        color: 'white'
+                                                    } : {}}
+                                                >
+                                                    {color}
+                                                </Button>
+                                            ))}
+                                        </div>
+                                    </div>
                                     <div className="border-2 border-dashed border-gray-300 rounded-lg p-4">
                                         <Label>Draw Your Signature</Label>
                                         <SignatureCanvas
                                             ref={sigCanvasRef}
-                                            penColor="black"
+                                            penColor={signatureColor}
                                             canvasProps={{
                                                 width: 400,
                                                 height: 150,
@@ -880,12 +1087,35 @@ export default function DocumentSignatureSystem({
                                             ))}
                                         </select>
                                     </div>
+                                    <div>
+                                        <Label>Signature Color</Label>
+                                        <div className="flex gap-2 mt-2">
+                                            {['black', 'blue', 'red'].map((color) => (
+                                                <Button
+                                                    key={color}
+                                                    type="button"
+                                                    variant={signatureColor === color ? "default" : "outline"}
+                                                    onClick={() => setSignatureColor(color)}
+                                                    className="capitalize"
+                                                    style={signatureColor === color ? {
+                                                        backgroundColor: color === 'black' ? '#000' : color === 'blue' ? '#2563eb' : '#dc2626',
+                                                        color: 'white'
+                                                    } : {}}
+                                                >
+                                                    {color}
+                                                </Button>
+                                            ))}
+                                        </div>
+                                    </div>
                                     {signatureText && (
                                         <div className="text-center p-4 border rounded-lg">
                                             <Label>Preview:</Label>
                                             <div
                                                 className="text-3xl font-bold mt-2"
-                                                style={{ fontFamily: signatureFont }}
+                                                style={{ 
+                                                    fontFamily: signatureFont,
+                                                    color: signatureColor === 'black' ? '#000' : signatureColor === 'blue' ? '#2563eb' : '#dc2626'
+                                                }}
                                             >
                                                 {signatureText}
                                             </div>
@@ -928,6 +1158,8 @@ export default function DocumentSignatureSystem({
                                         </Button>
                                     </div>
                                 </div>
+                            )}
+                                </>
                             )}
                         </CardContent>
                     </Card>

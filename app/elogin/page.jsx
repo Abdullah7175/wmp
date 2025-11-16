@@ -21,6 +21,8 @@ const validationSchema = Yup.object({
   password: Yup.string().required("Password is required").min(6, "Password must be at least 6 characters"),
 });
 
+const GLOBAL_ROLE_CODES = new Set(["CEO", "COO"]);
+
 export default function EFileLoginPage() {
   const router = useRouter();
   const { toast } = useToast();
@@ -58,66 +60,86 @@ export default function EFileLoginPage() {
     }
   }, []);
 
-  // Redirect authenticated users away from /elogin based on their role
   React.useEffect(() => {
     if (status === "authenticated" && session?.user && !hasRedirected) {
-      setHasRedirected(true);
-      // Check user role and redirect accordingly
-      checkUserRoleAndRedirect(session.user);
+      handleAuthorizedRedirect(session.user);
     }
   }, [session, status, hasRedirected]);
 
-  const checkUserRoleAndRedirect = async (user) => {
-    try {
-      // Fetch user details to get role
-      const response = await fetch(`/api/users/${user.id}`);
-      if (response.ok) {
-        const userData = await response.json();
-        const userRole = userData.role;
-        
-        // E-filing access control: Only allow role 1 (admin) and role 4 (e-filing user)
-        if (userRole === 1) {
-          // Admin users (role 1) → redirect to efiling
-          window.location.href = "/efiling";
-        } else if (userRole === 4) {
-          // Normal e-filing users (role 4) → redirect to efilinguser
-          window.location.href = "/efilinguser";
-        } else {
-          // Other roles are not allowed to access e-filing system
-          toast({
-            title: "Access Denied",
-            description: "You do not have permission to access the e-filing system. Only administrators and e-filing users are allowed.",
-            variant: "destructive",
-          });
-          // Sign out the user and redirect to main portal
-          setTimeout(() => {
-            window.location.href = "/";
-          }, 3000);
-          return;
-        }
-      } else {
-        // If can't fetch user data, deny access
-        toast({
-          title: "Access Denied",
-          description: "Unable to verify user permissions. Please contact administrator.",
-          variant: "destructive",
-        });
-        setTimeout(() => {
-          window.location.href = "/";
-        }, 3000);
-        return;
-      }
-    } catch (error) {
-      console.error("Error checking user role:", error);
+  const resolveDestination = (profile, fallbackRole) => {
+    const roleNumber = Number(profile?.role ?? fallbackRole ?? 0);
+    const roleCode = (profile?.role_code || "").toUpperCase();
+    const hasEfilingProfile = Boolean(profile?.efiling_user_id);
+    const isAdmin = roleNumber === 1;
+    const isGlobalRole = GLOBAL_ROLE_CODES.has(roleCode) || roleCode.startsWith("CEO_") || roleCode.startsWith("COO_");
+
+    if (hasEfilingProfile) {
+      return "/efilinguser";
+    }
+
+    if (isAdmin || isGlobalRole) {
+      return "/efiling";
+    }
+
+    return null;
+  };
+
+  const handleAuthorizedRedirect = async (user) => {
+    setHasRedirected(true);
+    if (!user?.id) {
       toast({
         title: "Access Denied",
-        description: "Error verifying user permissions. Please contact administrator.",
+        description: "Unable to determine user identity.",
         variant: "destructive",
       });
       setTimeout(() => {
         window.location.href = "/";
-      }, 3000);
+      }, 2000);
       return;
+    }
+
+    try {
+      const res = await fetch(`/api/efiling/users/profile?userId=${user.id}`, { cache: "no-store" });
+
+      if (res.ok) {
+        const profile = await res.json();
+        const destination = resolveDestination(profile, user.role);
+
+        if (destination) {
+          window.location.href = destination;
+          return;
+        }
+
+        toast({
+          title: "Access Denied",
+          description: "You do not have an active e-filing profile.",
+          variant: "destructive",
+        });
+        setTimeout(() => {
+          window.location.href = "/";
+        }, 2000);
+        return;
+      }
+
+      if (res.status === 404) {
+        const roleNumber = Number(user.role ?? 0);
+        if (roleNumber === 1) {
+          window.location.href = "/efiling";
+          return;
+        }
+      }
+
+      throw new Error(`Profile lookup failed with status ${res.status}`);
+    } catch (error) {
+      console.error("Error determining redirect:", error);
+      toast({
+        title: "Access Denied",
+        description: "Unable to verify user permissions. Please contact administrator.",
+        variant: "destructive",
+      });
+      setTimeout(() => {
+        window.location.href = "/";
+      }, 2000);
     }
   };
 
@@ -219,61 +241,11 @@ export default function EFileLoginPage() {
           localStorage.removeItem('eloginFailedAttempts');
           localStorage.removeItem('eloginLockoutTime');
 
-          // Check user role before showing success message
-          try {
-            const userResponse = await fetch(`/api/users/${result.user?.id || session?.user?.id}`);
-            if (userResponse.ok) {
-              const userData = await userResponse.json();
-              const userRole = userData.role;
-              
-              // E-filing access control: Only allow role 1 (admin) and role 4 (e-filing user)
-              if (userRole === 1 || userRole === 4) {
-                toast({
-                  title: "Login Successful",
-                  description: "Welcome to Works Management Portal! Redirecting...",
-                  variant: "success",
-                });
-
-                // After successful login, check user role and redirect accordingly
-                setTimeout(() => {
-                  if (!hasRedirected) {
-                    setHasRedirected(true);
-                    checkUserRoleAndRedirect(result.user || session?.user);
-                  }
-                }, 1000);
-              } else {
-                // User doesn't have permission for e-filing system
-                toast({
-                  title: "Access Denied",
-                  description: "You do not have permission to access the e-filing system. Only administrators and e-filing users are allowed.",
-                  variant: "destructive",
-                });
-                // Sign out the user
-                setTimeout(() => {
-                  window.location.href = "/";
-                }, 3000);
-              }
-            } else {
-              toast({
-                title: "Access Denied",
-                description: "Unable to verify user permissions. Please contact administrator.",
-                variant: "destructive",
-              });
-              setTimeout(() => {
-                window.location.href = "/";
-              }, 3000);
-            }
-          } catch (error) {
-            console.error("Error checking user role:", error);
-            toast({
-              title: "Access Denied",
-              description: "Error verifying user permissions. Please contact administrator.",
-              variant: "destructive",
-            });
-            setTimeout(() => {
-              window.location.href = "/";
-            }, 3000);
-          }
+          toast({
+            title: "Login Successful",
+            description: "Welcome to Works Management Portal! Redirecting...",
+            variant: "success",
+          });
         }
       } catch (error) {
         console.error("Login error:", error);

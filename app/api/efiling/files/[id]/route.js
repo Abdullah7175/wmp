@@ -11,49 +11,46 @@ export async function GET(request, { params }) {
         const result = await client.query(`
             SELECT 
                 f.*,
-                d.name as department_name,
-                c.name as category_name,
-                s.name as status_name,
-                s.code as status_code,
-                s.color as status_color,
-                COALESCE(ab.designation, 'Unassigned') as assigned_to_name,
+                d.name AS department_name,
+                c.name AS category_name,
+                s.name AS status_name,
+                s.code AS status_code,
+                s.color AS status_color,
+                COALESCE(ab.designation, 'Unassigned') AS assigned_to_name,
+                ar.name AS current_stage_name,
+                ar.code AS current_stage_code,
+                ar.name AS current_stage,
                 f.work_request_id,
-                COALESCE(creator_users.name, 'Unknown') as creator_user_name,
-                creator_users.name as created_by_name,
+                COALESCE(creator_users.name, 'Unknown') AS creator_user_name,
+                creator_users.name AS created_by_name,
                 CASE 
                     WHEN f.work_request_id IS NOT NULL THEN 'Yes'
                     ELSE 'No'
-                END as has_video_request,
-                wf.sla_deadline,
-                wf.sla_paused,
-                wf.sla_accumulated_hours,
-                wf.sla_pause_count,
-                wf.workflow_status,
-                ws.stage_name as current_stage_name,
-                ws.sla_hours as current_stage_sla_hours,
+                END AS has_video_request,
+                f.sla_deadline,
+                f.sla_paused,
+                f.sla_accumulated_hours,
+                f.sla_pause_count,
                 CASE 
-                    WHEN wf.sla_paused THEN 'PAUSED'
-                    WHEN wf.sla_deadline IS NOT NULL AND wf.sla_deadline < NOW() AND wf.workflow_status = 'IN_PROGRESS' THEN 'BREACHED'
-                    WHEN wf.sla_deadline IS NOT NULL AND wf.sla_deadline >= NOW() THEN 'ACTIVE'
-                    ELSE 'COMPLETED'
-                END as sla_status,
+                    WHEN f.sla_paused THEN 'PAUSED'
+                    WHEN f.sla_deadline IS NOT NULL AND f.sla_deadline < NOW() THEN 'BREACHED'
+                    WHEN f.sla_deadline IS NOT NULL THEN 'ACTIVE'
+                    ELSE 'PENDING'
+                END AS sla_status,
                 CASE
-                    WHEN wf.sla_paused THEN NULL
-                    WHEN wf.sla_deadline IS NOT NULL AND wf.sla_deadline >= NOW() THEN 
-                        ROUND(EXTRACT(EPOCH FROM (wf.sla_deadline - NOW()))/3600.0, 2)
-                    WHEN wf.sla_deadline IS NOT NULL THEN 
-                        ROUND(EXTRACT(EPOCH FROM (NOW() - wf.sla_deadline))/3600.0, 2) * -1
+                    WHEN f.sla_paused THEN NULL
+                    WHEN f.sla_deadline IS NOT NULL THEN 
+                        ROUND(EXTRACT(EPOCH FROM (f.sla_deadline - NOW()))/3600.0, 2)
                     ELSE NULL
-                END as hours_remaining
+                END AS hours_remaining
             FROM efiling_files f
             LEFT JOIN efiling_departments d ON f.department_id = d.id
             LEFT JOIN efiling_file_categories c ON f.category_id = c.id
             LEFT JOIN efiling_file_status s ON f.status_id = s.id
             LEFT JOIN efiling_users ab ON f.assigned_to = ab.id
+            LEFT JOIN efiling_roles ar ON ab.efiling_role_id = ar.id
             LEFT JOIN efiling_users creator_efiling ON f.created_by = creator_efiling.id
             LEFT JOIN users creator_users ON creator_efiling.user_id = creator_users.id
-            LEFT JOIN efiling_file_workflows wf ON wf.file_id = f.id
-            LEFT JOIN efiling_workflow_stages ws ON ws.id = wf.current_stage_id
             WHERE f.id = $1
         `, [id]);
 
@@ -215,9 +212,6 @@ export async function DELETE(request, { params }) {
         await client.query('DELETE FROM efiling_file_movements WHERE file_id = $1', [id]);
         await client.query('DELETE FROM efiling_notifications WHERE file_id = $1', [id]);
         await client.query('DELETE FROM efiling_signatures WHERE file_id = $1', [id]);
-
-        // Remove workflow instance tree (actions, stage instances will cascade via workflow_id)
-        await client.query('DELETE FROM efiling_file_workflows WHERE file_id = $1', [id]);
 
         // Finally delete the file
         await client.query('DELETE FROM efiling_files WHERE id = $1', [id]);

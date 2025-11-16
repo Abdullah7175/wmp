@@ -27,7 +27,7 @@ export async function GET(request) {
                     u.created_date,
                     u.updated_date,
                     u.role,
-                    eu.id as efiling_user_id,
+                    eu.id AS efiling_user_id,
                     eu.employee_id,
                     eu.designation,
                     eu.address,
@@ -46,15 +46,30 @@ export async function GET(request) {
                     eu.signature_settings,
                     eu.notification_preferences,
                     eu.is_active,
+                    eu.is_consultant,
+                    eu.district_id,
+                    eu.town_id,
+                    eu.subtown_id,
+                    eu.division_id,
                     eu.created_at,
                     eu.updated_at,
                     eu.google_email,
-                    d.name as department_name,
-                    r.name as role_name
+                    loc.role_code,
+                    loc.role_name,
+                    loc.department_type,
+                    loc.department_name,
+                    loc.district_id AS location_district_id,
+                    loc.district_name,
+                    loc.town_id AS location_town_id,
+                    loc.town_name,
+                    loc.subtown_id AS location_subtown_id,
+                    loc.subtown_name,
+                    loc.division_id AS location_division_id,
+                    loc.division_name,
+                    loc.division_type
                 FROM users u
                 LEFT JOIN efiling_users eu ON u.id = eu.user_id
-                LEFT JOIN efiling_departments d ON eu.department_id = d.id
-                LEFT JOIN efiling_roles r ON eu.efiling_role_id = r.id
+                LEFT JOIN v_efiling_users_by_location loc ON loc.user_id = u.id
                 WHERE u.id = $1`,
                 [userId]
             );

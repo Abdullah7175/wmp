@@ -59,6 +59,7 @@ const RequestsPage = () => {
                 req.complaint_type?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 req.complaint_subtype?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 req.town_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                req.division_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 req.id?.toString().includes(searchTerm)
             );
         }
@@ -186,7 +187,7 @@ const RequestsPage = () => {
                         <div className="relative">
                             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                             <Input
-                                placeholder="Search by address, complaint type, town, or request ID..."
+                                placeholder="Search by address, complaint type, division, town, or request ID..."
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
                                 className="pl-10"

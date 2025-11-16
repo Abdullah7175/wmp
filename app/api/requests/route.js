@@ -1,6 +1,12 @@
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/db';
 import { actionLogger, ENTITY_TYPES } from '@/lib/actionLogger';
+import { getToken } from 'next-auth/jwt';
+import {
+    resolveEfilingScope,
+    appendGeographyFilters,
+    recordMatchesGeography,
+} from '@/lib/efilingGeographyFilters';
 
 export async function GET(request) {
     const { searchParams } = new URL(request.url);
@@ -29,6 +35,25 @@ export async function GET(request) {
         client = await connectToDatabase();
         console.log('Database connected successfully for requests API');
         
+        const scopeInfo = await resolveEfilingScope(request, client, { scopeKeys: ['scope', 'efiling', 'efilingScoped'] });
+        if (scopeInfo.apply && scopeInfo.error) {
+            // If user doesn't have e-filing profile, return error
+            return NextResponse.json({ error: scopeInfo.error.message }, { status: scopeInfo.error.status });
+        }
+        
+        // Get user ID for potential fallback filtering
+        let efilingUserId = null;
+        if (scopeInfo.apply) {
+            const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
+            if (token?.user?.id) {
+                const efUserRes = await client.query(
+                    'SELECT id FROM efiling_users WHERE user_id = $1 AND is_active = true',
+                    [token.user.id]
+                );
+                efilingUserId = efUserRes.rows[0]?.id || null;
+            }
+        }
+
         if (id) {
             const numericId = Number(id);
             const query = `
@@ -36,6 +61,7 @@ export async function GET(request) {
                     wr.*,
                     ST_Y(wr.geo_tag) as latitude,
                     ST_X(wr.geo_tag) as longitude,
+                    t.district_id as town_district_id,
                     t.town as town_name,
                     st.subtown as subtown_name,
                     ct.type_name as complaint_type,
@@ -46,7 +72,7 @@ export async function GET(request) {
                     s.name as status_name,
                     d.title as district_name,
                     exen.name as executive_engineer_name,
-                    contractor.name as contractor_name,
+                    COALESCE(contractor.company_name, contractor.name) as contractor_name,
                     assistant.name as assistant_name,
                     ${includeApprovalStatus ? 'wra.approval_status,' : ''}
                     (
@@ -102,6 +128,16 @@ export async function GET(request) {
                 return NextResponse.json({ error: 'Request not found' }, { status: 404 });
             }
 
+            if (scopeInfo.apply && !scopeInfo.isGlobal) {
+                const record = result.rows[0];
+                const allowed = recordMatchesGeography(record, scopeInfo.geography, {
+                    getDistrict: (row) => row.town_district_id,
+                });
+                if (!allowed) {
+                    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+                }
+            }
+
             return NextResponse.json(result.rows[0], { status: 200 });
         } else {
             // Paginated with optional filter and creator filters
@@ -113,6 +149,7 @@ export async function GET(request) {
                 LEFT JOIN users u ON wr.creator_type = 'user' AND wr.creator_id = u.id
                 LEFT JOIN agents ag ON wr.creator_type = 'agent' AND wr.creator_id = ag.id
                 LEFT JOIN socialmediaperson sm ON wr.creator_type = 'socialmedia' AND wr.creator_id = sm.id
+                LEFT JOIN divisions dv ON wr.division_id = dv.id
             `;
             
             let dataQuery = `
@@ -120,8 +157,12 @@ export async function GET(request) {
                     wr.id, 
                     wr.request_date, 
                     wr.address,
+                    wr.zone_id,
+                    wr.division_id,
+                    dv.name AS division_name,
                     ST_Y(wr.geo_tag) as latitude, 
                     ST_X(wr.geo_tag) as longitude, 
+                    t.district_id as town_district_id,
                     t.town as town_name, 
                     ct.type_name as complaint_type, 
                     cst.subtype_name as complaint_subtype, 
@@ -145,6 +186,7 @@ export async function GET(request) {
                 LEFT JOIN users u ON wr.creator_type = 'user' AND wr.creator_id = u.id
                 LEFT JOIN agents ag ON wr.creator_type = 'agent' AND wr.creator_id = ag.id
                 LEFT JOIN socialmediaperson sm ON wr.creator_type = 'socialmedia' AND wr.creator_id = sm.id
+                LEFT JOIN divisions dv ON wr.division_id = dv.id
                 LEFT JOIN work_request_soft_approvals ceo_approval ON wr.id = ceo_approval.work_request_id AND ceo_approval.approver_type = 'ceo'
                 LEFT JOIN work_request_soft_approvals coo_approval ON wr.id = coo_approval.work_request_id AND coo_approval.approver_type = 'coo'
                 LEFT JOIN work_request_soft_approvals ce_approval ON wr.id = ce_approval.work_request_id AND ce_approval.approver_type = 'ce'
@@ -227,6 +269,7 @@ export async function GET(request) {
                     CAST(wr.id AS TEXT) ILIKE $${dataParamIdx} OR
                     wr.address ILIKE $${dataParamIdx} OR
                     t.town ILIKE $${dataParamIdx} OR
+                    dv.name ILIKE $${dataParamIdx} OR
                     ct.type_name ILIKE $${dataParamIdx} OR
                     s.name ILIKE $${dataParamIdx} OR
                     COALESCE(u.name, ag.name, sm.name) ILIKE $${dataParamIdx}
@@ -246,6 +289,54 @@ export async function GET(request) {
                 dataParams.push(dateTo);
                 dataParamIdx++;
             }
+
+            if (scopeInfo.apply && !scopeInfo.isGlobal) {
+                const beforeLength = whereClauses.length;
+                const geoAliases = {
+                    zone: 'wr.zone_id',
+                    division: 'wr.division_id',
+                    town: 'wr.town_id',
+                    district: 't.district_id',
+                };
+                
+                // Log geography for debugging
+                if (process.env.NODE_ENV === 'development') {
+                    console.log('[DEBUG] User geography:', JSON.stringify(scopeInfo.geography, null, 2));
+                }
+                
+                paramIdx = appendGeographyFilters(whereClauses, params, paramIdx, scopeInfo.geography, geoAliases);
+                dataParamIdx = appendGeographyFilters(
+                    dataWhereClauses,
+                    dataParams,
+                    dataParamIdx,
+                    scopeInfo.geography,
+                    geoAliases
+                );
+
+                if (whereClauses.length === beforeLength) {
+                    // If no geography filters were added, check if user has any geography configured
+                    // If not, return helpful error. Otherwise, allow query to proceed (might be global user or geography mismatch)
+                    const hasAnyGeo = scopeInfo.geography.divisionId || 
+                                     scopeInfo.geography.townId || 
+                                     scopeInfo.geography.districtId || 
+                                     (scopeInfo.geography.zoneIds && scopeInfo.geography.zoneIds.length > 0);
+                    
+                    if (!hasAnyGeo) {
+                        return NextResponse.json({ 
+                            error: 'User geography not configured for scoped access. Please ensure your e-filing profile has division_id, town_id, or district_id set.',
+                            details: {
+                                geography: scopeInfo.geography,
+                                suggestion: 'Please update your e-filing profile to include your division, town, or district assignment.'
+                            }
+                        }, { status: 403 });
+                    }
+                    // If geography exists but no filters were added, it might be a data mismatch
+                    // Log warning but allow query to proceed
+                    if (process.env.NODE_ENV === 'development') {
+                        console.warn('[WARNING] Geography configured but no filters added. Geography:', scopeInfo.geography);
+                    }
+                }
+            }
             
             if (whereClauses.length > 0) {
                 countQuery += ' WHERE ' + whereClauses.join(' AND ');
@@ -254,21 +345,22 @@ export async function GET(request) {
                 dataQuery += ' WHERE ' + dataWhereClauses.join(' AND ');
             }
             
-            // Handle sorting
-            let orderBy = 'wr.request_date DESC'; // default
+            // Handle sorting (ensure deterministic ordering with tie-breakers)
+            let orderBy = 'wr.request_date DESC, wr.created_date DESC, wr.id DESC'; // default
             if (sortBy) {
                 const allowedSortFields = {
                     'id': 'wr.id',
                     'request_date': 'wr.request_date',
                     'address': 'wr.address',
                     'town_name': 't.town',
+                    'division_name': 'dv.name',
                     'complaint_type': 'ct.type_name',
                     'status_name': 's.name'
                 };
                 
                 if (allowedSortFields[sortBy]) {
                     const direction = sortOrder.toLowerCase() === 'desc' ? 'DESC' : 'ASC';
-                    orderBy = `${allowedSortFields[sortBy]} ${direction}`;
+                    orderBy = `${allowedSortFields[sortBy]} ${direction}, wr.request_date DESC, wr.created_date DESC, wr.id DESC`;
                 }
             }
             
@@ -315,10 +407,12 @@ export async function POST(req) {
         client = await connectToDatabase();
         console.log('Database connected successfully for POST requests API');
         const body = await req.json();
+        console.log('[POST /api/requests] Incoming payload', JSON.stringify(body, null, 2));
         const {
             town_id,
             subtown_id,
             subtown_ids, // array of additional subtowns
+            division_id, // for division-based departments
             complaint_type_id,
             complaint_subtype_id,
             contact_number,
@@ -335,12 +429,28 @@ export async function POST(req) {
             file_type,
             additional_locations // array of additional locations
         } = body;
-        // Validate required fields
-        if (!town_id || !complaint_type_id || !contact_number || !address || !description || !creator_id || !creator_type) {
+        console.log('[POST /api/requests] Raw location inputs', {
+            town_id,
+            division_id,
+            typeof_town_id: typeof town_id,
+            typeof_division_id: typeof division_id,
+        });
+        // Validate required fields - town_id OR division_id must be present
+        if ((!town_id && !division_id) || !complaint_type_id || !contact_number || !address || !description || !creator_id || !creator_type) {
+            console.warn('[POST /api/requests] Missing required fields', {
+                town_id,
+                division_id,
+                complaint_type_id,
+                contact_number,
+                addressPresent: Boolean(address),
+                descriptionPresent: Boolean(description),
+                creator_id,
+                creator_type,
+            });
             return NextResponse.json({
                 error: 'Missing required fields',
                 details: {
-                    town_id, complaint_type_id, contact_number, address, description, creator_id, creator_type
+                    town_id, division_id, complaint_type_id, contact_number, address, description, creator_id, creator_type
                 }
             }, { status: 400 });
         }
@@ -392,32 +502,35 @@ export async function POST(req) {
             }
         }
         // Prepare extra fields for executive_engineer_id, contractor_id, nature_of_work, budget_code, file_type
+        // Base params: $1-$11 (11 params), geoTag: $12 (if present), extraFields start after that
         let extraFields = '';
         let extraValues = '';
         let extraParams = [];
+        // Next param number: 12 base params ($1-$11) + 1 for geoTag (if present) = 12 or 13
+        const nextParamNum = 12 + (geoTag ? 1 : 0);
         if (final_executive_engineer_id) {
             extraFields += ', executive_engineer_id';
-            extraValues += ', $' + (11 + extraParams.length + (geoTag ? 1 : 0));
+            extraValues += ', $' + (nextParamNum + extraParams.length);
             extraParams.push(final_executive_engineer_id);
         }
         if (final_contractor_id) {
             extraFields += ', contractor_id';
-            extraValues += ', $' + (11 + extraParams.length + (geoTag ? 1 : 0));
+            extraValues += ', $' + (nextParamNum + extraParams.length);
             extraParams.push(final_contractor_id);
         }
         if (nature_of_work) {
             extraFields += ', nature_of_work';
-            extraValues += ', $' + (11 + extraParams.length + (geoTag ? 1 : 0));
+            extraValues += ', $' + (nextParamNum + extraParams.length);
             extraParams.push(nature_of_work);
         }
         if (budget_code) {
             extraFields += ', budget_code';
-            extraValues += ', $' + (11 + extraParams.length + (geoTag ? 1 : 0));
+            extraValues += ', $' + (nextParamNum + extraParams.length);
             extraParams.push(budget_code);
         }
         if (file_type) {
             extraFields += ', file_type';
-            extraValues += ', $' + (11 + extraParams.length + (geoTag ? 1 : 0));
+            extraValues += ', $' + (nextParamNum + extraParams.length);
             extraParams.push(file_type);
         }
         // Get the default "Pending" status_id
@@ -428,6 +541,7 @@ export async function POST(req) {
             INSERT INTO work_requests (
                 town_id,
                 subtown_id,
+                division_id,
                 complaint_type_id,
                 complaint_subtype_id,
                 contact_number,
@@ -437,14 +551,20 @@ export async function POST(req) {
                 creator_type,
                 status_id,
                 geo_tag${extraFields}
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, ${geoTag ? `$11` : 'NULL'}${extraValues})
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, ${geoTag ? `$12` : 'NULL'}${extraValues})
             RETURNING id;
         `;
+        // Explicitly nullify town/subtown when division_id is present, and vice versa
+        const finalTownId = division_id ? null : (town_id || null);
+        const finalSubtownId = division_id ? null : (subtown_id || null);
+        const finalDivisionId = division_id || null;
+        
         const params = [
-            town_id,
-            subtown_id,
+            finalTownId,
+            finalSubtownId,
+            finalDivisionId,
             complaint_type_id,
-            complaint_subtype_id,
+            complaint_subtype_id || null,
             contact_number,
             address,
             description,
@@ -454,11 +574,25 @@ export async function POST(req) {
         ];
         if (geoTag) params.push(geoTag);
         params.push(...extraParams);
+        console.log('[POST /api/requests] Final parameter list', {
+            params,
+            extraParams,
+            geoTag,
+            finalTownId,
+            finalDivisionId,
+            final_subtowns_count: Array.isArray(subtown_ids) ? subtown_ids.length : 0,
+            final_additional_locations_count: Array.isArray(additional_locations) ? additional_locations.length : 0,
+            final_executive_engineer_id,
+            final_contractor_id,
+        });
+
         await client.query('BEGIN');
         const result = await client.query(query, params);
         const workRequestId = result.rows[0].id;
+        console.log('[POST /api/requests] Inserted request id', workRequestId);
         // Insert into work_request_subtowns if subtown_ids is present and is an array
-        if (Array.isArray(subtown_ids) && subtown_ids.length > 0) {
+        // Only insert if division_id is not present (division-based requests don't use subtowns)
+        if (!division_id && Array.isArray(subtown_ids) && subtown_ids.length > 0) {
             for (const stId of subtown_ids) {
                 await client.query(
                     'INSERT INTO work_request_subtowns (work_request_id, subtown_id) VALUES ($1, $2)',
@@ -485,7 +619,8 @@ export async function POST(req) {
         
         // Log the request creation action
         await actionLogger.create(req, ENTITY_TYPES.REQUEST, workRequestId, `Request #${workRequestId}`, {
-            town_id,
+            town_id: town_id || null,
+            division_id: division_id || null,
             complaint_type_id,
             complaint_subtype_id,
             creator_type,
@@ -496,6 +631,7 @@ export async function POST(req) {
             executive_engineer_id: final_executive_engineer_id,
             contractor_id: final_contractor_id
         });
+        console.log('[POST /api/requests] Completed, action log recorded for request', workRequestId);
         
         // Insert notifications for relevant users
         try {
@@ -551,6 +687,7 @@ export async function POST(req) {
             // Log but don't fail request
             console.error('Notification creation failed:', notifErr);
         }
+        console.log('[POST /api/requests] Returning success response for request', workRequestId);
         return NextResponse.json({
             message: 'Work request submitted successfully',
             id: workRequestId

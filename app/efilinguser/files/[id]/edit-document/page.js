@@ -8,8 +8,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Save, Send, Shield, Mic, MicOff, Building2, User, Calendar } from "lucide-react";
+import { ArrowLeft, Save, Send, Shield, Mic, MicOff, Building2, User, Calendar, X } from "lucide-react";
 import TipTapEditor from "../../../components/TipTapEditor";
 import DocumentSignatureSystem from "../../../components/DocumentSignatureSystem";
 import MarkToModal from "../../../components/MarkToModal";
@@ -48,6 +49,14 @@ export default function DocumentEditor() {
     const [hasUserSigned, setHasUserSigned] = useState(false);
     const [userEfilingId, setUserEfilingId] = useState(null);
     const [permissionChecked, setPermissionChecked] = useState(false);
+    const [canAddPage, setCanAddPage] = useState(false);
+    const [workflowState, setWorkflowState] = useState(null);
+    const [showAddPageModal, setShowAddPageModal] = useState(false);
+    const [newPageTitle, setNewPageTitle] = useState('');
+    const [newPageContent, setNewPageContent] = useState('');
+    const [templates, setTemplates] = useState([]);
+    const [selectedTemplateId, setSelectedTemplateId] = useState('');
+    const [loadingTemplates, setLoadingTemplates] = useState(false);
 
     // Helper function to convert HTML to plain text
     const htmlToText = (html) => {
@@ -101,6 +110,12 @@ export default function DocumentEditor() {
         }
     }, [params.id]);
 
+    useEffect(() => {
+        if (session?.user?.id && canEditDocument) {
+            fetchTemplates();
+        }
+    }, [session?.user?.id, canEditDocument]);
+
     // Check user permissions - Only file creators can edit in efilinguser
     useEffect(() => {
         if (session?.user) {
@@ -142,32 +157,60 @@ export default function DocumentEditor() {
                     }
                 }
                 
-                // Check if current user is the file creator
+                // Check permissions including workflow state
                 if (session?.user?.id) {
                     const userMappingRes = await fetch(`/api/efiling/users/profile?userId=${session.user.id}`);
                     if (userMappingRes.ok) {
                         const userMapping = await userMappingRes.json();
                         const efilingUserId = userMapping.efiling_user_id;
                         
-                        // Update canEditDocument based on whether user is the file creator
-                        const isFileCreator = fileData.created_by === efilingUserId;
-                        // In efilinguser, only file creators can edit (no admin override)
-                        setCanEditDocument(isFileCreator);
-                        setPermissionChecked(true);
-                        
-                        console.log('Edit access check:', {
-                            userId: session.user.id,
-                            efilingUserId: efilingUserId,
-                            fileCreatedBy: fileData.created_by,
-                            isFileCreator: isFileCreator,
-                            canEdit: isFileCreator,
-                            permissionChecked: true
-                        });
-                        
-                        // If user is not the creator, redirect them
-                        if (!isFileCreator) {
-                            router.replace(`/efilinguser/files/${params.id}`);
-                            return;
+                        // Fetch permissions (includes workflow state check)
+                        const permRes = await fetch(`/api/efiling/files/${params.id}/permissions`);
+                        if (permRes.ok) {
+                            const permData = await permRes.json();
+                            const permissions = permData.permissions;
+                            
+                            // Check if user can edit based on workflow state
+                            const canEdit = permissions?.canEdit || false;
+                            const canAdd = permissions?.canAddPage || false;
+                            setCanEditDocument(canEdit);
+                            setCanAddPage(canAdd);
+                            setWorkflowState(permissions?.workflow_state);
+                            setPermissionChecked(true);
+                            
+                            console.log('Edit access check:', {
+                                userId: session.user.id,
+                                efilingUserId: efilingUserId,
+                                fileCreatedBy: fileData.created_by,
+                                canEdit: canEdit,
+                                canAddPage: canAdd,
+                                workflowState: permissions?.workflow_state,
+                                isWithinTeam: permissions?.is_within_team,
+                                permissionChecked: true
+                            });
+                            
+                            // If user cannot edit or add pages, redirect them
+                            if (!canEdit && !canAdd) {
+                                toast({
+                                    title: "Editing not allowed",
+                                    description: permissions?.workflow_state === 'EXTERNAL' 
+                                        ? "File is in external workflow. Editing is only allowed when file is returned to creator. SE/CE can add pages."
+                                        : "You do not have permission to edit this file.",
+                                    variant: "destructive",
+                                });
+                                router.replace(`/efilinguser/files/${params.id}`);
+                                return;
+                            }
+                        } else {
+                            // Fallback to creator check
+                            const isFileCreator = fileData.created_by === efilingUserId;
+                            setCanEditDocument(isFileCreator);
+                            setPermissionChecked(true);
+                            
+                            if (!isFileCreator) {
+                                router.replace(`/efilinguser/files/${params.id}`);
+                                return;
+                            }
                         }
                     } else {
                         // If mapping fails, be safe and block edit
@@ -241,6 +284,187 @@ export default function DocumentEditor() {
 
     const handleMarkTo = () => {
         setShowMarkToModal(true);
+    };
+
+    const fetchTemplates = async () => {
+        try {
+            setLoadingTemplates(true);
+            const res = await fetch('/api/efiling/templates');
+            if (res.ok) {
+                const data = await res.json();
+                setTemplates(data.templates || []);
+            }
+        } catch (error) {
+            console.error('Error fetching templates:', error);
+        } finally {
+            setLoadingTemplates(false);
+        }
+    };
+
+    // Helper function to convert plain text to HTML with proper paragraph formatting
+    const convertTextToHTML = (text) => {
+        if (!text) return '';
+        
+        // Split by double newlines (paragraph breaks) or single newlines
+        // First, normalize line breaks
+        const normalized = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+        
+        // Split by double newlines for paragraphs
+        const paragraphs = normalized.split(/\n\n+/);
+        
+        // Convert each paragraph to HTML
+        const htmlParagraphs = paragraphs.map(para => {
+            // Trim whitespace
+            const trimmed = para.trim();
+            if (!trimmed) return '';
+            
+            // Replace single newlines within paragraph with <br> tags
+            const withBreaks = trimmed.replace(/\n/g, '<br>');
+            
+            // Wrap in paragraph tag
+            return `<p>${withBreaks}</p>`;
+        }).filter(p => p); // Remove empty paragraphs
+        
+        return htmlParagraphs.join('');
+    };
+
+    const handleTemplateSelect = async (templateId) => {
+        if (!templateId || templateId === '__none') {
+            setSelectedTemplateId('');
+            return;
+        }
+
+        try {
+            const res = await fetch(`/api/efiling/templates/${templateId}`);
+            if (res.ok) {
+                const data = await res.json();
+                const template = data.template;
+
+                // Track template usage
+                await fetch(`/api/efiling/templates/${templateId}/use`, { method: 'POST' });
+
+                // Convert main_content to HTML if it's plain text
+                const mainContentHTML = template.main_content 
+                    ? convertTextToHTML(template.main_content)
+                    : '';
+
+                // Apply template to current page
+                const currentPage = pages.find(p => p.id === currentPageId);
+                if (currentPage) {
+                    const updatedPages = pages.map(page => {
+                        if (page.id === currentPageId) {
+                            return {
+                                ...page,
+                                content: {
+                                    ...page.content,
+                                    title: template.title || page.content.title,
+                                    subject: template.subject || page.content.subject,
+                                    matter: mainContentHTML || page.content.matter
+                                }
+                            };
+                        }
+                        return page;
+                    });
+                    setPages(updatedPages);
+
+                    // Also update documentContent for backward compatibility
+                    if (template.title) setDocumentContent(prev => ({ ...prev, title: template.title }));
+                    if (template.subject) setDocumentContent(prev => ({ ...prev, subject: template.subject }));
+                    if (mainContentHTML) {
+                        setDocumentContent(prev => ({ ...prev, matter: mainContentHTML }));
+                    }
+
+                    setSelectedTemplateId(templateId);
+
+                    toast({
+                        title: "Template Applied",
+                        description: `Template "${template.name}" has been applied to the current page.`,
+                    });
+                }
+            }
+        } catch (error) {
+            console.error('Error applying template:', error);
+            toast({
+                title: "Error",
+                description: "Failed to apply template",
+                variant: "destructive",
+            });
+        }
+    };
+
+    const handleAddPage = async () => {
+        if (!canAddPage) {
+            toast({
+                title: "Cannot add page",
+                description: "Only SE/CE and their assistants can add pages to files assigned to SE/CE.",
+                variant: "destructive",
+            });
+            return;
+        }
+        
+        setShowAddPageModal(true);
+    };
+    
+    const handleSaveNewPage = async () => {
+        if (!newPageTitle.trim() && !newPageContent.trim()) {
+            toast({
+                title: "Page content required",
+                description: "Please provide a page title or content.",
+                variant: "destructive",
+            });
+            return;
+        }
+        
+        try {
+            const res = await fetch(`/api/efiling/files/${params.id}/pages`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    page_title: newPageTitle.trim() || `Page ${pages.length + 1}`,
+                    page_content: newPageContent.trim() || '',
+                    page_type: 'MAIN'
+                })
+            });
+            
+            if (!res.ok) {
+                const error = await res.json();
+                throw new Error(error.error || 'Failed to add page');
+            }
+            
+            const result = await res.json();
+            toast({
+                title: "Page added successfully",
+                description: `Page "${result.page.page_title}" has been added.`,
+            });
+            
+            // Reload pages
+            const docResponse = await fetch(`/api/efiling/files/${params.id}/document`);
+            if (docResponse.ok) {
+                const docData = await docResponse.json();
+                if (docData.pages && docData.pages.length > 0) {
+                    const loadedPages = docData.pages.map(page => ({
+                        id: page.id,
+                        pageNumber: page.pageNumber,
+                        title: page.title,
+                        content: page.content,
+                        type: page.type
+                    }));
+                    setPages(loadedPages);
+                    setCurrentPageId(loadedPages[loadedPages.length - 1].id);
+                }
+            }
+            
+            setShowAddPageModal(false);
+            setNewPageTitle('');
+            setNewPageContent('');
+        } catch (error) {
+            console.error('Failed to add page:', error);
+            toast({
+                title: "Failed to add page",
+                description: error.message || "Unable to add page. Please try again.",
+                variant: "destructive",
+            });
+        }
     };
 
     const addNewPage = () => {
@@ -748,13 +972,25 @@ export default function DocumentEditor() {
                                     size="sm"
                                     onClick={addNewPage}
                                     className="text-green-600 border-green-600 hover:bg-green-50"
+                                    title="Add a new page (for editing existing content)"
                                 >
                                     + Add Page
                                 </Button>
                             )}
+                            {canAddPage && !canEditDocument && permissionChecked && (
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={handleAddPage}
+                                    className="text-green-600 border-green-600 hover:bg-green-50"
+                                    title="Add a new page (SE/CE and assistants only)"
+                                >
+                                    + Add Page (SE/CE)
+                                </Button>
+                            )}
                         </div>
                         
-                        <div className="flex items-center space-x-2">
+                        {/* <div className="flex items-center space-x-2">
                         <Label className="text-sm font-medium">Templates:</Label>
                         <Button
                             variant={selectedTemplate === 1 ? "default" : "outline"}
@@ -796,11 +1032,9 @@ export default function DocumentEditor() {
                         >
                             📋 Custom
                         </Button>
-                        </div>
+                        </div> */}
                     </div>
                 </div>
-
-                {/* Formatting Toolbar */}
                 
             </div>
 
@@ -822,18 +1056,25 @@ export default function DocumentEditor() {
                                                 className="w-48"
                                                 disabled={!canEditDocument || !permissionChecked}
                                             />
-                                        <Select value={selectedTemplate.toString()} onValueChange={(value) => selectTemplate(parseInt(value))}>
-                                            <SelectTrigger className="w-48">
-                                                <SelectValue placeholder="Select Template" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {documentTemplates.map((template) => (
-                                                    <SelectItem key={template.id} value={template.id.toString()}>
-                                                        {template.name}
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
+                                        {canEditDocument && templates.length > 0 && (
+                                            <Select
+                                                value={selectedTemplateId || "__none"}
+                                                onValueChange={handleTemplateSelect}
+                                                disabled={loadingTemplates}
+                                            >
+                                                <SelectTrigger className="w-48">
+                                                    <SelectValue placeholder={loadingTemplates ? "Loading..." : "Select Template"} />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="__none">No Template</SelectItem>
+                                                    {templates.map(template => (
+                                                        <SelectItem key={template.id} value={String(template.id)}>
+                                                            {template.name} {template.template_type && `(${template.template_type})`}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        )}
                                         </div>
                                     </CardTitle>
                                 </CardHeader>
@@ -909,35 +1150,6 @@ export default function DocumentEditor() {
                                             )}
                                         </div>
                                         <div>
-                                            <Label htmlFor="regards">Regards</Label>
-                                            <Select 
-                                                value={(getCurrentPage().content.regards) || ''} 
-                                                onValueChange={(value) => updateCurrentPageContent({ regards: value })}
-                                                disabled={!canEditDocument || !permissionChecked}
-                                            >
-                                                <SelectTrigger id="regards">
-                                                    <SelectValue placeholder="Select regards" />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectItem value="Yours faithfully">Yours faithfully</SelectItem>
-                                                    <SelectItem value="Yours sincerely">Yours sincerely</SelectItem>
-                                                    <SelectItem value="Best regards">Best regards</SelectItem>
-                                                    <SelectItem value="Custom">Custom</SelectItem>
-                                                </SelectContent>
-                                            </Select>
-                                            {getCurrentPage().content.regards === 'Custom' && (
-                                                <input
-                                                    id="customRegards"
-                                                    type="text"
-                                                    value={htmlToText(getCurrentPage().content.customRegards)}
-                                                    onChange={(e) => updateCurrentPageContent({ customRegards: e.target.value })}
-                                                    className="w-full p-2 border border-gray-300 rounded-md min-h-[40px] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent mt-2"
-                                                    placeholder="Enter custom regards"
-                                                    disabled={!canEditDocument || !permissionChecked}
-                                                />
-                                            )}
-                                        </div>
-                                        <div>
                                             <Label htmlFor="footer">Footer</Label>
                                             <input
                                                 id="footer"
@@ -958,18 +1170,25 @@ export default function DocumentEditor() {
                                 <CardHeader>
                                     <CardTitle className="flex items-center justify-between">
                                         <span>Blank A4 Page Editor</span>
-                                        <Select value={selectedTemplate.toString()} onValueChange={(value) => selectTemplate(parseInt(value))}>
-                                            <SelectTrigger className="w-48">
-                                                <SelectValue placeholder="Select Template" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {documentTemplates.map((template) => (
-                                                    <SelectItem key={template.id} value={template.id.toString()}>
-                                                        {template.name}
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
+                                        {canEditDocument && templates.length > 0 && (
+                                            <Select
+                                                value={selectedTemplateId || "__none"}
+                                                onValueChange={handleTemplateSelect}
+                                                disabled={loadingTemplates}
+                                            >
+                                                <SelectTrigger className="w-48">
+                                                    <SelectValue placeholder={loadingTemplates ? "Loading..." : "Select Template"} />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="__none">No Template</SelectItem>
+                                                    {templates.map(template => (
+                                                        <SelectItem key={template.id} value={String(template.id)}>
+                                                            {template.name} {template.template_type && `(${template.template_type})`}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        )}
                                     </CardTitle>
                                 </CardHeader>
                                 <CardContent>
@@ -1026,11 +1245,11 @@ export default function DocumentEditor() {
                                         </div>
 
                                         {/* Regards */}
-                                        <div className="mb-4">
+                                        {/* <div className="mb-4">
                                             <div className="text-lg font-medium text-gray-800">
                                                 {documentContent.regards || 'Yours faithfully,'}
                                             </div>
-                                        </div>
+                                        </div> */}
 
                                         {/* Footer */}
                                         <div className="text-center mt-8">
@@ -1069,7 +1288,7 @@ export default function DocumentEditor() {
                             </Card>
 
                             {/* Help */}
-                            <Card>
+                            {/* <Card>
                                 <CardHeader>
                                     <CardTitle className="text-lg">Help & Tips</CardTitle>
                                 </CardHeader>
@@ -1079,7 +1298,7 @@ export default function DocumentEditor() {
                                     <p>• Use &quot;Mark To&quot; to send for approval</p>
                                     <p>• Save your work regularly</p>
                                 </CardContent>
-                            </Card>
+                            </Card> */}
 
                             {/* Attachment Manager */}
                             <AttachmentManager
@@ -1091,7 +1310,7 @@ export default function DocumentEditor() {
                             {/* Document Signature System */}
                             <Card>
                                 <CardHeader>
-                                    <CardTitle className="text-lg">Document Signature System</CardTitle>
+                                    <CardTitle className="text-lg">Add Comment / Signature </CardTitle>
                                 </CardHeader>
                                 <CardContent>
                                     <DocumentSignatureSystem
@@ -1128,6 +1347,59 @@ export default function DocumentEditor() {
                     fileId={params.id}
                     onClose={() => setShowESignatureModal(false)}
                 />
+            )}
+            
+            {/* Add Page Modal for SE/CE */}
+            {showAddPageModal && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                    <Card className="w-full max-w-2xl max-h-[90vh] overflow-hidden">
+                        <CardHeader>
+                            <div className="flex items-center justify-between">
+                                <CardTitle>Add New Page</CardTitle>
+                                <Button variant="ghost" size="sm" onClick={() => {
+                                    setShowAddPageModal(false);
+                                    setNewPageTitle('');
+                                    setNewPageContent('');
+                                }}>
+                                    <X className="w-4 h-4" />
+                                </Button>
+                            </div>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                            <div>
+                                <Label>Page Title</Label>
+                                <Input
+                                    value={newPageTitle}
+                                    onChange={(e) => setNewPageTitle(e.target.value)}
+                                    placeholder="Enter page title (optional)"
+                                    className="mt-1"
+                                />
+                            </div>
+                            <div>
+                                <Label>Page Content</Label>
+                                <Textarea
+                                    value={newPageContent}
+                                    onChange={(e) => setNewPageContent(e.target.value)}
+                                    placeholder="Enter page content"
+                                    className="mt-1"
+                                    rows={10}
+                                />
+                            </div>
+                            <div className="flex justify-end space-x-2">
+                                <Button variant="outline" onClick={() => {
+                                    setShowAddPageModal(false);
+                                    setNewPageTitle('');
+                                    setNewPageContent('');
+                                }}>
+                                    Cancel
+                                </Button>
+                                <Button onClick={handleSaveNewPage} className="bg-green-600 hover:bg-green-700">
+                                    Add Page
+                                </Button>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </div>
             )}
         </div>
     );

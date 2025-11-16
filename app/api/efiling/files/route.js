@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/db';
 import { eFileActionLogger, EFILING_ACTION_TYPES, EFILING_ENTITY_TYPES } from '@/lib/efilingActionLogger';
 import { getToken } from 'next-auth/jwt';
+import { getFiscalYear } from '@/lib/utils';
 
 export async function GET(request) {
     const { searchParams } = new URL(request.url);
@@ -104,8 +105,7 @@ export async function GET(request) {
                         const aclRes = await client.query(`
                             SELECT 1
                             FROM efiling_files f
-                            LEFT JOIN efiling_file_workflows wf ON wf.file_id = f.id
-                            WHERE f.id = $1 AND (f.created_by = $2 OR f.assigned_to = $2 OR wf.current_assignee_id = $2)
+                    WHERE f.id = $1 AND (f.created_by = $2 OR f.assigned_to = $2)
                         `, [id, efUserId]);
                         if (aclRes.rows.length === 0) {
                             return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
@@ -119,12 +119,14 @@ export async function GET(request) {
                 // Now let's try the full query with JOINs
                 const fullQuery = `
                     SELECT f.*, 
-                           c.name as category_name,
-                           d.name as department_name,
-                           s.name as status_name, s.code as status_code, s.color as status_color,
-                           COALESCE(ab.designation, 'Unassigned') as assigned_to_name,
-                           cr_users.name as created_by_name,
-                           cr_users.name as creator_user_name
+                           c.name AS category_name,
+                           d.name AS department_name,
+                           s.name AS status_name,
+                           s.code AS status_code,
+                           s.color AS status_color,
+                           COALESCE(ab.designation, 'Unassigned') AS assigned_to_name,
+                           cr_users.name AS created_by_name,
+                           cr_users.name AS creator_user_name
                     FROM efiling_files f
                     LEFT JOIN efiling_file_categories c ON f.category_id = c.id
                     LEFT JOIN efiling_departments d ON f.department_id = d.id
@@ -163,13 +165,17 @@ export async function GET(request) {
                        curr_users.name as current_assignee_user_name,
                        ls.last_signed_by_name,
                        ls.last_signed_at,
-                       wf.sla_deadline as sla_deadline,
-                       (wf.sla_deadline IS NOT NULL AND wf.sla_deadline < NOW() AND wf.workflow_status = 'IN_PROGRESS') as is_sla_breached,
-                       ROUND(EXTRACT(EPOCH FROM (wf.sla_deadline - NOW()))/60.0) as minutes_remaining,
-                       ws.stage_name as current_stage_name,
-                       ws.sla_hours as current_stage_sla_hours,
+                       f.sla_deadline,
+                       (f.sla_deadline IS NOT NULL AND f.sla_deadline < NOW()) as is_sla_breached,
+                       ROUND(EXTRACT(EPOCH FROM (f.sla_deadline - NOW()))/60.0) as minutes_remaining,
                        ft.name as file_type_name,
-                       ft.code as file_type_code
+                       ft.code as file_type_code,
+                       r.name as current_stage_name,
+                       r.code as current_stage_code,
+                       r.name as current_stage,
+                       f.sla_paused,
+                       f.sla_accumulated_hours,
+                       f.sla_pause_count
                 FROM efiling_files f
                 LEFT JOIN efiling_file_categories c ON f.category_id = c.id
                 LEFT JOIN efiling_departments d ON f.department_id = d.id
@@ -179,9 +185,7 @@ export async function GET(request) {
                 LEFT JOIN efiling_roles r ON ab.efiling_role_id = r.id
                 LEFT JOIN efiling_users cr ON f.created_by = cr.id
                 LEFT JOIN users cr_users ON cr.user_id = cr_users.id
-                LEFT JOIN efiling_file_workflows wf ON wf.file_id = f.id
-                LEFT JOIN efiling_workflow_stages ws ON ws.id = wf.current_stage_id
-                LEFT JOIN efiling_users curr ON wf.current_assignee_id = curr.id
+                LEFT JOIN efiling_users curr ON curr.id = f.assigned_to
                 LEFT JOIN users curr_users ON curr.user_id = curr_users.id
                 LEFT JOIN (
                     SELECT DISTINCT ON (file_id) 
@@ -235,7 +239,7 @@ export async function GET(request) {
                 );
                 if (efilingUserRes.rows.length > 0) {
                     const efilingUserId = efilingUserRes.rows[0].id;
-                    conditions.push(`(f.created_by = $${paramIndex} OR f.assigned_to = $${paramIndex} OR wf.current_assignee_id = $${paramIndex})`);
+                    conditions.push(`(f.created_by = $${paramIndex} OR f.assigned_to = $${paramIndex})`);
                     params.push(efilingUserId);
                     paramIndex++;
                 }
@@ -310,9 +314,11 @@ export async function POST(request) {
         }
         const currentUserId = token.user.id;
         
-        // Get user's efiling_users.id and department restrictions
+        // Get user's efiling_users.id, department, and geography
         const userQuery = await client.query(`
-            SELECT eu.id as efiling_user_id, eu.department_id, eu.efiling_role_id, d.name as department_name
+            SELECT eu.id as efiling_user_id, eu.department_id, eu.efiling_role_id, 
+                   eu.district_id, eu.town_id, eu.division_id,
+                   d.name as department_name, d.department_type
             FROM efiling_users eu 
             JOIN users u ON eu.user_id = u.id 
             JOIN efiling_departments d ON eu.department_id = d.id
@@ -328,6 +334,10 @@ export async function POST(request) {
         const userData = userQuery.rows[0];
         const createdBy = userData.efiling_user_id;
         const userDept = userData.department_id;
+        const userDistrictId = userData.district_id;
+        const userTownId = userData.town_id;
+        const userDivisionId = userData.division_id;
+        const userDeptType = userData.department_type;
         
         // Resolve user's role code (for role-code-based checks)
         let userRoleCode = null;
@@ -403,8 +413,9 @@ export async function POST(request) {
             }
         }
         
-        // Generate file number (format: DEPT/YEAR/SEQUENTIAL)
-        const year = new Date().getFullYear();
+        // Generate file number (format: DEPT/FISCAL_YEAR/SEQUENTIAL, e.g., WB/2025-26/0001)
+        const now = new Date();
+        const fiscalYear = getFiscalYear(now);
         const deptToUse = effectiveDeptId;
         const deptQuery = await client.query(
             'SELECT code FROM efiling_departments WHERE id = $1',
@@ -417,19 +428,35 @@ export async function POST(request) {
         
         const deptCode = deptQuery.rows[0].code;
         
-        // Get next sequence number for this department and year
-        // Use MAX to get the highest sequence number, then add 1
+        // Calculate fiscal year start and end dates for SQL matching
+        const currentYear = now.getFullYear();
+        const currentMonth = now.getMonth() + 1; // 1-12
+        let fiscalYearStart, fiscalYearEnd;
+        
+        if (currentMonth >= 7) {
+            // July 1 - December 31: Fiscal year is current year to next year
+            fiscalYearStart = new Date(currentYear, 6, 1); // July 1
+            fiscalYearEnd = new Date(currentYear + 1, 5, 30, 23, 59, 59); // June 30 next year
+        } else {
+            // January 1 - June 30: Fiscal year is previous year to current year
+            fiscalYearStart = new Date(currentYear - 1, 6, 1); // July 1 previous year
+            fiscalYearEnd = new Date(currentYear, 5, 30, 23, 59, 59); // June 30 current year
+        }
+        
+        // Get next sequence number for this department and fiscal year
+        // Match files created within the fiscal year period AND with matching fiscal year pattern
         const seqQuery = await client.query(
             `SELECT COALESCE(MAX(CAST(SUBSTRING(file_number FROM '\\d{4}$') AS INTEGER)), 0) + 1 as next_seq 
              FROM efiling_files 
              WHERE department_id = $1 
-             AND EXTRACT(YEAR FROM created_at) = $2
-             AND file_number LIKE $3`,
-            [deptToUse, year, `${deptCode}/${year}/%`]
+             AND created_at >= $2
+             AND created_at <= $3
+             AND file_number LIKE $4`,
+            [deptToUse, fiscalYearStart, fiscalYearEnd, `${deptCode}/${fiscalYear}/%`]
         );
         
         let sequence = seqQuery.rows[0].next_seq;
-        let fileNumber = `${deptCode}/${year}/${sequence.toString().padStart(4, '0')}`;
+        let fileNumber = `${deptCode}/${fiscalYear}/${sequence.toString().padStart(4, '0')}`;
         
         // Double-check if file number exists and increment if needed
         let attempts = 0;
@@ -445,7 +472,7 @@ export async function POST(request) {
             
             // File number exists, increment and try again
             sequence++;
-            fileNumber = `${deptCode}/${year}/${sequence.toString().padStart(4, '0')}`;
+            fileNumber = `${deptCode}/${fiscalYear}/${sequence.toString().padStart(4, '0')}`;
             attempts++;
         }
         
@@ -468,48 +495,16 @@ export async function POST(request) {
         const statusId = statusQuery.rows[0].id;
         console.log('Using status ID:', statusId, 'for DRAFT status');
         
-        // Prefer workflow by file type if provided
-        let workflowTemplateId = null;
-        let firstStageId = null;
+        // Workflow templates deprecated - using geographic routing instead
         
-        try {
-            let workflowQuery;
-            if (file_type_id) {
-                workflowQuery = await client.query(`
-                    SELECT wt.id, ws.id as first_stage_id
-                    FROM efiling_workflow_templates wt
-                    LEFT JOIN efiling_workflow_stages ws ON wt.id = ws.template_id AND ws.stage_order = 1
-                    WHERE wt.file_type_id = $1 AND wt.is_active = true
-                    LIMIT 1
-                `, [file_type_id]);
-            } else {
-                workflowQuery = await client.query(`
-                    SELECT wt.id, ws.id as first_stage_id
-                    FROM efiling_workflow_templates wt
-                    LEFT JOIN efiling_workflow_stages ws ON wt.id = ws.template_id AND ws.stage_order = 1
-                    WHERE wt.is_active = true
-                    LIMIT 1
-                `);
-            }
-            if (workflowQuery.rows.length > 0) {
-                workflowTemplateId = workflowQuery.rows[0].id;
-                firstStageId = workflowQuery.rows[0].first_stage_id;
-                console.log('Auto-assigned workflow template ID:', workflowTemplateId, 'with first stage:', firstStageId);
-            } else {
-                console.log('No workflow template found for selection');
-            }
-        } catch (workflowError) {
-            console.error('Error fetching workflow template:', workflowError);
-            // Do not fail file creation if workflow assignment fails
-        }
-        
-        // Create file first (without workflow_id initially)
+        // Create file with geographic fields auto-populated from creator
         const query = `
             INSERT INTO efiling_files (
                 file_number, subject, category_id, department_id, status_id,
-                priority, confidentiality_level, work_request_id, created_by, assigned_to, remarks, file_type_id
+                priority, confidentiality_level, work_request_id, created_by, assigned_to, remarks, 
+                file_type_id, district_id, town_id, division_id
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
             RETURNING *
         `;
         
@@ -521,9 +516,23 @@ export async function POST(request) {
             created_by: createdBy, assigned_to: assigned_to || null, remarks, file_type_id
         });
         
+        // Auto-populate geography based on department type
+        let fileDistrictId = null;
+        let fileTownId = null;
+        let fileDivisionId = null;
+        
+        if (userDeptType === 'district') {
+            fileDistrictId = userDistrictId;
+            fileTownId = userTownId;
+        } else if (userDeptType === 'division') {
+            fileDivisionId = userDivisionId;
+        }
+        // For 'global' type, geography fields remain null
+        
         const result = await client.query(query, [
             fileNumber, subject, categoryToUse, deptToUse, statusId,
-            'high', 'normal', work_request_id || null, createdBy, assigned_to || null, remarks, file_type_id || null
+            'high', 'normal', work_request_id || null, createdBy, assigned_to || null, remarks, 
+            file_type_id || null, fileDistrictId, fileTownId, fileDivisionId
         ]);
         
         console.log('File created successfully:', result.rows[0]);
@@ -548,68 +557,8 @@ export async function POST(request) {
             }
         }
         
-        // Create workflow instance if workflow template is assigned
-        if (workflowTemplateId && firstStageId) {
-            try {
-                // Create workflow instance
-                const workflowInstanceQuery = await client.query(`
-                    INSERT INTO efiling_file_workflows (
-                        file_id, template_id, current_stage_id, workflow_status, 
-                        started_at, current_assignee_id, created_by, created_at
-                    ) VALUES ($1, $2, $3, $4, NOW(), $5, $6, NOW())
-                    RETURNING id
-                `, [
-                    result.rows[0].id, 
-                    workflowTemplateId, 
-                    firstStageId, 
-                    'IN_PROGRESS', 
-                    assigned_to || createdBy,
-                    createdBy
-                ]);
-                
-                const workflowInstanceId = workflowInstanceQuery.rows[0].id;
-                
-                // Create initial stage instance
-                await client.query(`
-                    INSERT INTO efiling_workflow_stage_instances (
-                        workflow_id, stage_id, stage_status, assigned_to, started_at, created_at
-                    ) VALUES ($1, $2, $3, $4, NOW(), NOW())
-                `, [
-                    workflowInstanceId,
-                    firstStageId,
-                    'IN_PROGRESS',
-                    assigned_to || createdBy
-                ]);
-                
-                // Compute SLA deadline from stage.sla_hours (fallback 24)
-                let slaHours = 24;
-                try {
-                    const slaRes = await client.query('SELECT sla_hours FROM efiling_workflow_stages WHERE id = $1', [firstStageId]);
-                    if (slaRes.rows[0]?.sla_hours != null) slaHours = parseInt(slaRes.rows[0].sla_hours) || 24;
-                } catch {}
-                await client.query(`
-                    UPDATE efiling_file_workflows
-                    SET sla_deadline = NOW() + ($1 || ' hours')::interval, updated_at = NOW()
-                    WHERE id = $2
-                `, [slaHours.toString(), workflowInstanceId]);
-                await client.query(`
-                    UPDATE efiling_files
-                    SET workflow_id = $1, current_stage_id = $2, sla_deadline = NOW() + ($3 || ' hours')::interval, updated_at = NOW()
-                    WHERE id = $4
-                `, [workflowInstanceId, firstStageId, slaHours.toString(), result.rows[0].id]);
-                
-                console.log('Workflow instance created:', workflowInstanceId, 'with first stage:', firstStageId, 'SLA hours:', slaHours);
-                
-                // Update the result to include workflow information
-                result.rows[0].workflow_id = workflowInstanceId;
-                result.rows[0].current_stage_id = firstStageId;
-                result.rows[0].sla_deadline = null; // client will refetch on list
-                
-            } catch (workflowError) {
-                console.error('Error creating workflow instance:', workflowError);
-                // Don't fail file creation if workflow creation fails
-            }
-        }
+        // Workflow system deprecated - files now use geographic routing
+        // SLA can be managed at file level using efiling_files.sla_deadline directly if needed
         
         // Log the action
         try {
@@ -765,9 +714,6 @@ export async function DELETE(request) {
         await client.query('DELETE FROM efiling_file_movements WHERE file_id = $1', [id]);
         await client.query('DELETE FROM efiling_notifications WHERE file_id = $1', [id]);
         await client.query('DELETE FROM efiling_signatures WHERE file_id = $1', [id]);
-
-        // Remove workflow tree
-        await client.query('DELETE FROM efiling_file_workflows WHERE file_id = $1', [id]);
 
         // Finally delete the file
         await client.query('DELETE FROM efiling_files WHERE id = $1', [id]);

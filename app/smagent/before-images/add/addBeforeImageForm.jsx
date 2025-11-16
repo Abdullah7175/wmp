@@ -61,7 +61,30 @@ export default function AddBeforeImageForm({ workRequestId, onClose }) {
 
   const handleImageUpload = (e) => {
     const files = Array.from(e.target.files);
-    const newImages = files.map(file => ({
+    const maxImageSize = 5 * 1024 * 1024; // 5MB
+    
+    const validFiles = [];
+    const invalidFiles = [];
+    
+    files.forEach(file => {
+      if (file.size > maxImageSize) {
+        invalidFiles.push(file.name);
+      } else {
+        validFiles.push(file);
+      }
+    });
+    
+    if (invalidFiles.length > 0) {
+      toast({
+        title: "Invalid File Size",
+        description: `${invalidFiles.length} image(s) exceed size limit. Maximum allowed: 5MB`,
+        variant: "destructive",
+      });
+      e.target.value = ''; // Clear the input
+      return;
+    }
+    
+    const newImages = validFiles.map(file => ({
       id: Date.now() + Math.random(),
       file,
       preview: URL.createObjectURL(file),

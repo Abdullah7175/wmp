@@ -10,11 +10,13 @@ import { Button } from '@/components/ui/button';
 
 const Select = dynamic(() => import('react-select'), { ssr: false });
 
-const validationSchema = Yup.object({
-    town_id: Yup.string().required('Town is required'),
+// Dynamic validation schema - will be created based on department type
+const createValidationSchema = (isDivisionBased) => Yup.object({
+    complaint_type_id: Yup.string().required('Department is required'),
+    town_id: isDivisionBased ? Yup.string().nullable() : Yup.string().required('Town is required'),
     subtown_id: Yup.string().nullable(),
     subtown_ids: Yup.array().of(Yup.number()),
-    complaint_type_id: Yup.string().required('Complaint type is required'),
+    division_id: isDivisionBased ? Yup.string().required('Division is required') : Yup.string().nullable(),
     complaint_subtype_id: Yup.string().nullable(),
     contact_number: Yup.string()
         .required('Contact number is required')
@@ -24,7 +26,7 @@ const validationSchema = Yup.object({
     latitude: Yup.number().nullable(),
     longitude: Yup.number().nullable(),
     budget_code: Yup.string(),
-    file_type: Yup.string().oneOf(['SPI', 'ADP', '']).nullable(),
+    file_type: Yup.string().oneOf(['SPI', 'R&M', 'ADP', '']).nullable(),
     nature_of_work: Yup.string().required('Nature of Work is required'),
 });
 
@@ -39,6 +41,8 @@ export const RequestForm = ({ isPublic = false, initialValues, onSubmit, isEditM
     const [complaintSubTypes, setComplaintSubTypes] = useState([]);
     const [filteredSubTypes, setFilteredSubTypes] = useState([]);
     const [selectedComplaintType, setSelectedComplaintType] = useState(null);
+    const [divisions, setDivisions] = useState([]);
+    const [isDivisionBased, setIsDivisionBased] = useState(false);
     const [locationAccess, setLocationAccess] = useState(false);
     const [locationLoading, setLocationLoading] = useState(false);
     const [executiveEngineers, setExecutiveEngineers] = useState([]);
@@ -49,6 +53,8 @@ export const RequestForm = ({ isPublic = false, initialValues, onSubmit, isEditM
     const [filteredExecutiveEngineers, setFilteredExecutiveEngineers] = useState([]);
     const [smAgents, setSmAgents] = useState([]);
     const [selectedSmAgents, setSelectedSmAgents] = useState([]);
+
+    const isAgentUser = session?.user?.userType === 'agent';
 
     // Fetch filtered agents based on town and complaint type (only for Executive Engineers)
     const fetchFilteredAgents = async (townId, complaintTypeId) => {
@@ -69,6 +75,39 @@ export const RequestForm = ({ isPublic = false, initialValues, onSubmit, isEditM
         }
     };
 
+    const fetchDivisionExecutiveEngineers = async (divisionId, complaintTypeId) => {
+        if (!divisionId || !complaintTypeId) {
+            setFilteredExecutiveEngineers([]);
+            return;
+        }
+        try {
+            console.log('[RequestForm] Fetching division-based EEs', { divisionId, complaintTypeId });
+            const res = await fetch(`/api/agents?role=1&division_id=${divisionId}&complaint_type_id=${complaintTypeId}`);
+            if (res.ok) {
+                const data = await res.json();
+                setFilteredExecutiveEngineers(data.data || []);
+            } else {
+                setFilteredExecutiveEngineers([]);
+            }
+        } catch (error) {
+            console.error('Error fetching division-based agents:', error);
+            setFilteredExecutiveEngineers([]);
+        }
+    };
+
+    const handleDivisionChange = (selectedOption) => {
+        console.log('[RequestForm] Division changed', selectedOption);
+        const value = selectedOption ? String(selectedOption.value) : '';
+        formik.setFieldValue('division_id', value);
+        formik.setFieldValue('executive_engineer_id', '');
+
+        if (value && formik.values.complaint_type_id) {
+            fetchDivisionExecutiveEngineers(value, formik.values.complaint_type_id);
+        } else {
+            setFilteredExecutiveEngineers([]);
+        }
+    };
+
     const formik = useFormik({
         initialValues: initialValues || {
             town_id: '',
@@ -76,6 +115,7 @@ export const RequestForm = ({ isPublic = false, initialValues, onSubmit, isEditM
             subtown_ids: [],
             complaint_type_id: '',
             complaint_subtype_id: '',
+            division_id: '',
             contact_number: '',
             address: '',
             description: '',
@@ -90,13 +130,85 @@ export const RequestForm = ({ isPublic = false, initialValues, onSubmit, isEditM
             contractor_id: '',
             assigned_sm_agents: [],
         },
-        validationSchema,
+        validate: (values) => {
+            const errors = {};
+            const schema = createValidationSchema(isDivisionBased);
+            try {
+                schema.validateSync(values, { abortEarly: false });
+            } catch (err) {
+                err.inner.forEach((error) => {
+                    errors[error.path] = error.message;
+                });
+            }
+            return errors;
+        },
         validateOnChange: true,
         validateOnBlur: true,
         enableReinitialize: true,
         onSubmit: async (values) => {
-            // Add additional locations to submit values
+            // Prepare submit values
             const submitValues = { ...values, additional_locations: additionalLocations };
+            const normalizeInt = (val) => {
+                if (val === undefined || val === null || val === '') return null;
+                const parsed = Number(val);
+                return Number.isNaN(parsed) ? null : parsed;
+            };
+            const creatorId = normalizeInt(session?.user?.id);
+            const creatorType = session?.user?.userType || 'user';
+
+            if (!creatorId) {
+                toast({
+                    title: "Unable to submit request",
+                    description: "Session not ready. Please refresh the page and try again.",
+                    variant: 'destructive',
+                });
+                return;
+            }
+            
+            // If division-based, set town/subtown to null and ensure division_id is set
+            if (isDivisionBased) {
+                submitValues.town_id = null;
+                submitValues.subtown_id = null;
+                submitValues.subtown_ids = [];
+                
+                // If division_id is not set but department has division_id, use it
+                if (!submitValues.division_id) {
+                    const selectedType = complaintTypes.find(ct => ct.id === submitValues.complaint_type_id);
+                    if (selectedType?.division_id) {
+                    console.log('[RequestForm] Auto-assigning division from complaint type', selectedType.division_id);
+                        submitValues.division_id = selectedType.division_id;
+                    }
+                }
+            } else {
+                // If town-based, set division_id to null
+                submitValues.division_id = null;
+            }
+            submitValues.creator_id = creatorId;
+            submitValues.creator_type = creatorType;
+            submitValues.complaint_type_id = normalizeInt(submitValues.complaint_type_id);
+            submitValues.complaint_subtype_id = normalizeInt(submitValues.complaint_subtype_id);
+            submitValues.town_id = normalizeInt(submitValues.town_id);
+            submitValues.subtown_id = normalizeInt(submitValues.subtown_id);
+            submitValues.division_id = normalizeInt(submitValues.division_id);
+            submitValues.executive_engineer_id = normalizeInt(submitValues.executive_engineer_id);
+            submitValues.contractor_id = normalizeInt(submitValues.contractor_id);
+            submitValues.subtown_ids = Array.isArray(submitValues.subtown_ids)
+                ? submitValues.subtown_ids.map(normalizeInt).filter(v => v !== null)
+                : [];
+            submitValues.assigned_sm_agents = Array.isArray(submitValues.assigned_sm_agents)
+                ? submitValues.assigned_sm_agents.map(agent => ({
+                    ...agent,
+                    sm_agent_id: normalizeInt(agent.sm_agent_id ?? agent.value ?? agent.id),
+                })).filter(agent => agent.sm_agent_id !== null)
+                : [];
+        console.log('[RequestForm] Normalised submit values', submitValues);
+            
+            const debugPayload = {
+                ...submitValues,
+                additional_locations: additionalLocations,
+            };
+            console.log('[RequestForm] Prepared payload', JSON.stringify(debugPayload, null, 2));
+            
             if (onSubmit) {
                 await onSubmit(submitValues);
             } else {
@@ -108,23 +220,44 @@ export const RequestForm = ({ isPublic = false, initialValues, onSubmit, isEditM
                     },
                         body: JSON.stringify(submitValues),
                 });
+                console.log('[RequestForm] POST /api/requests status', response.status);
 
                 if (response.ok) {
-                    toast({
+                const responseData = await response.json().catch(() => ({}));
+                    console.log('[RequestForm] Success payload', responseData);
+                toast({
                         title: "Request submitted successfully",
-                        description: 'Your work request has been received.',
+                    description: responseData?.id
+                        ? `Work request #${responseData.id} has been created.`
+                        : 'Your work request has been received.',
                         variant: 'success',
                     });
-                    formik.resetForm();
+                formik.resetForm();
+                setAdditionalLocations([]);
+                setSelectedComplaintType(null);
+                setSelectedTown(null);
+                setFilteredSubtowns([]);
+                setFilteredExecutiveEngineers([]);
+                setSelectedSmAgents([]);
+                setIsDivisionBased(false);
                 } else {
+                    let errorMessage = 'Please try again later.';
+                    try {
+                        const err = await response.json();
+                        console.warn('[RequestForm] Error response', err);
+                        errorMessage = err?.error || err?.details || JSON.stringify(err);
+                    } catch (parseErr) {
+                        // ignore parse error
+                        console.warn('[RequestForm] Failed to parse error response', parseErr);
+                    }
                     toast({
                         title: "Failed to submit request",
-                        description: 'Please try again later.',
+                        description: errorMessage,
                         variant: 'destructive',
                     });
                 }
             } catch (error) {
-                console.error('Error submitting form:', error);
+                console.error('[RequestForm] Network/JS error submitting request:', error);
                 toast({
                     title: "An error occurred",
                     description: 'Please try again later.',
@@ -173,10 +306,16 @@ export const RequestForm = ({ isPublic = false, initialValues, onSubmit, isEditM
         // Fetch towns
         const fetchTowns = async () => {
             try {
-                const res = await fetch('/api/complaints/getinfo');
+                const res = await fetch('/api/towns');
                 if (res.ok) {
                     const data = await res.json();
-                    setTowns(data.towns);
+                    if (Array.isArray(data)) {
+                        setTowns(data);
+                    } else if (Array.isArray(data?.data)) {
+                        setTowns(data.data);
+                    } else {
+                        setTowns([]);
+                    }
                 }
             } catch (error) {
                 console.error('Error fetching towns:', error);
@@ -206,6 +345,19 @@ export const RequestForm = ({ isPublic = false, initialValues, onSubmit, isEditM
                 }
             } catch (error) {
                 console.error('Error fetching complaint types:', error);
+            }
+        };
+
+        // Fetch divisions
+        const fetchDivisions = async () => {
+            try {
+                const res = await fetch('/api/efiling/divisions?is_active=true');
+                if (res.ok) {
+                    const data = await res.json();
+                    setDivisions(data.divisions || []);
+                }
+            } catch (error) {
+                console.error('Error fetching divisions:', error);
             }
         };
 
@@ -261,23 +413,15 @@ export const RequestForm = ({ isPublic = false, initialValues, onSubmit, isEditM
         fetchComplaintSubTypes();
         fetchAgents();
         fetchSmAgents();
+        fetchDivisions();
     }, []);
 
     // Handle initial values for edit mode
     useEffect(() => {
         if (initialValues && isEditMode) {
-            // Set selected town
-            if (initialValues.town_id) {
-                const town = towns.find(t => t.id === initialValues.town_id);
-                if (town) {
-                    setSelectedTown({ value: town.id, label: town.town });
-                    // Filter subtowns for this town
-                    const filtered = subtowns.filter(subtown => subtown.town_id === town.id);
-                    setFilteredSubtowns(filtered);
-                }
-            }
+            let divisionBasedForType = false;
 
-            // Set selected complaint type
+            // Set selected complaint type first (to determine if division-based)
             if (initialValues.complaint_type_id) {
                 const complaintType = complaintTypes.find(ct => ct.id === initialValues.complaint_type_id);
                 if (complaintType) {
@@ -285,6 +429,36 @@ export const RequestForm = ({ isPublic = false, initialValues, onSubmit, isEditM
                     // Filter subtypes for this complaint type
                     const filtered = complaintSubTypes.filter(subtype => subtype.complaint_type_id === complaintType.id);
                     setFilteredSubTypes(filtered);
+                    
+                    // Determine division-based behaviour and set initial division
+                    divisionBasedForType = Boolean(complaintType.division_id);
+                    setIsDivisionBased(divisionBasedForType);
+                    if (divisionBasedForType) {
+                        if (initialValues.division_id !== undefined && initialValues.division_id !== null) {
+                            formik.setFieldValue('division_id', String(initialValues.division_id));
+                        } else {
+                            formik.setFieldValue('division_id', '');
+                        }
+                    } else {
+                        formik.setFieldValue('division_id', '');
+                    }
+                } else {
+                    setIsDivisionBased(false);
+                    formik.setFieldValue('division_id', '');
+                }
+            } else {
+                setIsDivisionBased(false);
+                formik.setFieldValue('division_id', '');
+            }
+
+            // Set selected town (only for town-based)
+            if (!divisionBasedForType && initialValues.town_id) {
+                const town = towns.find(t => t.id === initialValues.town_id);
+                if (town) {
+                    setSelectedTown({ value: town.id, label: town.town });
+                    // Filter subtowns for this town
+                    const filtered = subtowns.filter(subtown => subtown.town_id === town.id);
+                    setFilteredSubtowns(filtered);
                 }
             }
 
@@ -308,8 +482,11 @@ export const RequestForm = ({ isPublic = false, initialValues, onSubmit, isEditM
             }
 
             // Fetch filtered agents for the selected town and complaint type
-            if (initialValues.town_id && initialValues.complaint_type_id) {
+            if (!divisionBasedForType && initialValues.town_id && initialValues.complaint_type_id) {
                 fetchFilteredAgents(initialValues.town_id, initialValues.complaint_type_id);
+            }
+            if (divisionBasedForType && initialValues.division_id && initialValues.complaint_type_id) {
+                fetchDivisionExecutiveEngineers(initialValues.division_id, initialValues.complaint_type_id);
             }
 
             // Handle assigned social media agents
@@ -365,21 +542,59 @@ export const RequestForm = ({ isPublic = false, initialValues, onSubmit, isEditM
     };
 
     const handleComplaintTypeChange = (selectedOption) => {
+        console.log('[RequestForm] Department changed', selectedOption);
         setSelectedComplaintType(selectedOption);
         const filtered = complaintSubTypes.filter(subtype => subtype.complaint_type_id === selectedOption.value);
         setFilteredSubTypes(filtered);
         formik.setFieldValue('complaint_type_id', selectedOption ? selectedOption.value : '');
         formik.setFieldValue('complaint_subtype_id', '');
         
-        // Clear executive engineer selection when complaint type changes (contractors are not filtered)
-        formik.setFieldValue('executive_engineer_id', '');
-        
-        // Fetch filtered agents when complaint type changes
-        if (selectedOption && formik.values.town_id) {
-            fetchFilteredAgents(formik.values.town_id, selectedOption.value);
+        // Check if selected department is division-based
+        let divisionBased = false;
+        if (selectedOption) {
+            const selectedType = complaintTypes.find(ct => ct.id === selectedOption.value);
+            divisionBased = Boolean(selectedType?.division_id);
+            setIsDivisionBased(divisionBased);
+
+            // Reset geography-specific selections
+            formik.setFieldValue('executive_engineer_id', '');
+
+            if (divisionBased) {
+                // Division based workflow – clear town/subtown fields & require manual division selection
+                formik.setFieldValue('town_id', '');
+                formik.setFieldValue('subtown_id', '');
+                formik.setFieldValue('subtown_ids', []);
+                setSelectedTown(null);
+                setFilteredSubtowns([]);
+
+                if (isAgentUser && agentInfo?.division_id) {
+                    const divisionId = String(agentInfo.division_id);
+                    formik.setFieldValue('division_id', divisionId);
+                    fetchDivisionExecutiveEngineers(divisionId, selectedOption.value);
+                } else {
+                    formik.setFieldValue('division_id', '');
+                    setFilteredExecutiveEngineers([]);
+                }
+            } else {
+                // Town based workflow – clear division field
+                formik.setFieldValue('division_id', '');
+                setFilteredExecutiveEngineers([]);
+            }
         } else {
-            // Clear filtered executive engineers if not both town and complaint type are selected
+            setIsDivisionBased(false);
+            formik.setFieldValue('division_id', '');
+            formik.setFieldValue('town_id', '');
+            formik.setFieldValue('subtown_id', '');
+            formik.setFieldValue('subtown_ids', []);
             setFilteredExecutiveEngineers([]);
+            setSelectedTown(null);
+            setFilteredSubtowns([]);
+            formik.setFieldValue('executive_engineer_id', '');
+        }
+
+        // Fetch filtered agents when complaint type changes (town-based flow only)
+        if (selectedOption && !divisionBased && formik.values.town_id) {
+            fetchFilteredAgents(formik.values.town_id, selectedOption.value);
         }
     };
 
@@ -441,9 +656,42 @@ export const RequestForm = ({ isPublic = false, initialValues, onSubmit, isEditM
     const subtownOptions = filteredSubtowns.map(subtown => ({ value: subtown.id, label: subtown.subtown }));
     const complaintTypeOptions = complaintTypes.map(type => ({ value: type.id, label: type.type_name }));
     const complaintSubTypeOptions = filteredSubTypes.map(type => ({ value: type.id, label: type.subtype_name }));
+    const useFilteredExecutiveList = (isDivisionBased && formik.values.division_id) || (!isDivisionBased && formik.values.town_id);
+    const availableExecutiveEngineers = useFilteredExecutiveList ? filteredExecutiveEngineers : executiveEngineers;
+
+    // Re-validate when isDivisionBased changes
+    useEffect(() => {
+        if (isDivisionBased) {
+            formik.setFieldValue('town_id', '', false);
+            formik.setFieldValue('subtown_id', '', false);
+            formik.setFieldTouched('town_id', false, false);
+            formik.setFieldError('town_id', undefined);
+        }
+        formik.validateForm();
+    }, [isDivisionBased]);
+
+    useEffect(() => {
+        console.log('[RequestForm] isDivisionBased flag changed', {
+            isDivisionBased,
+            division_id: formik.values?.division_id,
+            town_id: formik.values?.town_id,
+        });
+    }, [isDivisionBased]);
+
+    useEffect(() => {
+        console.log('[RequestForm] Form values update', formik.values);
+    }, [formik.values]);
+
+    useEffect(() => {
+        const errorKeys = Object.keys(formik.errors || {});
+        if (errorKeys.length > 0) {
+            console.warn('[RequestForm] Validation errors', formik.errors);
+        }
+    }, [formik.errors]);
 
     // Restriction logic for agent role 1
     const isAgentRole1 = session?.user?.userType === 'agent' && Number(agentInfo?.role) === 1;
+    const divisionLocked = isAgentUser && Boolean(agentInfo?.division_id);
     const fixedTown = towns.find(t => t.id === agentInfo?.town_id);
     const fixedComplaintType = complaintTypes.find(ct => ct.id === agentInfo?.complaint_type_id);
 
@@ -459,63 +707,7 @@ export const RequestForm = ({ isPublic = false, initialValues, onSubmit, isEditM
                 </h2>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {/* Town */}
-                    {isAgentRole1 ? (
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Town *</label>
-                            <input
-                                type="text"
-                                value={fixedTown?.town || ''}
-                                disabled
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-100"
-                            />
-                            <input type="hidden" name="town_id" value={agentInfo?.town_id || ''} />
-                        </div>
-                    ) : (
-                        <div>
-                            <label htmlFor="town_id" className="block text-sm font-medium text-gray-700 mb-1">
-                                Town
-                            </label>
-                            <Select
-                                id="town_id"
-                                name="town_id"
-                                options={townOptions}
-                                onChange={handleTownChange}
-                                value={townOptions.find(option => option.value === formik.values.town_id) || null}
-                                className="basic-select"
-                                classNamePrefix="select"
-                            />
-                            {formik.errors.town_id && formik.touched.town_id && (
-                                <p className="mt-1 text-sm text-red-600">{formik.errors.town_id}</p>
-                            )}
-                        </div>
-                    )}
-
-                    {/* Sub Town */}
-                    <div>
-                        <label htmlFor="subtown_id" className="block text-sm font-medium text-gray-700 mb-1">
-                            Sub Town
-                        </label>
-                        <Select
-                            id="subtown_id"
-                            name="subtown_id"
-                            options={isAgentRole1
-                                ? subtowns.filter(st => st.town_id === agentInfo?.town_id).map(st => ({ value: st.id, label: st.subtown }))
-                                : subtownOptions
-                            }
-                            onChange={selectedOption => formik.setFieldValue('subtown_id', selectedOption ? selectedOption.value : '')}
-                            value={(
-                                isAgentRole1
-                                    ? subtowns.filter(st => st.town_id === agentInfo?.town_id).map(st => ({ value: st.id, label: st.subtown }))
-                                    : subtownOptions
-                            ).find(option => option.value === formik.values.subtown_id) || null}
-                            className="basic-select"
-                            classNamePrefix="select"
-                            isDisabled={isAgentRole1 && !agentInfo?.town_id}
-                        />
-                    </div>
-
-                    {/* Complaint Type */}
+                    {/* Department - Moved to top */}
                     {isAgentRole1 ? (
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Department *</label>
@@ -530,7 +722,7 @@ export const RequestForm = ({ isPublic = false, initialValues, onSubmit, isEditM
                     ) : (
                         <div>
                             <label htmlFor="complaint_type_id" className="block text-sm font-medium text-gray-700 mb-1">
-                                Department
+                                Department *
                             </label>
                             <Select
                                 id="complaint_type_id"
@@ -543,6 +735,113 @@ export const RequestForm = ({ isPublic = false, initialValues, onSubmit, isEditM
                             />
                             {formik.errors.complaint_type_id && formik.touched.complaint_type_id && (
                                 <p className="mt-1 text-sm text-red-600">{formik.errors.complaint_type_id}</p>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Conditionally show Town/Subtown OR Division based on department type */}
+                    {!isDivisionBased ? (
+                        <>
+                            {/* Town */}
+                            {isAgentRole1 ? (
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Town *</label>
+                                    <input
+                                        type="text"
+                                        value={fixedTown?.town || ''}
+                                        disabled
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-100"
+                                    />
+                                    <input type="hidden" name="town_id" value={agentInfo?.town_id || ''} />
+                                </div>
+                            ) : (
+                                <div>
+                                    <label htmlFor="town_id" className="block text-sm font-medium text-gray-700 mb-1">
+                                        Town *
+                                    </label>
+                                    <Select
+                                        id="town_id"
+                                        name="town_id"
+                                        options={townOptions}
+                                        onChange={handleTownChange}
+                                        value={townOptions.find(option => option.value === formik.values.town_id) || null}
+                                        className="basic-select"
+                                        classNamePrefix="select"
+                                        isDisabled={!formik.values.complaint_type_id}
+                                    />
+                                    {formik.errors.town_id && formik.touched.town_id && (
+                                        <p className="mt-1 text-sm text-red-600">{formik.errors.town_id}</p>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Sub Town */}
+                            <div>
+                                <label htmlFor="subtown_id" className="block text-sm font-medium text-gray-700 mb-1">
+                                    Sub Town
+                                </label>
+                                <Select
+                                    id="subtown_id"
+                                    name="subtown_id"
+                                    options={isAgentRole1
+                                        ? subtowns.filter(st => st.town_id === agentInfo?.town_id).map(st => ({ value: st.id, label: st.subtown }))
+                                        : subtownOptions
+                                    }
+                                    onChange={selectedOption => formik.setFieldValue('subtown_id', selectedOption ? selectedOption.value : '')}
+                                    value={(
+                                        isAgentRole1
+                                            ? subtowns.filter(st => st.town_id === agentInfo?.town_id).map(st => ({ value: st.id, label: st.subtown }))
+                                            : subtownOptions
+                                    ).find(option => option.value === formik.values.subtown_id) || null}
+                                    className="basic-select"
+                                    classNamePrefix="select"
+                                    isDisabled={(isAgentRole1 && !agentInfo?.town_id) || !formik.values.town_id}
+                                />
+                            </div>
+                        </>
+                    ) : (
+                        /* Division - shown when department is division-based */
+                        <div>
+                            <label htmlFor="division_id" className="block text-sm font-medium text-gray-700 mb-1">
+                                Division *
+                            </label>
+                            {divisionLocked ? (
+                                <>
+                                    <input
+                                        type="text"
+                                        value={divisions.find(div => String(div.id) === String(formik.values.division_id))?.name || 'Loading...'}
+                                        disabled
+                                        readOnly
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-100 cursor-not-allowed"
+                                    />
+                                    <p className="mt-1 text-xs text-gray-500">
+                                        Division is fixed based on the agent assignment.
+                                    </p>
+                                </>
+                            ) : (
+                                <>
+                                    <Select
+                                        id="division_id"
+                                        name="division_id"
+                                        options={divisions.map(div => ({ value: String(div.id), label: div.name }))}
+                                        onChange={handleDivisionChange}
+                                        value={
+                                            formik.values.division_id
+                                                ? {
+                                                    value: String(formik.values.division_id),
+                                                    label: divisions.find(div => String(div.id) === String(formik.values.division_id))?.name || 'Select division',
+                                                }
+                                                : null
+                                        }
+                                        className="basic-select"
+                                        classNamePrefix="select"
+                                        isDisabled={!formik.values.complaint_type_id}
+                                        placeholder="Select division..."
+                                    />
+                                    {formik.errors.division_id && formik.touched.division_id && (
+                                        <p className="mt-1 text-sm text-red-600">{formik.errors.division_id}</p>
+                                    )}
+                                </>
                             )}
                         </div>
                     )}
@@ -583,7 +882,8 @@ export const RequestForm = ({ isPublic = false, initialValues, onSubmit, isEditM
                         className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm"
                     >
                         <option value="">Select Nature of Work...</option>
-                        <option value="repairing">Repairing/Replacement</option>
+                        <option value="Repairing And Maintenance(R&M)">Repairing And Maintenance(R&M)</option>
+                        <option value="Development Work">Development Work</option>
                         <option value="New installation">New Installation</option>
                         <option value="Leakages">Leakages</option>
                         <option value="Sunk Down">Sunk Down</option>
@@ -602,7 +902,7 @@ export const RequestForm = ({ isPublic = false, initialValues, onSubmit, isEditM
                     {/* Contact Number */}
                     <div>
                         <label htmlFor="contact_number" className="block text-sm font-medium text-gray-700 mb-1">
-                            POC Number
+                            On-Site POC Number
                         </label>
                         <input
                             id="contact_number"
@@ -657,7 +957,7 @@ export const RequestForm = ({ isPublic = false, initialValues, onSubmit, isEditM
                     </div>
 
                     <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div>
+                        {/* <div>
                             <label htmlFor="budget_code" className="block text-sm font-medium text-gray-700 mb-1">Budget Code</label>
                             <input
                                 id="budget_code"
@@ -670,7 +970,7 @@ export const RequestForm = ({ isPublic = false, initialValues, onSubmit, isEditM
                             {formik.errors.budget_code && formik.touched.budget_code && (
                                 <p className="mt-1 text-sm text-red-600">{formik.errors.budget_code}</p>
                             )}
-                        </div>
+                        </div> */}
                         <div>
                             <label htmlFor="file_type" className="block text-sm font-medium text-gray-700 mb-1">File Type</label>
                             <select
@@ -682,6 +982,7 @@ export const RequestForm = ({ isPublic = false, initialValues, onSubmit, isEditM
                             >
                                 <option value="">Select file type...</option>
                                 <option value="SPI">Single Page Info (SPI)</option>
+                                <option value="R&M">Repair & Maintenance (R&M)</option>
                                 <option value="ADP">Annual Development (ADP)</option>
                             </select>
                             {formik.errors.file_type && formik.touched.file_type && (
@@ -839,27 +1140,30 @@ export const RequestForm = ({ isPublic = false, initialValues, onSubmit, isEditM
                     ))}
                 </div>
 
-                <div>
-                    <label htmlFor="subtown_ids" className="block text-sm font-medium text-gray-700 mb-1">Additional Subtowns (Multi-select)</label>
-                    <Select
-                        isMulti
-                        id="subtown_ids"
-                        name="subtown_ids"
-                        options={isAgentRole1
-                            ? subtowns.filter(st => st.town_id === agentInfo?.town_id).map(st => ({ value: st.id, label: st.subtown }))
-                            : subtownOptions
-                        }
-                        value={(
-                            isAgentRole1
+                {/* Additional Subtowns (Multi-select) - Only show for town-based */}
+                {!isDivisionBased && (
+                    <div>
+                        <label htmlFor="subtown_ids" className="block text-sm font-medium text-gray-700 mb-1">Additional Subtowns (Multi-select)</label>
+                        <Select
+                            isMulti
+                            id="subtown_ids"
+                            name="subtown_ids"
+                            options={isAgentRole1
                                 ? subtowns.filter(st => st.town_id === agentInfo?.town_id).map(st => ({ value: st.id, label: st.subtown }))
                                 : subtownOptions
-                        ).filter(opt => (formik.values.subtown_ids || []).includes(opt.value))}
-                        onChange={selectedOptions => formik.setFieldValue('subtown_ids', selectedOptions ? selectedOptions.map(opt => opt.value) : [])}
-                        className="basic-select"
-                        classNamePrefix="select"
-                        isDisabled={isAgentRole1 && !agentInfo?.town_id}
-                    />
-                </div>
+                            }
+                            value={(
+                                isAgentRole1
+                                    ? subtowns.filter(st => st.town_id === agentInfo?.town_id).map(st => ({ value: st.id, label: st.subtown }))
+                                    : subtownOptions
+                            ).filter(opt => (formik.values.subtown_ids || []).includes(opt.value))}
+                            onChange={selectedOptions => formik.setFieldValue('subtown_ids', selectedOptions ? selectedOptions.map(opt => opt.value) : [])}
+                            className="basic-select"
+                            classNamePrefix="select"
+                            isDisabled={isAgentRole1 && !agentInfo?.town_id}
+                        />
+                    </div>
+                )}
 
                 {/* Executive Engineer/Contractor field for agents */}
                 {session?.user?.userType === 'agent' && Number(session.user.role) === 2 && (
@@ -875,7 +1179,7 @@ export const RequestForm = ({ isPublic = false, initialValues, onSubmit, isEditM
                             className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm"
                         >
                             <option value="">Select Executive Engineer...</option>
-                            {((formik.values.town_id && formik.values.complaint_type_id) ? filteredExecutiveEngineers : executiveEngineers).map(ee => (
+                            {availableExecutiveEngineers.map(ee => (
                                 <option key={ee.id} value={ee.id}>{ee.name} - {ee.designation || 'Executive Engineer'}</option>
                             ))}
                         </select>
@@ -887,15 +1191,15 @@ export const RequestForm = ({ isPublic = false, initialValues, onSubmit, isEditM
                             Contractor
                         </label>
                         <Select
-                            options={contractors.map(c => ({ value: c.id, label: `${c.name} - ${c.designation || 'Contractor'}` }))}
+                            options={contractors.map(c => ({ value: c.id, label: c.company_name || c.name || 'Contractor' }))}
                             value={contractors.find(c => c.id === formik.values.contractor_id) ? 
-                                { value: formik.values.contractor_id, label: `${contractors.find(c => c.id === formik.values.contractor_id)?.name} - ${contractors.find(c => c.id === formik.values.contractor_id)?.designation || 'Contractor'}` } : 
+                                { value: formik.values.contractor_id, label: contractors.find(c => c.id === formik.values.contractor_id)?.company_name || contractors.find(c => c.id === formik.values.contractor_id)?.name || 'Contractor' } : 
                                 null
                             }
                             onChange={selectedOption => formik.setFieldValue('contractor_id', selectedOption ? selectedOption.value : '')}
                             className="basic-select"
                             classNamePrefix="select"
-                            placeholder="Select Contractor..."
+                            placeholder="Select Contractor Company..."
                             isSearchable={true}
                             isClearable={true}
                         />
@@ -915,7 +1219,7 @@ export const RequestForm = ({ isPublic = false, initialValues, onSubmit, isEditM
                             className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm"
                         >
                             <option value="">Select Executive Engineer...</option>
-                            {((formik.values.town_id && formik.values.complaint_type_id) ? filteredExecutiveEngineers : executiveEngineers).map(ee => (
+                            {availableExecutiveEngineers.map(ee => (
                             <option key={ee.id} value={ee.id}>{ee.name} - {ee.designation || 'Executive Engineer'}</option>
                             ))}
                         </select>
@@ -926,15 +1230,15 @@ export const RequestForm = ({ isPublic = false, initialValues, onSubmit, isEditM
                             Contractor
                         </label>
                         <Select
-                            options={contractors.map(c => ({ value: c.id, label: `${c.name} - ${c.designation || 'Contractor'}` }))}
+                            options={contractors.map(c => ({ value: c.id, label: c.company_name || c.name || 'Contractor' }))}
                             value={contractors.find(c => c.id === formik.values.contractor_id) ? 
-                                { value: formik.values.contractor_id, label: `${contractors.find(c => c.id === formik.values.contractor_id)?.name} - ${contractors.find(c => c.id === formik.values.contractor_id)?.designation || 'Contractor'}` } : 
+                                { value: formik.values.contractor_id, label: contractors.find(c => c.id === formik.values.contractor_id)?.company_name || contractors.find(c => c.id === formik.values.contractor_id)?.name || 'Contractor' } : 
                                 null
                             }
                             onChange={selectedOption => formik.setFieldValue('contractor_id', selectedOption ? selectedOption.value : '')}
                             className="basic-select"
                             classNamePrefix="select"
-                            placeholder="Select Contractor..."
+                            placeholder="Select Contractor Company..."
                             isSearchable={true}
                             isClearable={true}
                         />

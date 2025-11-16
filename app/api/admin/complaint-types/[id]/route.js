@@ -18,39 +18,103 @@ export async function GET(request, { params }) {
 
     const { id } = await params;
 
-    // Fetch complaint type with related data
-    const complaintType = await query(`
-      SELECT 
-        ct.id,
-        ct.type_name,
-        ct.description,
-        ct.created_date,
-        ct.updated_date,
-        COUNT(cst.id) as subtype_count,
-        COUNT(ceud.id) as assigned_ce_count,
-        array_agg(
-          json_build_object(
-            'id', cst.id,
-            'subtype_name', cst.subtype_name,
-            'description', cst.description
-          )
-        ) FILTER (WHERE cst.id IS NOT NULL) as subtypes,
-        array_agg(
-          json_build_object(
-            'id', u.id,
-            'name', u.name,
-            'email', u.email,
-            'designation', ce.designation
-          )
-        ) FILTER (WHERE u.id IS NOT NULL) as assigned_ce_users
-      FROM complaint_types ct
-      LEFT JOIN complaint_subtypes cst ON ct.id = cst.complaint_type_id
-      LEFT JOIN ce_user_departments ceud ON ct.id = ceud.complaint_type_id
-      LEFT JOIN ce_users ce ON ceud.ce_user_id = ce.id
-      LEFT JOIN users u ON ce.user_id = u.id
-      WHERE ct.id = $1
-      GROUP BY ct.id, ct.type_name, ct.description, ct.created_date, ct.updated_date
-    `, [id]);
+    // Check if complaint_type_divisions table exists
+    const tableCheck = await query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'complaint_type_divisions'
+      );
+    `);
+    
+    const hasBridgeTable = tableCheck.rows[0]?.exists || false;
+    
+    // Fetch complaint type with related data and multiple divisions (if bridge table exists) or single division
+    let complaintType;
+    if (hasBridgeTable) {
+      complaintType = await query(`
+        SELECT 
+          ct.id,
+          ct.type_name,
+          ct.description,
+          ct.created_date,
+          ct.updated_date,
+          ct.efiling_department_id,
+          ct.division_id as single_division_id,
+          ed.name as efiling_department_name,
+          (SELECT COUNT(*) FROM complaint_subtypes WHERE complaint_type_id = ct.id) as subtype_count,
+          (SELECT COUNT(*) FROM ce_user_departments WHERE complaint_type_id = ct.id) as assigned_ce_count,
+          -- Subtypes
+          COALESCE(
+            (SELECT json_agg(jsonb_build_object('id', cst.id, 'subtype_name', cst.subtype_name, 'description', cst.description))
+             FROM complaint_subtypes cst
+             WHERE cst.complaint_type_id = ct.id),
+            '[]'::json
+          ) as subtypes,
+          -- Assigned CE users
+          COALESCE(
+            (SELECT json_agg(jsonb_build_object('id', u.id, 'name', u.name, 'email', u.email, 'designation', ce.designation))
+             FROM ce_user_departments ceud
+             LEFT JOIN ce_users ce ON ceud.ce_user_id = ce.id
+             LEFT JOIN users u ON ce.user_id = u.id
+             WHERE ceud.complaint_type_id = ct.id AND u.id IS NOT NULL),
+            '[]'::json
+          ) as assigned_ce_users,
+          -- Multiple divisions
+          COALESCE(
+            (SELECT json_agg(jsonb_build_object('id', d.id, 'name', d.name))
+             FROM complaint_type_divisions ctd
+             LEFT JOIN divisions d ON ctd.division_id = d.id
+             WHERE ctd.complaint_type_id = ct.id AND d.id IS NOT NULL),
+            '[]'::json
+          ) as divisions
+        FROM complaint_types ct
+        LEFT JOIN efiling_departments ed ON ct.efiling_department_id = ed.id
+        WHERE ct.id = $1
+      `, [id]);
+    } else {
+      // Fallback query when bridge table doesn't exist yet
+      complaintType = await query(`
+        SELECT 
+          ct.id,
+          ct.type_name,
+          ct.description,
+          ct.created_date,
+          ct.updated_date,
+          ct.efiling_department_id,
+          ct.division_id as single_division_id,
+          ed.name as efiling_department_name,
+          d.name as division_name,
+          (SELECT COUNT(*) FROM complaint_subtypes WHERE complaint_type_id = ct.id) as subtype_count,
+          (SELECT COUNT(*) FROM ce_user_departments WHERE complaint_type_id = ct.id) as assigned_ce_count,
+          -- Subtypes
+          COALESCE(
+            (SELECT json_agg(jsonb_build_object('id', cst.id, 'subtype_name', cst.subtype_name, 'description', cst.description))
+             FROM complaint_subtypes cst
+             WHERE cst.complaint_type_id = ct.id),
+            '[]'::json
+          ) as subtypes,
+          -- Assigned CE users
+          COALESCE(
+            (SELECT json_agg(jsonb_build_object('id', u.id, 'name', u.name, 'email', u.email, 'designation', ce.designation))
+             FROM ce_user_departments ceud
+             LEFT JOIN ce_users ce ON ceud.ce_user_id = ce.id
+             LEFT JOIN users u ON ce.user_id = u.id
+             WHERE ceud.complaint_type_id = ct.id AND u.id IS NOT NULL),
+            '[]'::json
+          ) as assigned_ce_users,
+          -- Single division as array for consistency
+          CASE 
+            WHEN ct.division_id IS NOT NULL THEN 
+              json_build_array(jsonb_build_object('id', ct.division_id, 'name', d.name))
+            ELSE '[]'::json
+          END as divisions
+        FROM complaint_types ct
+        LEFT JOIN efiling_departments ed ON ct.efiling_department_id = ed.id
+        LEFT JOIN divisions d ON ct.division_id = d.id
+        WHERE ct.id = $1
+      `, [id]);
+    }
 
     if (complaintType.rows.length === 0) {
       return NextResponse.json(
@@ -87,7 +151,12 @@ export async function PUT(request, { params }) {
 
     const { id } = await params;
     const body = await request.json();
-    const { type_name, description } = body;
+    const { type_name, description, efiling_department_id, division_id, division_ids } = body;
+
+    // Support both single and multiple divisions
+    const finalDivisionIds = division_ids && Array.isArray(division_ids) && division_ids.length > 0 
+      ? division_ids.filter(id => id).map(id => parseInt(id)) 
+      : (division_id ? [parseInt(division_id)] : []);
 
     // Validate required fields
     if (!type_name || !type_name.trim()) {
@@ -121,13 +190,55 @@ export async function PUT(request, { params }) {
       );
     }
 
-    // Update complaint type
+    // Update complaint type (keep single division_id for backward compatibility)
+    const singleDivisionId = finalDivisionIds.length === 1 ? finalDivisionIds[0] : null;
+    
     const result = await query(`
       UPDATE complaint_types 
-      SET type_name = $1, description = $2, updated_date = CURRENT_TIMESTAMP
-      WHERE id = $3
+      SET type_name = $1, description = $2, efiling_department_id = $3, division_id = $4, updated_date = CURRENT_TIMESTAMP
+      WHERE id = $5
       RETURNING *
-    `, [type_name.trim(), description?.trim() || null, id]);
+    `, [
+      type_name.trim(), 
+      description?.trim() || null,
+      efiling_department_id ? parseInt(efiling_department_id) : null,
+      singleDivisionId,
+      id
+    ]);
+
+    // Update multiple divisions if division_ids is provided (only if bridge table exists)
+    const tableCheck = await query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'complaint_type_divisions'
+      );
+    `);
+    
+    const hasBridgeTable = tableCheck.rows[0]?.exists || false;
+    
+    if (hasBridgeTable && division_ids !== undefined) {
+      // Delete existing division assignments
+      try {
+        await query(`
+          DELETE FROM complaint_type_divisions WHERE complaint_type_id = $1
+        `, [id]);
+        
+        // Insert new division assignments
+        if (finalDivisionIds.length > 0) {
+          for (const divId of finalDivisionIds) {
+            await query(`
+              INSERT INTO complaint_type_divisions (complaint_type_id, division_id)
+              VALUES ($1, $2)
+              ON CONFLICT (complaint_type_id, division_id) DO NOTHING
+            `, [id, divId]);
+          }
+        }
+      } catch (err) {
+        console.error('Error updating divisions:', err);
+        // Continue even if update fails
+      }
+    }
 
     // Log the action
     await logUserAction({

@@ -5,22 +5,18 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { 
-    FileText, 
-    User, 
-    Clock, 
-    CheckCircle, 
-    ArrowRight, 
-    MessageSquare, 
-    Edit3, 
+import {
+    FileText,
+    User,
+    Clock,
+    CheckCircle,
+    ArrowRight,
+    MessageSquare,
     Paperclip,
     Calendar,
     Building,
     Shield,
     AlertCircle,
-    Play,
-    Pause,
-    StopCircle
 } from 'lucide-react';
 
 export default function FileHistoryTree({ fileId, includeInternal = false }) {
@@ -64,12 +60,6 @@ export default function FileHistoryTree({ fileId, includeInternal = false }) {
                 return <FileText className="h-4 w-4" />;
             case 'file_movement':
                 return <ArrowRight className="h-4 w-4" />;
-            case 'workflow_stage':
-                return <Play className="h-4 w-4" />;
-            case 'stage_completed':
-                return <CheckCircle className="h-4 w-4" />;
-            case 'workflow_action':
-                return <Edit3 className="h-4 w-4" />;
             case 'comment':
                 return <MessageSquare className="h-4 w-4" />;
             case 'signature':
@@ -89,12 +79,6 @@ export default function FileHistoryTree({ fileId, includeInternal = false }) {
                 return 'bg-blue-100 text-blue-800';
             case 'file_movement':
                 return 'bg-green-100 text-green-800';
-            case 'workflow_stage':
-                return 'bg-purple-100 text-purple-800';
-            case 'stage_completed':
-                return 'bg-emerald-100 text-emerald-800';
-            case 'workflow_action':
-                return 'bg-orange-100 text-orange-800';
             case 'comment':
                 return 'bg-indigo-100 text-indigo-800';
             case 'signature':
@@ -274,9 +258,8 @@ export default function FileHistoryTree({ fileId, includeInternal = false }) {
             <CardContent>
                 {/* Filter Tabs */}
                 <Tabs value={filterType} onValueChange={setFilterType} className="mb-6">
-                    <TabsList className="grid w-full grid-cols-6">
+                    <TabsList className="grid w-full grid-cols-5">
                         <TabsTrigger value="all">All</TabsTrigger>
-                        <TabsTrigger value="workflow_stage">Stages</TabsTrigger>
                         <TabsTrigger value="file_movement">Movements</TabsTrigger>
                         <TabsTrigger value="comment">Comments</TabsTrigger>
                         <TabsTrigger value="signature">Signatures</TabsTrigger>
@@ -292,62 +275,65 @@ export default function FileHistoryTree({ fileId, includeInternal = false }) {
                             <p>No {filterType === 'all' ? '' : filterType} events found.</p>
                         </div>
                     ) : (
-                        filteredTimeline.map((item, index) => (
+                        filteredTimeline.map((item) => (
                             <div key={item.id} className="flex items-start space-x-4">
-                                {/* Timeline Icon */}
                                 <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${getActionColor(item.type)}`}>
                                     {getActionIcon(item.type)}
                                 </div>
-                                
-                                {/* Timeline Content */}
+
                                 <div className="flex-1 min-w-0">
                                     <div className="flex items-center space-x-2 mb-1">
                                         <h4 className="text-sm font-medium text-gray-900">
-                                            {item.action}
+                                            {item.action || 'Activity'}
                                         </h4>
                                         {item.details?.status && (
                                             getStatusBadge(item.details.status, item.details.sla_breached)
                                         )}
                                     </div>
-                                    
-                                    <p className="text-sm text-gray-600 mb-2">
-                                        {item.description}
-                                    </p>
-                                    
-                                    {/* Additional Details */}
+
+                                    {item.description && (
+                                        <p className="text-sm text-gray-600 mb-2">
+                                            {item.description}
+                                        </p>
+                                    )}
+
                                     {item.details && Object.keys(item.details).length > 0 && (
                                         <div className="bg-gray-50 rounded-lg p-3 mb-2">
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
-                                                {Object.entries(item.details).map(([key, value]) => {
-                                                    if (value && typeof value === 'string' && value.length < 100) {
-                                                        return (
-                                                            <div key={key} className="flex items-center space-x-1">
-                                                                <span className="font-medium text-gray-700">
-                                                                    {key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}:
-                                                                </span>
-                                                                <span className="text-gray-600">{value}</span>
-                                                            </div>
-                                                        );
-                                                    }
-                                                    return null;
-                                                })}
+                                                {Object.entries(item.details)
+                                                    .filter(([_, value]) =>
+                                                        value !== null && value !== undefined && value !== '' && typeof value !== 'boolean'
+                                                    )
+                                                    .map(([key, value]) => (
+                                                        <div key={key} className="flex items-center space-x-1">
+                                                            <span className="font-medium text-gray-700">
+                                                                {key.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())}:
+                                                            </span>
+                                                            <span className="text-gray-600">{String(value)}</span>
+                                                        </div>
+                                                    ))}
                                             </div>
                                         </div>
                                     )}
-                                    
-                                    {/* Metadata */}
+
                                     <div className="flex items-center space-x-4 text-xs text-gray-500">
-                                        <div className="flex items-center space-x-1">
-                                            <User className="h-3 w-3" />
-                                            <span>{item.user}</span>
-                                        </div>
-                                        <div className="flex items-center space-x-1">
-                                            <Calendar className="h-3 w-3" />
-                                            <span>{formatDate(item.timestamp)}</span>
-                                        </div>
-                                        <span className="text-gray-400">
-                                            {getTimeAgo(item.timestamp)}
-                                        </span>
+                                        {item.user && (
+                                            <div className="flex items-center space-x-1">
+                                                <User className="h-3 w-3" />
+                                                <span>{item.user}</span>
+                                            </div>
+                                        )}
+                                        {item.timestamp && (
+                                            <div className="flex items-center space-x-1">
+                                                <Calendar className="h-3 w-3" />
+                                                <span>{formatDate(item.timestamp)}</span>
+                                            </div>
+                                        )}
+                                        {item.timestamp && (
+                                            <span className="text-gray-400">
+                                                {getTimeAgo(item.timestamp)}
+                                            </span>
+                                        )}
                                     </div>
                                 </div>
                             </div>
@@ -366,9 +352,9 @@ export default function FileHistoryTree({ fileId, includeInternal = false }) {
                         </div>
                         <div>
                             <div className="text-2xl font-bold text-green-600">
-                                {history.timeline.filter(item => item.type === 'workflow_stage').length}
+                                {history.timeline.filter(item => item.type === 'file_movement').length}
                             </div>
-                            <div className="text-sm text-gray-600">Workflow Stages</div>
+                            <div className="text-sm text-gray-600">Movements</div>
                         </div>
                         <div>
                             <div className="text-2xl font-bold text-purple-600">
@@ -381,6 +367,12 @@ export default function FileHistoryTree({ fileId, includeInternal = false }) {
                                 {history.timeline.filter(item => item.type === 'signature').length}
                             </div>
                             <div className="text-sm text-gray-600">Signatures</div>
+                        </div>
+                        <div>
+                            <div className="text-2xl font-bold text-pink-600">
+                                {history.timeline.filter(item => item.type === 'attachment').length}
+                            </div>
+                            <div className="text-sm text-gray-600">Attachments</div>
                         </div>
                     </div>
                 </div>
