@@ -30,13 +30,29 @@ export async function GET(request, { params }) {
             ORDER BY m.created_at ASC
         `, [id]);
 
-        // Signatures
-        const sigRes = await client.query(`
-            SELECT id, user_name, user_role, type, timestamp
-            FROM efiling_document_signatures
-            WHERE file_id = $1 AND is_active = true
-            ORDER BY timestamp ASC
-        `, [id]);
+        // Signatures - check if table exists first
+        let sigRes = { rows: [] };
+        try {
+            const tableCheck = await client.query(`
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables 
+                    WHERE table_schema = 'public' 
+                    AND table_name = 'efiling_document_signatures'
+                );
+            `);
+            
+            if (tableCheck.rows[0]?.exists) {
+                sigRes = await client.query(`
+                    SELECT id, user_name, user_role, type, timestamp
+                    FROM efiling_document_signatures
+                    WHERE file_id = $1 AND is_active = true
+                    ORDER BY timestamp ASC
+                `, [id]);
+            }
+        } catch (sigError) {
+            console.warn('Could not fetch signatures:', sigError.message);
+            // Continue without signatures
+        }
 
         const events = [];
         events.push({

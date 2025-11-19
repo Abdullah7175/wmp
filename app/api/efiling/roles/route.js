@@ -48,12 +48,27 @@ export async function GET(request) {
 
                 return NextResponse.json(result.rows[0]);
             } else {
+                // Check if efiling_role_locations table exists
+                let hasRoleLocationsTable = false;
+                try {
+                    const tableCheck = await client.query(`
+                        SELECT EXISTS (
+                            SELECT FROM information_schema.tables 
+                            WHERE table_schema = 'public' 
+                            AND table_name = 'efiling_role_locations'
+                        );
+                    `);
+                    hasRoleLocationsTable = tableCheck.rows[0]?.exists || false;
+                } catch (tableError) {
+                    console.warn('Could not check for efiling_role_locations table:', tableError.message);
+                }
+
                 // Fetch all roles
                 let query = `
                     SELECT DISTINCT r.*, d.name as department_name
                     FROM efiling_roles r
                     LEFT JOIN efiling_departments d ON r.department_id = d.id
-                    LEFT JOIN efiling_role_locations rl ON rl.role_id = r.id
+                    ${hasRoleLocationsTable ? 'LEFT JOIN efiling_role_locations rl ON rl.role_id = r.id' : ''}
                 `;
                 
                 const params = [];
@@ -64,7 +79,7 @@ export async function GET(request) {
                     params.push(isActive === 'true');
                 }
 
-                if (!canSeeAll && userGeography) {
+                if (!canSeeAll && userGeography && hasRoleLocationsTable) {
                     const locationParts = [];
                     const pushParam = (value) => {
                         params.push(value);

@@ -431,7 +431,13 @@ export const RequestForm = ({ isPublic = false, initialValues, onSubmit, isEditM
                     setFilteredSubTypes(filtered);
                     
                     // Determine division-based behaviour and set initial division
-                    divisionBasedForType = Boolean(complaintType.division_id);
+                    // Check multiple ways: is_division_based flag, divisions array, division_id, or efiling_department_type
+                    divisionBasedForType = Boolean(
+                        complaintType.is_division_based ||
+                        (complaintType.divisions && Array.isArray(complaintType.divisions) && complaintType.divisions.length > 0) ||
+                        complaintType.division_id ||
+                        (complaintType.efiling_department_type === 'division')
+                    );
                     setIsDivisionBased(divisionBasedForType);
                     if (divisionBasedForType) {
                         if (initialValues.division_id !== undefined && initialValues.division_id !== null) {
@@ -553,7 +559,21 @@ export const RequestForm = ({ isPublic = false, initialValues, onSubmit, isEditM
         let divisionBased = false;
         if (selectedOption) {
             const selectedType = complaintTypes.find(ct => ct.id === selectedOption.value);
-            divisionBased = Boolean(selectedType?.division_id);
+            // Check multiple ways: is_division_based flag, divisions array, division_id, or efiling_department_type
+            divisionBased = Boolean(
+                selectedType?.is_division_based ||
+                (selectedType?.divisions && Array.isArray(selectedType.divisions) && selectedType.divisions.length > 0) ||
+                selectedType?.division_id ||
+                (selectedType?.efiling_department_type === 'division')
+            );
+            console.log('[RequestForm] Division-based check', {
+                selectedType,
+                is_division_based: selectedType?.is_division_based,
+                divisions: selectedType?.divisions,
+                division_id: selectedType?.division_id,
+                efiling_department_type: selectedType?.efiling_department_type,
+                divisionBased
+            });
             setIsDivisionBased(divisionBased);
 
             // Reset geography-specific selections

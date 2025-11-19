@@ -262,19 +262,63 @@ export async function DELETE(request) {
 
     const client = await connectToDatabase();
     try {
-        const referenceCheck = await client.query(
-            `SELECT (
-                SELECT COUNT(*) FROM efiling_department_locations WHERE zone_id = $1
-            ) + (
-                SELECT COUNT(*) FROM efiling_role_locations WHERE zone_id = $1
-            ) + (
-                SELECT COUNT(*) FROM efiling_role_group_locations WHERE zone_id = $1
-            ) AS ref_count`,
-            [id]
-        );
+        // Check which tables exist before checking references
+        let hasDepartmentLocations = false;
+        let hasRoleLocations = false;
+        let hasRoleGroupLocations = false;
+        
+        try {
+            const [deptCheck, roleCheck, roleGroupCheck] = await Promise.all([
+                client.query(`
+                    SELECT EXISTS (
+                        SELECT FROM information_schema.tables 
+                        WHERE table_schema = 'public' 
+                        AND table_name = 'efiling_department_locations'
+                    );
+                `),
+                client.query(`
+                    SELECT EXISTS (
+                        SELECT FROM information_schema.tables 
+                        WHERE table_schema = 'public' 
+                        AND table_name = 'efiling_role_locations'
+                    );
+                `),
+                client.query(`
+                    SELECT EXISTS (
+                        SELECT FROM information_schema.tables 
+                        WHERE table_schema = 'public' 
+                        AND table_name = 'efiling_role_group_locations'
+                    );
+                `)
+            ]);
+            hasDepartmentLocations = deptCheck.rows[0]?.exists || false;
+            hasRoleLocations = roleCheck.rows[0]?.exists || false;
+            hasRoleGroupLocations = roleGroupCheck.rows[0]?.exists || false;
+        } catch (checkError) {
+            console.warn('Could not check for location tables:', checkError.message);
+        }
 
-        if (parseInt(referenceCheck.rows[0].ref_count, 10) > 0) {
-            return NextResponse.json({ error: 'Cannot delete zone with existing location mappings' }, { status: 409 });
+        // Build reference check query based on existing tables
+        const refParts = [];
+        if (hasDepartmentLocations) {
+            refParts.push('(SELECT COUNT(*) FROM efiling_department_locations WHERE zone_id = $1)');
+        }
+        if (hasRoleLocations) {
+            refParts.push('(SELECT COUNT(*) FROM efiling_role_locations WHERE zone_id = $1)');
+        }
+        if (hasRoleGroupLocations) {
+            refParts.push('(SELECT COUNT(*) FROM efiling_role_group_locations WHERE zone_id = $1)');
+        }
+
+        if (refParts.length > 0) {
+            const referenceCheck = await client.query(
+                `SELECT ${refParts.join(' + ')} AS ref_count`,
+                [id]
+            );
+
+            if (parseInt(referenceCheck.rows[0].ref_count, 10) > 0) {
+                return NextResponse.json({ error: 'Cannot delete zone with existing location mappings' }, { status: 409 });
+            }
         }
 
         const res = await client.query(`DELETE FROM efiling_zones WHERE id = $1 RETURNING *`, [id]);

@@ -18,6 +18,25 @@ export async function GET(request) {
     const client = await connectToDatabase();
 
     try {
+        // Check if efiling_role_locations table exists
+        let hasRoleLocationsTable = false;
+        try {
+            const tableCheck = await client.query(`
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables 
+                    WHERE table_schema = 'public' 
+                    AND table_name = 'efiling_role_locations'
+                );
+            `);
+            hasRoleLocationsTable = tableCheck.rows[0]?.exists || false;
+        } catch (tableError) {
+            console.warn('Could not check for efiling_role_locations table:', tableError.message);
+        }
+
+        if (!hasRoleLocationsTable) {
+            return NextResponse.json({ success: true, locations: [] });
+        }
+
         if (id) {
             const res = await client.query(
                 `SELECT rl.*, r.name AS role_name, r.code AS role_code,

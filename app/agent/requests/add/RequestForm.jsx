@@ -376,15 +376,23 @@ export const RequestForm = ({ isPublic = false, initialValues, onSubmit, isEditM
                     setFilteredSubTypes(filtered);
                     
                     // Check if division-based and set division if present
-                    if (complaintType.division_id) {
-                        setIsDivisionBased(true);
+                    // Check multiple ways: is_division_based flag, divisions array, division_id, or efiling_department_type
+                    const isDivisionBased = Boolean(
+                        complaintType.is_division_based ||
+                        (complaintType.divisions && Array.isArray(complaintType.divisions) && complaintType.divisions.length > 0) ||
+                        complaintType.division_id ||
+                        (complaintType.efiling_department_type === 'division') ||
+                        agentInfo?.division_id
+                    );
+                    setIsDivisionBased(isDivisionBased);
+                    if (isDivisionBased) {
                         if (initialValues.division_id) {
                             formik.setFieldValue('division_id', initialValues.division_id);
                         } else if (complaintType.division_id) {
                             formik.setFieldValue('division_id', complaintType.division_id);
+                        } else if (agentInfo?.division_id) {
+                            formik.setFieldValue('division_id', agentInfo.division_id);
                         }
-                    } else {
-                        setIsDivisionBased(false);
                     }
                 }
             }
@@ -492,7 +500,23 @@ export const RequestForm = ({ isPublic = false, initialValues, onSubmit, isEditM
         let divisionBased = false;
         if (selectedOption) {
             const selectedType = complaintTypes.find(ct => ct.id === selectedOption.value);
-            divisionBased = Boolean(selectedType?.division_id || agentInfo?.division_id);
+            // Check multiple ways: is_division_based flag, divisions array, division_id, or efiling_department_type
+            divisionBased = Boolean(
+                selectedType?.is_division_based ||
+                (selectedType?.divisions && Array.isArray(selectedType.divisions) && selectedType.divisions.length > 0) ||
+                selectedType?.division_id ||
+                (selectedType?.efiling_department_type === 'division') ||
+                agentInfo?.division_id
+            );
+            console.log('[AgentRequestForm] Division-based check', {
+                selectedType,
+                is_division_based: selectedType?.is_division_based,
+                divisions: selectedType?.divisions,
+                division_id: selectedType?.division_id,
+                efiling_department_type: selectedType?.efiling_department_type,
+                agentInfo_division_id: agentInfo?.division_id,
+                divisionBased
+            });
             setIsDivisionBased(divisionBased);
 
             if (divisionBased) {

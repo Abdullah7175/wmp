@@ -158,11 +158,14 @@ export async function GET(request) {
                     wr.division_id,
                     wr.town_id,
                     t.district_id AS town_district_id,
+                    t.town AS town_name,
+                    d.name AS division_name,
                     ST_Y(v.geo_tag) as latitude,
                     ST_X(v.geo_tag) as longitude
                 FROM videos v
                 JOIN work_requests wr ON v.work_request_id = wr.id
                 LEFT JOIN town t ON wr.town_id = t.id
+                LEFT JOIN divisions d ON wr.division_id = d.id
                 WHERE v.id = $1
             `;
             const result = await client.query(query, [id]);
@@ -192,11 +195,14 @@ export async function GET(request) {
                     wr.division_id,
                     wr.town_id,
                     t.district_id AS town_district_id,
+                    t.town AS town_name,
+                    d.name AS division_name,
                     ST_Y(v.geo_tag) as latitude, 
                     ST_X(v.geo_tag) as longitude
                 FROM videos v
                 JOIN work_requests wr ON v.work_request_id = wr.id
                 LEFT JOIN town t ON wr.town_id = t.id
+                LEFT JOIN divisions d ON wr.division_id = d.id
                 WHERE v.creator_id = $1 AND v.creator_type = $2
             `;
             const params = [creatorId, creatorType];
@@ -240,11 +246,14 @@ export async function GET(request) {
                     wr.division_id,
                     wr.town_id,
                     t.district_id AS town_district_id,
+                    t.town AS town_name,
+                    d.name AS division_name,
                     ST_Y(v.geo_tag) as latitude,
                     ST_X(v.geo_tag) as longitude
                 FROM videos v
                 JOIN work_requests wr ON v.work_request_id = wr.id
                 LEFT JOIN town t ON wr.town_id = t.id
+                LEFT JOIN divisions d ON wr.division_id = d.id
                 WHERE v.work_request_id = $1
             `;
             const params = [workRequestId];
@@ -292,6 +301,7 @@ export async function GET(request) {
                 FROM videos v 
                 JOIN work_requests wr ON v.work_request_id = wr.id
                 LEFT JOIN town t ON wr.town_id = t.id
+                LEFT JOIN divisions d ON wr.division_id = d.id
             `;
             let dataQuery = `
                 SELECT 
@@ -302,11 +312,14 @@ export async function GET(request) {
                     wr.division_id,
                     wr.town_id,
                     t.district_id AS town_district_id,
+                    t.town AS town_name,
+                    d.name AS division_name,
                     ST_Y(v.geo_tag) as latitude,
                     ST_X(v.geo_tag) as longitude
                 FROM videos v 
                 JOIN work_requests wr ON v.work_request_id = wr.id
                 LEFT JOIN town t ON wr.town_id = t.id
+                LEFT JOIN divisions d ON wr.division_id = d.id
             `;
             let whereClauses = [];
             let params = [];
