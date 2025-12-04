@@ -42,7 +42,7 @@ export async function GET(request) {
 
         // Build query with multiple departments/roles support
         let query = `
-            SELECT DISTINCT
+            SELECT 
                 t.id,
                 t.name,
                 t.template_type,
@@ -61,24 +61,26 @@ export async function GET(request) {
                 t.last_used_at,
                 t.created_at,
                 t.updated_at,
-                -- Multiple departments
+                -- Multiple departments (using subquery to get distinct values)
                 COALESCE(
-                    json_agg(DISTINCT jsonb_build_object('id', td.department_id, 'name', d.name)) 
-                    FILTER (WHERE td.department_id IS NOT NULL),
-                    '[]'::json
-                ) as departments,
-                -- Multiple roles
+                    (SELECT jsonb_agg(jsonb_build_object('id', dept_id, 'name', dept_name))
+                     FROM (SELECT DISTINCT td.department_id as dept_id, d.name as dept_name
+                           FROM efiling_template_departments td
+                           LEFT JOIN efiling_departments d ON td.department_id = d.id
+                           WHERE td.template_id = t.id AND td.department_id IS NOT NULL) depts),
+                    '[]'::jsonb
+                )::json as departments,
+                -- Multiple roles (using subquery to get distinct values)
                 COALESCE(
-                    json_agg(DISTINCT jsonb_build_object('id', tr.role_id, 'name', r.name, 'code', r.code)) 
-                    FILTER (WHERE tr.role_id IS NOT NULL),
-                    '[]'::json
-                ) as roles
+                    (SELECT jsonb_agg(jsonb_build_object('id', role_id, 'name', role_name, 'code', role_code))
+                     FROM (SELECT DISTINCT tr.role_id, r.name as role_name, r.code as role_code
+                           FROM efiling_template_roles tr
+                           LEFT JOIN efiling_roles r ON tr.role_id = r.id
+                           WHERE tr.template_id = t.id AND tr.role_id IS NOT NULL) roles),
+                    '[]'::jsonb
+                )::json as roles
             FROM efiling_templates t
             LEFT JOIN efiling_file_categories c ON t.category_id = c.id
-            LEFT JOIN efiling_template_departments td ON t.id = td.template_id
-            LEFT JOIN efiling_departments d ON td.department_id = d.id
-            LEFT JOIN efiling_template_roles tr ON t.id = tr.template_id
-            LEFT JOIN efiling_roles r ON tr.role_id = r.id
             LEFT JOIN efiling_users eu_creator ON t.created_by = eu_creator.id
             LEFT JOIN users u_creator ON eu_creator.user_id = u_creator.id
             WHERE t.is_active = true
@@ -157,7 +159,7 @@ export async function GET(request) {
             query += ' AND ' + conditions.join(' AND ');
         }
 
-        query += ' GROUP BY t.id, c.name, u_creator.name ORDER BY t.template_type, t.name';
+        query += ` ORDER BY t.template_type, t.name`;
 
         const result = await client.query(query, params);
 

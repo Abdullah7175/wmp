@@ -71,6 +71,12 @@ export async function GET(request, { params }) {
                 f.work_request_id,
                 COALESCE(creator_users.name, 'Unknown') AS creator_user_name,
                 creator_users.name AS created_by_name,
+                creator_efiling.designation AS created_by_designation,
+                CASE 
+                    WHEN creator_efiling.designation IS NOT NULL AND creator_efiling.designation != '' 
+                    THEN creator_users.name || ' (' || creator_efiling.designation || ')'
+                    ELSE creator_users.name
+                END AS created_by_name_with_designation,
                 CASE 
                     WHEN f.work_request_id IS NOT NULL THEN 'Yes'
                     ELSE 'No'

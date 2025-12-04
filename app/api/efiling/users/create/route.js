@@ -10,6 +10,7 @@ export async function POST(request) {
             email,
             password,
             contact_number,
+            cnic,
             employee_id,
             designation,
             department_id,
@@ -36,9 +37,18 @@ export async function POST(request) {
         } = await request.json();
 
         // Validate required fields
-        if (!name || !email || !password || !efiling_role_id) {
+        if (!name || !email || !password || !efiling_role_id || !cnic) {
             return NextResponse.json(
-                { error: 'Missing required fields: name, email, password, efiling_role_id' },
+                { error: 'Missing required fields: name, email, password, cnic, efiling_role_id' },
+                { status: 400 }
+            );
+        }
+
+        // Validate CNIC format (13 digits with hyphens: 42101-8065450-1)
+        const cnicRegex = /^\d{5}-\d{7}-\d{1}$/;
+        if (!cnicRegex.test(cnic)) {
+            return NextResponse.json(
+                { error: 'Invalid CNIC format. CNIC must be in the format: 11111-1111111-1 (13 digits with hyphens)' },
                 { status: 400 }
             );
         }
@@ -62,8 +72,23 @@ export async function POST(request) {
             );
 
             if (existingUser.rows.length > 0) {
+                await client.release();
                 return NextResponse.json(
                     { error: 'User with this email already exists' },
+                    { status: 400 }
+                );
+            }
+
+            // Check if CNIC already exists
+            const existingCnic = await client.query(
+                'SELECT id FROM users WHERE cnic = $1',
+                [cnic]
+            );
+
+            if (existingCnic.rows.length > 0) {
+                await client.release();
+                return NextResponse.json(
+                    { error: 'User with this CNIC already exists' },
                     { status: 400 }
                 );
             }
@@ -76,6 +101,7 @@ export async function POST(request) {
                 );
 
                 if (existingEmployee.rows.length > 0) {
+                    await client.release();
                     return NextResponse.json(
                         { error: 'Employee ID already exists' },
                         { status: 400 }
@@ -91,10 +117,10 @@ export async function POST(request) {
 
             // 1. Create user in main users table
             const userResult = await client.query(
-                `INSERT INTO users (name, email, password, contact_number, image, role, created_date, updated_date)
-                 VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
+                `INSERT INTO users (name, email, password, contact_number, cnic, image, role, created_date, updated_date)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
                  RETURNING id`,
-                [name, email, hashedPassword, contact_number || null, image || null, 4] // role = 4 for e-filing users
+                [name, email, hashedPassword, contact_number || null, cnic, image || null, 4] // role = 4 for e-filing users
             );
 
             const userId = userResult.rows[0].id;

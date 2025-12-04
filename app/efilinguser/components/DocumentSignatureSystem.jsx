@@ -16,7 +16,8 @@ export default function DocumentSignatureSystem({
     onSignatureAdded, 
     onCommentAdded,
     userRole,
-    canEditDocument 
+    canEditDocument,
+    hasUserSigned = false
 }) {
     const { data: session } = useSession();
     const { toast } = useToast();
@@ -745,30 +746,25 @@ export default function DocumentSignatureSystem({
     return (
         <div className="space-y-6">
             {/* Signature and Comment Controls */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <Button
-                    onClick={() => setShowSignatureModal(true)}
-                    className="flex items-center justify-center gap-2 w-full"
-                    data-signature-button
-                >
-                    <Pen className="w-4 h-4" />
-                    E-Signature
-                </Button>
-                {/* <Button
-                    onClick={() => setShowSignatureManager(true)}
-                    variant="outline"
-                    className="flex items-center justify-center gap-2 w-full"
-                >
-                    <Settings className="w-4 h-4" />
-                    Manage Signatures
-                </Button> */}
+            <div className={`grid gap-3 ${hasUserSigned ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-2'}`}>
+                {!hasUserSigned && (
+                    <Button
+                        onClick={() => setShowSignatureModal(true)}
+                        className="flex items-center justify-center gap-2 w-full"
+                        data-signature-button
+                    >
+                        <Pen className="w-4 h-4" />
+                        E-Signature
+                    </Button>
+                )}
                 <Button
                     onClick={() => setShowCommentModal(true)}
                     variant="outline"
                     className="flex items-center justify-center gap-2 w-full"
+                    data-comment-button
                 >
                     <MessageSquare className="w-4 h-4" />
-                    Comment
+                    Add Comment
                 </Button>
             </div>
 

@@ -105,13 +105,35 @@ export async function POST(request, { params }) {
         const { color } = body;
         const signatureColor = color || 'black';
 
-        // Insert new signature
+        // Get historical user information (designation, town, division) at time of signature
+        const userInfo = await client.query(`
+            SELECT eu.designation, eu.town_id, eu.division_id
+            FROM efiling_users eu
+            WHERE eu.user_id = $1 AND eu.is_active = true
+            LIMIT 1
+        `, [user_id]);
+        const userData = userInfo.rows[0] || {};
+
+        // Add historical columns if they don't exist
+        await client.query(`
+            ALTER TABLE efiling_document_signatures 
+            ADD COLUMN IF NOT EXISTS user_designation VARCHAR(255) NULL,
+            ADD COLUMN IF NOT EXISTS user_town_id INT4 NULL,
+            ADD COLUMN IF NOT EXISTS user_division_id INT4 NULL
+        `);
+
+        // Insert new signature with historical user info
         const result = await client.query(`
             INSERT INTO efiling_document_signatures 
-            (file_id, user_id, user_name, user_role, type, content, position, font, color)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            (file_id, user_id, user_name, user_role, type, content, position, font, color, user_designation, user_town_id, user_division_id)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
             RETURNING *
-        `, [id, user_id, user_name, user_role, type, content, position, font, signatureColor]);
+        `, [
+            id, user_id, user_name, user_role, type, content, position, font, signatureColor,
+            userData.designation || null,
+            userData.town_id || null,
+            userData.division_id || null
+        ]);
 
         // Notify creator and current assignee
         try {

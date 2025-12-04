@@ -490,9 +490,9 @@ export default function TipTapEditor({
     ];
 
     return (
-        <div className={`tiptap-editor ${className}`}>
-            {/* Toolbar */}
-            <div className="border-b border-gray-200 p-2 bg-gray-50 rounded-t-md">
+        <div className={`tiptap-editor flex flex-col h-full ${className}`}>
+            {/* Toolbar - Sticky */}
+            <div className="sticky top-0 z-10 border-b border-gray-200 p-2 bg-gray-50 rounded-t-md">
                 <div className="flex flex-wrap items-center gap-1">
                     {/* Text Formatting */}
                     <div className="flex items-center gap-1 border-r border-gray-300 pr-2">
@@ -902,11 +902,13 @@ export default function TipTapEditor({
                 )}
             </div>
 
-            {/* Editor Content */}
-            <EditorContent 
-                editor={editor} 
-                className="min-h-[500px] prose prose-sm sm:prose lg:prose-lg xl:prose-2xl focus:outline-none p-4 border border-gray-200 rounded-md [&_.ProseMirror]:min-h-[500px] [&_.ProseMirror]:outline-none [&_.ProseMirror_ul]:list-disc [&_.ProseMirror_ul]:pl-6 [&_.ProseMirror_ol]:list-decimal [&_.ProseMirror_ol]:pl-6 [&_.ProseMirror_li]:my-1 prose-table:border-collapse prose-table:border prose-table:border-gray-300 prose-th:border prose-th:border-gray-300 prose-th:bg-gray-50 prose-td:border prose-td:border-gray-300" 
-            />
+            {/* Editor Content - Scrollable */}
+            <div className="flex-1 overflow-y-auto">
+                <EditorContent 
+                    editor={editor} 
+                    className="min-h-[500px] prose prose-sm sm:prose lg:prose-lg xl:prose-2xl focus:outline-none p-4 border border-gray-200 rounded-md [&_.ProseMirror]:min-h-[500px] [&_.ProseMirror]:outline-none [&_.ProseMirror_ul]:list-disc [&_.ProseMirror_ul]:pl-6 [&_.ProseMirror_ol]:list-decimal [&_.ProseMirror_ol]:pl-6 [&_.ProseMirror_li]:my-1 prose-table:border-collapse prose-table:border prose-table:border-gray-300 prose-th:border prose-th:border-gray-300 prose-th:bg-gray-50 prose-td:border prose-td:border-gray-300" 
+                />
+            </div>
         </div>
     );
 }

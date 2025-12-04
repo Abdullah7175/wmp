@@ -258,15 +258,35 @@ export async function POST(request, { params }) {
                 }
             }
 
-            // Create movement record with team workflow flags
+            // Get historical user information for from_user (at time of action)
+            const fromUserInfo = await client.query(`
+                SELECT u.name, eu.designation, eu.town_id, eu.division_id
+                FROM efiling_users eu
+                LEFT JOIN users u ON eu.user_id = u.id
+                WHERE eu.id = $1
+            `, [fromUserEfilingId]);
+            const fromUserData = fromUserInfo.rows[0] || {};
+
+            // Get historical user information for to_user (at time of action)
+            const toUserInfo = await client.query(`
+                SELECT u.name, eu.designation, eu.town_id, eu.division_id
+                FROM efiling_users eu
+                LEFT JOIN users u ON eu.user_id = u.id
+                WHERE eu.id = $1
+            `, [userId]);
+            const toUserData = toUserInfo.rows[0] || {};
+
+            // Create movement record with team workflow flags and historical user info
             const movementRes = await client.query(`
                 INSERT INTO efiling_file_movements (
                     file_id, from_user_id, to_user_id, 
                     from_department_id, to_department_id, 
                     action_type, remarks,
-                    is_team_internal, is_return_to_creator, tat_started
+                    is_team_internal, is_return_to_creator, tat_started,
+                    from_user_name, from_user_designation, from_user_town_id, from_user_division_id,
+                    to_user_name, to_user_designation, to_user_town_id, to_user_division_id
                 )
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
                 RETURNING id
             `, [
                 id, 
@@ -278,7 +298,15 @@ export async function POST(request, { params }) {
                 remarks || null,
                 isTeamInternal,
                 isReturnToCreator,
-                shouldStartTAT
+                shouldStartTAT,
+                fromUserData.name || null,
+                fromUserData.designation || null,
+                fromUserData.town_id || null,
+                fromUserData.division_id || null,
+                toUserData.name || null,
+                toUserData.designation || null,
+                toUserData.town_id || null,
+                toUserData.division_id || null
             ]);
             
             const movements = [movementRes];

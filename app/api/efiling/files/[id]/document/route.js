@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/db';
 import { logAction, ENTITY_TYPES } from '@/lib/actionLogger';
 import { getToken } from 'next-auth/jwt';
-import { canEditFile } from '@/lib/efilingWorkflowStateManager';
+import { canEditFile, getWorkflowState } from '@/lib/efilingWorkflowStateManager';
 
 export async function POST(request, { params }) {
     let client;
@@ -33,13 +33,71 @@ export async function POST(request, { params }) {
                 return NextResponse.json({ error: 'User not found in e-filing system' }, { status: 403 });
             }
             
-            const canEdit = await canEditFile(client, id, userRes.rows[0].id);
+            const efilingUserId = userRes.rows[0].id;
+            
+            // Get file info to check assigned_to
+            const fileRes = await client.query(`
+                SELECT created_by, assigned_to, workflow_state_id
+                FROM efiling_files
+                WHERE id = $1
+            `, [id]);
+            
+            if (fileRes.rows.length === 0) {
+                return NextResponse.json({ error: 'File not found' }, { status: 404 });
+            }
+            
+            const file = fileRes.rows[0];
+            const isCreator = file.created_by === efilingUserId;
+            
+            // Get workflow state
+            const state = await getWorkflowState(client, id);
+            
+            // STRICT CHECK: If creator and file is assigned to someone else, block unless explicitly returned
+            if (isCreator && file.assigned_to && file.assigned_to !== efilingUserId) {
+                // Only allow if state is RETURNED_TO_CREATOR
+                // TEAM_INTERNAL should not allow editing if file is assigned to someone else
+                if (state && state.current_state === 'RETURNED_TO_CREATOR') {
+                    // Allow edit - file was returned to creator
+                } else {
+                    // Block edit - file is assigned to someone else
+                    console.log('BLOCKING EDIT:', {
+                        userId: efilingUserId,
+                        fileId: id,
+                        isCreator: isCreator,
+                        assignedTo: file.assigned_to,
+                        workflowState: state ? state.current_state : 'NONE',
+                        reason: 'File assigned to someone else'
+                    });
+                    return NextResponse.json({
+                        error: 'You cannot edit this file. File is marked to a higher level. Editing is only allowed when the file is marked back to you.',
+                        code: 'EDIT_NOT_ALLOWED'
+                    }, { status: 403 });
+                }
+            }
+            
+            // Use canEditFile for final check
+            const canEdit = await canEditFile(client, id, efilingUserId);
             if (!canEdit) {
+                console.log('BLOCKING EDIT: canEditFile returned false', {
+                    userId: efilingUserId,
+                    fileId: id,
+                    isCreator: isCreator,
+                    assignedTo: file.assigned_to,
+                    workflowState: state ? state.current_state : 'NONE'
+                });
                 return NextResponse.json({
                     error: 'You cannot edit this file. File is in external workflow or not returned to creator.',
                     code: 'EDIT_NOT_ALLOWED'
                 }, { status: 403 });
             }
+            
+            console.log('ALLOWING EDIT:', {
+                userId: efilingUserId,
+                fileId: id,
+                isCreator: isCreator,
+                assignedTo: file.assigned_to,
+                workflowState: state ? state.current_state : 'NONE'
+            });
         }
 
         try {

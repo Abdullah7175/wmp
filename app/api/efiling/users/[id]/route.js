@@ -24,6 +24,7 @@ export async function GET(request, { params }) {
                     u.name,
                     u.email,
                     u.contact_number,
+                    u.cnic,
                     u.created_date,
                     u.updated_date,
                     eu.id as efiling_user_id,
@@ -112,6 +113,7 @@ export async function PUT(request, { params }) {
             email,
             password,
             contact_number,
+            cnic,
             address,
             employee_id,
             designation,
@@ -149,7 +151,7 @@ export async function PUT(request, { params }) {
         try {
             // Get current user info
             const currentUser = await client.query(
-                `SELECT u.id, u.email, eu.employee_id 
+                `SELECT u.id, u.email, u.cnic, eu.employee_id 
                  FROM users u 
                  JOIN efiling_users eu ON u.id = eu.user_id 
                  WHERE eu.id = $1`,
@@ -165,7 +167,19 @@ export async function PUT(request, { params }) {
 
             const userId = currentUser.rows[0].id;
             const currentEmail = currentUser.rows[0].email;
+            const currentCnic = currentUser.rows[0].cnic;
             const currentEmployeeId = currentUser.rows[0].employee_id;
+
+            // Validate CNIC format if provided
+            if (cnic) {
+                const cnicRegex = /^\d{5}-\d{7}-\d{1}$/;
+                if (!cnicRegex.test(cnic)) {
+                    return NextResponse.json(
+                        { error: 'Invalid CNIC format. CNIC must be in the format: 11111-1111111-1 (13 digits with hyphens)' },
+                        { status: 400 }
+                    );
+                }
+            }
 
             // Check if email already exists (if changed)
             if (email && email !== currentEmail) {
@@ -177,6 +191,21 @@ export async function PUT(request, { params }) {
                 if (existingUser.rows.length > 0) {
                     return NextResponse.json(
                         { error: 'User with this email already exists' },
+                        { status: 400 }
+                    );
+                }
+            }
+
+            // Check if CNIC already exists (if changed)
+            if (cnic && cnic !== currentCnic) {
+                const existingCnic = await client.query(
+                    'SELECT id FROM users WHERE cnic = $1 AND id != $2',
+                    [cnic, userId]
+                );
+
+                if (existingCnic.rows.length > 0) {
+                    return NextResponse.json(
+                        { error: 'User with this CNIC already exists' },
                         { status: 400 }
                     );
                 }
@@ -227,6 +256,12 @@ export async function PUT(request, { params }) {
             if (contact_number !== undefined) {
                 userUpdateQuery += `, contact_number = $${paramCount}`;
                 userParams.push(contact_number);
+                paramCount++;
+            }
+
+            if (cnic !== undefined) {
+                userUpdateQuery += `, cnic = $${paramCount}`;
+                userParams.push(cnic);
                 paramCount++;
             }
 

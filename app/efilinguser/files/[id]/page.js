@@ -6,16 +6,19 @@ import { useRouter, useParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Edit, Download, Eye, Clock, User, Building2, FileText, AlertCircle, MessageSquare, Forward, Printer, FileDown, X, Maximize2 } from "lucide-react";
+import { ArrowLeft, Edit, Download, Eye, Clock, User, Building2, FileText, AlertCircle, MessageSquare, Forward, Printer, FileDown, X, Maximize2, Shield } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import Image from "next/image";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import DocumentSignatureSystem from "../../components/DocumentSignatureSystem";
+import { useEfilingUser } from "@/context/EfilingUserContext";
 
 export default function FileDetail() {
     const { data: session } = useSession();
     const router = useRouter();
     const params = useParams();
     const { toast } = useToast();
+    const { efilingUserId } = useEfilingUser();
     const [file, setFile] = useState(null);
     const [loading, setLoading] = useState(true);
     const [pages, setPages] = useState([]);
@@ -26,6 +29,8 @@ export default function FileDetail() {
     const [newComment, setNewComment] = useState("");
     const [postingComment, setPostingComment] = useState(false);
     const [beforeContent, setBeforeContent] = useState([]);
+    const [userRole, setUserRole] = useState('');
+    const [hasUserSigned, setHasUserSigned] = useState(false);
 
     const [showMarkModal, setShowMarkModal] = useState(false);
     const [markUsers, setMarkUsers] = useState([]);
@@ -35,6 +40,20 @@ export default function FileDetail() {
     const [markRemarks, setMarkRemarks] = useState("");
     const [markSubmitting, setMarkSubmitting] = useState(false);
 
+    const fetchUserRole = async () => {
+        try {
+            if (efilingUserId) {
+                const res = await fetch(`/api/efiling/users/${efilingUserId}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    setUserRole(data.role_name || data.role_code || '');
+                }
+            }
+        } catch (e) {
+            console.error('Error fetching user role:', e);
+        }
+    };
+
     useEffect(() => {
         if (!session?.user?.id || !params.id) return;
         const loadData = async () => {
@@ -42,9 +61,10 @@ export default function FileDetail() {
             await fetchExtras();
             await fetchTimeline();
             await fetchComments();
+            await fetchUserRole();
         };
         loadData();
-    }, [session?.user?.id, params.id]);
+    }, [session?.user?.id, params.id, efilingUserId]);
 
     useEffect(() => {
         if (file?.work_request_id) {
@@ -102,6 +122,12 @@ export default function FileDetail() {
                 const sigs = await sigRes.json();
                 console.log('Fetched signatures:', sigs);
                 setSignatures(Array.isArray(sigs) ? sigs : []);
+                // Check if current user has already signed
+                // Note: user_id in signatures table refers to users.id (not efiling_user_id)
+                if (session?.user?.id) {
+                    const userSigned = sigs.some(s => s.user_id === session.user.id && s.is_active !== false);
+                    setHasUserSigned(userSigned);
+                }
             }
         } catch (e) {
             console.error('Error loading extras', e);
@@ -758,12 +784,12 @@ export default function FileDetail() {
                 </div>
                 <div className="info-row">
                     <div className="info-label">Created By:</div>
-                    <div className="info-value">{file?.created_by_name}</div>
+                    <div className="info-value">{file?.created_by_name_with_designation || file?.created_by_name}</div>
                 </div>
             </div>
         
-        <div className="container mx-auto px-4 py-6">
-            <div className="flex items-center justify-between mb-6 no-print">
+        <div className="container mx-auto px-4 py-6 h-[calc(100vh-80px)] flex flex-col">
+            <div className="flex items-center justify-between mb-6 no-print flex-shrink-0">
                 <div className="flex items-center space-x-4">
                     <Button variant="ghost" onClick={() => router.back()} className="flex items-center">
                         <ArrowLeft className="w-4 h-4 mr-2" />
@@ -787,15 +813,15 @@ export default function FileDetail() {
                         <FileDown className="w-4 h-4 mr-2" />
                         Export PDF
                     </Button>
-                    <Button variant="outline">
+                    {/* <Button variant="outline">
                         <Download className="w-4 h-4 mr-2" />
                         Download
-                    </Button>
+                    </Button> */}
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="lg:col-span-2 space-y-6">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1 overflow-hidden">
+                <div className="lg:col-span-2 space-y-6 overflow-y-auto pr-2">
                     <Card className="no-print">
                         <CardHeader>
                             <CardTitle className="flex items-center">
@@ -1019,7 +1045,7 @@ export default function FileDetail() {
                     )}
                 </div>
 
-                <div className="space-y-6 no-print">
+                <div className="space-y-6 no-print overflow-y-auto pr-2">
                     <Card>
                         <CardHeader>
                             <CardTitle>File Metadata</CardTitle>
@@ -1035,7 +1061,7 @@ export default function FileDetail() {
                             </div>
                             <div>
                                 <label className="text-sm font-medium text-gray-600">Created By</label>
-                                <p className="flex items-center text-sm"><User className="w-4 h-4 mr-2 text-gray-500" />{file.created_by_name || 'Unknown'}</p>
+                                <p className="flex items-center text-sm"><User className="w-4 h-4 mr-2 text-gray-500" />{file.created_by_name_with_designation || file.created_by_name || 'Unknown'}</p>
                             </div>
                         </CardContent>
                     </Card>
@@ -1045,14 +1071,58 @@ export default function FileDetail() {
                             <CardTitle>Quick Actions</CardTitle>
                         </CardHeader>
                         <CardContent className="space-y-2">
-                            <Button variant="outline" className="w-full justify-start" onClick={() => router.push(`/efilinguser/files/${file.id}/view-document`)}>
-                                <Eye className="w-4 h-4 mr-2" />
-                                Open Document Viewer (E‑Sign, Manage)
-                            </Button>
                             <Button variant="outline" className="w-full justify-start" onClick={openMarkModal}>
                                 <Forward className="w-4 h-4 mr-2" />
                                 Mark / Forward File
                             </Button>
+                        </CardContent>
+                    </Card>
+
+                    {/* E-Signature Section */}
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2">
+                                <Shield className="w-5 h-5" />
+                                E-Signature
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            {hasUserSigned ? (
+                                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                                    <div className="flex items-start gap-3">
+                                        <Shield className="w-5 h-5 text-blue-600 mt-0.5" />
+                                        <div>
+                                            <p className="text-sm font-medium text-blue-900">
+                                                You have already signed this document.
+                                            </p>
+                                            <p className="text-xs text-blue-700 mt-1">
+                                                Your signature has been successfully recorded and cannot be modified.
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            ) : (
+                                <DocumentSignatureSystem
+                                    fileId={params.id}
+                                    userRole={userRole}
+                                    canEditDocument={true}
+                                    onSignatureAdded={(signature) => {
+                                        console.log('Signature added:', signature);
+                                        setHasUserSigned(true);
+                                        // Refresh signatures list
+                                        fetchExtras();
+                                        toast({
+                                            title: "Signature Added",
+                                            description: "Your signature has been successfully added to the document.",
+                                        });
+                                    }}
+                                    onCommentAdded={(comment) => {
+                                        console.log('Comment added:', comment);
+                                        // Refresh comments list
+                                        fetchComments();
+                                    }}
+                                />
+                            )}
                         </CardContent>
                     </Card>
 
@@ -1208,11 +1278,8 @@ export default function FileDetail() {
                                             <div className="flex-1">
                                                 <div className="text-sm font-medium">{ev.title}</div>
                                                 <div className="text-xs text-gray-500">{formatDate(ev.timestamp)}</div>
-                                                {ev.meta && (ev.meta.from || ev.meta.to || ev.meta.remarks || ev.meta.role) && (
+                                                {ev.meta && (ev.meta.remarks) && (
                                                     <div className="text-xs text-gray-600 mt-1">
-                                                        {ev.meta.from && <div>From: {ev.meta.from}</div>}
-                                                        {ev.meta.to && <div>To: {ev.meta.to}</div>}
-                                                        {ev.meta.role && <div>Role: {ev.meta.role}</div>}
                                                         {ev.meta.remarks && <div>Remarks: {ev.meta.remarks}</div>}
                                                     </div>
                                                 )}
@@ -1277,7 +1344,35 @@ export default function FileDetail() {
                                         height={600} 
                                         className="max-w-full max-h-[70vh] object-contain mx-auto rounded-lg shadow-lg" 
                                     />
-        </div>
+                                </div>
+                            ) : selectedAttachment.file_type === 'application/pdf' || selectedAttachment.file_name?.toLowerCase().endsWith('.pdf') ? (
+                                <div className="space-y-4">
+                                    <div className="border rounded-lg overflow-hidden bg-gray-50">
+                                        <iframe
+                                            src={selectedAttachment.file_url}
+                                            className="w-full h-[70vh] min-h-[500px] border-0"
+                                            title={selectedAttachment.file_name}
+                                            style={{ display: 'block' }}
+                                        />
+                                    </div>
+                                    <div className="flex justify-end">
+                                        <Button 
+                                            variant="outline"
+                                            onClick={() => {
+                                                const link = document.createElement('a');
+                                                link.href = selectedAttachment.file_url;
+                                                link.download = selectedAttachment.file_name;
+                                                link.target = '_blank';
+                                                document.body.appendChild(link);
+                                                link.click();
+                                                document.body.removeChild(link);
+                                            }}
+                                        >
+                                            <Download className="w-4 h-4 mr-2" />
+                                            Download File
+                                        </Button>
+                                    </div>
+                                </div>
                             ) : (
                                 <div className="text-center py-8">
                                     <FileText className="w-16 h-16 mx-auto text-gray-400 mb-4" />

@@ -38,6 +38,7 @@ export default function EditEfilingUser() {
         password: '',
         confirmPassword: '',
         contact_number: '',
+        cnic: '',
         employee_id: '',
         designation: '',
         department_id: '',
@@ -94,6 +95,7 @@ export default function EditEfilingUser() {
                     password: '',
                     confirmPassword: '',
                     contact_number: userData.contact_number || '',
+                    cnic: userData.cnic || '',
                     employee_id: userData.employee_id || '',
                     designation: userData.designation || '',
                     department_id: userData.department_id || '',
@@ -174,6 +176,29 @@ export default function EditEfilingUser() {
         }));
     };
 
+    // CNIC formatting handler - auto-inserts hyphens
+    const handleCnicChange = (value) => {
+        // Remove all non-digit characters
+        const digitsOnly = value.replace(/\D/g, '');
+        
+        // Limit to 13 digits
+        const limitedDigits = digitsOnly.slice(0, 13);
+        
+        // Format with hyphens: 42101-8065450-1
+        let formatted = '';
+        if (limitedDigits.length > 0) {
+            formatted = limitedDigits.slice(0, 5);
+            if (limitedDigits.length > 5) {
+                formatted += '-' + limitedDigits.slice(5, 12);
+                if (limitedDigits.length > 12) {
+                    formatted += '-' + limitedDigits.slice(12, 13);
+                }
+            }
+        }
+        
+        handleInputChange('cnic', formatted);
+    };
+
     // Auto-populate geographic fields when department is selected
     const handleDepartmentChange = async (departmentId) => {
         handleInputChange('department_id', departmentId ? parseInt(departmentId) : '');
@@ -228,13 +253,26 @@ export default function EditEfilingUser() {
     };
 
     const validateForm = () => {
-        if (!formData.name || !formData.email || !formData.employee_id || !formData.department_id || !formData.efiling_role_id) {
+        if (!formData.name || !formData.email || !formData.cnic || !formData.employee_id || !formData.department_id || !formData.efiling_role_id) {
             toast({
                 title: "Validation Error",
                 description: "Please fill in all required fields.",
                 variant: "destructive",
             });
             return false;
+        }
+
+        // Validate CNIC format (13 digits with hyphens: 42101-8065450-1)
+        if (formData.cnic) {
+            const cnicRegex = /^\d{5}-\d{7}-\d{1}$/;
+            if (!cnicRegex.test(formData.cnic)) {
+                toast({
+                    title: "Validation Error",
+                    description: "CNIC must be in the format: 11111-1111111-1 (13 digits with hyphens).",
+                    variant: "destructive",
+                });
+                return false;
+            }
         }
 
         // Only validate password if it's being changed
@@ -391,6 +429,20 @@ export default function EditEfilingUser() {
                                     onChange={(e) => handleInputChange('contact_number', e.target.value)}
                                     placeholder="Enter contact number"
                                 />
+                            </div>
+                            <div>
+                                <Label htmlFor="cnic">CNIC *</Label>
+                                <Input
+                                    id="cnic"
+                                    value={formData.cnic}
+                                    onChange={(e) => handleCnicChange(e.target.value)}
+                                    placeholder="11111-1111111-1"
+                                    maxLength={15}
+                                    required
+                                />
+                                <p className="text-sm text-gray-500 mt-1">
+                                    13-digit CNIC number with format: 11111-1111111-1
+                                </p>
                             </div>
                             <div>
                                 <Label htmlFor="google_email">Google Email (Optional)</Label>

@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Save, Send, Shield, Mic, MicOff, Building2, User, Calendar, X } from "lucide-react";
+import { ArrowLeft, Save, Send, Shield, Mic, MicOff, Building2, User, Calendar, X, Paperclip, MessageSquare } from "lucide-react";
 import TipTapEditor from "../../../components/TipTapEditor";
 import DocumentSignatureSystem from "../../../components/DocumentSignatureSystem";
 import MarkToModal from "../../../components/MarkToModal";
@@ -42,6 +42,8 @@ export default function DocumentEditor() {
     const [saving, setSaving] = useState(false);
     const [showMarkToModal, setShowMarkToModal] = useState(false);
     const [showESignatureModal, setShowESignatureModal] = useState(false);
+    const [showAttachmentModal, setShowAttachmentModal] = useState(false);
+    const [showCommentModal, setShowCommentModal] = useState(false);
     const [editorType, setEditorType] = useState('structured');
     const [selectedTemplate, setSelectedTemplate] = useState(1);
     const [userRole, setUserRole] = useState('');
@@ -57,6 +59,8 @@ export default function DocumentEditor() {
     const [templates, setTemplates] = useState([]);
     const [selectedTemplateId, setSelectedTemplateId] = useState('');
     const [loadingTemplates, setLoadingTemplates] = useState(false);
+    const [fileAssignedTo, setFileAssignedTo] = useState(null);
+    const [isFileAtHigherLevel, setIsFileAtHigherLevel] = useState(false);
 
     // Helper function to convert HTML to plain text
     const htmlToText = (html) => {
@@ -109,6 +113,29 @@ export default function DocumentEditor() {
             fetchFile();
         }
     }, [params.id]);
+
+    useEffect(() => {
+        if (session?.user?.id && params.id) {
+            checkUserSignature();
+        }
+    }, [session?.user?.id, params.id]);
+
+    const checkUserSignature = async () => {
+        try {
+            const sigRes = await fetch(`/api/efiling/files/${params.id}/signatures`);
+            if (sigRes.ok) {
+                const sigs = await sigRes.json();
+                // Check if current user has already signed
+                // Note: user_id in signatures table refers to users.id (not efiling_user_id)
+                if (session?.user?.id) {
+                    const userSigned = sigs.some(s => s.user_id === session.user.id && s.is_active !== false);
+                    setHasUserSigned(userSigned);
+                }
+            }
+        } catch (e) {
+            console.error('Error checking user signature:', e);
+        }
+    };
 
     useEffect(() => {
         if (session?.user?.id && canEditDocument) {
@@ -178,6 +205,28 @@ export default function DocumentEditor() {
                             setWorkflowState(permissions?.workflow_state);
                             setPermissionChecked(true);
                             
+                            // Store assigned to information
+                            setFileAssignedTo({
+                                name: fileData.assigned_to_name || 'Unassigned',
+                                id: fileData.assigned_to
+                            });
+                            
+                            // Check if file is at higher level (not within team and not returned to creator)
+                            const isWithinTeam = permissions?.is_within_team || false;
+                            const isReturnedToCreator = permissions?.workflow_state === 'RETURNED_TO_CREATOR';
+                            const currentState = permissions?.workflow_state || '';
+                            // File is at higher level if:
+                            // 1. User is creator
+                            // 2. File is assigned to someone else (not creator and not null)
+                            // 3. Not within team
+                            // 4. Not returned to creator
+                            // 5. State is EXTERNAL or file is assigned to someone else
+                            const isCreator = fileData.created_by === efilingUserId;
+                            const isAssignedToCreator = fileData.assigned_to === efilingUserId || fileData.assigned_to === null;
+                            const isAssignedToSomeoneElse = fileData.assigned_to !== null && fileData.assigned_to !== efilingUserId;
+                            const isAtHigherLevel = isCreator && isAssignedToSomeoneElse && !isWithinTeam && !isReturnedToCreator && (currentState === 'EXTERNAL' || currentState === '' || !canEdit);
+                            setIsFileAtHigherLevel(isAtHigherLevel);
+                            
                             console.log('Edit access check:', {
                                 userId: session.user.id,
                                 efilingUserId: efilingUserId,
@@ -186,25 +235,22 @@ export default function DocumentEditor() {
                                 canAddPage: canAdd,
                                 workflowState: permissions?.workflow_state,
                                 isWithinTeam: permissions?.is_within_team,
+                                isAtHigherLevel: isAtHigherLevel,
+                                assignedTo: fileData.assigned_to_name,
                                 permissionChecked: true
                             });
-                            
-                            // If user cannot edit or add pages, redirect them
-                            if (!canEdit && !canAdd) {
-                                toast({
-                                    title: "Editing not allowed",
-                                    description: permissions?.workflow_state === 'EXTERNAL' 
-                                        ? "File is in external workflow. Editing is only allowed when file is returned to creator. SE/CE can add pages."
-                                        : "You do not have permission to edit this file.",
-                                    variant: "destructive",
-                                });
-                                router.replace(`/efilinguser/files/${params.id}`);
-                                return;
-                            }
                         } else {
                             // Fallback to creator check
                             const isFileCreator = fileData.created_by === efilingUserId;
-                            setCanEditDocument(isFileCreator);
+                            const isAssignedToCreator = fileData.assigned_to === efilingUserId;
+                            // If file is assigned to someone else and creator, it's at higher level
+                            const isAtHigherLevel = isFileCreator && fileData.assigned_to !== null && !isAssignedToCreator;
+                            setCanEditDocument(isFileCreator && !isAtHigherLevel);
+                            setIsFileAtHigherLevel(isAtHigherLevel);
+                            setFileAssignedTo({
+                                name: fileData.assigned_to_name || 'Unassigned',
+                                id: fileData.assigned_to
+                            });
                             setPermissionChecked(true);
                             
                             if (!isFileCreator) {
@@ -240,6 +286,26 @@ export default function DocumentEditor() {
     };
 
     const handleSave = async () => {
+        // Check if file is at higher level
+        if (isFileAtHigherLevel) {
+            toast({
+                title: "Save Not Allowed",
+                description: "This file is marked to a higher level. You cannot save changes until the file is marked back to you.",
+                variant: "destructive",
+            });
+            return;
+        }
+
+        // Check if user has permission to edit
+        if (!canEditDocument || !permissionChecked) {
+            toast({
+                title: "Save Not Allowed",
+                description: "You do not have permission to edit this file.",
+                variant: "destructive",
+            });
+            return;
+        }
+
         setSaving(true);
         try {
             const response = await fetch(`/api/efiling/files/${params.id}/document`, {
@@ -872,6 +938,24 @@ export default function DocumentEditor() {
                             <h1 className="text-xl font-bold text-gray-900">Document Editor</h1>
                             <p className="text-sm text-gray-600">File: {file.file_number}</p>
                             
+                            {/* Warning Message when file is at higher level */}
+                            {isFileAtHigherLevel && (
+                                <div className="mt-2 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                                    <div className="flex items-start gap-2">
+                                        <AlertCircle className="w-5 h-5 text-amber-600 mt-0.5" />
+                                        <div>
+                                            <p className="text-sm font-medium text-amber-900">
+                                                File is marked to a higher level
+                                            </p>
+                                            <p className="text-xs text-amber-700 mt-1">
+                                                This file has been marked to <strong>{fileAssignedTo?.name || 'a higher authority'}</strong>. 
+                                                You cannot edit the content, add attachments, or add comments until the file is marked back to you.
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                            
                             {/* Editor Type Toggle */}
                             <div className="flex items-center space-x-2 mt-2">
                                 <Button
@@ -897,7 +981,7 @@ export default function DocumentEditor() {
                     <div className="flex items-center space-x-2">
                         <Button
                             onClick={handleSave}
-                            disabled={saving}
+                            disabled={saving || isFileAtHigherLevel}
                             className="bg-blue-600 hover:bg-blue-700"
                         >
                             {saving ? (
@@ -924,6 +1008,14 @@ export default function DocumentEditor() {
                         
                         <Button
                             onClick={() => {
+                                if (hasUserSigned) {
+                                    toast({
+                                        title: "Already Signed",
+                                        description: "You have already signed this document. Your signature has been successfully recorded and cannot be modified.",
+                                        variant: "default",
+                                    });
+                                    return;
+                                }
                                 // Open the signature modal from DocumentSignatureSystem
                                 const signatureButton = document.querySelector('[data-signature-button]');
                                 if (signatureButton) {
@@ -932,9 +1024,36 @@ export default function DocumentEditor() {
                             }}
                             variant="outline"
                             className="border-purple-600 text-purple-600 hover:bg-purple-50"
+                            disabled={hasUserSigned}
                         >
                             <Shield className="w-4 h-4 mr-2" />
-                            E-Sign
+                            {hasUserSigned ? 'Already Signed' : 'E-Sign'}
+                        </Button>
+                        
+                        <Button
+                            onClick={() => setShowAttachmentModal(true)}
+                            variant="outline"
+                            className="border-blue-600 text-blue-600 hover:bg-blue-50"
+                        >
+                            <Paperclip className="w-4 h-4 mr-2" />
+                            Attachment
+                        </Button>
+                        
+                        <Button
+                            onClick={() => {
+                                // Trigger comment modal from DocumentSignatureSystem
+                                const commentButton = document.querySelector('[data-comment-button]');
+                                if (commentButton) {
+                                    commentButton.click();
+                                } else {
+                                    setShowCommentModal(true);
+                                }
+                            }}
+                            variant="outline"
+                            className="border-orange-600 text-orange-600 hover:bg-orange-50"
+                        >
+                            <MessageSquare className="w-4 h-4 mr-2" />
+                            Add Comment
                         </Button>
                     </div>
                 </div>
@@ -958,7 +1077,7 @@ export default function DocumentEditor() {
                                         <button
                                             onClick={() => deletePage(page.id)}
                                             className="ml-1 text-red-500 hover:text-red-700 text-sm font-bold w-5 h-5 flex items-center justify-center rounded-full hover:bg-red-100"
-                                            disabled={!canEditDocument || !permissionChecked}
+                                            disabled={!canEditDocument || !permissionChecked || isFileAtHigherLevel}
                                             title="Delete page"
                                         >
                                             ×
@@ -966,7 +1085,7 @@ export default function DocumentEditor() {
                                     )}
                                 </div>
                             ))}
-                            {canEditDocument && permissionChecked && (
+                            {canEditDocument && permissionChecked && !isFileAtHigherLevel && (
                                 <Button
                                     variant="outline"
                                     size="sm"
@@ -1039,14 +1158,14 @@ export default function DocumentEditor() {
             </div>
 
             {/* Main Content */}
-            <div className="container mx-auto px-4 py-6">
-                <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+            <div className="container mx-auto px-4 py-6 h-[calc(100vh-200px)]">
+                <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 h-full">
                     {/* Main Editor Area */}
-                    <div className="lg:col-span-3">
+                    <div className="lg:col-span-3 flex flex-col h-full overflow-hidden">
                         {editorType === 'structured' ? (
                             // Structured Editor
-                            <Card className="min-h-[800px]">
-                                <CardHeader>
+                            <Card className="flex flex-col h-full overflow-hidden">
+                                <CardHeader className="flex-shrink-0">
                                     <CardTitle className="flex items-center justify-between">
                                         <span>Document Content - {getCurrentPage().title}</span>
                                         <div className="flex items-center space-x-2">
@@ -1054,7 +1173,7 @@ export default function DocumentEditor() {
                                                 value={getCurrentPage().title}
                                                 onChange={(e) => updatePageTitle(currentPageId, e.target.value)}
                                                 className="w-48"
-                                                disabled={!canEditDocument || !permissionChecked}
+                                                disabled={!canEditDocument || !permissionChecked || isFileAtHigherLevel}
                                             />
                                         {canEditDocument && templates.length > 0 && (
                                             <Select
@@ -1078,7 +1197,7 @@ export default function DocumentEditor() {
                                         </div>
                                     </CardTitle>
                                 </CardHeader>
-                                <CardContent className="space-y-6">
+                                <CardContent className="space-y-6 flex-1 overflow-y-auto">
                                     <div className="space-y-4">
                                         {/* Fixed KWSC Header */}
                                         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
@@ -1107,7 +1226,7 @@ export default function DocumentEditor() {
                                                 onChange={(e) => updateCurrentPageContent({ title: e.target.value })}
                                                 className="w-full p-2 border border-gray-300 rounded-md min-h-[40px] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                                 placeholder="Enter document title"
-                                                disabled={!canEditDocument || !permissionChecked}
+                                                disabled={!canEditDocument || !permissionChecked || isFileAtHigherLevel}
                                             />
                                         </div>
                                         <div>
@@ -1119,7 +1238,7 @@ export default function DocumentEditor() {
                                                 onChange={(e) => updateCurrentPageContent({ subject: e.target.value })}
                                                 className="w-full p-2 border border-gray-300 rounded-md min-h-[40px] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                                 placeholder="Enter document subject"
-                                                disabled={!canEditDocument || !permissionChecked}
+                                                disabled={!canEditDocument || !permissionChecked || isFileAtHigherLevel}
                                             />
                                         </div>
                                         <div>
@@ -1131,21 +1250,26 @@ export default function DocumentEditor() {
                                                 onChange={(e) => updateCurrentPageContent({ date: e.target.value })}
                                                 className="w-full p-2 border border-gray-300 rounded-md min-h-[40px] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                                 placeholder="Enter date"
-                                                disabled={!canEditDocument || !permissionChecked}
+                                                disabled={!canEditDocument || !permissionChecked || isFileAtHigherLevel}
                                             />
                                         </div>
-                                        <div>
+                                        <div className="relative flex flex-col" style={{ height: '600px' }}>
                                             <Label htmlFor="matter">Main Matter</Label>
-                                            <TipTapEditor
-                                                value={(getCurrentPage().content.matter) || ''}
-                                                onChange={(value) => updateCurrentPageContent({ matter: value })}
-                                                placeholder="Enter main content..."
-                                                className="min-h-[200px]"
-                                                readOnly={!canEditDocument || !permissionChecked}
-                                            />
-                                            {(!canEditDocument || !permissionChecked) && (
+                                            <div className="flex-1 border border-gray-300 rounded-md overflow-hidden">
+                                                <TipTapEditor
+                                                    value={(getCurrentPage().content.matter) || ''}
+                                                    onChange={(value) => updateCurrentPageContent({ matter: value })}
+                                                    placeholder="Enter main content..."
+                                                    className="h-full"
+                                                    readOnly={!canEditDocument || !permissionChecked || isFileAtHigherLevel}
+                                                />
+                                            </div>
+                                            {(!canEditDocument || !permissionChecked || isFileAtHigherLevel) && (
                                                 <p className="text-sm text-gray-500 mt-1">
-                                                    Only the document creator or authorized administrators can edit this content.
+                                                    {isFileAtHigherLevel 
+                                                        ? "This file is marked to a higher level. Editing is disabled until the file is marked back to you."
+                                                        : "Only the document creator or authorized administrators can edit this content."
+                                                    }
                                                 </p>
                                             )}
                                         </div>
@@ -1158,7 +1282,7 @@ export default function DocumentEditor() {
                                                 onChange={(e) => updateCurrentPageContent({ footer: e.target.value })}
                                                 className="w-full p-2 border border-gray-300 rounded-md min-h-[40px] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                                 placeholder="Enter footer text"
-                                                disabled={!canEditDocument || !permissionChecked}
+                                                disabled={!canEditDocument || !permissionChecked || isFileAtHigherLevel}
                                             />
                                         </div>
                                     </div>
@@ -1264,8 +1388,8 @@ export default function DocumentEditor() {
                     </div>
 
                     {/* Sidebar */}
-                    <div className="lg:col-span-1">
-                        <div className="space-y-6">
+                    <div className="lg:col-span-1 flex flex-col h-full overflow-hidden">
+                        <div className="space-y-6 flex-1 overflow-y-auto pr-2">
                             {/* File Information */}
                             <Card>
                                 <CardHeader>
@@ -1303,29 +1427,80 @@ export default function DocumentEditor() {
                             {/* Attachment Manager */}
                             <AttachmentManager
                                 fileId={params.id}
-                                canEdit={canEditDocument}
-                                viewOnly={!canEditDocument}
+                                canEdit={canEditDocument && !isFileAtHigherLevel}
+                                viewOnly={!canEditDocument || isFileAtHigherLevel}
                             />
 
-                            {/* Document Signature System */}
+                            {/* Signature Status */}
+                            {hasUserSigned && (
+                                <Card>
+                                    <CardHeader>
+                                        <CardTitle className="text-lg flex items-center gap-2">
+                                            <Shield className="w-5 h-5" />
+                                            Signature Status
+                                        </CardTitle>
+                                    </CardHeader>
+                                    <CardContent>
+                                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                                            <div className="flex items-start gap-3">
+                                                <Shield className="w-5 h-5 text-blue-600 mt-0.5" />
+                                                <div>
+                                                    <p className="text-sm font-medium text-blue-900">
+                                                        You have already signed this document.
+                                                    </p>
+                                                    <p className="text-xs text-blue-700 mt-1">
+                                                        Your signature has been successfully recorded and cannot be modified.
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            )}
+
+                            {/* Document Signature System - Always show for comments */}
                             <Card>
                                 <CardHeader>
                                     <CardTitle className="text-lg">Add Comment / Signature </CardTitle>
                                 </CardHeader>
                                 <CardContent>
-                                    <DocumentSignatureSystem
-                                        fileId={params.id}
-                                        userRole={userRole}
-                                        canEditDocument={canEditDocument}
-                                        onSignatureAdded={(signature) => {
-                                            // Handle signature added
-                                            console.log('Signature added:', signature);
-                                        }}
-                                        onCommentAdded={(comment) => {
-                                            // Handle comment added
-                                            console.log('Comment added:', comment);
-                                        }}
-                                    />
+                                    {isFileAtHigherLevel ? (
+                                        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                                            <div className="flex items-start gap-3">
+                                                <AlertCircle className="w-5 h-5 text-amber-600 mt-0.5" />
+                                                <div>
+                                                    <p className="text-sm font-medium text-amber-900">
+                                                        Comments and signatures are disabled
+                                                    </p>
+                                                    <p className="text-xs text-amber-700 mt-1">
+                                                        You cannot add comments or signatures while the file is marked to a higher level. 
+                                                        Please wait until the file is marked back to you.
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <DocumentSignatureSystem
+                                            fileId={params.id}
+                                            userRole={userRole}
+                                            canEditDocument={canEditDocument}
+                                            hasUserSigned={hasUserSigned}
+                                            onSignatureAdded={(signature) => {
+                                                // Handle signature added
+                                                console.log('Signature added:', signature);
+                                                setHasUserSigned(true);
+                                                checkUserSignature(); // Refresh signature status
+                                                toast({
+                                                    title: "Signature Added",
+                                                    description: "Your signature has been successfully added to the document.",
+                                                });
+                                            }}
+                                            onCommentAdded={(comment) => {
+                                                // Handle comment added
+                                                console.log('Comment added:', comment);
+                                            }}
+                                        />
+                                    )}
                                 </CardContent>
                             </Card>
                         </div>
@@ -1347,6 +1522,51 @@ export default function DocumentEditor() {
                     fileId={params.id}
                     onClose={() => setShowESignatureModal(false)}
                 />
+            )}
+
+            {/* Attachment Upload Modal */}
+            {showAttachmentModal && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                    <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto bg-white rounded-lg p-6">
+                        <div className="flex items-center justify-between mb-4">
+                            <h2 className="text-xl font-bold flex items-center gap-2">
+                                <Paperclip className="w-5 h-5" />
+                                Upload Attachment
+                            </h2>
+                            <Button variant="ghost" size="sm" onClick={() => setShowAttachmentModal(false)}>
+                                <X className="w-4 h-4" />
+                            </Button>
+                        </div>
+                        <AttachmentManager
+                            fileId={params.id}
+                            canEdit={canEditDocument}
+                            viewOnly={!canEditDocument}
+                        />
+                    </div>
+                </div>
+            )}
+
+            {/* Comment Modal */}
+            {showCommentModal && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                    <div className="w-full max-w-md bg-white rounded-lg p-6">
+                        <div className="flex items-center justify-between mb-4">
+                            <h2 className="text-xl font-bold">Add Comment</h2>
+                            <Button variant="ghost" size="sm" onClick={() => setShowCommentModal(false)}>
+                                <X className="w-4 h-4" />
+                            </Button>
+                        </div>
+                        <DocumentSignatureSystem
+                            fileId={params.id}
+                            userRole={userRole}
+                            canEditDocument={canEditDocument}
+                            onCommentAdded={(comment) => {
+                                console.log('Comment added:', comment);
+                                setShowCommentModal(false);
+                            }}
+                        />
+                    </div>
+                </div>
             )}
             
             {/* Add Page Modal for SE/CE */}

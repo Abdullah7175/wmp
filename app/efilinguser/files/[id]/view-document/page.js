@@ -585,17 +585,9 @@ export default function DocumentViewer() {
                                                                 </Badge>
                                                             </div>
                                                             <div className="text-xs text-gray-500 mb-2">{formatDate(event.timestamp)}</div>
-                                                            {event.meta && Object.keys(event.meta).length > 0 && (
+                                                            {event.meta && event.meta.remarks && (
                                                                 <div className="text-xs text-gray-600 mt-2 space-y-1">
-                                                                    {event.meta.from && event.meta.to && (
-                                                                        <div>From: <span className="font-medium">{event.meta.from}</span> → To: <span className="font-medium">{event.meta.to}</span></div>
-                                                                    )}
-                                                                    {event.meta.role && (
-                                                                        <div>Role: <span className="font-medium">{event.meta.role}</span></div>
-                                                                    )}
-                                                                    {event.meta.remarks && (
-                                                                        <div className="mt-1 italic text-gray-500">"{event.meta.remarks}"</div>
-                                                                    )}
+                                                                    <div className="mt-1 italic text-gray-500">"{event.meta.remarks}"</div>
                                                                 </div>
                                                             )}
                                                         </div>
@@ -670,6 +662,34 @@ export default function DocumentViewer() {
                                         style={{ objectFit: 'contain' }}
                                     />
                                 </div>
+                            ) : selectedAttachment.file_type === 'application/pdf' || selectedAttachment.file_name?.toLowerCase().endsWith('.pdf') ? (
+                                <div className="space-y-4">
+                                    <div className="border rounded-lg overflow-hidden bg-gray-50">
+                                        <iframe
+                                            src={selectedAttachment.file_url}
+                                            className="w-full h-[70vh] min-h-[500px] border-0"
+                                            title={selectedAttachment.file_name}
+                                            style={{ display: 'block' }}
+                                        />
+                                    </div>
+                                    <div className="flex justify-end">
+                                        <Button 
+                                            variant="outline"
+                                            onClick={() => {
+                                                const link = document.createElement('a');
+                                                link.href = selectedAttachment.file_url;
+                                                link.download = selectedAttachment.file_name;
+                                                link.target = '_blank';
+                                                document.body.appendChild(link);
+                                                link.click();
+                                                document.body.removeChild(link);
+                                            }}
+                                        >
+                                            <Download className="w-4 h-4 mr-2" />
+                                            Download File
+                                        </Button>
+                                    </div>
+                                </div>
                             ) : (
                                 <div className="text-center py-8">
                                     <FileText className="w-16 h-16 mx-auto text-gray-400 mb-4" />
@@ -702,9 +722,9 @@ export default function DocumentViewer() {
                                 <div>
                                     <span className="font-medium">Uploaded:</span>
                                     <p className="text-gray-600">{formatDate(selectedAttachment.uploaded_at)}</p>
-                </div>
-            </div>
-        </div>
+                                </div>
+                            </div>
+                        </div>
                     )}
                 </DialogContent>
             </Dialog>
