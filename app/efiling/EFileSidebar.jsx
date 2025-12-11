@@ -93,6 +93,24 @@ const links = [
         ]
     },
     {
+        href: "/efiling/daak",
+        label: "E-Posted (Daak)",
+        icon: <FileText className="w-5 h-5 mr-2" />,
+        subItems: [
+            { href: "/efiling/daak", label: "All Daak", icon: <FileText className="w-4 h-4" /> },
+            { href: "/efiling/daak/new", label: "Create Daak", icon: <FileText className="w-4 h-4" /> },
+        ]
+    },
+    {
+        href: "/efiling/meetings",
+        label: "Meetings",
+        icon: <Calendar className="w-5 h-5 mr-2" />,
+        subItems: [
+            { href: "/efiling/meetings", label: "All Meetings", icon: <Calendar className="w-4 h-4" /> },
+            { href: "/efiling/meetings/new", label: "Create Meeting", icon: <Calendar className="w-4 h-4" /> },
+        ]
+    },
+    {
         href: "/efiling/geography",
         label: "Geography",
         icon: <MapPin className="w-5 h-5 mr-2" />,

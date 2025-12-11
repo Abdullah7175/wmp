@@ -20,7 +20,7 @@ module.exports = {
       out_file: './logs/wmp-out.log',
       log_file: './logs/wmp-combined.log',
       time: true,
-      max_memory_restart: '1G',
+      max_memory_restart: '3G',
       restart_delay: 4000,
       max_restarts: 10,
       min_uptime: '10s',

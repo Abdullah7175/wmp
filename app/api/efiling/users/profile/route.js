@@ -7,9 +7,19 @@ export async function GET(request) {
         const { searchParams } = new URL(request.url);
         const userId = searchParams.get('userId');
 
-        if (!userId) {
+        // Validate userId - must be a valid integer, not "undefined" or empty
+        if (!userId || userId === 'undefined' || userId === 'null' || userId.trim() === '') {
             return NextResponse.json(
                 { error: 'User ID is required' },
+                { status: 400 }
+            );
+        }
+
+        // Ensure userId is a valid integer
+        const userIdNum = parseInt(userId, 10);
+        if (isNaN(userIdNum) || userIdNum <= 0) {
+            return NextResponse.json(
+                { error: 'Invalid user ID format' },
                 { status: 400 }
             );
         }
@@ -88,7 +98,7 @@ export async function GET(request) {
                     LEFT JOIN efiling_users eu ON u.id = eu.user_id
                     LEFT JOIN v_efiling_users_by_location loc ON loc.user_id = u.id
                     WHERE u.id = $1`,
-                    [userId]
+                    [userIdNum]
                 );
             } else {
                 // Fallback to direct joins if view doesn't exist
@@ -146,7 +156,7 @@ export async function GET(request) {
                     LEFT JOIN subtown st ON eu.subtown_id = st.id
                     LEFT JOIN divisions div ON eu.division_id = div.id
                     WHERE u.id = $1 AND (eu.is_active = true OR eu.is_active IS NULL)`,
-                    [userId]
+                    [userIdNum]
                 );
             }
 

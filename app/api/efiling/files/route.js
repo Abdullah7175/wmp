@@ -7,12 +7,27 @@ import { getFiscalYear } from '@/lib/utils';
 export async function GET(request) {
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
-    const department_id = searchParams.get('department_id');
-    const status_id = searchParams.get('status_id');
-    const created_by = searchParams.get('created_by');
-    const assigned_to = searchParams.get('assigned_to');
-    const work_request_id = searchParams.get('work_request_id');
-    const priority = searchParams.get('priority');
+    
+    // Helper function to parse and validate integer parameters
+    const parseIntegerParam = (value, paramName) => {
+        if (!value || value === 'undefined' || value === 'null' || value.trim() === '') {
+            return null;
+        }
+        const parsed = parseInt(value, 10);
+        if (isNaN(parsed) || parsed <= 0) {
+            console.warn(`Invalid ${paramName} parameter: ${value}`);
+            return null;
+        }
+        return parsed;
+    };
+    
+    const department_id = parseIntegerParam(searchParams.get('department_id'), 'department_id');
+    const status_id = parseIntegerParam(searchParams.get('status_id'), 'status_id');
+    const created_by = parseIntegerParam(searchParams.get('created_by'), 'created_by');
+    const assigned_to = parseIntegerParam(searchParams.get('assigned_to'), 'assigned_to');
+    const work_request_id = parseIntegerParam(searchParams.get('work_request_id'), 'work_request_id');
+    const priority = searchParams.get('priority'); // String, not integer
+    
     let page = parseInt(searchParams.get('page') || '1');
     let limit = parseInt(searchParams.get('limit') || '10');
     let offset = (page - 1) * limit;

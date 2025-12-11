@@ -67,6 +67,24 @@ const links = [
         label: "My Templates",
         icon: <FileText className="w-5 h-5 mr-2" />,
     },
+    {
+        href: "/efilinguser/daak",
+        label: "E-Posted (Daak)",
+        icon: <FileText className="w-5 h-5 mr-2" />,
+        subItems: [
+            { href: "/efilinguser/daak", label: "Received Daak", icon: <FileText className="w-4 h-4" /> },
+            { href: "/efilinguser/daak/new", label: "Create Daak", icon: <Plus className="w-4 h-4" /> },
+        ]
+    },
+    {
+        href: "/efilinguser/meetings",
+        label: "Meetings",
+        icon: <Calendar className="w-5 h-5 mr-2" />,
+        subItems: [
+            { href: "/efilinguser/meetings", label: "My Meetings", icon: <Calendar className="w-4 h-4" /> },
+            { href: "/efilinguser/meetings/new", label: "Create Meeting", icon: <Plus className="w-4 h-4" /> },
+        ]
+    },
 ];
 
 export function EFileSidebar() {

@@ -774,17 +774,35 @@ export async function PUT(req) {
         // If shoot_date is present, update it
         // shoot_date is UI-only and not stored in the database
 
+        // Helper to validate and convert integer parameters
+        const validateIntegerParam = (value, paramName) => {
+            if (value === undefined || value === null) return null;
+            if (value === '' || value === 'undefined' || value === 'null') return null;
+            const parsed = parseInt(value, 10);
+            if (isNaN(parsed) || parsed <= 0) {
+                console.warn(`Invalid ${paramName} parameter: ${value}, skipping`);
+                return null;
+            }
+            return parsed;
+        };
+
         // Update extra fields
         const updateFields = [];
         const updateParams = [];
         let paramIdx = 3; // 1: assigned_to, 2: status_id, 3: id
-        if (executive_engineer_id !== undefined) {
-            updateFields.push(`executive_engineer_id = $${++paramIdx}`);
-            updateParams.push(executive_engineer_id);
+        if (executive_engineer_id !== undefined && executive_engineer_id !== null && executive_engineer_id !== '') {
+            const validExecEngId = validateIntegerParam(executive_engineer_id, 'executive_engineer_id');
+            if (validExecEngId !== null) {
+                updateFields.push(`executive_engineer_id = $${++paramIdx}`);
+                updateParams.push(validExecEngId);
+            }
         }
-        if (contractor_id !== undefined) {
-            updateFields.push(`contractor_id = $${++paramIdx}`);
-            updateParams.push(contractor_id);
+        if (contractor_id !== undefined && contractor_id !== null && contractor_id !== '') {
+            const validContractorId = validateIntegerParam(contractor_id, 'contractor_id');
+            if (validContractorId !== null) {
+                updateFields.push(`contractor_id = $${++paramIdx}`);
+                updateParams.push(validContractorId);
+            }
         }
         if (budget_code !== undefined) {
             updateFields.push(`budget_code = $${++paramIdx}`);
@@ -798,21 +816,45 @@ export async function PUT(req) {
             updateFields.push(`nature_of_work = $${++paramIdx}`);
             updateParams.push(nature_of_work);
         }
-        if (town_id !== undefined) {
-            updateFields.push(`town_id = $${++paramIdx}`);
-            updateParams.push(town_id);
+        // Helper to validate and convert integer parameters
+        const validateIntegerParam = (value, paramName) => {
+            if (value === undefined || value === null) return null;
+            if (value === '' || value === 'undefined' || value === 'null') return null;
+            const parsed = parseInt(value, 10);
+            if (isNaN(parsed) || parsed <= 0) {
+                console.warn(`Invalid ${paramName} parameter: ${value}, skipping`);
+                return null;
+            }
+            return parsed;
+        };
+
+        if (town_id !== undefined && town_id !== null && town_id !== '') {
+            const validTownId = validateIntegerParam(town_id, 'town_id');
+            if (validTownId !== null) {
+                updateFields.push(`town_id = $${++paramIdx}`);
+                updateParams.push(validTownId);
+            }
         }
-        if (subtown_id !== undefined) {
-            updateFields.push(`subtown_id = $${++paramIdx}`);
-            updateParams.push(subtown_id);
+        if (subtown_id !== undefined && subtown_id !== null && subtown_id !== '') {
+            const validSubtownId = validateIntegerParam(subtown_id, 'subtown_id');
+            if (validSubtownId !== null) {
+                updateFields.push(`subtown_id = $${++paramIdx}`);
+                updateParams.push(validSubtownId);
+            }
         }
-        if (complaint_type_id !== undefined) {
-            updateFields.push(`complaint_type_id = $${++paramIdx}`);
-            updateParams.push(complaint_type_id);
+        if (complaint_type_id !== undefined && complaint_type_id !== null && complaint_type_id !== '') {
+            const validComplaintTypeId = validateIntegerParam(complaint_type_id, 'complaint_type_id');
+            if (validComplaintTypeId !== null) {
+                updateFields.push(`complaint_type_id = $${++paramIdx}`);
+                updateParams.push(validComplaintTypeId);
+            }
         }
-        if (complaint_subtype_id !== undefined) {
-            updateFields.push(`complaint_subtype_id = $${++paramIdx}`);
-            updateParams.push(complaint_subtype_id);
+        if (complaint_subtype_id !== undefined && complaint_subtype_id !== null && complaint_subtype_id !== '') {
+            const validComplaintSubtypeId = validateIntegerParam(complaint_subtype_id, 'complaint_subtype_id');
+            if (validComplaintSubtypeId !== null) {
+                updateFields.push(`complaint_subtype_id = $${++paramIdx}`);
+                updateParams.push(validComplaintSubtypeId);
+            }
         }
         if (contact_number !== undefined) {
             updateFields.push(`contact_number = $${++paramIdx}`);
