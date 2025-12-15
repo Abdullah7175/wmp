@@ -7,14 +7,17 @@ import { authOptions } from '@/pages/api/auth/[...nextauth]';
 export async function POST(request) {
     let client;
     try {
-        const { userId, method, code } = await request.json();
+        const { userId, code } = await request.json();
         
-        if (!userId || !method || !code) {
+        if (!userId || !code) {
             return NextResponse.json(
-                { error: 'User ID, method, and code are required' },
+                { error: 'User ID and code are required' },
                 { status: 400 }
             );
         }
+        
+        // Always use WhatsApp method
+        const method = 'whatsapp';
 
         client = await connectToDatabase();
         

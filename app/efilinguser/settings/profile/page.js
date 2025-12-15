@@ -43,14 +43,10 @@ export default function ProfileSettings() {
     const [userSignature, setUserSignature] = useState(null);
     const [showSignatureModal, setShowSignatureModal] = useState(false);
     const [showAuthModal, setShowAuthModal] = useState(false);
-    const [signatureMethod, setSignatureMethod] = useState("otp");
     const [otpCode, setOtpCode] = useState("");
-    const [googleAuthCode, setGoogleAuthCode] = useState("");
     const [otpSent, setOtpSent] = useState(false);
     const [countdown, setCountdown] = useState(0);
     const [authLoading, setAuthLoading] = useState(false);
-    const [showEmailRegistration, setShowEmailRegistration] = useState(false);
-    const [registrationEmail, setRegistrationEmail] = useState("");
     
     // Signature creation states
     const [signatureText, setSignatureText] = useState("");
@@ -288,7 +284,6 @@ export default function ProfileSettings() {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ 
-                    method: signatureMethod === 'whatsapp' ? 'whatsapp' : 'sms',
                     userId: session?.user?.id || efilingUserId
                 })
             });
@@ -300,9 +295,7 @@ export default function ProfileSettings() {
                 setCountdown(60);
                 toast({
                     title: "OTP Sent",
-                    description: data.message || (signatureMethod === 'whatsapp' 
-                        ? "OTP has been sent to your registered WhatsApp number." 
-                        : "OTP has been sent to your registered mobile number."),
+                    description: data.message || "OTP has been sent to your registered WhatsApp number.",
                 });
             } else {
                 // If WhatsApp fails but OTP is provided for testing
@@ -333,43 +326,19 @@ export default function ProfileSettings() {
         try {
             setAuthLoading(true);
             
-            let response;
-            
-            if (signatureMethod === 'googleOAuth') {
-                response = await fetch('/api/efiling/google-auth', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        email: googleAuthCode,
-                        userId: session?.user?.id
-                    })
-                });
-
-                if (response.status === 402) {
-                    const errorData = await response.json();
-                    setShowEmailRegistration(true);
-                    setRegistrationEmail(googleAuthCode);
-                    setAuthLoading(false);
-                    return;
-                }
-            } else {
-                // For OTP and WhatsApp, use the same verification endpoint
-                const methodToSend = signatureMethod === 'whatsapp' ? 'whatsapp' : signatureMethod;
-                response = await fetch('/api/efiling/verify-auth', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        userId: session?.user?.id || efilingUserId,
-                        method: methodToSend,
-                        code: (signatureMethod === 'otp' || signatureMethod === 'whatsapp') ? otpCode : googleAuthCode
-                    })
-                });
-            }
+            // Use WhatsApp OTP verification
+            const response = await fetch('/api/efiling/verify-auth', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    userId: session?.user?.id || efilingUserId,
+                    code: otpCode
+                })
+            });
 
             if (response.ok) {
                 setShowAuthModal(false);
                 setOtpCode("");
-                setGoogleAuthCode("");
                 setShowSignatureModal(true);
                 toast({
                     title: "Authentication Successful",
@@ -910,86 +879,34 @@ export default function ProfileSettings() {
                         <CardContent className="space-y-4">
                             <div className="space-y-4">
                                 <div>
-                                    <Label>Authentication Method</Label>
-                                    <select
-                                        value={signatureMethod}
-                                        onChange={(e) => {
-                                            setSignatureMethod(e.target.value);
-                                            setOtpSent(false);
-                                            setOtpCode("");
-                                            setCountdown(0);
-                                        }}
-                                        className="w-full p-2 border rounded-md mt-1"
-                                    >
-                                        <option value="otp">SMS OTP</option>
-                                        <option value="whatsapp">WhatsApp OTP</option>
-                                        <option value="google">Google Authenticator</option>
-                                        <option value="googleOAuth">Google OAuth</option>
-                                    </select>
+                                    <Label>WhatsApp OTP Verification</Label>
+                                    <p className="text-sm text-muted-foreground mt-1 mb-4">
+                                        OTP will be sent to your registered WhatsApp number: {profile.phone ? profile.phone.replace(/(\d{4})(\d{3})(\d{4})/, '$1***$3') : 'Not set'}
+                                    </p>
                                 </div>
 
-                                {(signatureMethod === 'otp' || signatureMethod === 'whatsapp') && (
-                                    <div className="space-y-2">
-                                        <div className="flex justify-between items-center">
-                                            <Label htmlFor="otpCode">OTP Code</Label>
-                                            {!otpSent && (
-                                                <Button 
-                                                    variant="outline" 
-                                                    size="sm" 
-                                                    onClick={sendOTP}
-                                                    disabled={authLoading || countdown > 0}
-                                                >
-                                                    {countdown > 0 ? `Resend in ${countdown}s` : "Send OTP"}
-                                                </Button>
-                                            )}
-                                        </div>
-                                        <Input
-                                            id="otpCode"
-                                            value={otpCode}
-                                            onChange={(e) => setOtpCode(e.target.value)}
-                                            placeholder="Enter 6-digit OTP"
-                                            maxLength={6}
-                                        />
-                                        {signatureMethod === 'whatsapp' && (
-                                            <p className="text-sm text-gray-500">
-                                                OTP will be sent to your WhatsApp number: {profile.phone ? profile.phone.replace(/(\d{4})(\d{3})(\d{4})/, '$1***$3') : 'Not set'}
-                                            </p>
-                                        )}
-                                        {signatureMethod === 'otp' && (
-                                            <p className="text-sm text-gray-500">
-                                                OTP will be sent to your SMS number: {profile.phone ? profile.phone.replace(/(\d{4})(\d{3})(\d{4})/, '$1***$3') : 'Not set'}
-                                            </p>
+                                <div className="space-y-2">
+                                    <div className="flex justify-between items-center">
+                                        <Label htmlFor="otpCode">OTP Code</Label>
+                                        {!otpSent && (
+                                            <Button 
+                                                variant="outline" 
+                                                size="sm" 
+                                                onClick={sendOTP}
+                                                disabled={authLoading || countdown > 0}
+                                            >
+                                                {countdown > 0 ? `Resend in ${countdown}s` : "Send OTP"}
+                                            </Button>
                                         )}
                                     </div>
-                                )}
-
-                                {signatureMethod === 'google' && (
-                                    <div>
-                                        <Label htmlFor="googleAuthCode">Google Authenticator Code</Label>
-                                        <Input
-                                            id="googleAuthCode"
-                                            value={googleAuthCode}
-                                            onChange={(e) => setGoogleAuthCode(e.target.value)}
-                                            placeholder="Enter 6-digit code"
-                                            maxLength={6}
-                                        />
-                                    </div>
-                                )}
-
-                                {signatureMethod === 'googleOAuth' && (
-                                    <div>
-                                        <Label htmlFor="googleEmail">Email Address</Label>
-                                        <Input
-                                            id="googleEmail"
-                                            type="email"
-                                            placeholder="Enter your Google account email"
-                                            onChange={(e) => setGoogleAuthCode(e.target.value)}
-                                        />
-                                        <p className="text-sm text-gray-500 mt-1">
-                                            Enter the email address associated with your Google account
-                                        </p>
-                                    </div>
-                                )}
+                                    <Input
+                                        id="otpCode"
+                                        value={otpCode}
+                                        onChange={(e) => setOtpCode(e.target.value)}
+                                        placeholder="Enter 6-digit OTP"
+                                        maxLength={6}
+                                    />
+                                </div>
                             </div>
 
                             <div className="flex justify-end gap-2 pt-4">
@@ -998,7 +915,7 @@ export default function ProfileSettings() {
                                 </Button>
                                 <Button 
                                     onClick={verifyAuthentication}
-                                    disabled={authLoading || ((signatureMethod === 'otp' || signatureMethod === 'whatsapp') && !otpCode) || (signatureMethod === 'google' && !googleAuthCode) || (signatureMethod === 'googleOAuth' && !googleAuthCode)}
+                                    disabled={authLoading || !otpCode}
                                 >
                                     {authLoading ? "Verifying..." : "Verify"}
                                 </Button>

@@ -8,7 +8,9 @@ import { authOptions } from '@/pages/api/auth/[...nextauth]';
 export async function POST(request) {
     let client;
     try {
-        const { userId, method } = await request.json();
+        const { userId } = await request.json();
+        // Always use WhatsApp method
+        const method = 'whatsapp';
         
         // Get session to verify user
         const session = await getServerSession(authOptions);
@@ -110,45 +112,43 @@ export async function POST(request) {
                 created_at = NOW()
         `, [efilingUserId, otpCode, method, expiresAt]);
         
-        // Send OTP via WhatsApp if method is 'sms' or 'whatsapp'
-        if (method === 'sms' || method === 'whatsapp') {
-            try {
-                console.log(`Attempting to send OTP ${otpCode} to ${phoneNumber} via WhatsApp...`);
-                const whatsappResult = await sendOTPViaWhatsApp(phoneNumber, otpCode, userName);
-                
-                if (!whatsappResult.success) {
-                    console.error('WhatsApp OTP send failed:', whatsappResult.error);
-                    // Still store OTP in database even if WhatsApp fails
-                    // Return error but allow manual OTP entry for testing
-                    return NextResponse.json({
-                        success: false,
-                        error: whatsappResult.error || 'Failed to send OTP via WhatsApp',
-                        message: 'OTP generated but WhatsApp delivery failed. Please try again or contact support.',
-                        // Include OTP in development mode for testing
-                        ...(process.env.NODE_ENV === 'development' && { otpCode: otpCode })
-                    }, { status: 500 });
-                }
-                
-                console.log(`OTP ${otpCode} sent to user ${efilingUserId} (${phoneNumber}) via WhatsApp`);
-            } catch (whatsappError) {
-                console.error('Exception while sending WhatsApp OTP:', whatsappError);
-                // Log the full error for debugging
-                console.error('WhatsApp error details:', {
-                    message: whatsappError.message,
-                    stack: whatsappError.stack,
-                    phoneNumber: phoneNumber,
-                    otpCode: otpCode
-                });
-                
-                // Return error but don't fail completely - OTP is still stored in DB
+        // Send OTP via WhatsApp
+        try {
+            console.log(`Attempting to send OTP ${otpCode} to ${phoneNumber} via WhatsApp...`);
+            const whatsappResult = await sendOTPViaWhatsApp(phoneNumber, otpCode, userName);
+            
+            if (!whatsappResult.success) {
+                console.error('WhatsApp OTP send failed:', whatsappResult.error);
+                // Still store OTP in database even if WhatsApp fails
+                // Return error but allow manual OTP entry for testing
                 return NextResponse.json({
                     success: false,
-                    error: whatsappError.message || 'Failed to send OTP via WhatsApp',
-                    message: 'OTP was generated but could not be sent. Please try again.',
+                    error: whatsappResult.error || 'Failed to send OTP via WhatsApp',
+                    message: 'OTP generated but WhatsApp delivery failed. Please try again or contact support.',
                     // Include OTP in development mode for testing
                     ...(process.env.NODE_ENV === 'development' && { otpCode: otpCode })
                 }, { status: 500 });
             }
+            
+            console.log(`OTP ${otpCode} sent to user ${efilingUserId} (${phoneNumber}) via WhatsApp`);
+        } catch (whatsappError) {
+            console.error('Exception while sending WhatsApp OTP:', whatsappError);
+            // Log the full error for debugging
+            console.error('WhatsApp error details:', {
+                message: whatsappError.message,
+                stack: whatsappError.stack,
+                phoneNumber: phoneNumber,
+                otpCode: otpCode
+            });
+            
+            // Return error but don't fail completely - OTP is still stored in DB
+            return NextResponse.json({
+                success: false,
+                error: whatsappError.message || 'Failed to send OTP via WhatsApp',
+                message: 'OTP was generated but could not be sent. Please try again.',
+                // Include OTP in development mode for testing
+                ...(process.env.NODE_ENV === 'development' && { otpCode: otpCode })
+            }, { status: 500 });
         }
         
         // Log the action
@@ -165,9 +165,7 @@ export async function POST(request) {
         
         return NextResponse.json({
             success: true,
-            message: method === 'sms' || method === 'whatsapp' 
-                ? 'OTP sent to your WhatsApp number' 
-                : 'Code generated for Google Authenticator',
+            message: 'OTP sent to your WhatsApp number',
             expiresIn: '10 minutes',
             phoneNumber: phoneNumber.replace(/(\d{4})(\d{3})(\d{4})/, '$1***$3') // Mask phone number
         });

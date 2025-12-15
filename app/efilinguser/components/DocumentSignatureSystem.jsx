@@ -32,17 +32,13 @@ export default function DocumentSignatureSystem({
     const [commentText, setCommentText] = useState("");
     const [editingCommentId, setEditingCommentId] = useState(null);
     const [editCommentText, setEditCommentText] = useState("");
-    const [signatureMethod, setSignatureMethod] = useState("otp");
     const [otpCode, setOtpCode] = useState("");
-    const [googleAuthCode, setGoogleAuthCode] = useState("");
     const [loading, setLoading] = useState(false);
     const [otpSent, setOtpSent] = useState(false);
     const [countdown, setCountdown] = useState(0);
     const [showAuthModal, setShowAuthModal] = useState(false);
     const [pendingAction, setPendingAction] = useState(null);
     const [pendingSignatureData, setPendingSignatureData] = useState(null);
-    const [showEmailRegistration, setShowEmailRegistration] = useState(false);
-    const [registrationEmail, setRegistrationEmail] = useState("");
     
     // New signature creation states
     const [signatureText, setSignatureText] = useState("");
@@ -189,43 +185,19 @@ export default function DocumentSignatureSystem({
         try {
             setLoading(true);
             
-            let response;
-            
-            if (signatureMethod === 'googleOAuth') {
-                // Use Google OAuth verification
-                response = await fetch('/api/efiling/google-auth', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        email: googleAuthCode, // googleAuthCode contains the email for OAuth
-                        userId: session?.user?.id
-                    })
-                });
-
-                if (response.status === 402) {
-                    // User needs to register their Google email
-                    const errorData = await response.json();
-                    setShowEmailRegistration(true);
-                    setRegistrationEmail(googleAuthCode);
-                    setLoading(false);
-                    return;
-                }
-            } else {
-                // Use regular OTP/Google Authenticator verification
-                response = await fetch('/api/efiling/verify-auth', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        method: signatureMethod,
-                        code: signatureMethod === 'otp' ? otpCode : googleAuthCode
-                    })
-                });
-            }
+            // Use WhatsApp OTP verification
+            const response = await fetch('/api/efiling/verify-auth', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    userId: session?.user?.id,
+                    code: otpCode
+                })
+            });
 
             if (response.ok) {
                 setShowAuthModal(false);
                 setOtpCode("");
-                setGoogleAuthCode("");
                 
                 // Execute the pending action - Only for signatures, not comments
                 if (pendingAction === 'addSignature' && pendingSignatureData) {
@@ -252,45 +224,6 @@ export default function DocumentSignatureSystem({
     };
 
     // Register Google email
-    const registerGoogleEmail = async () => {
-        try {
-            setLoading(true);
-            
-            const response = await fetch('/api/efiling/google-auth', {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    email: registrationEmail,
-                    userId: session?.user?.id
-                })
-            });
-
-            if (response.ok) {
-                setShowEmailRegistration(false);
-                setRegistrationEmail("");
-                
-                toast({
-                    title: "Email Registered",
-                    description: "Your Google email has been registered successfully. You can now use Google OAuth for authentication.",
-                });
-                
-                // Retry the original authentication
-                setGoogleAuthCode(registrationEmail);
-                await verifyAuthentication();
-            } else {
-                const errorData = await response.json();
-                throw new Error(errorData.error || 'Failed to register email');
-            }
-        } catch (error) {
-            toast({
-                title: "Registration Failed",
-                description: error.message || "Failed to register Google email. Please try again.",
-                variant: "destructive",
-            });
-        } finally {
-            setLoading(false);
-        }
-    };
 
     // Add signature to document
     const addSignatureToDocument = async (signatureData) => {
@@ -1221,70 +1154,34 @@ export default function DocumentSignatureSystem({
                         <CardContent className="space-y-4">
                             <div className="space-y-4">
                                 <div>
-                                    <Label>Authentication Method</Label>
-                                    <select
-                                        value={signatureMethod}
-                                        onChange={(e) => setSignatureMethod(e.target.value)}
-                                        className="w-full p-2 border rounded-md mt-1"
-                                    >
-                                        <option value="otp">SMS OTP</option>
-                                        <option value="google">Google Authenticator</option>
-                                        <option value="googleOAuth">Google OAuth</option>
-                                    </select>
+                                    <Label>WhatsApp OTP Verification</Label>
+                                    <p className="text-sm text-muted-foreground mt-1 mb-4">
+                                        OTP will be sent to your registered WhatsApp number.
+                                    </p>
                                 </div>
 
-                                {signatureMethod === 'otp' && (
-                                    <div className="space-y-2">
-                                        <div className="flex justify-between items-center">
-                                            <Label htmlFor="otpCode">OTP Code</Label>
-                                            {!otpSent && (
-                                                <Button 
-                                                    variant="outline" 
-                                                    size="sm" 
-                                                    onClick={sendOTP}
-                                                    disabled={loading || countdown > 0}
-                                                >
-                                                    {countdown > 0 ? `Resend in ${countdown}s` : "Send OTP"}
-                                                </Button>
-                                            )}
-                                        </div>
-                                        <Input
-                                            id="otpCode"
-                                            value={otpCode}
-                                            onChange={(e) => setOtpCode(e.target.value)}
-                                            placeholder="Enter 6-digit OTP"
-                                            maxLength={6}
-                                        />
+                                <div className="space-y-2">
+                                    <div className="flex justify-between items-center">
+                                        <Label htmlFor="otpCode">OTP Code</Label>
+                                        {!otpSent && (
+                                            <Button 
+                                                variant="outline" 
+                                                size="sm" 
+                                                onClick={sendOTP}
+                                                disabled={loading || countdown > 0}
+                                            >
+                                                {countdown > 0 ? `Resend in ${countdown}s` : "Send OTP"}
+                                            </Button>
+                                        )}
                                     </div>
-                                )}
-
-                                {signatureMethod === 'google' && (
-                                    <div>
-                                        <Label htmlFor="googleAuthCode">Google Authenticator Code</Label>
-                                        <Input
-                                            id="googleAuthCode"
-                                            value={googleAuthCode}
-                                            onChange={(e) => setGoogleAuthCode(e.target.value)}
-                                            placeholder="Enter 6-digit code"
-                                            maxLength={6}
-                                        />
-                                    </div>
-                                )}
-
-                                {signatureMethod === 'googleOAuth' && (
-                                    <div>
-                                        <Label htmlFor="googleEmail">Email Address</Label>
-                                        <Input
-                                            id="googleEmail"
-                                            type="email"
-                                            placeholder="Enter your Google account email"
-                                            onChange={(e) => setGoogleAuthCode(e.target.value)}
-                                        />
-                                        <p className="text-sm text-gray-500 mt-1">
-                                            Enter the email address associated with your Google account
-                                        </p>
-                                    </div>
-                                )}
+                                    <Input
+                                        id="otpCode"
+                                        value={otpCode}
+                                        onChange={(e) => setOtpCode(e.target.value)}
+                                        placeholder="Enter 6-digit OTP"
+                                        maxLength={6}
+                                    />
+                                </div>
                             </div>
 
                             <div className="flex justify-end gap-2 pt-4">
@@ -1293,7 +1190,7 @@ export default function DocumentSignatureSystem({
                                 </Button>
                                 <Button 
                                     onClick={verifyAuthentication}
-                                    disabled={loading || (signatureMethod === 'otp' && !otpCode) || (signatureMethod === 'google' && !googleAuthCode) || (signatureMethod === 'googleOAuth' && !googleAuthCode)}
+                                    disabled={loading || !otpCode}
                                 >
                                     {loading ? "Verifying..." : "Verify"}
                                 </Button>
@@ -1397,36 +1294,6 @@ export default function DocumentSignatureSystem({
                 </div>
             )}
 
-            {/* Email Registration Modal */}
-            {showEmailRegistration && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]">
-                    <Card className="w-full max-w-md">
-                        <CardHeader>
-                            <CardTitle className="flex items-center gap-2">
-                                <Shield className="w-5 h-5" />
-                                Register Your Google Email
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                            <p className="text-sm text-gray-700">
-                                It seems you are trying to use Google OAuth with an email address ({registrationEmail}) that is not yet registered in our system.
-                                Please register this email address to complete your Google authentication.
-                            </p>
-                            <div className="flex justify-end gap-2">
-                                <Button variant="outline" onClick={() => setShowEmailRegistration(false)}>
-                                    Cancel
-                                </Button>
-                                <Button 
-                                    onClick={registerGoogleEmail}
-                                    disabled={loading}
-                                >
-                                    {loading ? "Registering..." : "Register Email"}
-                                </Button>
-                            </div>
-                        </CardContent>
-                    </Card>
-                </div>
-            )}
         </div>
     );
 }

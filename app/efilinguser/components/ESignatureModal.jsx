@@ -27,9 +27,7 @@ export default function ESignatureModal({
     const { data: session } = useSession();
     const { toast } = useToast();
     const [activeTab, setActiveTab] = useState("draw");
-    const [signatureMethod, setSignatureMethod] = useState("otp");
     const [otpCode, setOtpCode] = useState("");
-    const [googleAuthCode, setGoogleAuthCode] = useState("");
     const [signatureText, setSignatureText] = useState("");
     const [selectedFont, setSelectedFont] = useState("Dancing Script");
     const [signatureImage, setSignatureImage] = useState(null);
@@ -39,8 +37,6 @@ export default function ESignatureModal({
     const [countdown, setCountdown] = useState(0);
     const [showAuthModal, setShowAuthModal] = useState(false);
     const [pendingAction, setPendingAction] = useState(null);
-    const [showEmailRegistration, setShowEmailRegistration] = useState(false);
-    const [registrationEmail, setRegistrationEmail] = useState("");
     
     const sigCanvasRef = useRef(null);
     const fileInputRef = useRef(null);
@@ -185,43 +181,19 @@ export default function ESignatureModal({
         try {
             setLoading(true);
             
-            let response;
-            
-            if (signatureMethod === 'googleOAuth') {
-                // Use Google OAuth verification
-                response = await fetch('/api/efiling/google-auth', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        email: googleAuthCode, // googleAuthCode contains the email for OAuth
-                        userId: session?.user?.id
-                    })
-                });
-
-                if (response.status === 402) {
-                    // User needs to register their Google email
-                    const errorData = await response.json();
-                    setShowEmailRegistration(true);
-                    setRegistrationEmail(googleAuthCode);
-                    setLoading(false);
-                    return;
-                }
-            } else {
-                // Use regular OTP/Google Authenticator verification
-                response = await fetch('/api/efiling/verify-auth', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        method: signatureMethod,
-                        code: signatureMethod === 'otp' ? otpCode : googleAuthCode
-                    })
-                });
-            }
+            // Use WhatsApp OTP verification
+            const response = await fetch('/api/efiling/verify-auth', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    userId: session?.user?.id,
+                    code: otpCode
+                })
+            });
 
             if (response.ok) {
                 setShowAuthModal(false);
                 setOtpCode("");
-                setGoogleAuthCode("");
                 
                 // Execute the pending action
                 if (pendingAction === 'saveSignature') {
@@ -530,80 +502,34 @@ export default function ESignatureModal({
                         <CardContent className="space-y-4">
                             <div className="space-y-4">
                                 <div>
-                                    <Label>Authentication Method</Label>
-                                    <Select value={signatureMethod} onValueChange={setSignatureMethod}>
-                                        <SelectTrigger>
-                                            <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="otp" className="flex items-center gap-2">
-                                                <Smartphone className="w-4 h-4" />
-                                                SMS OTP
-                                            </SelectItem>
-                                            <SelectItem value="google" className="flex items-center gap-2">
-                                                <Key className="w-4 h-4" />
-                                                Google Authenticator
-                                            </SelectItem>
-                                            <SelectItem value="googleOAuth" className="flex items-center gap-2">
-                                                <Key className="w-4 h-4" />
-                                                Google OAuth
-                                            </SelectItem>
-                                        </SelectContent>
-                                    </Select>
+                                    <Label>WhatsApp OTP Verification</Label>
+                                    <p className="text-sm text-muted-foreground mt-1 mb-4">
+                                        OTP will be sent to your registered WhatsApp number.
+                                    </p>
                                 </div>
 
-                                {signatureMethod === 'otp' && (
-                                    <div className="space-y-2">
-                                        <div className="flex justify-between items-center">
-                                            <Label htmlFor="otpCode">OTP Code</Label>
-                                            {!otpSent && (
-                                                <Button 
-                                                    variant="outline" 
-                                                    size="sm" 
-                                                    onClick={sendOTP}
-                                                    disabled={loading || countdown > 0}
-                                                >
-                                                    {countdown > 0 ? `Resend in ${countdown}s` : "Send OTP"}
-                                                </Button>
-                                            )}
-                                        </div>
-                                        <Input
-                                            id="otpCode"
-                                            value={otpCode}
-                                            onChange={(e) => setOtpCode(e.target.value)}
-                                            placeholder="Enter 6-digit OTP"
-                                            maxLength={6}
-                                        />
+                                <div className="space-y-2">
+                                    <div className="flex justify-between items-center">
+                                        <Label htmlFor="otpCode">OTP Code</Label>
+                                        {!otpSent && (
+                                            <Button 
+                                                variant="outline" 
+                                                size="sm" 
+                                                onClick={sendOTP}
+                                                disabled={loading || countdown > 0}
+                                            >
+                                                {countdown > 0 ? `Resend in ${countdown}s` : "Send OTP"}
+                                            </Button>
+                                        )}
                                     </div>
-                                )}
-
-                                {signatureMethod === 'google' && (
-                                    <div>
-                                        <Label htmlFor="googleAuthCode">Google Authenticator Code</Label>
-                                        <Input
-                                            id="googleAuthCode"
-                                            value={googleAuthCode}
-                                            onChange={(e) => setGoogleAuthCode(e.target.value)}
-                                            placeholder="Enter 6-digit code"
-                                            maxLength={6}
-                                        />
-                                    </div>
-                                )}
-
-                                {signatureMethod === 'googleOAuth' && (
-                                    <div>
-                                        <Label htmlFor="googleEmail">Email Address</Label>
-                                        <Input
-                                            id="googleEmail"
-                                            type="email"
-                                            placeholder="Enter your Google account email"
-                                            onChange={(e) => setGoogleAuthCode(e.target.value)}
-                                        />
-                                        <p className="text-sm text-gray-500 mt-1">
-                                            Enter the email address associated with your Google account
-                                        </p>
-                                    </div>
-                                )}
+                                    <Input
+                                        id="otpCode"
+                                        value={otpCode}
+                                        onChange={(e) => setOtpCode(e.target.value)}
+                                        placeholder="Enter 6-digit OTP"
+                                        maxLength={6}
+                                    />
+                                </div>
                             </div>
 
                             <div className="flex justify-end gap-2 pt-4">
@@ -612,7 +538,7 @@ export default function ESignatureModal({
                                 </Button>
                                 <Button 
                                     onClick={verifyAuthentication}
-                                    disabled={loading || (signatureMethod === 'otp' && !otpCode) || (signatureMethod === 'google' && !googleAuthCode) || (signatureMethod === 'googleOAuth' && !googleAuthCode)}
+                                    disabled={loading || !otpCode}
                                 >
                                     {loading ? "Verifying..." : "Verify"}
                                 </Button>
@@ -622,36 +548,6 @@ export default function ESignatureModal({
                 </div>
             )}
 
-            {/* Email Registration Modal */}
-            {showEmailRegistration && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]">
-                    <Card className="w-full max-w-md">
-                        <CardHeader>
-                            <CardTitle className="flex items-center gap-2">
-                                <Shield className="w-5 h-5" />
-                                Register Your Google Email
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                            <p className="text-sm text-gray-700">
-                                It seems you are trying to use Google OAuth with an email address ({registrationEmail}) that is not yet registered in our system.
-                                Please register this email address to complete your Google authentication.
-                            </p>
-                            <div className="flex justify-end gap-2">
-                                <Button variant="outline" onClick={() => setShowEmailRegistration(false)}>
-                                    Cancel
-                                </Button>
-                                <Button 
-                                    onClick={registerGoogleEmail}
-                                    disabled={loading}
-                                >
-                                    {loading ? "Registering..." : "Register Email"}
-                                </Button>
-                            </div>
-                        </CardContent>
-                    </Card>
-                </div>
-            )}
         </>
     );
 }
