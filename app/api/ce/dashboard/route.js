@@ -3,6 +3,8 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/pages/api/auth/[...nextauth]";
 import { connectToDatabase } from "@/lib/db";
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(request) {
   let client;
   try {

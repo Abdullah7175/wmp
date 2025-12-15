@@ -7,6 +7,8 @@ import { writeFile, mkdir } from 'fs/promises';
 import { join } from 'path';
 import { resolveEfilingScope, appendGeographyFilters } from '@/lib/efilingGeographyFilters';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(request) {
   let client;
   try {

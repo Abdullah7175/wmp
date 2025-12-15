@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/db';
 import { getToken } from 'next-auth/jwt';
 
+export const dynamic = 'force-dynamic';
+
 async function getEfilingUserId(token, client) {
     if ([1, 2].includes(token.user.role)) {
         const adminEfiling = await client.query(

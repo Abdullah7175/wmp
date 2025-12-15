@@ -4,6 +4,8 @@ import path from 'path';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/pages/api/auth/[...nextauth]';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(request) {
     try {
         const session = await getServerSession(authOptions);

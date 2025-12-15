@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/db';
 import { getToken } from 'next-auth/jwt';
 
+export const dynamic = 'force-dynamic';
+
 /**
  * GET /api/efiling/dashboard/stats
  * Comprehensive dashboard statistics for e-filing system

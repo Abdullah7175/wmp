@@ -14,6 +14,9 @@ import {
   createErrorResponse,
   createSuccessResponse
 } from '@/lib/fileUploadOptimized';
+
+export const dynamic = 'force-dynamic';
+} from '@/lib/fileUploadOptimized';
 import {
   resolveEfilingScope,
   appendGeographyFilters,

@@ -4,6 +4,8 @@ import { authOptions } from "@/pages/api/auth/[...nextauth]";
 import { query } from "@/lib/db";
 import { logUserAction } from "@/lib/userActionLogger";
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(request) {
   try {
     const session = await getServerSession(authOptions);

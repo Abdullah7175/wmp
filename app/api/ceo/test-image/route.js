@@ -5,6 +5,8 @@ import { query } from "@/lib/db";
 import fs from "fs/promises";
 import path from "path";
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(request) {
   try {
     const session = await getServerSession(authOptions);

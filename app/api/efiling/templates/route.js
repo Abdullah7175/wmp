@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/db';
 import { getToken } from 'next-auth/jwt';
 
+export const dynamic = 'force-dynamic';
+
 /**
  * GET /api/efiling/templates
  * Get templates filtered by department, role, and template type

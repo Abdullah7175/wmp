@@ -7,6 +7,8 @@ import { promises as fs } from 'fs';
 import { join } from 'path';
 import { mkdir, writeFile } from 'fs/promises';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(request) {
   try {
     const session = await getServerSession(authOptions);

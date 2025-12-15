@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/db';
 
+export const dynamic = 'force-dynamic';
+
 // Get e-filing user profile by users.id
 export async function GET(request) {
     try {

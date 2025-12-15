@@ -4,6 +4,8 @@ import { eFileActionLogger, EFILING_ACTION_TYPES, EFILING_ENTITY_TYPES } from '@
 import { getToken } from 'next-auth/jwt';
 import { getFiscalYear } from '@/lib/utils';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(request) {
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');

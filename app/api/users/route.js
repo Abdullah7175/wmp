@@ -7,6 +7,8 @@ import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { actionLogger, ENTITY_TYPES } from '@/lib/actionLogger';
 
+export const dynamic = 'force-dynamic';
+
 // Configure upload directory
 const uploadDir = path.join(process.cwd(), 'public/uploads/users');
 
