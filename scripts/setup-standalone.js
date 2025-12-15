@@ -73,6 +73,22 @@ async function setupStandalone() {
       console.warn('⚠️  Public directory not found');
     }
 
+    // Copy .env file if it exists
+    const envFile = path.join(rootDir, '.env');
+    const envLocalFile = path.join(rootDir, '.env.local');
+    const standaloneEnvFile = path.join(standaloneDir, '.env');
+    
+    if (fs.existsSync(envLocalFile)) {
+      await fsp.copyFile(envLocalFile, standaloneEnvFile);
+      console.log('✅ .env.local file copied to standalone');
+    } else if (fs.existsSync(envFile)) {
+      await fsp.copyFile(envFile, standaloneEnvFile);
+      console.log('✅ .env file copied to standalone');
+    } else {
+      console.warn('⚠️  No .env or .env.local file found');
+      console.warn('⚠️  Make sure to set environment variables in the standalone directory');
+    }
+
     console.log('✨ Standalone setup complete!');
     console.log('📝 You can now run: node .next/standalone/server.js');
 
