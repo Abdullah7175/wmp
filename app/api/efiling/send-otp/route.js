@@ -12,25 +12,38 @@ export async function POST(request) {
         
         // Get session to verify user
         const session = await getServerSession(authOptions);
-        const currentUserId = session?.user?.id || userId;
+        const sessionUserId = session?.user?.id; // This is users.id
         
-        if (!currentUserId || !method) {
+        if (!sessionUserId && !userId) {
             return NextResponse.json(
-                { error: 'User ID and method are required' },
-                { status: 400 }
+                { error: 'User authentication required' },
+                { status: 401 }
             );
         }
 
         client = await connectToDatabase();
         
         // Get user's phone number and name from database
-        // efiling_users table references users table via user_id, so we need to join
-        const userResult = await client.query(`
-            SELECT eu.id, u.name, u.contact_number, u.email
-            FROM efiling_users eu
-            LEFT JOIN users u ON eu.user_id = u.id
-            WHERE eu.id = $1
-        `, [currentUserId]);
+        // session.user.id is users.id, so we need to find efiling_users by user_id
+        // OR if userId is provided and it's an efiling_users.id, use that
+        let userResult;
+        if (userId && !sessionUserId) {
+            // If userId is provided and no session, assume it's efiling_users.id
+            userResult = await client.query(`
+                SELECT eu.id, u.name, u.contact_number, u.email
+                FROM efiling_users eu
+                LEFT JOIN users u ON eu.user_id = u.id
+                WHERE eu.id = $1
+            `, [userId]);
+        } else {
+            // Use session user.id (which is users.id) to find efiling_users
+            userResult = await client.query(`
+                SELECT eu.id, u.name, u.contact_number, u.email
+                FROM efiling_users eu
+                LEFT JOIN users u ON eu.user_id = u.id
+                WHERE eu.user_id = $1 AND eu.is_active = true
+            `, [sessionUserId]);
+        }
 
         if (userResult.rows.length === 0) {
             return NextResponse.json(
@@ -40,6 +53,7 @@ export async function POST(request) {
         }
 
         const user = userResult.rows[0];
+        const efilingUserId = user.id; // This is efiling_users.id
         const phoneNumber = user.contact_number;
         const userName = user.name || 'User';
 
@@ -80,7 +94,7 @@ export async function POST(request) {
                 otp_code = $2, 
                 expires_at = $4, 
                 created_at = NOW()
-        `, [currentUserId, otpCode, method, expiresAt]);
+        `, [efilingUserId, otpCode, method, expiresAt]);
         
         // Send OTP via WhatsApp if method is 'sms' or 'whatsapp'
         if (method === 'sms' || method === 'whatsapp') {
@@ -101,7 +115,7 @@ export async function POST(request) {
                     }, { status: 500 });
                 }
                 
-                console.log(`OTP ${otpCode} sent to user ${currentUserId} (${phoneNumber}) via WhatsApp`);
+                console.log(`OTP ${otpCode} sent to user ${efilingUserId} (${phoneNumber}) via WhatsApp`);
             } catch (whatsappError) {
                 console.error('Exception while sending WhatsApp OTP:', whatsappError);
                 // Log the full error for debugging
@@ -125,7 +139,7 @@ export async function POST(request) {
         
         // Log the action
         try {
-            await logAction('SEND_OTP', `OTP sent to user ${currentUserId} via ${method}`, currentUserId);
+            await logAction('SEND_OTP', `OTP sent to user ${efilingUserId} via ${method}`, efilingUserId);
         } catch (logError) {
             console.error('Error logging action:', logError);
             // Don't fail if logging fails
