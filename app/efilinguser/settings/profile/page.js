@@ -253,26 +253,53 @@ export default function ProfileSettings() {
     const sendOTP = async () => {
         try {
             setAuthLoading(true);
+            
+            // Check if user has phone number
+            if (!profile.phone) {
+                toast({
+                    title: "Phone Number Required",
+                    description: "Please add your contact number in your profile first.",
+                    variant: "destructive",
+                });
+                return;
+            }
+
             const response = await fetch('/api/efiling/send-otp', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ method: 'sms' })
+                body: JSON.stringify({ 
+                    method: 'sms',
+                    userId: session?.user?.id || efilingUserId
+                })
             });
 
-            if (response.ok) {
+            const data = await response.json();
+
+            if (response.ok && data.success) {
                 setOtpSent(true);
                 setCountdown(60);
                 toast({
                     title: "OTP Sent",
-                    description: "OTP has been sent to your registered mobile number.",
+                    description: data.message || "OTP has been sent to your registered WhatsApp number.",
                 });
             } else {
-                throw new Error('Failed to send OTP');
+                // If WhatsApp fails but OTP is provided for testing
+                if (data.otpCode) {
+                    toast({
+                        title: "OTP Generated (Testing Mode)",
+                        description: `WhatsApp delivery failed. Your OTP is: ${data.otpCode}`,
+                        variant: "default",
+                    });
+                    setOtpSent(true);
+                    setCountdown(60);
+                } else {
+                    throw new Error(data.error || 'Failed to send OTP');
+                }
             }
         } catch (error) {
             toast({
                 title: "Error",
-                description: "Failed to send OTP. Please try again.",
+                description: error.message || "Failed to send OTP. Please try again.",
                 variant: "destructive",
             });
         } finally {
@@ -1168,4 +1195,5 @@ export default function ProfileSettings() {
             )}
         </div>
     );
+} 
 } 
