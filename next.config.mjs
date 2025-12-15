@@ -44,7 +44,15 @@ const nextConfig = {
     dangerouslyAllowSVG: true,
   },
   experimental: {
-    serverActions: true, // Enable server actions in Next.js 13
+    serverActions: {
+      bodySizeLimit: '2mb',
+      allowedOrigins: [
+        'wmp.kwsc.gos.pk',
+        'localhost',
+        '119.30.113.18',
+        '127.0.0.1',
+      ],
+    },
   },
   webpack: (config) => {
     config.resolve.fallback = { 

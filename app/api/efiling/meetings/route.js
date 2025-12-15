@@ -200,10 +200,61 @@ export async function GET(request) {
             return meeting;
         }));
 
-        // Get total count
-        let countQuery = query.replace(/SELECT.*?FROM/, 'SELECT COUNT(DISTINCT m.id) FROM');
-        countQuery = countQuery.replace(/ORDER BY.*$/, '');
-        const countResult = await client.query(countQuery, params.slice(0, -2));
+        // Get total count - build a separate count query to avoid GROUP BY issues
+        let countQuery = `
+            SELECT COUNT(DISTINCT m.id) as count
+        `;
+        
+        if (attendingMeetings === 'true' && efilingUserId) {
+            countQuery += `
+                FROM efiling_meetings m
+                INNER JOIN efiling_meeting_attendees ma ON m.id = ma.meeting_id
+                WHERE ma.attendee_id = $1
+            `;
+        } else if (myMeetings === 'true' && efilingUserId) {
+            countQuery += `
+                FROM efiling_meetings m
+                WHERE m.organizer_id = $1
+            `;
+        } else {
+            countQuery += `
+                FROM efiling_meetings m
+                WHERE m.organizer_id = $1 
+                   OR EXISTS (
+                       SELECT 1 FROM efiling_meeting_attendees ma 
+                       WHERE ma.meeting_id = m.id AND ma.attendee_id = $1
+                   )
+            `;
+        }
+
+        const countParams = [efilingUserId || 0];
+        let countParamCount = 1;
+
+        if (status) {
+            countParamCount++;
+            countQuery += ` AND m.status = $${countParamCount}`;
+            countParams.push(status);
+        }
+
+        if (meetingType) {
+            countParamCount++;
+            countQuery += ` AND m.meeting_type = $${countParamCount}`;
+            countParams.push(meetingType);
+        }
+
+        if (dateFrom) {
+            countParamCount++;
+            countQuery += ` AND m.meeting_date >= $${countParamCount}`;
+            countParams.push(dateFrom);
+        }
+
+        if (dateTo) {
+            countParamCount++;
+            countQuery += ` AND m.meeting_date <= $${countParamCount}`;
+            countParams.push(dateTo);
+        }
+
+        const countResult = await client.query(countQuery, countParams);
         const total = parseInt(countResult.rows[0].count);
 
         return NextResponse.json({

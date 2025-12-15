@@ -140,9 +140,17 @@ function isAllowed(pathname, allowedList) {
 export async function middleware(req) {
     const { pathname } = req.nextUrl;
     
-    // Skip middleware for static files and API routes
-    if (pathname.startsWith('/_next') || pathname.startsWith('/api') || pathname.includes('.')) {
-        return NextResponse.next();
+    // Skip middleware for static files, API routes, and Server Actions
+    if (pathname.startsWith('/_next') || pathname.startsWith('/api') || pathname.includes('.') || pathname.startsWith('/_action')) {
+        // For Server Actions, ensure origin header is preserved
+        const response = NextResponse.next();
+        if (req.headers.get('x-forwarded-host')) {
+            response.headers.set('x-forwarded-host', req.headers.get('x-forwarded-host'));
+        }
+        if (req.headers.get('x-forwarded-proto')) {
+            response.headers.set('x-forwarded-proto', req.headers.get('x-forwarded-proto'));
+        }
+        return response;
     }
 
     // Handle e-filing authentication for efiling and efilinguser routes
