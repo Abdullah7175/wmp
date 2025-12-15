@@ -24,10 +24,12 @@ export async function POST(request) {
         client = await connectToDatabase();
         
         // Get user's phone number and name from database
+        // efiling_users table references users table via user_id, so we need to join
         const userResult = await client.query(`
-            SELECT id, name, contact_number, email
-            FROM efiling_users
-            WHERE id = $1
+            SELECT eu.id, u.name, u.contact_number, u.email
+            FROM efiling_users eu
+            LEFT JOIN users u ON eu.user_id = u.id
+            WHERE eu.id = $1
         `, [currentUserId]);
 
         if (userResult.rows.length === 0) {
@@ -82,21 +84,43 @@ export async function POST(request) {
         
         // Send OTP via WhatsApp if method is 'sms' or 'whatsapp'
         if (method === 'sms' || method === 'whatsapp') {
-            const whatsappResult = await sendOTPViaWhatsApp(phoneNumber, otpCode, userName);
-            
-            if (!whatsappResult.success) {
-                console.error('WhatsApp OTP send failed:', whatsappResult.error);
-                // Still store OTP in database even if WhatsApp fails
-                // Return error but allow manual OTP entry for testing
+            try {
+                console.log(`Attempting to send OTP ${otpCode} to ${phoneNumber} via WhatsApp...`);
+                const whatsappResult = await sendOTPViaWhatsApp(phoneNumber, otpCode, userName);
+                
+                if (!whatsappResult.success) {
+                    console.error('WhatsApp OTP send failed:', whatsappResult.error);
+                    // Still store OTP in database even if WhatsApp fails
+                    // Return error but allow manual OTP entry for testing
+                    return NextResponse.json({
+                        success: false,
+                        error: whatsappResult.error || 'Failed to send OTP via WhatsApp',
+                        message: 'OTP generated but WhatsApp delivery failed. Please try again or contact support.',
+                        // Include OTP in development mode for testing
+                        ...(process.env.NODE_ENV === 'development' && { otpCode: otpCode })
+                    }, { status: 500 });
+                }
+                
+                console.log(`OTP ${otpCode} sent to user ${currentUserId} (${phoneNumber}) via WhatsApp`);
+            } catch (whatsappError) {
+                console.error('Exception while sending WhatsApp OTP:', whatsappError);
+                // Log the full error for debugging
+                console.error('WhatsApp error details:', {
+                    message: whatsappError.message,
+                    stack: whatsappError.stack,
+                    phoneNumber: phoneNumber,
+                    otpCode: otpCode
+                });
+                
+                // Return error but don't fail completely - OTP is still stored in DB
                 return NextResponse.json({
                     success: false,
-                    error: whatsappResult.error || 'Failed to send OTP via WhatsApp',
-                    message: 'OTP generated but WhatsApp delivery failed. OTP: ' + otpCode + ' (for testing)',
-                    otpCode: otpCode // Include OTP in response for testing purposes
+                    error: whatsappError.message || 'Failed to send OTP via WhatsApp',
+                    message: 'OTP was generated but could not be sent. Please try again.',
+                    // Include OTP in development mode for testing
+                    ...(process.env.NODE_ENV === 'development' && { otpCode: otpCode })
                 }, { status: 500 });
             }
-            
-            console.log(`OTP ${otpCode} sent to user ${currentUserId} (${phoneNumber}) via WhatsApp`);
         }
         
         // Log the action
@@ -117,14 +141,27 @@ export async function POST(request) {
         });
         
     } catch (error) {
-        console.error('Error sending OTP:', error);
+        console.error('Error sending OTP:', {
+            message: error.message,
+            stack: error.stack,
+            name: error.name,
+            userId: userId,
+            method: method
+        });
         return NextResponse.json(
-            { error: error.message || 'Failed to send OTP' },
+            { 
+                error: error.message || 'Failed to send OTP',
+                details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+            },
             { status: 500 }
         );
     } finally {
         if (client) {
-            await client.release();
+            try {
+                await client.release();
+            } catch (releaseError) {
+                console.error('Error releasing database client:', releaseError);
+            }
         }
     }
 }
