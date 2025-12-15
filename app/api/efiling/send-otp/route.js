@@ -37,11 +37,14 @@ export async function POST(request) {
             `, [userId]);
         } else {
             // Use session user.id (which is users.id) to find efiling_users
+            // Get the most recent active efiling_users record for this user
             userResult = await client.query(`
                 SELECT eu.id, u.name, u.contact_number, u.email
                 FROM efiling_users eu
                 LEFT JOIN users u ON eu.user_id = u.id
                 WHERE eu.user_id = $1 AND eu.is_active = true
+                ORDER BY eu.id DESC
+                LIMIT 1
             `, [sessionUserId]);
         }
 
@@ -53,9 +56,20 @@ export async function POST(request) {
         }
 
         const user = userResult.rows[0];
+        
+        // Debug: Log what we retrieved
+        console.log('Retrieved user data:', {
+            efilingUserId: user.id,
+            name: user.name,
+            contact_number: user.contact_number,
+            email: user.email,
+            sessionUserId: sessionUserId,
+            sessionName: session?.user?.name
+        });
         const efilingUserId = user.id; // This is efiling_users.id
         const phoneNumber = user.contact_number;
-        const userName = user.name || 'User';
+        // Use session name if available (it's more reliable), otherwise fall back to database name
+        const userName = session?.user?.name || user.name || 'User';
 
         if (!phoneNumber) {
             return NextResponse.json(
@@ -139,7 +153,11 @@ export async function POST(request) {
         
         // Log the action
         try {
-            await logAction('SEND_OTP', `OTP sent to user ${efilingUserId} via ${method}`, efilingUserId);
+            await logAction(request, 'SEND_OTP', 'efiling_otp', {
+                entityId: efilingUserId,
+                entityName: `User ${efilingUserId}`,
+                details: { method, phoneNumber: phoneNumber ? phoneNumber.replace(/(\d{4})(\d{3})(\d{4})/, '$1***$3') : 'N/A' }
+            });
         } catch (logError) {
             console.error('Error logging action:', logError);
             // Don't fail if logging fails
