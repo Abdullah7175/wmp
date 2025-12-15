@@ -15,7 +15,7 @@ const nextConfig = {
     ];
   },
   env: {
-    NEXTAUTH_URL: process.env.NEXTAUTH_URL || 'http://202.61.47.29:3000',
+    NEXTAUTH_URL: process.env.NEXTAUTH_URL || 'http://wmp.kwsc.gos.pk:3000',
     NEXTAUTH_SECRET: process.env.NEXTAUTH_SECRET || 'default-secret-change-in-production',
     JWT_SECRET: process.env.JWT_SECRET || 'default-jwt-secret-change-in-production',
   },
@@ -23,7 +23,12 @@ const nextConfig = {
     remotePatterns: [
       {
         protocol: 'https',
-        hostname: 'placehold.co',
+        hostname: 'wmp.kwsc.gos.pk',
+      },
+      {
+        protocol: 'http',
+        hostname: 'wmp.kwsc.gos.pk',
+        port: '3000',
       },
       {
         protocol: 'http',
@@ -32,7 +37,7 @@ const nextConfig = {
       },
       {
         protocol: 'http',
-        hostname: '202.61.47.29',
+        hostname: '119.30.113.18',
         port: '3000',
       },
     ],

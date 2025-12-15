@@ -16,7 +16,7 @@ export async function GET(request, { params }) {
     const queryText = `
       SELECT 
         bc.*,
-        CASE WHEN bc.link IS NOT NULL THEN CONCAT('http://202.61.47.29:3000', bc.link) ELSE NULL END as link,
+        CASE WHEN bc.link IS NOT NULL THEN CONCAT('http://119.30.113.18:3000', bc.link) ELSE NULL END as link,
         wr.address,
         wr.description as work_description,
         ct.type_name as complaint_type,

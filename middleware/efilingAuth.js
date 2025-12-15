@@ -11,7 +11,7 @@ export async function efilingAuthMiddleware(request) {
             res.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
             res.headers.set('Permissions-Policy', 'camera=(), geolocation=(), microphone=()');
             const scriptSrc = isDev ? "script-src 'self' 'unsafe-inline' 'unsafe-eval'" : "script-src 'self' 'unsafe-inline'";
-            const connectSrc = isDev ? "connect-src 'self' ws: http://localhost:3000 ws: http://202.61.47.29:3000" : "connect-src 'self'";
+            const connectSrc = isDev ? "connect-src 'self' ws: http://localhost:3000 ws: http://119.30.113.18:3000" : "connect-src 'self'";
             const csp = `default-src 'self'; ${scriptSrc}; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; ${connectSrc}; frame-ancestors 'none'; object-src 'none'`;
             res.headers.set('Content-Security-Policy', csp);
         } catch {}
