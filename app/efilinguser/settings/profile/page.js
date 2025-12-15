@@ -288,7 +288,7 @@ export default function ProfileSettings() {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ 
-                    method: 'sms',
+                    method: signatureMethod === 'whatsapp' ? 'whatsapp' : 'sms',
                     userId: session?.user?.id || efilingUserId
                 })
             });
@@ -300,7 +300,9 @@ export default function ProfileSettings() {
                 setCountdown(60);
                 toast({
                     title: "OTP Sent",
-                    description: data.message || "OTP has been sent to your registered WhatsApp number.",
+                    description: data.message || (signatureMethod === 'whatsapp' 
+                        ? "OTP has been sent to your registered WhatsApp number." 
+                        : "OTP has been sent to your registered mobile number."),
                 });
             } else {
                 // If WhatsApp fails but OTP is provided for testing
@@ -351,12 +353,15 @@ export default function ProfileSettings() {
                     return;
                 }
             } else {
+                // For OTP and WhatsApp, use the same verification endpoint
+                const methodToSend = signatureMethod === 'whatsapp' ? 'whatsapp' : signatureMethod;
                 response = await fetch('/api/efiling/verify-auth', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        method: signatureMethod,
-                        code: signatureMethod === 'otp' ? otpCode : googleAuthCode
+                        userId: session?.user?.id || efilingUserId,
+                        method: methodToSend,
+                        code: (signatureMethod === 'otp' || signatureMethod === 'whatsapp') ? otpCode : googleAuthCode
                     })
                 });
             }
@@ -908,16 +913,22 @@ export default function ProfileSettings() {
                                     <Label>Authentication Method</Label>
                                     <select
                                         value={signatureMethod}
-                                        onChange={(e) => setSignatureMethod(e.target.value)}
+                                        onChange={(e) => {
+                                            setSignatureMethod(e.target.value);
+                                            setOtpSent(false);
+                                            setOtpCode("");
+                                            setCountdown(0);
+                                        }}
                                         className="w-full p-2 border rounded-md mt-1"
                                     >
                                         <option value="otp">SMS OTP</option>
+                                        <option value="whatsapp">WhatsApp OTP</option>
                                         <option value="google">Google Authenticator</option>
                                         <option value="googleOAuth">Google OAuth</option>
                                     </select>
                                 </div>
 
-                                {signatureMethod === 'otp' && (
+                                {(signatureMethod === 'otp' || signatureMethod === 'whatsapp') && (
                                     <div className="space-y-2">
                                         <div className="flex justify-between items-center">
                                             <Label htmlFor="otpCode">OTP Code</Label>
@@ -939,6 +950,16 @@ export default function ProfileSettings() {
                                             placeholder="Enter 6-digit OTP"
                                             maxLength={6}
                                         />
+                                        {signatureMethod === 'whatsapp' && (
+                                            <p className="text-sm text-gray-500">
+                                                OTP will be sent to your WhatsApp number: {profile.phone ? profile.phone.replace(/(\d{4})(\d{3})(\d{4})/, '$1***$3') : 'Not set'}
+                                            </p>
+                                        )}
+                                        {signatureMethod === 'otp' && (
+                                            <p className="text-sm text-gray-500">
+                                                OTP will be sent to your SMS number: {profile.phone ? profile.phone.replace(/(\d{4})(\d{3})(\d{4})/, '$1***$3') : 'Not set'}
+                                            </p>
+                                        )}
                                     </div>
                                 )}
 
@@ -977,7 +998,7 @@ export default function ProfileSettings() {
                                 </Button>
                                 <Button 
                                     onClick={verifyAuthentication}
-                                    disabled={authLoading || (signatureMethod === 'otp' && !otpCode) || (signatureMethod === 'google' && !googleAuthCode) || (signatureMethod === 'googleOAuth' && !googleAuthCode)}
+                                    disabled={authLoading || ((signatureMethod === 'otp' || signatureMethod === 'whatsapp') && !otpCode) || (signatureMethod === 'google' && !googleAuthCode) || (signatureMethod === 'googleOAuth' && !googleAuthCode)}
                                 >
                                     {authLoading ? "Verifying..." : "Verify"}
                                 </Button>
