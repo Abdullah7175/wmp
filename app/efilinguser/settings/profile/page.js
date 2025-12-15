@@ -60,6 +60,7 @@ export default function ProfileSettings() {
     const [activeSignatureTab, setActiveSignatureTab] = useState("draw");
     
     const sigCanvasRef = useRef(null);
+    const [canvasReady, setCanvasReady] = useState(false);
     
     const signatureFonts = [
         { value: "Arial", label: "Arial" },
@@ -88,6 +89,25 @@ export default function ProfileSettings() {
         }
         return () => clearTimeout(timer);
     }, [countdown]);
+
+    // Initialize canvas when signature modal opens and draw tab is active
+    useEffect(() => {
+        if (showSignatureModal && activeSignatureTab === "draw") {
+            // Small delay to ensure modal is fully rendered
+            const timer = setTimeout(() => {
+                setCanvasReady(true);
+                if (sigCanvasRef.current && signatureColor) {
+                    sigCanvasRef.current.penColor = signatureColor;
+                }
+            }, 100);
+            return () => {
+                clearTimeout(timer);
+                setCanvasReady(false);
+            };
+        } else {
+            setCanvasReady(false);
+        }
+    }, [showSignatureModal, activeSignatureTab, signatureColor]);
 
     const fetchProfile = async () => {
         try {
@@ -976,6 +996,12 @@ export default function ProfileSettings() {
                             <Button variant="ghost" size="sm" onClick={() => {
                                 setShowSignatureModal(false);
                                 setActiveSignatureTab("draw");
+                                setCanvasReady(false);
+                                setSignatureText("");
+                                setScannedSignatureFile(null);
+                                if (sigCanvasRef.current) {
+                                    sigCanvasRef.current.clear();
+                                }
                             }}>
                                 <X className="w-4 h-4" />
                             </Button>
@@ -984,7 +1010,11 @@ export default function ProfileSettings() {
                             <div className="flex space-x-2 border-b">
                                 <Button
                                     variant={activeSignatureTab === "draw" ? "default" : "ghost"}
-                                    onClick={() => setActiveSignatureTab("draw")}
+                                    onClick={() => {
+                                        setActiveSignatureTab("draw");
+                                        setCanvasReady(false);
+                                        setTimeout(() => setCanvasReady(true), 100);
+                                    }}
                                     className="flex items-center gap-2"
                                 >
                                     <Pen className="w-4 h-4" />
@@ -992,7 +1022,10 @@ export default function ProfileSettings() {
                                 </Button>
                                 <Button
                                     variant={activeSignatureTab === "type" ? "default" : "ghost"}
-                                    onClick={() => setActiveSignatureTab("type")}
+                                    onClick={() => {
+                                        setActiveSignatureTab("type");
+                                        setCanvasReady(false);
+                                    }}
                                     className="flex items-center gap-2"
                                 >
                                     <Pen className="w-4 h-4" />
@@ -1000,7 +1033,10 @@ export default function ProfileSettings() {
                                 </Button>
                                 <Button
                                     variant={activeSignatureTab === "scan" ? "default" : "ghost"}
-                                    onClick={() => setActiveSignatureTab("scan")}
+                                    onClick={() => {
+                                        setActiveSignatureTab("scan");
+                                        setCanvasReady(false);
+                                    }}
                                     className="flex items-center gap-2"
                                 >
                                     <Shield className="w-4 h-4" />
@@ -1037,15 +1073,22 @@ export default function ProfileSettings() {
                                     </div>
                                     <div className="border-2 border-dashed border-gray-300 rounded-lg p-4">
                                         <Label>Draw Your Signature</Label>
-                                        <SignatureCanvas
-                                            ref={sigCanvasRef}
-                                            penColor={signatureColor}
-                                            canvasProps={{
-                                                width: 400,
-                                                height: 150,
-                                                className: "border rounded mx-auto mt-2"
-                                            }}
-                                        />
+                                        {canvasReady && (
+                                            <SignatureCanvas
+                                                ref={sigCanvasRef}
+                                                penColor={signatureColor}
+                                                canvasProps={{
+                                                    width: 400,
+                                                    height: 150,
+                                                    className: "border rounded mx-auto mt-2 block"
+                                                }}
+                                            />
+                                        )}
+                                        {!canvasReady && (
+                                            <div className="border rounded mx-auto mt-2 w-full" style={{ width: 400, height: 150, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                <div className="text-gray-400">Loading canvas...</div>
+                                            </div>
+                                        )}
                                         <div className="flex gap-2 justify-center mt-2">
                                             <Button 
                                                 variant="outline" 

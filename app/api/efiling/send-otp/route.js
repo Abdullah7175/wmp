@@ -5,8 +5,6 @@ import { sendOTPViaWhatsApp } from '@/lib/whatsappService';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/pages/api/auth/[...nextauth]';
 
-export const dynamic = 'force-dynamic';
-
 export async function POST(request) {
     let client;
     try {
