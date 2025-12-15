@@ -1196,4 +1196,3 @@ export default function ProfileSettings() {
         </div>
     );
 } 
-} 

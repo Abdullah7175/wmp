@@ -816,17 +816,6 @@ export async function PUT(req) {
             updateFields.push(`nature_of_work = $${++paramIdx}`);
             updateParams.push(nature_of_work);
         }
-        // Helper to validate and convert integer parameters
-        const validateIntegerParam = (value, paramName) => {
-            if (value === undefined || value === null) return null;
-            if (value === '' || value === 'undefined' || value === 'null') return null;
-            const parsed = parseInt(value, 10);
-            if (isNaN(parsed) || parsed <= 0) {
-                console.warn(`Invalid ${paramName} parameter: ${value}, skipping`);
-                return null;
-            }
-            return parsed;
-        };
 
         if (town_id !== undefined && town_id !== null && town_id !== '') {
             const validTownId = validateIntegerParam(town_id, 'town_id');
