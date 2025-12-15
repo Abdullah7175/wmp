@@ -16,8 +16,8 @@ const nextConfig = {
   },
   env: {
     NEXTAUTH_URL: process.env.NEXTAUTH_URL || 'http://202.61.47.29:3000',
-    NEXTAUTH_SECRET: process.env.NEXTAUTH_SECRET,
-    JWT_SECRET: process.env.JWT_SECRET,
+    NEXTAUTH_SECRET: process.env.NEXTAUTH_SECRET || 'default-secret-change-in-production',
+    JWT_SECRET: process.env.JWT_SECRET || 'default-jwt-secret-change-in-production',
   },
   images: {
     remotePatterns: [
@@ -39,12 +39,8 @@ const nextConfig = {
     dangerouslyAllowSVG: true,
   },
   experimental: {
-    serverActions: {
-      allowedOrigins: ['localhost:3000', 'localhost:3001', 'localhost:3002', 'localhost:3003', 'localhost:3004', '202.61.47.29:3000'],
-      bodySizeLimit: '1gb', // Increase body size limit to 1GB
-    },
+    serverActions: true, // Enable server actions in Next.js 13
   },
-  serverExternalPackages: ['sharp', 'fs-extra'],
   webpack: (config) => {
     config.resolve.fallback = { 
       fs: false, 
