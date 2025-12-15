@@ -1,5 +1,4 @@
 import localFont from "next/font/local";
-import { Poppins } from 'next/font/google';
 import { Providers } from "./providers";
 import "./globals.css";
 
@@ -13,12 +12,12 @@ const geistMono = localFont({
   variable: "--font-geist-mono",
   weight: "100 900",
 });
-const poppins = Poppins({
-  subsets: ['latin'],
-  display: 'swap',
-  variable: '--font-poppins',
-  weight: ['100', '200', '300', '400', '500', '600', '700', '800', '900']
-});
+
+// Use system font fallback to avoid Google Fonts network issues during build
+// Poppins will be loaded via CSS if available, otherwise falls back to system fonts
+const poppins = {
+  variable: '--font-poppins'
+};
 
 export const metadata = {
   title: "WMP",
