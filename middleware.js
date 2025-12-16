@@ -142,14 +142,32 @@ export async function middleware(req) {
     
     // Skip middleware for static files, API routes, and Server Actions
     if (pathname.startsWith('/_next') || pathname.startsWith('/api') || pathname.includes('.') || pathname.startsWith('/_action')) {
-        // For Server Actions, ensure origin header is preserved
+        // For Server Actions, ensure all forwarded headers are preserved
         const response = NextResponse.next();
-        if (req.headers.get('x-forwarded-host')) {
-            response.headers.set('x-forwarded-host', req.headers.get('x-forwarded-host'));
+        
+        // Preserve forwarded headers
+        const forwardedHost = req.headers.get('x-forwarded-host');
+        const forwardedProto = req.headers.get('x-forwarded-proto');
+        const origin = req.headers.get('origin');
+        
+        if (forwardedHost) {
+            response.headers.set('x-forwarded-host', forwardedHost);
         }
-        if (req.headers.get('x-forwarded-proto')) {
-            response.headers.set('x-forwarded-proto', req.headers.get('x-forwarded-proto'));
+        if (forwardedProto) {
+            response.headers.set('x-forwarded-proto', forwardedProto);
         }
+        
+        // Preserve or reconstruct Origin header for Server Actions
+        if (origin) {
+            response.headers.set('origin', origin);
+        } else if (forwardedProto && forwardedHost) {
+            // Reconstruct Origin header from forwarded headers if missing
+            const reconstructedOrigin = `${forwardedProto}://${forwardedHost}`;
+            response.headers.set('origin', reconstructedOrigin);
+            // Also set it in the request headers for Next.js to use
+            req.headers.set('origin', reconstructedOrigin);
+        }
+        
         return response;
     }
 

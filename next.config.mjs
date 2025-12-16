@@ -15,7 +15,8 @@ const nextConfig = {
     ];
   },
   env: {
-    NEXTAUTH_URL: process.env.NEXTAUTH_URL || 'http://wmp.kwsc.gos.pk:3000',
+    // Use HTTPS in production, HTTP only for local development
+    NEXTAUTH_URL: process.env.NEXTAUTH_URL || (process.env.NODE_ENV === 'production' ? 'https://wmp.kwsc.gos.pk' : 'http://wmp.kwsc.gos.pk:3000'),
     NEXTAUTH_SECRET: process.env.NEXTAUTH_SECRET || 'default-secret-change-in-production',
     JWT_SECRET: process.env.JWT_SECRET || 'default-jwt-secret-change-in-production',
   },
