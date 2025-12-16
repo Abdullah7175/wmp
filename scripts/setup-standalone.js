@@ -89,6 +89,19 @@ async function setupStandalone() {
       console.warn('⚠️  Make sure to set environment variables in the standalone directory');
     }
 
+    // Copy sharp module for image optimization (required for standalone mode)
+    const sharpSource = path.join(rootDir, 'node_modules', 'sharp');
+    const sharpDest = path.join(standaloneDir, 'node_modules', 'sharp');
+    if (fs.existsSync(sharpSource)) {
+      const sharpDestDir = path.dirname(sharpDest);
+      await fsp.mkdir(sharpDestDir, { recursive: true });
+      await copyDir(sharpSource, sharpDest);
+      console.log('✅ Sharp module copied to standalone');
+    } else {
+      console.warn('⚠️  Sharp module not found in node_modules');
+      console.warn('⚠️  Run "npm install sharp" to enable image optimization');
+    }
+
     console.log('✨ Standalone setup complete!');
     console.log('📝 You can now run: node .next/standalone/server.js');
 

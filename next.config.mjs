@@ -43,6 +43,8 @@ const nextConfig = {
       },
     ],
     dangerouslyAllowSVG: true,
+    // Disable image optimization if sharp is not available (fallback)
+    unoptimized: process.env.DISABLE_IMAGE_OPTIMIZATION === 'true',
   },
   experimental: {
     serverActions: true, // Enable server actions in Next.js 13

@@ -175,31 +175,44 @@ function setOriginHeader(req, response) {
 export async function middleware(req) {
     const { pathname } = req.nextUrl;
     
-    // Always set origin header on request for POST requests (Server Actions need this)
-    // This must be done early, before any processing
-    if (req.method === 'POST') {
-        const origin = req.headers.get('origin');
-        if (!origin) {
-            const forwardedHost = req.headers.get('x-forwarded-host') || req.headers.get('host');
-            const forwardedProto = req.headers.get('x-forwarded-proto') || (req.nextUrl.protocol.replace(':', ''));
-            const referer = req.headers.get('referer');
-            
-            if (forwardedProto && forwardedHost) {
-                const reconstructedOrigin = `${forwardedProto}://${forwardedHost}`;
-                req.headers.set('origin', reconstructedOrigin);
-            } else if (referer) {
-                try {
-                    const refererUrl = new URL(referer);
-                    req.headers.set('origin', refererUrl.origin);
-                } catch {}
-            } else if (req.nextUrl.origin) {
-                req.headers.set('origin', req.nextUrl.origin);
+    // Helper to ensure origin header is always set for POST requests
+    const ensureOriginHeader = () => {
+        if (req.method === 'POST') {
+            const origin = req.headers.get('origin');
+            if (!origin) {
+                const forwardedHost = req.headers.get('x-forwarded-host') || req.headers.get('host');
+                const forwardedProto = req.headers.get('x-forwarded-proto') || (req.nextUrl.protocol.replace(':', ''));
+                const referer = req.headers.get('referer');
+                
+                let reconstructedOrigin = null;
+                
+                if (forwardedProto && forwardedHost) {
+                    reconstructedOrigin = `${forwardedProto}://${forwardedHost}`;
+                } else if (referer) {
+                    try {
+                        const refererUrl = new URL(referer);
+                        reconstructedOrigin = refererUrl.origin;
+                    } catch {}
+                } else if (req.nextUrl.origin) {
+                    reconstructedOrigin = req.nextUrl.origin;
+                }
+                
+                if (reconstructedOrigin) {
+                    req.headers.set('origin', reconstructedOrigin);
+                }
             }
         }
-    }
+    };
     
-    // Skip middleware for static files, API routes
-    if (pathname.startsWith('/_next') || pathname.startsWith('/api') || pathname.includes('.')) {
+    // Always set origin header early for POST requests (Server Actions need this)
+    ensureOriginHeader();
+    
+    // Skip middleware for static files, API routes, and Server Action paths
+    // Server Actions can be POST requests to page routes or use special Next.js paths
+    if (pathname.startsWith('/_next') || 
+        pathname.startsWith('/api') || 
+        pathname.includes('.') ||
+        pathname.startsWith('/_action')) {
         const response = NextResponse.next();
         setOriginHeader(req, response);
         return response;
@@ -208,13 +221,17 @@ export async function middleware(req) {
     // For POST requests (might be Server Actions), ensure origin header is set
     // But still run authentication checks for protected routes
     if (req.method === 'POST') {
+        // Ensure origin is set on request before creating response
+        ensureOriginHeader();
+        
         const response = NextResponse.next();
         setOriginHeader(req, response);
         
         // Continue with authentication checks for efiling routes
         if (pathname.startsWith('/efiling') || pathname.startsWith('/efilinguser') || pathname === '/elogin') {
             const authResponse = await efilingAuthMiddleware(req);
-            // Merge origin header into auth response
+            // Ensure origin header is set on both request and response
+            ensureOriginHeader();
             setOriginHeader(req, authResponse);
             return authResponse;
         }
