@@ -175,6 +175,29 @@ function setOriginHeader(req, response) {
 export async function middleware(req) {
     const { pathname } = req.nextUrl;
     
+    // Always set origin header on request for POST requests (Server Actions need this)
+    // This must be done early, before any processing
+    if (req.method === 'POST') {
+        const origin = req.headers.get('origin');
+        if (!origin) {
+            const forwardedHost = req.headers.get('x-forwarded-host') || req.headers.get('host');
+            const forwardedProto = req.headers.get('x-forwarded-proto') || (req.nextUrl.protocol.replace(':', ''));
+            const referer = req.headers.get('referer');
+            
+            if (forwardedProto && forwardedHost) {
+                const reconstructedOrigin = `${forwardedProto}://${forwardedHost}`;
+                req.headers.set('origin', reconstructedOrigin);
+            } else if (referer) {
+                try {
+                    const refererUrl = new URL(referer);
+                    req.headers.set('origin', refererUrl.origin);
+                } catch {}
+            } else if (req.nextUrl.origin) {
+                req.headers.set('origin', req.nextUrl.origin);
+            }
+        }
+    }
+    
     // Skip middleware for static files, API routes
     if (pathname.startsWith('/_next') || pathname.startsWith('/api') || pathname.includes('.')) {
         const response = NextResponse.next();
@@ -183,10 +206,8 @@ export async function middleware(req) {
     }
     
     // For POST requests (might be Server Actions), ensure origin header is set
-    // But still run authentication checks
+    // But still run authentication checks for protected routes
     if (req.method === 'POST') {
-        // Create a response that will be modified by subsequent middleware
-        // We'll set the origin header after authentication checks
         const response = NextResponse.next();
         setOriginHeader(req, response);
         
@@ -198,8 +219,8 @@ export async function middleware(req) {
             return authResponse;
         }
         
-        // For other POST requests, continue with normal middleware flow
-        // (will be handled below)
+        // For other POST requests, return with origin header set
+        return response;
     }
 
     // Handle e-filing authentication for efiling and efilinguser routes
