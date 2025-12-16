@@ -137,43 +137,79 @@ function isAllowed(pathname, allowedList) {
   });
 }
 
+// Helper function to set origin header for Server Actions
+function setOriginHeader(req, response) {
+    const forwardedHost = req.headers.get('x-forwarded-host') || req.headers.get('host');
+    const forwardedProto = req.headers.get('x-forwarded-proto') || (req.nextUrl.protocol.replace(':', ''));
+    const origin = req.headers.get('origin');
+    const referer = req.headers.get('referer');
+    
+    // Preserve forwarded headers
+    if (req.headers.get('x-forwarded-host')) {
+        response.headers.set('x-forwarded-host', req.headers.get('x-forwarded-host'));
+    }
+    if (req.headers.get('x-forwarded-proto')) {
+        response.headers.set('x-forwarded-proto', req.headers.get('x-forwarded-proto'));
+    }
+    
+    // Set origin header - critical for Server Actions
+    if (origin) {
+        response.headers.set('origin', origin);
+        req.headers.set('origin', origin);
+    } else if (forwardedProto && forwardedHost) {
+        const reconstructedOrigin = `${forwardedProto}://${forwardedHost}`;
+        response.headers.set('origin', reconstructedOrigin);
+        req.headers.set('origin', reconstructedOrigin);
+    } else if (referer) {
+        try {
+            const refererUrl = new URL(referer);
+            response.headers.set('origin', refererUrl.origin);
+            req.headers.set('origin', refererUrl.origin);
+        } catch {}
+    } else if (req.nextUrl.origin) {
+        response.headers.set('origin', req.nextUrl.origin);
+        req.headers.set('origin', req.nextUrl.origin);
+    }
+}
+
 export async function middleware(req) {
     const { pathname } = req.nextUrl;
     
-    // Skip middleware for static files, API routes, and Server Actions
-    if (pathname.startsWith('/_next') || pathname.startsWith('/api') || pathname.includes('.') || pathname.startsWith('/_action')) {
-        // For Server Actions, ensure all forwarded headers are preserved
+    // Skip middleware for static files, API routes
+    if (pathname.startsWith('/_next') || pathname.startsWith('/api') || pathname.includes('.')) {
         const response = NextResponse.next();
-        
-        // Preserve forwarded headers
-        const forwardedHost = req.headers.get('x-forwarded-host');
-        const forwardedProto = req.headers.get('x-forwarded-proto');
-        const origin = req.headers.get('origin');
-        
-        if (forwardedHost) {
-            response.headers.set('x-forwarded-host', forwardedHost);
-        }
-        if (forwardedProto) {
-            response.headers.set('x-forwarded-proto', forwardedProto);
-        }
-        
-        // Preserve or reconstruct Origin header for Server Actions
-        if (origin) {
-            response.headers.set('origin', origin);
-        } else if (forwardedProto && forwardedHost) {
-            // Reconstruct Origin header from forwarded headers if missing
-            const reconstructedOrigin = `${forwardedProto}://${forwardedHost}`;
-            response.headers.set('origin', reconstructedOrigin);
-            // Also set it in the request headers for Next.js to use
-            req.headers.set('origin', reconstructedOrigin);
-        }
-        
+        setOriginHeader(req, response);
         return response;
+    }
+    
+    // For POST requests (might be Server Actions), ensure origin header is set
+    // But still run authentication checks
+    if (req.method === 'POST') {
+        // Create a response that will be modified by subsequent middleware
+        // We'll set the origin header after authentication checks
+        const response = NextResponse.next();
+        setOriginHeader(req, response);
+        
+        // Continue with authentication checks for efiling routes
+        if (pathname.startsWith('/efiling') || pathname.startsWith('/efilinguser') || pathname === '/elogin') {
+            const authResponse = await efilingAuthMiddleware(req);
+            // Merge origin header into auth response
+            setOriginHeader(req, authResponse);
+            return authResponse;
+        }
+        
+        // For other POST requests, continue with normal middleware flow
+        // (will be handled below)
     }
 
     // Handle e-filing authentication for efiling and efilinguser routes
     if (pathname.startsWith('/efiling') || pathname.startsWith('/efilinguser') || pathname === '/elogin') {
-        return await efilingAuthMiddleware(req);
+        const response = await efilingAuthMiddleware(req);
+        // Ensure origin header is set for Server Actions
+        if (req.method === 'POST') {
+            setOriginHeader(req, response);
+        }
+        return response;
     }
 
     try {

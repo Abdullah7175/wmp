@@ -1,10 +1,22 @@
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/db';
 
+// Mark as dynamic to prevent static generation
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
     let client;
     try {
         client = await connectToDatabase();
+        
+        // Handle build phase gracefully
+        if (!client) {
+            return NextResponse.json({ 
+                success: false, 
+                error: 'Database connection unavailable during build phase',
+                buildPhase: true
+            }, { status: 503 });
+        }
         
         // Test if socialmediaperson table exists
         const tableCheck = await client.query(`
@@ -39,7 +51,10 @@ export async function GET() {
             sampleData: sampleData
         });
     } catch (error) {
-        console.error('Test error:', error);
+        // Don't log errors during build phase
+        if (!error.message?.includes('build phase')) {
+            console.error('Test error:', error);
+        }
         return NextResponse.json({ 
             success: false, 
             error: error.message 

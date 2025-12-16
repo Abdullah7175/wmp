@@ -93,7 +93,7 @@ export default function EFileLoginPage() {
         variant: "destructive",
       });
       setTimeout(() => {
-        window.location.href = "/";
+        router.push("/");
       }, 2000);
       return;
     }
@@ -106,7 +106,11 @@ export default function EFileLoginPage() {
         const destination = resolveDestination(profile, user.role);
 
         if (destination) {
-          window.location.href = destination;
+          // Use router.push instead of window.location.href for better Next.js navigation
+          // Add a small delay to ensure session cookie is fully set
+          setTimeout(() => {
+            router.push(destination);
+          }, 100);
           return;
         }
 
@@ -116,7 +120,7 @@ export default function EFileLoginPage() {
           variant: "destructive",
         });
         setTimeout(() => {
-          window.location.href = "/";
+          router.push("/");
         }, 2000);
         return;
       }
@@ -124,7 +128,9 @@ export default function EFileLoginPage() {
       if (res.status === 404) {
         const roleNumber = Number(user.role ?? 0);
         if (roleNumber === 1) {
-          window.location.href = "/efiling";
+          setTimeout(() => {
+            router.push("/efiling");
+          }, 100);
           return;
         }
       }
@@ -138,7 +144,7 @@ export default function EFileLoginPage() {
         variant: "destructive",
       });
       setTimeout(() => {
-        window.location.href = "/";
+        router.push("/");
       }, 2000);
     }
   };
@@ -246,6 +252,32 @@ export default function EFileLoginPage() {
             description: "Welcome to Works Management Portal! Redirecting...",
             variant: "success",
           });
+
+          // Wait for session to be established before redirecting
+          // This prevents redirect loops when middleware checks for token
+          let attempts = 0;
+          const maxAttempts = 10;
+          const checkSession = async () => {
+            try {
+              const sessionRes = await fetch('/api/auth/session', { cache: 'no-store' });
+              const sessionData = await sessionRes.json();
+              
+              if (sessionData?.user?.id || attempts >= maxAttempts) {
+                // Session is ready or we've waited long enough
+                // The useEffect hook will handle the redirect when status becomes "authenticated"
+                return;
+              }
+              
+              attempts++;
+              setTimeout(checkSession, 200);
+            } catch (error) {
+              console.error('Error checking session:', error);
+              // Continue anyway - useEffect will handle redirect
+            }
+          };
+          
+          // Start checking session after a brief delay
+          setTimeout(checkSession, 300);
         }
       } catch (error) {
         console.error("Login error:", error);

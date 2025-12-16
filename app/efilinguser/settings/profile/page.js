@@ -48,6 +48,11 @@ export default function ProfileSettings() {
     const [countdown, setCountdown] = useState(0);
     const [authLoading, setAuthLoading] = useState(false);
     
+    // Google email registration states
+    const [showEmailRegistration, setShowEmailRegistration] = useState(false);
+    const [registrationEmail, setRegistrationEmail] = useState("");
+    const [googleAuthCode, setGoogleAuthCode] = useState("");
+    
     // Signature creation states
     const [signatureText, setSignatureText] = useState("");
     const [signatureFont, setSignatureFont] = useState("Arial");

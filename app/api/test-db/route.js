@@ -1,13 +1,37 @@
 import { NextResponse } from 'next/server';
 import { connectToDatabase, checkDbConnection } from '@/lib/db';
 
+// Mark as dynamic to prevent static generation
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
     let client;
     const startTime = Date.now();
     
     try {
-        console.log('Starting database health check...');
+        // Skip logging during build phase
+        const isBuildPhase = process.env.NEXT_PHASE === 'phase-production-build' || 
+                            process.env.NEXT_PHASE === 'phase-export';
+        
+        if (!isBuildPhase) {
+            console.log('Starting database health check...');
+        }
+        
         client = await connectToDatabase();
+        
+        // Handle build phase gracefully
+        if (!client) {
+            return NextResponse.json({ 
+                success: false, 
+                error: 'Database connection unavailable during build phase',
+                buildPhase: true,
+                timing: {
+                    totalTime: Date.now() - startTime
+                },
+                timestamp: new Date().toISOString()
+            }, { status: 503 });
+        }
+        
         const connectionTime = Date.now() - startTime;
         
         // Test multiple queries to ensure database is fully functional
@@ -49,12 +73,19 @@ export async function GET() {
         
     } catch (error) {
         const totalTime = Date.now() - startTime;
-        console.error('Database health check error:', {
-            error: error.message,
-            code: error.code,
-            totalTime: totalTime,
-            timestamp: new Date().toISOString()
-        });
+        
+        // Don't log errors during build phase
+        const isBuildPhase = process.env.NEXT_PHASE === 'phase-production-build' || 
+                            process.env.NEXT_PHASE === 'phase-export';
+        
+        if (!isBuildPhase) {
+            console.error('Database health check error:', {
+                error: error.message,
+                code: error.code,
+                totalTime: totalTime,
+                timestamp: new Date().toISOString()
+            });
+        }
         
         return NextResponse.json({ 
             success: false, 
