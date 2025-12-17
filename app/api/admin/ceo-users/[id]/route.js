@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
+import { auth } from "@/auth";
 import { query } from "@/lib/db";
 import bcrypt from "bcryptjs";
 import path from "path";
@@ -7,7 +7,7 @@ import { promises as fs } from "fs";
 
 export async function DELETE(request, { params }) {
   try {
-    const session = await getServerSession();
+    const session = await auth();
     
     // Only allow admins (role 1) to delete CEO users
     if (!session?.user || session.user.role !== 1) {
@@ -102,7 +102,7 @@ export async function DELETE(request, { params }) {
 
 export async function PUT(request, { params }) {
   try {
-    const session = await getServerSession();
+    const session = await auth();
     
     // Only allow admins (role 1) to update CEO users
     if (!session?.user || session.user.role !== 1) {

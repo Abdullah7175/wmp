@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
+import { auth } from "@/auth";
 import { query } from "@/lib/db";
 
 export async function POST(request) {
   try {
-    const session = await getServerSession();
+    const session = await auth();
     
     // Only allow CEO (role 5) or Admin (role 1) to reactivate requests
     if (!session?.user || 
