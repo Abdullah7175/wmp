@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/db';
 import { actionLogger, ENTITY_TYPES } from '@/lib/actionLogger';
-import { getToken } from 'next-auth/jwt';
+import { auth } from '@/auth';
 import {
     resolveEfilingScope,
     appendGeographyFilters,
@@ -44,11 +44,11 @@ export async function GET(request) {
         // Get user ID for potential fallback filtering
         let efilingUserId = null;
         if (scopeInfo.apply) {
-            const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
-            if (token?.user?.id) {
+            const session = await auth();
+            if (session?.user?.id) {
                 const efUserRes = await client.query(
                     'SELECT id FROM efiling_users WHERE user_id = $1 AND is_active = true',
-                    [token.user.id]
+                    [session.user.id]
                 );
                 efilingUserId = efUserRes.rows[0]?.id || null;
             }

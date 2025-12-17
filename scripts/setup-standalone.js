@@ -102,6 +102,17 @@ async function setupStandalone() {
       console.warn('⚠️  Run "npm install sharp" to enable image optimization');
     }
 
+    // Copy dotenv module for loading .env files in standalone mode
+    const dotenvSource = path.join(rootDir, 'node_modules', 'dotenv');
+    const dotenvDest = path.join(standaloneDir, 'node_modules', 'dotenv');
+    if (fs.existsSync(dotenvSource)) {
+      await fsp.mkdir(path.dirname(dotenvDest), { recursive: true });
+      await copyDir(dotenvSource, dotenvDest);
+      console.log('✅ Dotenv module copied to standalone');
+    } else {
+      console.warn('⚠️  Dotenv module not found in node_modules');
+    }
+
     console.log('✨ Standalone setup complete!');
     console.log('📝 You can now run: node .next/standalone/server.js');
 

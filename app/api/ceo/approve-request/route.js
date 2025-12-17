@@ -1,12 +1,11 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/pages/api/auth/[...nextauth]";
+import { auth } from "@/auth";
 import { query } from "@/lib/db";
 import { logUserAction } from "@/lib/userActionLogger";
 
 export async function POST(request) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await auth();
     
     // Check if user is CEO (role 5) and userType is 'user'
     if (!session?.user || parseInt(session.user.role) !== 5 || session.user.userType !== 'user') {

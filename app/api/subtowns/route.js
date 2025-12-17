@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/db';
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/pages/api/auth/[...nextauth]";
+import { auth } from "@/auth";
 
 export async function GET(request) {
     const { searchParams } = new URL(request.url);
@@ -83,7 +82,7 @@ export async function GET(request) {
 export async function POST(req) {
     try {
         // Check authentication
-        const session = await getServerSession(authOptions);
+        const session = await auth();
         
         if (!session?.user || session.user.userType !== 'user' || parseInt(session.user.role) !== 1) {
             return NextResponse.json(
@@ -125,7 +124,7 @@ export async function POST(req) {
 export async function PUT(req) {
     try {
         // Check authentication
-        const session = await getServerSession(authOptions);
+        const session = await auth();
         
         if (!session?.user || session.user.userType !== 'user' || parseInt(session.user.role) !== 1) {
             return NextResponse.json(
@@ -173,7 +172,7 @@ export async function PUT(req) {
 export async function DELETE(req) {
     try {
         // Check authentication
-        const session = await getServerSession(authOptions);
+        const session = await auth();
         
         if (!session?.user || session.user.userType !== 'user' || parseInt(session.user.role) !== 1) {
             return NextResponse.json(

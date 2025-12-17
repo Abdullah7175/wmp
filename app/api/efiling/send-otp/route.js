@@ -2,8 +2,7 @@ import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/db';
 import { logAction } from '@/lib/actionLogger';
 import { sendOTPViaWhatsApp } from '@/lib/whatsappService';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/pages/api/auth/[...nextauth]';
+import { auth } from '@/auth';
 
 export async function POST(request) {
     let client;
@@ -13,7 +12,7 @@ export async function POST(request) {
         const method = 'whatsapp';
         
         // Get session to verify user
-        const session = await getServerSession(authOptions);
+        const session = await auth();
         const sessionUserId = session?.user?.id; // This is users.id
         
         if (!sessionUserId && !userId) {

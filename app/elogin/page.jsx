@@ -73,12 +73,14 @@ export default function EFileLoginPage() {
     const isAdmin = roleNumber === 1;
     const isGlobalRole = GLOBAL_ROLE_CODES.has(roleCode) || roleCode.startsWith("CEO_") || roleCode.startsWith("COO_");
 
-    if (hasEfilingProfile) {
-      return "/efilinguser";
-    }
-
+    // Admin users (role 1) and global roles always go to efiling admin
     if (isAdmin || isGlobalRole) {
       return "/efiling";
+    }
+
+    // Regular users with efiling profile go to efilinguser
+    if (hasEfilingProfile) {
+      return "/efilinguser";
     }
 
     return null;

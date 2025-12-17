@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/pages/api/auth/[...nextauth]";
+import { auth } from "@/auth";
 import { query } from "@/lib/db";
 import bcrypt from "bcryptjs";
 import path from "path";
@@ -8,7 +7,7 @@ import fs from "fs";
 
 export async function GET(request) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await auth();
 
     if (!session?.user || session.user.userType !== 'user' || parseInt(session.user.role) !== 6) { // COO role is 6
       return NextResponse.json(
@@ -50,7 +49,7 @@ export async function GET(request) {
 
 export async function PUT(request) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await auth();
 
     if (!session?.user || session.user.userType !== 'user' || parseInt(session.user.role) !== 6) { // COO role is 6
       return NextResponse.json(

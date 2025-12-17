@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/db';
 import { logAction } from '@/lib/actionLogger';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/pages/api/auth/[...nextauth]';
+import { auth } from '@/auth';
 
 export async function POST(request) {
     let client;
@@ -25,7 +24,7 @@ export async function POST(request) {
         // OTP is stored in efiling_otp_codes.user_id as varchar(255) with efiling_users.id as string
         // We need to always convert users.id to efiling_users.id first
         
-        const session = await getServerSession(authOptions);
+        const session = await auth();
         const sessionUserId = session?.user?.id;
         
         let efilingUserId = userId;

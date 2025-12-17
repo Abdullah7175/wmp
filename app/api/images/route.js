@@ -3,8 +3,7 @@ import { promises as fs } from 'fs';
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/db';
 import { actionLogger, ENTITY_TYPES } from '@/lib/actionLogger';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/pages/api/auth/[...nextauth]';
+import { auth } from '@/auth';
 import {
   UPLOAD_CONFIG,
   validateFile,
@@ -211,7 +210,7 @@ export async function GET(request) {
 
 export async function POST(req) {
     try {
-        const session = await getServerSession(authOptions);
+        const session = await auth();
         if (!session?.user) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }

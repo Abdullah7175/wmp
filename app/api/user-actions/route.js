@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/db';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/pages/api/auth/[...nextauth]';
+import { auth } from '@/auth';
 
 export async function GET(request) {
     const { searchParams } = new URL(request.url);
@@ -17,7 +16,7 @@ export async function GET(request) {
     const userId = searchParams.get('user_id');
 
     // Check if user is admin (role 1)
-    const session = await getServerSession(authOptions);
+    const session = await auth();
     if (!session || session.user?.userType !== 'user' || session.user?.role !== 1) {
         return NextResponse.json({ error: 'Unauthorized - Admin access required' }, { status: 403 });
     }

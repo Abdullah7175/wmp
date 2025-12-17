@@ -1,8 +1,7 @@
 import { Suspense } from "react";
 import { connectToDatabase } from "@/lib/db";
 import CeoUsersList from "./components/CeoUsersList";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/pages/api/auth/[...nextauth]";
+import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 
 // Force dynamic rendering to prevent build-time database connections
@@ -49,7 +48,7 @@ async function getCeoUsers() {
 }
 
 export default async function CeoUsersPage() {
-  const session = await getServerSession(authOptions);
+  const session = await auth();
   
   // Only allow admins (role 1) to access this page
   if (!session?.user || session.user.userType !== 'user' || parseInt(session.user.role) !== 1) {

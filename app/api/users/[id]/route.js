@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/db';
-import { getServerSession } from 'next-auth/next';
+import { auth } from '@/auth';
 
 export async function GET(request, { params }) {
     let client;
@@ -24,7 +24,7 @@ export async function GET(request, { params }) {
         }
 
         // Get session to ensure user is authenticated
-        const session = await getServerSession();
+        const session = await auth();
         if (!session) {
             return NextResponse.json(
                 { error: 'Unauthorized' },

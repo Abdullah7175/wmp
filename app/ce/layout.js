@@ -1,11 +1,10 @@
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/pages/api/auth/[...nextauth]";
+import { auth } from "@/auth";
 import CESidebar from "./CESidebar";
 
 export default async function CELayout({ children }) {
-  const session = await getServerSession(authOptions);
+  const session = await auth();
 
   // Check if user is authenticated and has CE role (7)
   if (!session?.user || session.user.userType !== 'user' || parseInt(session.user.role) !== 7) {

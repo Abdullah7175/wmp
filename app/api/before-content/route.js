@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { connectToDatabase, query } from '@/lib/db';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/pages/api/auth/[...nextauth]';
+import { auth } from '@/auth';
 import { logUserAction } from '@/lib/userActionLogger';
 import { writeFile, mkdir } from 'fs/promises';
 import { join } from 'path';
@@ -12,7 +11,7 @@ export const dynamic = 'force-dynamic';
 export async function GET(request) {
   let client;
   try {
-    const session = await getServerSession(authOptions);
+    const session = await auth();
     const { searchParams } = new URL(request.url);
     const workRequestId = searchParams.get('workRequestId');
     const creatorId = searchParams.get('creator_id');
@@ -124,7 +123,7 @@ export async function GET(request) {
 
 export async function POST(request) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await auth();
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -390,7 +389,7 @@ export async function POST(request) {
 
 export async function DELETE(request) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await auth();
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getToken } from 'next-auth/jwt';
+// Note: getToken from next-auth/jwt uses Node.js crypto which isn't available in Edge runtime
+// We'll check for session cookies directly instead
 
 export async function efilingAuthMiddleware(request) {
     const pathname = request.nextUrl.pathname;
@@ -49,15 +50,24 @@ export async function efilingAuthMiddleware(request) {
         return withSecurityHeaders(NextResponse.next());
     }
     
-    const token = await getToken({ 
-        req: request, 
-        secret: process.env.NEXTAUTH_SECRET
-    });
+    // Check for session cookie directly (Edge runtime compatible)
+    // In Edge runtime, we can't use getToken, so we check cookies directly
+    const sessionCookie = request.cookies.get(
+        process.env.NODE_ENV === 'production' 
+            ? '__Secure-next-auth.session-token' 
+            : 'next-auth.session-token'
+    ) || request.cookies.get('authjs.session-token') || request.cookies.get('__Secure-authjs.session-token');
+    
+    // For next-auth v5, also check for the new cookie names
+    const nextAuthCookie = request.cookies.get('next-auth.session-token') || 
+                           request.cookies.get('__Secure-next-auth.session-token') ||
+                           request.cookies.get('authjs.session-token') ||
+                           request.cookies.get('__Secure-authjs.session-token');
 
-    // If no token, redirect to login
+    // If no session cookie, redirect to login
     // But allow POST requests and Server Actions to pass through
     // (they might be part of the authentication flow or form submissions)
-    if (!token) {
+    if (!sessionCookie && !nextAuthCookie) {
         // Allow POST requests to pass through (might be Server Actions or form submissions)
         if (request.method === 'POST') {
             return withSecurityHeaders(NextResponse.next());
@@ -83,11 +93,8 @@ export async function efilingAuthMiddleware(request) {
     }
 
     // Basic path-based routing without role checking in middleware
+    // Role checking will be done in the page components since we can't decode JWT in Edge runtime
     if (pathname.startsWith('/efilinguser')) {
-        // Admins should use e-filing admin, not efilinguser
-        if (token?.user?.role === 1 || token?.user?.role === 2) {
-            return withSecurityHeaders(NextResponse.redirect(new URL('/efiling', request.url)));
-        }
         return withSecurityHeaders(NextResponse.next());
     }
     

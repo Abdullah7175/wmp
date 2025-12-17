@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/pages/api/auth/[...nextauth]";
+import { auth } from "@/auth";
 import { query } from "@/lib/db";
 import fs from "fs/promises";
 import path from "path";
@@ -9,7 +8,7 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(request) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await auth();
     
     // Only allow CEO users (role 5) to access this endpoint
     if (!session?.user || session.user.userType !== 'user' || parseInt(session.user.role) !== 5) {

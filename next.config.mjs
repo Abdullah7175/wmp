@@ -1,11 +1,10 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
   reactStrictMode: true,
   output: 'standalone',
   trailingSlash: false,
+  // Empty turbopack config to silence the warning when using webpack config
+  turbopack: {},
   async rewrites() {
     return [
       {
@@ -46,16 +45,29 @@ const nextConfig = {
     // Disable image optimization if sharp is not available (fallback)
     unoptimized: process.env.DISABLE_IMAGE_OPTIMIZATION === 'true',
   },
-  experimental: {
-    serverActions: true, // Enable server actions in Next.js 13
-  },
-  webpack: (config) => {
+  // Server Actions are stable in Next.js 16, no experimental flag needed
+  webpack: (config, { isServer, webpack }) => {
     config.resolve.fallback = { 
       fs: false, 
       path: false, 
       stream: false, 
-      constants: false 
+      constants: false, 
+      turbopack: false
     };
+    
+    // Ignore Cloudflare-specific modules that aren't needed in standard Next.js
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      'pg-cloudflare': false,
+    };
+    
+    // Ignore cloudflare:sockets using IgnorePlugin
+    config.plugins.push(
+      new webpack.IgnorePlugin({
+        resourceRegExp: /^cloudflare:sockets$/,
+      })
+    );
+    
     return config;
   },
 };

@@ -1,10 +1,9 @@
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/pages/api/auth/[...nextauth]";
+import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import CeoLayoutClient from "./CeoLayoutClient";
 
 export default async function CeoLayout({ children }) {
-  const session = await getServerSession(authOptions);
+  const session = await auth();
   
   // Check if user is CEO (role 5) and userType is 'user'
   if (!session?.user || parseInt(session.user.role) !== 5 || session.user.userType !== 'user') {

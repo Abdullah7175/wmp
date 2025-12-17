@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/pages/api/auth/[...nextauth]';
+import { auth } from '@/auth';
 import { promises as fs } from 'fs';
 import path from 'path';
 import { 
@@ -14,7 +13,7 @@ import {
 
 export async function POST(req) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await auth();
     if (!session?.user) {
       return createErrorResponse('Unauthorized', 401);
     }
@@ -88,7 +87,7 @@ export async function POST(req) {
 // Cleanup endpoint for abandoned uploads
 export async function DELETE(req) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await auth();
     if (!session?.user) {
       return createErrorResponse('Unauthorized', 401);
     }

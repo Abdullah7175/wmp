@@ -1,12 +1,16 @@
-// pages/api/auth/[...nextauth].js
+// auth.js - NextAuth v5 (Auth.js) configuration
 import NextAuth from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import GoogleProvider from "next-auth/providers/google";
 import bcrypt from "bcryptjs";
 import { connectToDatabase } from '@/lib/db';
-import { eFileActionLogger, EFILING_ACTION_TYPES, EFILING_ENTITY_TYPES } from '@/lib/efilingActionLogger';
+import { eFileActionLogger } from '@/lib/efilingActionLogger';
 
-export const authOptions = {
+export const { handlers, auth, signIn, signOut } = NextAuth({
+  trustHost: true, // Allow localhost and other hosts in development
+  basePath: "/api/auth", // Explicitly set the base path
+  // Use NEXTAUTH_URL from environment or default to localhost
+  url: process.env.NEXTAUTH_URL || process.env.AUTH_URL || "http://localhost:3000",
   providers: [
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID,
@@ -40,7 +44,7 @@ export const authOptions = {
               console.log('Password verified successfully');
               console.log('User authenticated:', { id: user.id, name: user.name, userType: 'user', role: user.role });
               return {
-                id: user.id,
+                id: user.id.toString(),
                 name: user.name,
                 email: user.email,
                 role: user.role,
@@ -63,7 +67,7 @@ export const authOptions = {
               console.log('Password verified successfully');
               console.log('User authenticated:', { id: agent.id, name: agent.name, userType: 'agent', role: agent.role });
               return {
-                id: agent.id,
+                id: agent.id.toString(),
                 name: agent.name,
                 email: agent.email,
                 role: agent.role,
@@ -86,7 +90,7 @@ export const authOptions = {
               console.log('Password verified successfully');
               console.log('User authenticated:', { id: sm.id, name: sm.name, userType: 'socialmedia', role: sm.role });
               return {
-                id: sm.id,
+                id: sm.id.toString(),
                 name: sm.name,
                 email: sm.email,
                 role: sm.role,
@@ -113,7 +117,7 @@ export const authOptions = {
     maxAge: 60 * 60 // 1 hour
   },
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, account }) {
       if (user) {
         token.user = user;
       }
@@ -129,17 +133,17 @@ export const authOptions = {
       // Log successful login
       try {
         if (user && user.id) {
-                      await eFileActionLogger.logAction({
-                entityId: null,
-                userId: user.id.toString(),
-                action: 'USER_LOGIN',
-                entityType: 'auth',
-                details: { 
-                    method: account?.provider || 'credentials', 
-                    userType: user.userType || 'user',
-                    description: `User "${user.name}" logged into e-filing system`
-                }
-            });
+          await eFileActionLogger.logAction({
+            entityId: null,
+            userId: user.id.toString(),
+            action: 'USER_LOGIN',
+            entityType: 'auth',
+            details: { 
+              method: account?.provider || 'credentials', 
+              userType: user.userType || 'user',
+              description: `User "${user.name}" logged into e-filing system`
+            }
+          });
         }
       } catch (logError) {
         console.error('Error logging login action:', logError);
@@ -157,17 +161,17 @@ export const authOptions = {
           
           if (userResult.rows.length > 0) {
             const dbUser = userResult.rows[0];
-            user.id = dbUser.id;
+            user.id = dbUser.id.toString();
             user.role = dbUser.role;
             user.userType = 'user';
           } else if (agentResult.rows.length > 0) {
             const dbUser = agentResult.rows[0];
-            user.id = dbUser.id;
+            user.id = dbUser.id.toString();
             user.role = dbUser.role;
             user.userType = 'agent';
           } else if (smResult.rows.length > 0) {
             const dbUser = smResult.rows[0];
-            user.id = dbUser.id;
+            user.id = dbUser.id.toString();
             user.role = dbUser.role;
             user.userType = 'socialmedia';
           } else {
@@ -176,7 +180,7 @@ export const authOptions = {
               'INSERT INTO users (name, email, role, userType) VALUES ($1, $2, $3, $4) RETURNING *',
               [user.name, user.email, 'user', 'user']
             );
-            user.id = newUserResult.rows[0].id;
+            user.id = newUserResult.rows[0].id.toString();
             user.role = 'user';
             user.userType = 'user';
           }
@@ -189,20 +193,23 @@ export const authOptions = {
         }
       }
       return true;
-    },
-    async signOut({ token }) {
+    }
+  },
+  events: {
+    async signOut({ session, token }) {
       // Log successful logout
       try {
-        if (token?.user?.id) {
+        const user = session?.user || token?.user;
+        if (user?.id) {
           await eFileActionLogger.logAction({
             entityId: null,
-            userId: token.user.id.toString(),
+            userId: user.id.toString(),
             action: 'USER_LOGOUT',
             entityType: 'auth',
             details: { 
               method: 'session_end', 
-              userType: token.user.userType || 'user',
-              description: `User "${token.user.name}" logged out from e-filing system`
+              userType: user.userType || 'user',
+              description: `User "${user.name}" logged out from e-filing system`
             }
           });
         }
@@ -212,9 +219,5 @@ export const authOptions = {
       }
     }
   }
-};
-
-export default NextAuth(authOptions);
-
-
+});
 

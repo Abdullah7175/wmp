@@ -1,10 +1,9 @@
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/pages/api/auth/[...nextauth]";
+import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import CooLayoutClient from "./CooLayoutClient";
 
 export default async function CooLayout({ children }) {
-  const session = await getServerSession(authOptions);
+  const session = await auth();
   
   // Check if user is COO (role 6) and userType is 'user'
   if (!session?.user || parseInt(session.user.role) !== 6 || session.user.userType !== 'user') {
