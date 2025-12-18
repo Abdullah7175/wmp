@@ -14,7 +14,7 @@ export async function GET(request, { params }) {
             return NextResponse.json({ error: 'Template ID is required' }, { status: 400 });
         }
 
-        const session = await auth();
+        const session = await auth(request);
         if (!session?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
@@ -95,7 +95,7 @@ export async function PUT(request, { params }) {
             return NextResponse.json({ error: 'Template ID is required' }, { status: 400 });
         }
 
-        const session = await auth();
+        const session = await auth(request);
         if (!session?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
@@ -283,7 +283,7 @@ export async function DELETE(request, { params }) {
             return NextResponse.json({ error: 'Template ID is required' }, { status: 400 });
         }
 
-        const session = await auth();
+        const session = await auth(request);
         if (!session?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }

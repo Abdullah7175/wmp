@@ -11,7 +11,7 @@ export async function GET(request) {
         const id = searchParams.get('id');
         const isActive = searchParams.get('is_active');
 
-        const session = await auth();
+        const session = await auth(request);
         let userGeography = null;
         let canSeeAll = false;
         if (session?.user) {
@@ -91,7 +91,7 @@ export async function GET(request) {
 export async function POST(request) {
     let client;
     try {
-        const session = await auth();
+        const session = await auth(request);
         if (!session?.user?.role || parseInt(session.user.role) !== 1 || session.user.id !== '1') {
             return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
         }
@@ -123,7 +123,7 @@ export async function POST(request) {
 export async function PUT(request) {
     let client;
     try {
-        const session = await auth();
+        const session = await auth(request);
         if (!session?.user?.role || parseInt(session.user.role) !== 1 || session.user.id !== '1') {
             return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
         }
@@ -171,7 +171,7 @@ export async function PUT(request) {
 export async function DELETE(request) {
     let client;
     try {
-        const session = await auth();
+        const session = await auth(request);
         if (!session?.user?.role || parseInt(session.user.role) !== 1 || session.user.id !== '1') {
             return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
         }

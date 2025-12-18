@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/db';
+import { auth } from '@/auth';
 import { eFileActionLogger, EFILING_ENTITY_TYPES, EFILING_ACTION_TYPES } from '@/lib/efilingActionLogger';
 import { validateEFileAccess, checkEFileRateLimit } from '@/lib/efilingSecurity';
 
@@ -138,15 +139,25 @@ export async function GET(request) {
 export async function POST(request) {
     let client;
     try {
+        // Get session for authentication
+        const session = await auth(request);
+        if (!session?.user?.id) {
+            return NextResponse.json(
+                { error: 'Unauthorized' },
+                { status: 401 }
+            );
+        }
+
+        const userId = session.user.id.toString();
+        const ipAddress = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip');
+        const userAgent = request.headers.get('user-agent');
+
         const body = await request.json();
         const { 
             name, 
             description, 
             departmentId,
-            policyType,
-            createdBy, 
-            ipAddress, 
-            userAgent 
+            policyType
         } = body;
 
         // Input validation
@@ -158,7 +169,7 @@ export async function POST(request) {
         }
 
         // Rate limiting
-        const rateLimit = checkEFileRateLimit(createdBy, 'workflow_action', createdBy);
+        const rateLimit = checkEFileRateLimit(userId, 'workflow_action', userId);
         if (!rateLimit.allowed) {
             return NextResponse.json(
                 { error: 'Rate limit exceeded. Please try again later.' },
@@ -167,7 +178,7 @@ export async function POST(request) {
         }
 
         // Validate access
-        const accessValidation = await validateEFileAccess(createdBy, 'sla_policy', null, 'CREATE_SLA_POLICY');
+        const accessValidation = await validateEFileAccess(userId, 'sla_policy', null, 'CREATE_SLA_POLICY');
         if (!accessValidation.allowed) {
             return NextResponse.json(
                 { error: accessValidation.reason },
@@ -198,7 +209,7 @@ export async function POST(request) {
             entityType: 'SLA_POLICY',
             entityId: slaPolicy.id,
             action: 'SLA_POLICY_CREATED',
-            userId: createdBy,
+            userId: userId,
             details: {
                 slaPolicyName: name,
                 departmentId: departmentId || 'global'

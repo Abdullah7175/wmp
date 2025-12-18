@@ -36,7 +36,7 @@ export async function GET(request) {
     
     // Add authentication check for general access
     try {
-        const session = await auth();
+        const session = await auth(request);
         if (!session?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
@@ -107,7 +107,7 @@ export async function GET(request) {
 
                 // Access control: only creator or current assignee may view
                 try {
-                    const session = await auth();
+                    const session = await auth(request);
                     if (!session?.user?.id) {
                         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
                     }
@@ -317,7 +317,7 @@ export async function GET(request) {
             }
             
             // Add user-based filtering for efiling users (only if no specific filters are applied)
-            const session = await auth();
+            const session = await auth(request);
             if (session?.user?.id && ![1,2].includes(parseInt(session.user.role)) && !created_by && !assigned_to) {
                 // For efiling users, only show files they created or are assigned to
                 const efilingUserRes = await client.query(
@@ -416,7 +416,7 @@ export async function POST(request) {
         }
         
         // Get current user from session token
-        const session = await auth();
+        const session = await auth(request);
         if (!session?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
@@ -799,7 +799,7 @@ export async function DELETE(request) {
     
     try {
         // Admin-only hard delete with full cleanup (mirror of /efiling/files/[id])
-        const session = await auth();
+        const session = await auth(request);
         if (!session?.user?.role || ![1, 2].includes(parseInt(session.user.role))) {
             return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
         }

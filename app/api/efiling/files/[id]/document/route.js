@@ -11,7 +11,7 @@ export async function POST(request, { params }) {
         const body = await request.json();
         const { content, template } = body;
 
-        const session = await auth();
+        const session = await auth(request);
         if (!session?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
@@ -231,7 +231,7 @@ export async function PUT(request, { params }) {
         const { id } = await params;
         const body = await request.json();
         
-        const session = await auth();
+        const session = await auth(request);
         if (!session?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }

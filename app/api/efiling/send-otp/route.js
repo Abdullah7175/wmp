@@ -12,7 +12,7 @@ export async function POST(request) {
         const method = 'whatsapp';
         
         // Get session to verify user
-        const session = await auth();
+        const session = await auth(request);
         const sessionUserId = session?.user?.id; // This is users.id
         
         if (!sessionUserId && !userId) {

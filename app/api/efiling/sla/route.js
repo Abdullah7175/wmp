@@ -15,36 +15,46 @@ export async function GET(request) {
         const { searchParams } = new URL(request.url);
         const fromRole = searchParams.get('from_role_code');
         const toRole = searchParams.get('to_role_code');
+        const departmentId = searchParams.get('department_id');
         const activeOnly = searchParams.get('active_only') !== 'false';
 
         let query = `
-            SELECT id, from_role_code, to_role_code, level_scope, sla_hours, 
-                   description, is_active, created_at, updated_at
-            FROM efiling_sla_matrix
+            SELECT sm.id, sm.from_role_code, sm.to_role_code, sm.level_scope, sm.sla_hours, 
+                   sm.description, sm.is_active, sm.department_id, sm.created_at, sm.updated_at,
+                   d.name as department_name, d.code as department_code
+            FROM efiling_sla_matrix sm
+            LEFT JOIN efiling_departments d ON sm.department_id = d.id
             WHERE 1=1
         `;
         const params = [];
         let paramIndex = 1;
 
         if (activeOnly) {
-            query += ` AND is_active = $${paramIndex}`;
+            query += ` AND sm.is_active = $${paramIndex}`;
             params.push(true);
             paramIndex++;
         }
 
         if (fromRole) {
-            query += ` AND from_role_code = $${paramIndex}`;
+            query += ` AND sm.from_role_code = $${paramIndex}`;
             params.push(fromRole);
             paramIndex++;
         }
 
         if (toRole) {
-            query += ` AND to_role_code = $${paramIndex}`;
+            query += ` AND sm.to_role_code = $${paramIndex}`;
             params.push(toRole);
             paramIndex++;
         }
 
-        query += ` ORDER BY from_role_code, to_role_code ASC`;
+        if (departmentId) {
+            // Show entries for this department OR global entries (department_id IS NULL)
+            query += ` AND (sm.department_id = $${paramIndex} OR sm.department_id IS NULL)`;
+            params.push(departmentId);
+            paramIndex++;
+        }
+
+        query += ` ORDER BY sm.department_id NULLS LAST, sm.from_role_code, sm.to_role_code ASC`;
 
         const result = await client.query(query, params);
         
@@ -69,8 +79,8 @@ export async function GET(request) {
 export async function POST(request) {
     let client;
     try {
-        // Check authentication
-        const session = await auth();
+        // Check authentication - pass request to auth() for proper cookie reading
+        const session = await auth(request);
         if (!session?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
@@ -82,7 +92,7 @@ export async function POST(request) {
         // }
 
         const body = await request.json();
-        const { from_role_code, to_role_code, level_scope = 'district', sla_hours = 24, description, is_active = true } = body;
+        const { from_role_code, to_role_code, level_scope = 'district', sla_hours = 24, description, department_id, is_active = true } = body;
 
         if (!from_role_code || !to_role_code) {
             return NextResponse.json({ 
@@ -107,9 +117,9 @@ export async function POST(request) {
         const result = await client.query(`
             INSERT INTO efiling_sla_matrix (
                 from_role_code, to_role_code, level_scope, sla_hours, 
-                description, is_active, created_at, updated_at
+                description, department_id, is_active, created_at, updated_at
             )
-            VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
+            VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
             RETURNING *
         `, [
             from_role_code.toUpperCase(), 
@@ -117,6 +127,7 @@ export async function POST(request) {
             level_scope, 
             sla_hours, 
             description || null, 
+            department_id || null,
             is_active
         ]);
 

@@ -22,7 +22,7 @@ export default function CreateFileType() {
     const [categories, setCategories] = useState([]);
     const [roles, setRoles] = useState([]);
     const [departments, setDepartments] = useState([]);
-    const [slaPolicies, setSlaPolicies] = useState([]);
+    const [slaMatrixEntries, setSlaMatrixEntries] = useState([]);
     const [selectedCreators, setSelectedCreators] = useState([]);
     const [formData, setFormData] = useState({
         name: '',
@@ -32,7 +32,7 @@ export default function CreateFileType() {
         requiresApproval: true,
         can_create_roles: '',
         department_id: '',
-        sla_policy_id: '',
+        sla_matrix_id: '',
         max_approval_level: ''
     });
 
@@ -41,7 +41,7 @@ export default function CreateFileType() {
             loadCategories();
             loadRoles();
             loadDepartments();
-            // Don't load SLA policies initially - wait for department selection
+            // Don't load SLA matrix entries initially - wait for department selection
         }
     }, [session]);
 
@@ -86,19 +86,19 @@ export default function CreateFileType() {
         }
     };
 
-    const loadSlaPolicies = async (departmentId = null) => {
+    const loadSlaMatrixEntries = async (departmentId = null) => {
         try {
-            let url = '/api/efiling/sla-policies?is_active=true';
+            let url = '/api/efiling/sla?active_only=true';
             if (departmentId) {
                 url += `&department_id=${departmentId}`;
             }
             const response = await fetch(url);
             if (response.ok) {
                 const data = await response.json();
-                setSlaPolicies(data.slaPolicies || []);
+                setSlaMatrixEntries(data.data || []);
             }
         } catch (error) {
-            console.error('Error loading SLA policies:', error);
+            console.error('Error loading SLA matrix entries:', error);
         }
     };
 
@@ -109,14 +109,14 @@ export default function CreateFileType() {
             [field]: value
         }));
         
-        // Reload SLA policies when department changes
+        // Reload SLA matrix entries when department changes
         if (field === 'department_id') {
-            loadSlaPolicies(value || null);
-            // Clear SLA policy selection when department changes
+            loadSlaMatrixEntries(value || null);
+            // Clear SLA matrix selection when department changes
             if (value !== formData.department_id) {
                 setFormData(prev => ({
                     ...prev,
-                    sla_policy_id: ''
+                    sla_matrix_id: ''
                 }));
             }
         }
@@ -274,29 +274,31 @@ export default function CreateFileType() {
                             </div>
 
                             <div>
-                                <Label htmlFor="sla_policy_id">SLA Policy</Label>
+                                <Label htmlFor="sla_matrix_id">SLA Matrix Entry</Label>
                                 <Select 
-                                    value={formData.sla_policy_id || undefined} 
-                                    onValueChange={(value) => handleInputChange('sla_policy_id', value === 'none' ? '' : value)}
+                                    value={formData.sla_matrix_id || undefined} 
+                                    onValueChange={(value) => handleInputChange('sla_matrix_id', value === 'none' ? '' : value)}
                                     disabled={!formData.department_id}
                                 >
                                     <SelectTrigger>
-                                        <SelectValue placeholder={formData.department_id ? "Select SLA policy (optional)" : "Select department first"}>
-                                            {formData.sla_policy_id && slaPolicies.find(p => p.id == formData.sla_policy_id)?.name}
+                                        <SelectValue placeholder={formData.department_id ? "Select SLA matrix entry (optional)" : "Select department first"}>
+                                            {formData.sla_matrix_id && slaMatrixEntries.find(e => e.id == formData.sla_matrix_id) 
+                                                ? `${slaMatrixEntries.find(e => e.id == formData.sla_matrix_id).from_role_code} → ${slaMatrixEntries.find(e => e.id == formData.sla_matrix_id).to_role_code} (${slaMatrixEntries.find(e => e.id == formData.sla_matrix_id).sla_hours}h)`
+                                                : ''}
                                         </SelectValue>
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="none">No SLA Policy</SelectItem>
-                                        {slaPolicies.map((policy) => (
-                                            <SelectItem key={policy.id} value={policy.id.toString()}>
-                                                {policy.name} {policy.department_name ? `(${policy.department_name})` : '(Global)'}
+                                        <SelectItem value="none">No SLA Matrix Entry</SelectItem>
+                                        {slaMatrixEntries.map((entry) => (
+                                            <SelectItem key={entry.id} value={entry.id.toString()}>
+                                                {entry.from_role_code} → {entry.to_role_code} ({entry.sla_hours}h) {entry.department_name ? `- ${entry.department_name}` : '(Global)'}
                                             </SelectItem>
                                         ))}
                                     </SelectContent>
                                 </Select>
                                 {!formData.department_id && (
                                     <p className="text-sm text-muted-foreground mt-1">
-                                        Please select a department first to see available SLA policies
+                                        Please select a department first to see available SLA matrix entries
                                     </p>
                                 )}
                             </div>

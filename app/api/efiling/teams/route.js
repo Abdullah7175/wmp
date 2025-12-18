@@ -14,7 +14,7 @@ export async function GET(request) {
         const { searchParams } = new URL(request.url);
         const managerId = searchParams.get('manager_id');
         
-        const session = await auth();
+        const session = await auth(request);
         if (!session?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
@@ -76,7 +76,7 @@ export async function POST(request) {
             );
         }
         
-        const session = await auth();
+        const session = await auth(request);
         if (!session?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
@@ -166,7 +166,7 @@ export async function DELETE(request) {
             );
         }
         
-        const session = await auth();
+        const session = await auth(request);
         if (!session?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }

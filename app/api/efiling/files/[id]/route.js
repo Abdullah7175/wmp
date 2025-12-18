@@ -236,7 +236,7 @@ export async function DELETE(request, { params }) {
 
         // Admin-only hard delete with full cleanup
         const { auth } = await import('@/auth');
-        const session = await auth();
+        const session = await auth(request);
         if (!session?.user?.role || ![1, 2].includes(parseInt(session.user.role))) {
             return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
         }

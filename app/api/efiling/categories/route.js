@@ -99,7 +99,7 @@ export async function GET(request) {
 export async function POST(request) {
     let client;
     try {
-        const session = await auth();
+        const session = await auth(request);
         if (!session?.user?.role || ![1,2].includes(parseInt(session.user.role))) {
             return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
         }
@@ -167,7 +167,7 @@ export async function POST(request) {
 export async function PUT(request) {
     let client;
     try {
-        const session = await auth();
+        const session = await auth(request);
         if (!session?.user?.role || ![1,2].includes(parseInt(session.user.role))) {
             return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
         }
@@ -254,7 +254,7 @@ export async function PUT(request) {
 export async function DELETE(request) {
     let client;
     try {
-        const session = await auth();
+        const session = await auth(request);
         if (!session?.user?.role || ![1,2].includes(parseInt(session.user.role))) {
             return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
         }

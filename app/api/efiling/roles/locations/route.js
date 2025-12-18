@@ -3,7 +3,7 @@ import { connectToDatabase } from '@/lib/db';
 import { auth } from '@/auth';
 
 async function requireAdmin(request) {
-    const session = await auth();
+    const session = await auth(request);
     const role = parseInt(session?.user?.role);
     if (!session?.user || ![1, 2].includes(role)) {
         return { error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) };

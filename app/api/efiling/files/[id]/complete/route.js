@@ -17,7 +17,7 @@ export async function POST(request, { params }) {
         const { remarks } = body;
 
         // Get current user from session
-        const session = await auth();
+        const session = await auth(request);
         if (!session?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
@@ -186,7 +186,7 @@ export async function GET(request, { params }) {
         const { id } = await params;
 
         // Get current user from session
-        const session = await auth();
+        const session = await auth(request);
         if (!session?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }

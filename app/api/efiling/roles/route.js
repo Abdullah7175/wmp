@@ -13,7 +13,7 @@ export async function GET(request) {
         const client = await connectToDatabase();
 
         try {
-            const session = await auth();
+            const session = await auth(request);
             let userGeography = null;
             let canSeeAll = false;
 

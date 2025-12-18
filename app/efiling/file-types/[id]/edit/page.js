@@ -20,6 +20,7 @@ export default function EditFileType() {
     const [initialLoading, setInitialLoading] = useState(true);
     const [departments, setDepartments] = useState([]);
     const [roles, setRoles] = useState([]);
+    const [slaMatrixEntries, setSlaMatrixEntries] = useState([]);
     const [selectedCreators, setSelectedCreators] = useState([]);
 
     const [formData, setFormData] = useState({
@@ -27,6 +28,7 @@ export default function EditFileType() {
         code: '',
         description: '',
         department_id: '',
+        sla_matrix_id: '',
         requires_approval: false,
         auto_assign: false,
         workflow_template_id: '',
@@ -39,6 +41,15 @@ export default function EditFileType() {
             loadDependencies();
         }
     }, [params.id]);
+
+    useEffect(() => {
+        // Load SLA matrix entries when department changes
+        if (formData.department_id) {
+            loadSlaMatrixEntries(formData.department_id);
+        } else {
+            setSlaMatrixEntries([]);
+        }
+    }, [formData.department_id]);
 
     const loadDependencies = async () => {
         try {
@@ -62,6 +73,7 @@ export default function EditFileType() {
                     code: fileType.code || '',
                     description: fileType.description || '',
                     department_id: fileType.department_id || null,
+                    sla_matrix_id: fileType.sla_matrix_id || '',
                     requires_approval: fileType.requires_approval || false,
                     auto_assign: fileType.auto_assign || false,
                     workflow_template_id: fileType.workflow_template_id || '',
@@ -69,6 +81,11 @@ export default function EditFileType() {
                 });
                 const cr = Array.isArray(fileType.can_create_roles) ? fileType.can_create_roles : (()=>{ try { return JSON.parse(fileType.can_create_roles||'[]'); } catch { return []; }})();
                 setSelectedCreators(cr);
+                
+                // Load SLA matrix entries if department is set
+                if (fileType.department_id) {
+                    loadSlaMatrixEntries(fileType.department_id);
+                }
             } else {
                 throw new Error('Failed to load file type');
             }
@@ -110,11 +127,39 @@ export default function EditFileType() {
         }
     };
 
+    const loadSlaMatrixEntries = async (departmentId = null) => {
+        try {
+            let url = '/api/efiling/sla?active_only=true';
+            if (departmentId) {
+                url += `&department_id=${departmentId}`;
+            }
+            const response = await fetch(url);
+            if (response.ok) {
+                const data = await response.json();
+                setSlaMatrixEntries(data.data || []);
+            }
+        } catch (error) {
+            console.error('Error loading SLA matrix entries:', error);
+        }
+    };
+
     const handleInputChange = (field, value) => {
         setFormData(prev => ({
             ...prev,
             [field]: value
         }));
+        
+        // Reload SLA matrix entries when department changes
+        if (field === 'department_id') {
+            loadSlaMatrixEntries(value || null);
+            // Clear SLA matrix selection when department changes
+            if (value !== formData.department_id) {
+                setFormData(prev => ({
+                    ...prev,
+                    sla_matrix_id: ''
+                }));
+            }
+        }
     };
 
     const handleCheckboxChange = (field, checked) => {
@@ -251,7 +296,7 @@ export default function EditFileType() {
                             </div>
                         </div>
 
-                        {/* Department and Status */}
+                        {/* Department, SLA Policy and Status */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div>
                                 <Label htmlFor="department_id">Department</Label>
@@ -274,6 +319,38 @@ export default function EditFileType() {
                                     </SelectContent>
                                 </Select>
                             </div>
+                            <div>
+                                <Label htmlFor="sla_matrix_id">SLA Matrix Entry</Label>
+                                <Select 
+                                    value={formData.sla_matrix_id ? formData.sla_matrix_id.toString() : "none"} 
+                                    onValueChange={(value) => handleInputChange('sla_matrix_id', value === "none" ? '' : value)}
+                                    disabled={!formData.department_id}
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue placeholder={formData.department_id ? "Select SLA matrix entry (optional)" : "Select department first"}>
+                                            {formData.sla_matrix_id && slaMatrixEntries.find(e => e.id == formData.sla_matrix_id)
+                                                ? `${slaMatrixEntries.find(e => e.id == formData.sla_matrix_id).from_role_code} → ${slaMatrixEntries.find(e => e.id == formData.sla_matrix_id).to_role_code} (${slaMatrixEntries.find(e => e.id == formData.sla_matrix_id).sla_hours}h)`
+                                                : formData.department_id ? "No SLA Matrix Entry" : "Select department first"}
+                                        </SelectValue>
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="none">No SLA Matrix Entry</SelectItem>
+                                        {slaMatrixEntries.map((entry) => (
+                                            <SelectItem key={entry.id} value={entry.id.toString()}>
+                                                {entry.from_role_code} → {entry.to_role_code} ({entry.sla_hours}h) {entry.department_name ? `- ${entry.department_name}` : '(Global)'}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                {!formData.department_id && (
+                                    <p className="text-sm text-muted-foreground mt-1">
+                                        Please select a department first to see available SLA matrix entries
+                                    </p>
+                                )}
+                            </div>
+                        </div>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div>
                                 <Label htmlFor="is_active">Status</Label>
                                 <Select value={formData.is_active.toString()} onValueChange={(value) => handleInputChange('is_active', value === 'true')}>

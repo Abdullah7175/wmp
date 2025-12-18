@@ -2,11 +2,13 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Edit2, Trash2, Clock, ArrowLeft, Save } from "lucide-react";
 import {
@@ -15,16 +17,17 @@ import {
     DialogDescription,
     DialogHeader,
     DialogTitle,
-    DialogTrigger,
 } from "@/components/ui/dialog";
 
 export default function SLAMatrixPage() {
     const router = useRouter();
+    const { data: session } = useSession();
     const { toast } = useToast();
     const [slaEntries, setSlaEntries] = useState([]);
     const [loading, setLoading] = useState(true);
     const [dialogOpen, setDialogOpen] = useState(false);
     const [editingEntry, setEditingEntry] = useState(null);
+    const [departments, setDepartments] = useState([]);
     const [roles, setRoles] = useState([]);
 
     const [formData, setFormData] = useState({
@@ -32,13 +35,18 @@ export default function SLAMatrixPage() {
         to_role_code: '',
         level_scope: 'district',
         sla_hours: 24,
-        description: ''
+        description: '',
+        department_id: '',
+        is_active: true
     });
 
     useEffect(() => {
-        loadSLAMatrix();
-        loadRoles();
-    }, []);
+        if (session?.user) {
+            loadSLAMatrix();
+            loadDepartments();
+            loadRoles();
+        }
+    }, [session]);
 
     const loadSLAMatrix = async () => {
         setLoading(true);
@@ -66,9 +74,21 @@ export default function SLAMatrixPage() {
         }
     };
 
+    const loadDepartments = async () => {
+        try {
+            const response = await fetch('/api/efiling/departments?is_active=true');
+            if (response.ok) {
+                const data = await response.json();
+                setDepartments(Array.isArray(data) ? data : []);
+            }
+        } catch (error) {
+            console.error('Error loading departments:', error);
+        }
+    };
+
     const loadRoles = async () => {
         try {
-            const response = await fetch('/api/efiling/roles');
+            const response = await fetch('/api/efiling/roles?is_active=true');
             if (response.ok) {
                 const data = await response.json();
                 setRoles(Array.isArray(data) ? data : []);
@@ -92,7 +112,9 @@ export default function SLAMatrixPage() {
             to_role_code: '',
             level_scope: 'district',
             sla_hours: 24,
-            description: ''
+            description: '',
+            department_id: '',
+            is_active: true
         });
         setDialogOpen(true);
     };
@@ -100,17 +122,19 @@ export default function SLAMatrixPage() {
     const handleEdit = (entry) => {
         setEditingEntry(entry);
         setFormData({
-            from_role_code: entry.from_role_code,
-            to_role_code: entry.to_role_code,
-            level_scope: entry.level_scope,
-            sla_hours: entry.sla_hours,
-            description: entry.description || ''
+            from_role_code: entry.from_role_code || '',
+            to_role_code: entry.to_role_code || '',
+            level_scope: entry.level_scope || 'district',
+            sla_hours: entry.sla_hours || 24,
+            description: entry.description || '',
+            department_id: entry.department_id || '',
+            is_active: entry.is_active !== undefined ? entry.is_active : true
         });
         setDialogOpen(true);
     };
 
     const handleDelete = async (id) => {
-        if (!confirm('Are you sure you want to delete this SLA entry?')) {
+        if (!confirm('Are you sure you want to delete this SLA matrix entry?')) {
             return;
         }
 
@@ -119,24 +143,26 @@ export default function SLAMatrixPage() {
                 method: 'DELETE'
             });
 
+            const result = await response.json();
+
             if (response.ok) {
                 toast({
                     title: "Success",
-                    description: "SLA entry deleted successfully"
+                    description: "SLA matrix entry deleted successfully"
                 });
                 loadSLAMatrix();
             } else {
                 toast({
                     title: "Error",
-                    description: "Failed to delete SLA entry",
+                    description: result.error || "Failed to delete SLA matrix entry",
                     variant: "destructive"
                 });
             }
         } catch (error) {
-            console.error('Error deleting SLA entry:', error);
+            console.error('Error deleting SLA matrix entry:', error);
             toast({
                 title: "Error",
-                description: "Failed to delete SLA entry",
+                description: "Failed to delete SLA matrix entry",
                 variant: "destructive"
             });
         }
@@ -145,18 +171,46 @@ export default function SLAMatrixPage() {
     const handleSubmit = async (e) => {
         e.preventDefault();
 
+        if (!formData.from_role_code || !formData.to_role_code) {
+            toast({
+                title: "Error",
+                description: "From Role and To Role are required",
+                variant: "destructive"
+            });
+            return;
+        }
+
+        if (!formData.sla_hours || formData.sla_hours < 0) {
+            toast({
+                title: "Error",
+                description: "SLA Hours must be a positive number",
+                variant: "destructive"
+            });
+            return;
+        }
+
         try {
             const url = editingEntry 
                 ? `/api/efiling/sla/${editingEntry.id}`
                 : '/api/efiling/sla';
             const method = editingEntry ? 'PUT' : 'POST';
 
+            const requestBody = {
+                from_role_code: formData.from_role_code,
+                to_role_code: formData.to_role_code,
+                level_scope: formData.level_scope,
+                sla_hours: parseFloat(formData.sla_hours),
+                description: formData.description || null,
+                department_id: formData.department_id || null,
+                is_active: formData.is_active
+            };
+
             const response = await fetch(url, {
                 method,
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify(formData)
+                body: JSON.stringify(requestBody)
             });
 
             const result = await response.json();
@@ -164,22 +218,22 @@ export default function SLAMatrixPage() {
             if (response.ok) {
                 toast({
                     title: "Success",
-                    description: editingEntry ? "SLA entry updated successfully" : "SLA entry created successfully"
+                    description: editingEntry ? "SLA matrix entry updated successfully" : "SLA matrix entry created successfully"
                 });
                 setDialogOpen(false);
                 loadSLAMatrix();
             } else {
                 toast({
                     title: "Error",
-                    description: result.error || "Failed to save SLA entry",
+                    description: result.error || "Failed to save SLA matrix entry",
                     variant: "destructive"
                 });
             }
         } catch (error) {
-            console.error('Error saving SLA entry:', error);
+            console.error('Error saving SLA matrix entry:', error);
             toast({
                 title: "Error",
-                description: "Failed to save SLA entry",
+                description: "Failed to save SLA matrix entry",
                 variant: "destructive"
             });
         }
@@ -211,14 +265,14 @@ export default function SLAMatrixPage() {
                         Back
                     </Button>
                     <div>
-                        <h1 className="text-2xl font-bold">SLA (TAT) Matrix</h1>
-                        <p className="text-sm text-gray-600">Manage time limits for role transitions</p>
+                        <h1 className="text-2xl font-bold">SLA Matrix</h1>
+                        <p className="text-sm text-gray-600">Manage SLA matrix entries for role-based routing</p>
                     </div>
                 </div>
                 
                 <Button onClick={handleCreate} className="flex items-center gap-2">
                     <Plus className="w-4 h-4" />
-                    Add SLA Entry
+                    Add SLA Matrix Entry
                 </Button>
             </div>
 
@@ -233,7 +287,7 @@ export default function SLAMatrixPage() {
                     {slaEntries.length === 0 ? (
                         <div className="text-center py-12">
                             <Clock className="w-12 h-12 mx-auto text-gray-400 mb-4" />
-                            <p className="text-gray-600">No SLA entries found</p>
+                            <p className="text-gray-600">No SLA matrix entries found</p>
                             <Button onClick={handleCreate} className="mt-4">
                                 Create First Entry
                             </Button>
@@ -245,8 +299,9 @@ export default function SLAMatrixPage() {
                                     <tr className="border-b">
                                         <th className="p-3 text-left font-semibold">From Role</th>
                                         <th className="p-3 text-left font-semibold">To Role</th>
-                                        <th className="p-3 text-left font-semibold">Scope</th>
+                                        <th className="p-3 text-left font-semibold">Level Scope</th>
                                         <th className="p-3 text-left font-semibold">SLA Hours</th>
+                                        <th className="p-3 text-left font-semibold">Department</th>
                                         <th className="p-3 text-left font-semibold">Description</th>
                                         <th className="p-3 text-left font-semibold">Status</th>
                                         <th className="p-3 text-left font-semibold">Actions</th>
@@ -255,15 +310,11 @@ export default function SLAMatrixPage() {
                                 <tbody>
                                     {slaEntries.map((entry) => (
                                         <tr key={entry.id} className="border-b hover:bg-gray-50">
-                                            <td className="p-3">
-                                                <code className="text-sm bg-gray-100 px-2 py-1 rounded">
-                                                    {entry.from_role_code}
-                                                </code>
+                                            <td className="p-3 font-medium">
+                                                {entry.from_role_code}
                                             </td>
-                                            <td className="p-3">
-                                                <code className="text-sm bg-gray-100 px-2 py-1 rounded">
-                                                    {entry.to_role_code}
-                                                </code>
+                                            <td className="p-3 font-medium">
+                                                {entry.to_role_code}
                                             </td>
                                             <td className="p-3">
                                                 <span className="px-2 py-1 text-xs rounded bg-blue-100 text-blue-800">
@@ -271,9 +322,18 @@ export default function SLAMatrixPage() {
                                                 </span>
                                             </td>
                                             <td className="p-3">
-                                                <span className="font-medium text-green-600">
-                                                    {entry.sla_hours}h
-                                                </span>
+                                                <span className="font-medium">{entry.sla_hours} hrs</span>
+                                            </td>
+                                            <td className="p-3">
+                                                {entry.department_name ? (
+                                                    <span className="px-2 py-1 text-xs rounded bg-green-100 text-green-800">
+                                                        {entry.department_name}
+                                                    </span>
+                                                ) : (
+                                                    <span className="px-2 py-1 text-xs rounded bg-gray-100 text-gray-800">
+                                                        Global
+                                                    </span>
+                                                )}
                                             </td>
                                             <td className="p-3 text-sm text-gray-600">
                                                 {entry.description || '-'}
@@ -316,15 +376,15 @@ export default function SLAMatrixPage() {
 
             {/* Create/Edit Dialog */}
             <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-                <DialogContent className="max-w-2xl">
+                <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
                     <DialogHeader>
                         <DialogTitle>
-                            {editingEntry ? 'Edit SLA Entry' : 'Create SLA Entry'}
+                            {editingEntry ? 'Edit SLA Matrix Entry' : 'Create SLA Matrix Entry'}
                         </DialogTitle>
                         <DialogDescription>
                             {editingEntry 
-                                ? 'Update the SLA configuration for this role transition'
-                                : 'Define the time limit for a role transition'}
+                                ? 'Update the SLA matrix entry configuration'
+                                : 'Create a new SLA matrix entry for role-based routing'}
                         </DialogDescription>
                     </DialogHeader>
 
@@ -336,21 +396,17 @@ export default function SLAMatrixPage() {
                                     id="from_role_code"
                                     value={formData.from_role_code}
                                     onChange={(e) => handleInputChange('from_role_code', e.target.value.toUpperCase())}
-                                    placeholder="e.g., WAT_XEN_SAF"
+                                    placeholder="e.g., CEO"
                                     required
                                 />
-                                <p className="text-xs text-gray-500 mt-1">
-                                    Use * for wildcard (e.g., WAT_XEN_*)
-                                </p>
                             </div>
-
                             <div>
                                 <Label htmlFor="to_role_code">To Role Code *</Label>
                                 <Input
                                     id="to_role_code"
                                     value={formData.to_role_code}
                                     onChange={(e) => handleInputChange('to_role_code', e.target.value.toUpperCase())}
-                                    placeholder="e.g., SE_CEN"
+                                    placeholder="e.g., DIRECTOR"
                                     required
                                 />
                             </div>
@@ -358,7 +414,7 @@ export default function SLAMatrixPage() {
 
                         <div className="grid grid-cols-2 gap-4">
                             <div>
-                                <Label htmlFor="level_scope">Geographic Scope</Label>
+                                <Label htmlFor="level_scope">Level Scope *</Label>
                                 <Select
                                     value={formData.level_scope}
                                     onValueChange={(value) => handleInputChange('level_scope', value)}
@@ -372,35 +428,66 @@ export default function SLAMatrixPage() {
                                         <SelectItem value="global">Global</SelectItem>
                                     </SelectContent>
                                 </Select>
-                                <p className="text-xs text-gray-500 mt-1">
-                                    district = same district required, division = same division, global = no restriction
-                                </p>
                             </div>
-
                             <div>
                                 <Label htmlFor="sla_hours">SLA Hours *</Label>
                                 <Input
                                     id="sla_hours"
                                     type="number"
-                                    min="1"
+                                    min="0"
+                                    step="0.5"
                                     value={formData.sla_hours}
-                                    onChange={(e) => handleInputChange('sla_hours', parseInt(e.target.value))}
+                                    onChange={(e) => handleInputChange('sla_hours', parseFloat(e.target.value) || 0)}
                                     required
                                 />
-                                <p className="text-xs text-gray-500 mt-1">
-                                    Time limit in hours for this transition
-                                </p>
                             </div>
                         </div>
 
                         <div>
+                            <Label htmlFor="department_id">Department (Optional)</Label>
+                            <Select
+                                value={formData.department_id ? formData.department_id.toString() : "none"}
+                                onValueChange={(value) => handleInputChange('department_id', value === "none" ? null : parseInt(value))}
+                            >
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Select department (optional)">
+                                        {formData.department_id ? departments.find(d => d.id == formData.department_id)?.name : "Global Entry"}
+                                    </SelectValue>
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="none">Global Entry (No Department)</SelectItem>
+                                    {departments.map((dept) => (
+                                        <SelectItem key={dept.id} value={dept.id.toString()}>
+                                            {dept.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                            <p className="text-xs text-gray-500 mt-1">
+                                Leave as "Global Entry" for entries that apply to all departments, or select a specific department
+                            </p>
+                        </div>
+
+                        <div>
                             <Label htmlFor="description">Description</Label>
-                            <Input
+                            <Textarea
                                 id="description"
                                 value={formData.description}
                                 onChange={(e) => handleInputChange('description', e.target.value)}
-                                placeholder="Optional description"
+                                placeholder="Optional description of the SLA matrix entry"
+                                rows={3}
                             />
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                            <input
+                                type="checkbox"
+                                id="is_active"
+                                checked={formData.is_active}
+                                onChange={(e) => handleInputChange('is_active', e.target.checked)}
+                                className="w-4 h-4"
+                            />
+                            <Label htmlFor="is_active" className="cursor-pointer">Active</Label>
                         </div>
 
                         <div className="flex justify-end gap-2 pt-4">
@@ -425,4 +512,3 @@ export default function SLAMatrixPage() {
         </div>
     );
 }
-

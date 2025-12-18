@@ -34,7 +34,7 @@ export async function GET(request) {
 
         client = await connectToDatabase();
 
-        const session = await auth();
+        const session = await auth(request);
         let userGeography = null;
         let canSeeAll = false;
         if (session?.user) {
