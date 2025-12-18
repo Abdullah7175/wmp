@@ -15,7 +15,7 @@ export async function GET(request) {
 
         client = await connectToDatabase();
 
-        const session = await auth(request);
+        const session = await auth();
         let userGeography = null;
         let canSeeAll = false;
         if (session?.user) {
@@ -161,9 +161,18 @@ export async function GET(request) {
 export async function POST(request) {
     let client;
     try {
-        const session = await auth(request);
-        if (!session?.user?.role || ![1,2].includes(parseInt(session.user.role))) {
-            return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        const session = await auth();
+        if (!session) {
+            console.error('File types POST - No session found');
+            return NextResponse.json({ error: 'Forbidden - No session' }, { status: 403 });
+        }
+        if (!session.user) {
+            console.error('File types POST - No user in session:', session);
+            return NextResponse.json({ error: 'Forbidden - No user in session' }, { status: 403 });
+        }
+        if (!session.user.role || ![1,2].includes(parseInt(session.user.role))) {
+            console.error('File types POST - User is not admin. Role:', session.user.role);
+            return NextResponse.json({ error: 'Forbidden - Admin access required' }, { status: 403 });
         }
         const body = await request.json();
         const { 
@@ -274,9 +283,18 @@ export async function POST(request) {
 export async function PUT(request) {
     let client;
     try {
-        const session = await auth(request);
-        if (!session?.user?.role || ![1,2].includes(parseInt(session.user.role))) {
-            return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        const session = await auth();
+        if (!session) {
+            console.error('File types PUT - No session found');
+            return NextResponse.json({ error: 'Forbidden - No session' }, { status: 403 });
+        }
+        if (!session.user) {
+            console.error('File types PUT - No user in session:', session);
+            return NextResponse.json({ error: 'Forbidden - No user in session' }, { status: 403 });
+        }
+        if (!session.user.role || ![1,2].includes(parseInt(session.user.role))) {
+            console.error('File types PUT - User is not admin. Role:', session.user.role);
+            return NextResponse.json({ error: 'Forbidden - Admin access required' }, { status: 403 });
         }
         const body = await request.json();
         const { id, name, description, code, requires_approval, department_id, can_create_roles, sla_matrix_id, max_approval_level } = body;
@@ -384,9 +402,18 @@ export async function PUT(request) {
 export async function DELETE(request) {
     let client;
     try {
-        const session = await auth(request);
-        if (!session?.user?.role || ![1,2].includes(parseInt(session.user.role))) {
-            return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        const session = await auth();
+        if (!session) {
+            console.error('File types DELETE - No session found');
+            return NextResponse.json({ error: 'Forbidden - No session' }, { status: 403 });
+        }
+        if (!session.user) {
+            console.error('File types DELETE - No user in session:', session);
+            return NextResponse.json({ error: 'Forbidden - No user in session' }, { status: 403 });
+        }
+        if (!session.user.role || ![1,2].includes(parseInt(session.user.role))) {
+            console.error('File types DELETE - User is not admin. Role:', session.user.role);
+            return NextResponse.json({ error: 'Forbidden - Admin access required' }, { status: 403 });
         }
         const { searchParams } = new URL(request.url);
         const id = searchParams.get('id');

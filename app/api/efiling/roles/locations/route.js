@@ -2,11 +2,20 @@ import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/db';
 import { auth } from '@/auth';
 
-async function requireAdmin(request) {
-    const session = await auth(request);
-    const role = parseInt(session?.user?.role);
-    if (!session?.user || ![1, 2].includes(role)) {
-        return { error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) };
+async function requireAdmin() {
+    const session = await auth();
+    if (!session) {
+        console.error('Roles locations - No session found');
+        return { error: NextResponse.json({ error: 'Forbidden - No session' }, { status: 403 }) };
+    }
+    if (!session.user) {
+        console.error('Roles locations - No user in session:', session);
+        return { error: NextResponse.json({ error: 'Forbidden - No user in session' }, { status: 403 }) };
+    }
+    const role = parseInt(session.user.role);
+    if (![1, 2].includes(role)) {
+        console.error('Roles locations - User is not admin. Role:', role);
+        return { error: NextResponse.json({ error: 'Forbidden - Admin access required' }, { status: 403 }) };
     }
     return { session };
 }
@@ -88,7 +97,7 @@ export async function GET(request) {
 }
 
 export async function POST(request) {
-    const authResult = await requireAdmin(request);
+    const authResult = await requireAdmin();
     if (authResult.error) return authResult.error;
 
     const client = await connectToDatabase();
@@ -147,7 +156,7 @@ export async function POST(request) {
 }
 
 export async function PUT(request) {
-    const authResult = await requireAdmin(request);
+    const authResult = await requireAdmin();
     if (authResult.error) return authResult.error;
 
     const client = await connectToDatabase();
@@ -213,7 +222,7 @@ export async function PUT(request) {
 }
 
 export async function DELETE(request) {
-    const authResult = await requireAdmin(request);
+    const authResult = await requireAdmin();
     if (authResult.error) return authResult.error;
 
     const { searchParams } = new URL(request.url);

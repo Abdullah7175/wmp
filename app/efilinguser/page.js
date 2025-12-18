@@ -148,22 +148,34 @@ export default function EFileUserDashboard() {
         const userRole = userProfile.efiling_role?.code;
         const userDepartment = userProfile.department_id;
         
-        // Water department users can only see water files (use actual codes from DB)
-        if ([6, 7, 8, 9].includes(userDepartment)) {
-            return files.filter(file => ['WSP', 'WB_MW', 'PLM'].includes(file.file_type_code || file.file_type?.code));
-        }
-        
-        // Sewerage department users can only see sewerage files
-        if ([10, 19].includes(userDepartment)) {
-            return files.filter(file => ['SEP'].includes(file.file_type_code || file.file_type?.code));
-        }
-        
         // Admin users can see all files
         if (userRole === 'SYS_ADMIN') {
             return files;
         }
         
-        return files;
+        // Filter by department_id first (more reliable)
+        // If file has department_id, it must match user's department
+        // Otherwise, fall back to file_type_code filtering
+        return files.filter(file => {
+            // If file has department_id, check if it matches user's department
+            if (file.department_id) {
+                return file.department_id === userDepartment;
+            }
+            
+            // Fallback to file_type_code filtering for files without department_id
+            // Water department users can only see water files
+            if ([6, 7, 8, 9].includes(userDepartment)) {
+                return ['WSP', 'WB_MW', 'PLM', 'EW_WE&M'].includes(file.file_type_code || file.file_type?.code);
+            }
+            
+            // Sewerage department users can only see sewerage files
+            if ([10, 19].includes(userDepartment)) {
+                return ['SEP'].includes(file.file_type_code || file.file_type?.code);
+            }
+            
+            // For other departments, show all files
+            return true;
+        });
     };
 
     const getRoleDisplayName = (roleCode) => {

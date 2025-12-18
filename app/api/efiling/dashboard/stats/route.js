@@ -19,9 +19,18 @@ export const dynamic = 'force-dynamic';
 export async function GET(request) {
     let client;
     try {
-        const session = await auth(request);
-        if (!session?.user?.id) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        const session = await auth();
+        if (!session) {
+            console.error('Dashboard stats - No session found');
+            return NextResponse.json({ error: 'Unauthorized - No session' }, { status: 401 });
+        }
+        if (!session.user) {
+            console.error('Dashboard stats - No user in session:', session);
+            return NextResponse.json({ error: 'Unauthorized - No user in session' }, { status: 401 });
+        }
+        if (!session.user.id) {
+            console.error('Dashboard stats - No user ID in session:', session.user);
+            return NextResponse.json({ error: 'Unauthorized - No user ID' }, { status: 401 });
         }
 
         client = await connectToDatabase();

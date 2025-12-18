@@ -56,6 +56,27 @@ export async function GET(request, { params }) {
       case 'webp':
         contentType = 'image/webp';
         break;
+      case 'pdf':
+        contentType = 'application/pdf';
+        break;
+      case 'doc':
+        contentType = 'application/msword';
+        break;
+      case 'docx':
+        contentType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+        break;
+      case 'xls':
+        contentType = 'application/vnd.ms-excel';
+        break;
+      case 'xlsx':
+        contentType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+        break;
+      case 'ppt':
+        contentType = 'application/vnd.ms-powerpoint';
+        break;
+      case 'pptx':
+        contentType = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
+        break;
       case 'mp4':
         contentType = 'video/mp4';
         break;

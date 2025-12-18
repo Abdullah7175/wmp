@@ -14,8 +14,9 @@ export async function POST(request, { params }) {
             return NextResponse.json({ error: 'Template ID is required' }, { status: 400 });
         }
 
-        const session = await auth(request);
+        const session = await auth();
         if (!session?.user?.id) {
+            console.error('Template use - No session or user ID');
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 

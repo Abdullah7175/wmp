@@ -35,7 +35,7 @@ export async function GET(request) {
             return NextResponse.json([]);
         }
         
-        const session = await auth(request);
+        const session = await auth();
         let userGeography = null;
         let canSeeAll = false;
 

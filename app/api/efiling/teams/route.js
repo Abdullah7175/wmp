@@ -14,9 +14,18 @@ export async function GET(request) {
         const { searchParams } = new URL(request.url);
         const managerId = searchParams.get('manager_id');
         
-        const session = await auth(request);
-        if (!session?.user?.id) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        const session = await auth();
+        if (!session) {
+            console.error('Teams GET - No session found');
+            return NextResponse.json({ error: 'Unauthorized - No session' }, { status: 401 });
+        }
+        if (!session.user) {
+            console.error('Teams GET - No user in session:', session);
+            return NextResponse.json({ error: 'Unauthorized - No user in session' }, { status: 401 });
+        }
+        if (!session.user.id) {
+            console.error('Teams GET - No user ID in session:', session.user);
+            return NextResponse.json({ error: 'Unauthorized - No user ID' }, { status: 401 });
         }
         
         client = await connectToDatabase();
@@ -76,15 +85,21 @@ export async function POST(request) {
             );
         }
         
-        const session = await auth(request);
-        if (!session?.user?.id) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        const session = await auth();
+        if (!session) {
+            console.error('Teams POST - No session found');
+            return NextResponse.json({ error: 'Unauthorized - No session' }, { status: 401 });
+        }
+        if (!session.user) {
+            console.error('Teams POST - No user in session:', session);
+            return NextResponse.json({ error: 'Unauthorized - No user in session' }, { status: 401 });
+        }
+        if (!session.user.id) {
+            console.error('Teams POST - No user ID in session:', session.user);
+            return NextResponse.json({ error: 'Unauthorized - No user ID' }, { status: 401 });
         }
         
         client = await connectToDatabase();
-        if (!session?.user?.id) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
         const isAdmin = [1, 2].includes(parseInt(session.user.role));
         
         if (!isAdmin) {
@@ -166,9 +181,18 @@ export async function DELETE(request) {
             );
         }
         
-        const session = await auth(request);
-        if (!session?.user?.id) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        const session = await auth();
+        if (!session) {
+            console.error('Teams DELETE - No session found');
+            return NextResponse.json({ error: 'Unauthorized - No session' }, { status: 401 });
+        }
+        if (!session.user) {
+            console.error('Teams DELETE - No user in session:', session);
+            return NextResponse.json({ error: 'Unauthorized - No user in session' }, { status: 401 });
+        }
+        if (!session.user.id) {
+            console.error('Teams DELETE - No user ID in session:', session.user);
+            return NextResponse.json({ error: 'Unauthorized - No user ID' }, { status: 401 });
         }
         
         // Check if user is admin or the manager

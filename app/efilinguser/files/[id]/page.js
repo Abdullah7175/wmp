@@ -1373,6 +1373,37 @@ export default function FileDetail() {
                                         </Button>
                                     </div>
                                 </div>
+                            ) : selectedAttachment.file_type === 'application/msword' || 
+                                  selectedAttachment.file_type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+                                  selectedAttachment.file_name?.toLowerCase().endsWith('.doc') ||
+                                  selectedAttachment.file_name?.toLowerCase().endsWith('.docx') ? (
+                                <div className="space-y-4">
+                                    <div className="border rounded-lg overflow-hidden bg-gray-50 p-4">
+                                        <p className="text-sm text-gray-600 mb-4">
+                                            Word documents cannot be previewed directly in the browser. Please download to view.
+                                        </p>
+                                        <div className="flex justify-center items-center min-h-[200px] bg-gray-100 rounded">
+                                            <FileText className="w-24 h-24 text-gray-400" />
+                                        </div>
+                                    </div>
+                                    <div className="flex justify-end">
+                                        <Button 
+                                            variant="outline"
+                                            onClick={() => {
+                                                const link = document.createElement('a');
+                                                link.href = selectedAttachment.file_url;
+                                                link.download = selectedAttachment.file_name;
+                                                link.target = '_blank';
+                                                document.body.appendChild(link);
+                                                link.click();
+                                                document.body.removeChild(link);
+                                            }}
+                                        >
+                                            <Download className="w-4 h-4 mr-2" />
+                                            Download File
+                                        </Button>
+                                    </div>
+                                </div>
                             ) : (
                                 <div className="text-center py-8">
                                     <FileText className="w-16 h-16 mx-auto text-gray-400 mb-4" />

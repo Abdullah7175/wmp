@@ -38,8 +38,15 @@ export async function POST(request) {
         
         const userId = request.headers.get('x-user-id') || 'system';
         
+        // Handle standalone mode - get correct base directory
+        let baseDir = process.cwd();
+        if (baseDir.includes('.next/standalone') || baseDir.includes('.next\\standalone')) {
+            // In standalone mode, go up two levels to get to project root
+            baseDir = join(baseDir, '..', '..');
+        }
+        
         // Create upload directory if it doesn't exist
-        const uploadDir = join(process.cwd(), 'public', 'uploads', 'efiling', 'attachments');
+        const uploadDir = join(baseDir, 'public', 'uploads', 'efiling', 'attachments');
         await mkdir(uploadDir, { recursive: true });
         
         // Generate unique filename
@@ -50,6 +57,19 @@ export async function POST(request) {
         // Save file to disk
         const fileBuffer = await file.arrayBuffer();
         await fs.writeFile(filePath, Buffer.from(fileBuffer));
+        
+        // Verify file was saved successfully
+        try {
+            const stats = await fs.stat(filePath);
+            if (!stats.isFile()) {
+                throw new Error('File was not saved correctly');
+            }
+            console.log(`File uploaded successfully: ${filePath} (${stats.size} bytes)`);
+            console.log(`File URL: /uploads/efiling/attachments/${uniqueFileName}`);
+        } catch (verifyError) {
+            console.error(`Error verifying uploaded file: ${verifyError.message}`);
+            throw new Error('Failed to verify uploaded file');
+        }
         
         // Generate public URL
         const fileUrl = `/uploads/efiling/attachments/${uniqueFileName}`;

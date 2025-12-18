@@ -108,17 +108,32 @@ export async function GET(request) {
         // For non-admin users, filter by their department/role
         if (!isAdmin && userEfiling) {
             conditions.push(`(
-                -- Templates matching user's department (from bridge table or single department)
-                (EXISTS (
-                    SELECT 1 FROM efiling_template_departments td 
-                    WHERE td.template_id = t.id AND td.department_id = $${paramIndex}
-                ) OR t.department_id = $${paramIndex} OR t.department_id IS NULL)
-                AND
-                -- Templates matching user's role (from bridge table or single role)
-                (EXISTS (
-                    SELECT 1 FROM efiling_template_roles tr 
-                    WHERE tr.template_id = t.id AND tr.role_id = $${paramIndex + 1}
-                ) OR t.role_id = $${paramIndex + 1} OR t.role_id IS NULL)
+                -- Global templates (no department, no role, no bridge entries)
+                (
+                    t.department_id IS NULL 
+                    AND t.role_id IS NULL
+                    AND NOT EXISTS (SELECT 1 FROM efiling_template_departments td WHERE td.template_id = t.id)
+                    AND NOT EXISTS (SELECT 1 FROM efiling_template_roles tr WHERE tr.template_id = t.id)
+                )
+                OR
+                -- Templates matching user's department AND role (both must match)
+                (
+                    -- Department matches (from bridge table or single department)
+                    (
+                        EXISTS (
+                            SELECT 1 FROM efiling_template_departments td 
+                            WHERE td.template_id = t.id AND td.department_id = $${paramIndex}
+                        ) OR t.department_id = $${paramIndex}
+                    )
+                    AND
+                    -- Role matches (from bridge table or single role)
+                    (
+                        EXISTS (
+                            SELECT 1 FROM efiling_template_roles tr 
+                            WHERE tr.template_id = t.id AND tr.role_id = $${paramIndex + 1}
+                        ) OR t.role_id = $${paramIndex + 1}
+                    )
+                )
                 OR
                 -- User's own templates
                 (t.created_by = $${paramIndex + 2})
