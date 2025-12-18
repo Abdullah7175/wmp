@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/db';
-import { getToken } from 'next-auth/jwt';
+import { auth } from '@/auth';
 
 export async function GET(request) {
     const { searchParams } = new URL(request.url);
@@ -99,8 +99,8 @@ export async function GET(request) {
 export async function POST(request) {
     let client;
     try {
-        const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
-        if (!token?.user?.role || ![1,2].includes(token.user.role)) {
+        const session = await auth();
+        if (!session?.user?.role || ![1,2].includes(parseInt(session.user.role))) {
             return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
         }
 
@@ -167,8 +167,8 @@ export async function POST(request) {
 export async function PUT(request) {
     let client;
     try {
-        const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
-        if (!token?.user?.role || ![1,2].includes(token.user.role)) {
+        const session = await auth();
+        if (!session?.user?.role || ![1,2].includes(parseInt(session.user.role))) {
             return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
         }
 
@@ -254,8 +254,8 @@ export async function PUT(request) {
 export async function DELETE(request) {
     let client;
     try {
-        const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
-        if (!token?.user?.role || ![1,2].includes(token.user.role)) {
+        const session = await auth();
+        if (!session?.user?.role || ![1,2].includes(parseInt(session.user.role))) {
             return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
         }
 

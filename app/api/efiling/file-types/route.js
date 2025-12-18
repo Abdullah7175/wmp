@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/db';
 import { eFileActionLogger } from '@/lib/efilingActionLogger';
-import { getToken } from 'next-auth/jwt';
+import { auth } from '@/auth';
 import { getUserGeography, isGlobalRoleCode } from '@/lib/efilingGeographicRouting';
 
 export async function GET(request) {
@@ -15,14 +15,14 @@ export async function GET(request) {
 
         client = await connectToDatabase();
 
-        const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
+        const session = await auth();
         let userGeography = null;
         let canSeeAll = false;
-        if (token?.user) {
-            if ([1, 2].includes(token.user.role)) {
+        if (session?.user) {
+            if ([1, 2].includes(parseInt(session.user.role))) {
                 canSeeAll = true;
             } else {
-                userGeography = await getUserGeography(client, token.user.id);
+                userGeography = await getUserGeography(client, session.user.id);
                 if (userGeography && isGlobalRoleCode(userGeography.role_code)) {
                     canSeeAll = true;
                 }
@@ -55,7 +55,7 @@ export async function GET(request) {
             try {
                 await eFileActionLogger.logAction({
                     entityId: null,
-                    userId: token?.user?.id || 'system',
+                    userId: session?.user?.id || 'system',
                     action: 'FILE_TYPE_VIEWED',
                     entityType: 'efiling_file_type',
                     details: { 
@@ -127,7 +127,7 @@ export async function GET(request) {
             try {
                 await eFileActionLogger.logAction({
                     entityId: null,
-                    userId: token?.user?.id || 'system',
+                    userId: session?.user?.id || 'system',
                     action: 'FILE_TYPES_LISTED',
                     entityType: 'efiling_file_type',
                     details: { 
@@ -161,8 +161,8 @@ export async function GET(request) {
 export async function POST(request) {
     let client;
     try {
-        const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
-        if (!token?.user?.role || ![1,2].includes(token.user.role)) {
+        const session = await auth();
+        if (!session?.user?.role || ![1,2].includes(parseInt(session.user.role))) {
             return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
         }
         const body = await request.json();
@@ -175,7 +175,10 @@ export async function POST(request) {
             createdBy, 
             ipAddress, 
             userAgent,
-            can_create_roles
+            can_create_roles,
+            department_id,
+            sla_policy_id,
+            max_approval_level
         } = body;
 
         // Input validation
@@ -206,8 +209,8 @@ export async function POST(request) {
         const result = await client.query(`
             INSERT INTO efiling_file_types (
                 name, description, category_id, code, requires_approval, 
-                created_at, can_create_roles
-            ) VALUES ($1, $2, $3, $4, $5, NOW(), $6)
+                created_at, can_create_roles, department_id, sla_policy_id, max_approval_level
+            ) VALUES ($1, $2, $3, $4, $5, NOW(), $6, $7, $8, $9)
             RETURNING *
         `, [
             name,
@@ -215,7 +218,10 @@ export async function POST(request) {
             categoryId,
             code,
             requiresApproval !== false,
-            Array.isArray(can_create_roles) ? JSON.stringify(can_create_roles) : (typeof can_create_roles === 'string' ? can_create_roles : null)
+            Array.isArray(can_create_roles) ? JSON.stringify(can_create_roles) : (typeof can_create_roles === 'string' ? can_create_roles : null),
+            department_id || null,
+            sla_policy_id || null,
+            max_approval_level || null
         ]);
 
         const fileType = result.rows[0];
@@ -268,12 +274,12 @@ export async function POST(request) {
 export async function PUT(request) {
     let client;
     try {
-        const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
-        if (!token?.user?.role || ![1,2].includes(token.user.role)) {
+        const session = await auth();
+        if (!session?.user?.role || ![1,2].includes(parseInt(session.user.role))) {
             return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
         }
         const body = await request.json();
-        const { id, name, description, code, requires_approval, department_id, can_create_roles } = body;
+        const { id, name, description, code, requires_approval, department_id, can_create_roles, sla_policy_id, max_approval_level } = body;
         const ipAddress = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip');
         const userAgent = request.headers.get('user-agent');
 
@@ -307,8 +313,10 @@ export async function PUT(request) {
                 requires_approval = $4,
                 department_id = $5,
                 can_create_roles = COALESCE($6, can_create_roles),
+                sla_policy_id = COALESCE($7, sla_policy_id),
+                max_approval_level = COALESCE($8, max_approval_level),
                 updated_at = NOW()
-            WHERE id = $7
+            WHERE id = $9
             RETURNING *
         `, [
             name,
@@ -317,6 +325,8 @@ export async function PUT(request) {
             requires_approval,
             department_id,
             Array.isArray(can_create_roles) ? JSON.stringify(can_create_roles) : (typeof can_create_roles === 'string' ? can_create_roles : null),
+            sla_policy_id,
+            max_approval_level,
             id
         ]);
 
@@ -369,8 +379,8 @@ export async function PUT(request) {
 export async function DELETE(request) {
     let client;
     try {
-        const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
-        if (!token?.user?.role || ![1,2].includes(token.user.role)) {
+        const session = await auth();
+        if (!session?.user?.role || ![1,2].includes(parseInt(session.user.role))) {
             return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
         }
         const { searchParams } = new URL(request.url);

@@ -21,6 +21,8 @@ export default function CreateFileType() {
     const [loading, setLoading] = useState(false);
     const [categories, setCategories] = useState([]);
     const [roles, setRoles] = useState([]);
+    const [departments, setDepartments] = useState([]);
+    const [slaPolicies, setSlaPolicies] = useState([]);
     const [selectedCreators, setSelectedCreators] = useState([]);
     const [formData, setFormData] = useState({
         name: '',
@@ -28,13 +30,18 @@ export default function CreateFileType() {
         categoryId: '',
         code: '',
         requiresApproval: true,
-        can_create_roles: ''
+        can_create_roles: '',
+        department_id: '',
+        sla_policy_id: '',
+        max_approval_level: ''
     });
 
     useEffect(() => {
         if (session?.user) {
             loadCategories();
             loadRoles();
+            loadDepartments();
+            loadSlaPolicies();
         }
     }, [session]);
 
@@ -64,6 +71,30 @@ export default function CreateFileType() {
             }
         } catch (error) {
             console.error('Error loading roles:', error);
+        }
+    };
+
+    const loadDepartments = async () => {
+        try {
+            const response = await fetch('/api/efiling/departments?is_active=true');
+            if (response.ok) {
+                const data = await response.json();
+                setDepartments(Array.isArray(data) ? data : []);
+            }
+        } catch (error) {
+            console.error('Error loading departments:', error);
+        }
+    };
+
+    const loadSlaPolicies = async () => {
+        try {
+            const response = await fetch('/api/efiling/sla-policies?is_active=true');
+            if (response.ok) {
+                const data = await response.json();
+                setSlaPolicies(data.slaPolicies || []);
+            }
+        } catch (error) {
+            console.error('Error loading SLA policies:', error);
         }
     };
 
@@ -204,6 +235,62 @@ export default function CreateFileType() {
                                 </Select>
                             </div>
 
+                            <div>
+                                <Label htmlFor="department_id">Department</Label>
+                                <Select 
+                                    value={formData.department_id || undefined} 
+                                    onValueChange={(value) => handleInputChange('department_id', value === 'none' ? '' : value)}
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Select department (optional)">
+                                            {formData.department_id && departments.find(d => d.id == formData.department_id)?.name}
+                                        </SelectValue>
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="none">No Department</SelectItem>
+                                        {departments.map((dept) => (
+                                            <SelectItem key={dept.id} value={dept.id.toString()}>
+                                                {dept.name}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+
+                            <div>
+                                <Label htmlFor="sla_policy_id">SLA Policy</Label>
+                                <Select 
+                                    value={formData.sla_policy_id || undefined} 
+                                    onValueChange={(value) => handleInputChange('sla_policy_id', value === 'none' ? '' : value)}
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Select SLA policy (optional)">
+                                            {formData.sla_policy_id && slaPolicies.find(p => p.id == formData.sla_policy_id)?.name}
+                                        </SelectValue>
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="none">No SLA Policy</SelectItem>
+                                        {slaPolicies.map((policy) => (
+                                            <SelectItem key={policy.id} value={policy.id.toString()}>
+                                                {policy.name}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+
+                            <div>
+                                <Label htmlFor="max_approval_level">Max Approval Level</Label>
+                                <Input
+                                    id="max_approval_level"
+                                    type="number"
+                                    min="1"
+                                    max="5"
+                                    value={formData.max_approval_level}
+                                    onChange={(e) => handleInputChange('max_approval_level', e.target.value ? parseInt(e.target.value) : '')}
+                                    placeholder="1-5 (optional)"
+                                />
+                            </div>
 
                         </div>
 
