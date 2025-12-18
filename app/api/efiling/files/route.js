@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 import { connectToDatabase } from '@/lib/db';
 import { eFileActionLogger, EFILING_ACTION_TYPES, EFILING_ENTITY_TYPES } from '@/lib/efilingActionLogger';
 import { auth } from '@/auth';
@@ -36,10 +37,38 @@ export async function GET(request) {
     
     // Add authentication check for general access
     try {
-        const session = await auth(request);
-        if (!session?.user?.id) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        // Log request details for debugging
+        const cookieHeader = request.headers.get('cookie');
+        const cookieStore = await cookies();
+        const sessionCookie = cookieStore.get(
+            process.env.NODE_ENV === 'production' 
+                ? '__Secure-next-auth.session-token' 
+                : 'next-auth.session-token'
+        ) || cookieStore.get('authjs.session-token') || cookieStore.get('__Secure-authjs.session-token');
+        
+        console.log('Files route - Cookie header present:', !!cookieHeader);
+        console.log('Files route - Session cookie present:', !!sessionCookie);
+        console.log('Files route - Request URL:', request.url);
+        
+        const session = await auth();
+        
+        // Better error logging
+        if (!session) {
+            console.error('Files route - No session found. Cookies:', cookieHeader ? 'Present' : 'Missing', 'Session cookie:', sessionCookie ? 'Present' : 'Missing');
+            return NextResponse.json({ error: 'Unauthorized - No session' }, { status: 401 });
         }
+        
+        if (!session.user) {
+            console.error('Files route - No user in session:', JSON.stringify(session, null, 2));
+            return NextResponse.json({ error: 'Unauthorized - No user in session' }, { status: 401 });
+        }
+        
+        if (!session.user.id) {
+            console.error('Files route - No user ID in session:', JSON.stringify(session.user, null, 2));
+            return NextResponse.json({ error: 'Unauthorized - No user ID' }, { status: 401 });
+        }
+        
+        console.log('Files route - Session found for user:', session.user.id);
         
         // Allow access for admin/manager roles (1,2) or efiling users
         if (![1,2].includes(parseInt(session.user.role))) {

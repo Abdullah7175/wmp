@@ -8,13 +8,15 @@ export async function POST(request, { params }) {
     let client;
     try {
         const { id } = await params;
-        const body = await request.json();
-        const { content, template } = body;
-
-        const session = await auth(request);
+        
+        // Call auth first before reading request body to avoid "body already consumed" error
+        const session = await auth();
         if (!session?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
+        
+        const body = await request.json();
+        const { content, template } = body;
 
         client = await connectToDatabase();
         
@@ -229,9 +231,14 @@ export async function PUT(request, { params }) {
     let client;
     try {
         const { id } = await params;
-        const body = await request.json();
         
-        const session = await auth(request);
+        // Call auth first before reading request body to avoid "body already consumed" error
+        const session = await auth();
+        if (!session?.user?.id) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+        
+        const body = await request.json();
         if (!session?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }

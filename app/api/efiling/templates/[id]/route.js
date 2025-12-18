@@ -14,7 +14,7 @@ export async function GET(request, { params }) {
             return NextResponse.json({ error: 'Template ID is required' }, { status: 400 });
         }
 
-        const session = await auth(request);
+        const session = await auth();
         if (!session?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
@@ -79,6 +79,17 @@ export async function PUT(request, { params }) {
     let client;
     try {
         const { id } = await params;
+        
+        if (!id) {
+            return NextResponse.json({ error: 'Template ID is required' }, { status: 400 });
+        }
+        
+        // Call auth first before reading request body to avoid "body already consumed" error
+        const session = await auth();
+        if (!session?.user?.id) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+        
         const body = await request.json();
         const { name, template_type, title, subject, main_content, category_id, department_id, role_id, department_ids, role_ids } = body;
 
@@ -90,12 +101,6 @@ export async function PUT(request, { params }) {
         const finalRoleIds = role_ids && Array.isArray(role_ids) && role_ids.length > 0 
             ? role_ids.filter(id => id) 
             : (role_id ? [role_id] : []);
-
-        if (!id) {
-            return NextResponse.json({ error: 'Template ID is required' }, { status: 400 });
-        }
-
-        const session = await auth(request);
         if (!session?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }

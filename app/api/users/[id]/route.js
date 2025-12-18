@@ -25,7 +25,7 @@ export async function GET(request, { params }) {
 
         // Get session to ensure user is authenticated
         const session = await auth();
-        if (!session) {
+        if (!session || !session.user) {
             return NextResponse.json(
                 { error: 'Unauthorized' },
                 { status: 401 }

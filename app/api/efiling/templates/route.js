@@ -24,9 +24,22 @@ export async function GET(request) {
         const userId = searchParams.get('user_id');
         const includeSystem = searchParams.get('include_system') !== 'false';
 
-        const session = await auth(request);
-        if (!session?.user?.id) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        const session = await auth();
+        
+        // Better error logging
+        if (!session) {
+            console.error('Templates GET: No session found');
+            return NextResponse.json({ error: 'Unauthorized - No session' }, { status: 401 });
+        }
+        
+        if (!session.user) {
+            console.error('Templates GET: No user in session:', session);
+            return NextResponse.json({ error: 'Unauthorized - No user in session' }, { status: 401 });
+        }
+        
+        if (!session.user.id) {
+            console.error('Templates GET: No user ID in session:', session.user);
+            return NextResponse.json({ error: 'Unauthorized - No user ID' }, { status: 401 });
         }
 
         client = await connectToDatabase();
@@ -189,6 +202,25 @@ export async function GET(request) {
 export async function POST(request) {
     let client;
     try {
+        // Call auth first before reading request body to avoid "body already consumed" error
+        const session = await auth();
+        
+        // Better error logging
+        if (!session) {
+            console.error('Templates POST: No session found');
+            return NextResponse.json({ error: 'Unauthorized - No session' }, { status: 401 });
+        }
+        
+        if (!session.user) {
+            console.error('Templates POST: No user in session:', session);
+            return NextResponse.json({ error: 'Unauthorized - No user in session' }, { status: 401 });
+        }
+        
+        if (!session.user.id) {
+            console.error('Templates POST: No user ID in session:', session.user);
+            return NextResponse.json({ error: 'Unauthorized - No user ID' }, { status: 401 });
+        }
+        
         const body = await request.json();
         const { name, template_type, title, subject, main_content, category_id, department_id, role_id, department_ids, role_ids } = body;
 
@@ -197,11 +229,6 @@ export async function POST(request) {
                 { error: 'Name and at least one of (title, subject, main_content) is required' },
                 { status: 400 }
             );
-        }
-
-        const session = await auth(request);
-        if (!session?.user?.id) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
         client = await connectToDatabase();
@@ -217,10 +244,11 @@ export async function POST(request) {
         `, [session.user.id]);
 
         if (userRes.rows.length === 0 && !isAdmin) {
+            await client.release();
             return NextResponse.json({ error: 'User not found in e-filing system' }, { status: 403 });
         }
 
-        const userEfiling = userRes.rows[0];
+        const userEfiling = userRes.rows[0] || null;
 
         // Support both single and multiple departments/roles
         let finalDepartmentIds = department_ids && Array.isArray(department_ids) && department_ids.length > 0 
@@ -235,6 +263,10 @@ export async function POST(request) {
         let isSystemTemplate = false;
 
         if (!isAdmin) {
+            if (!userEfiling) {
+                await client.release();
+                return NextResponse.json({ error: 'User not found in e-filing system' }, { status: 403 });
+            }
             finalDepartmentIds = userEfiling.department_id ? [userEfiling.department_id] : [];
             finalRoleIds = userEfiling.efiling_role_id ? [userEfiling.efiling_role_id] : [];
             isSystemTemplate = false;

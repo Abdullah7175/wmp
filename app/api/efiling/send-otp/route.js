@@ -9,12 +9,12 @@ export async function POST(request) {
     let userId;
     const method = 'whatsapp'; // Always use WhatsApp method
     try {
+        // Call auth first before reading request body to avoid "body already consumed" error
+        const session = await auth();
+        const sessionUserId = session?.user?.id; // This is users.id
+        
         const body = await request.json();
         userId = body.userId;
-        
-        // Get session to verify user
-        const session = await auth(request);
-        const sessionUserId = session?.user?.id; // This is users.id
         
         if (!sessionUserId && !userId) {
             return NextResponse.json(
