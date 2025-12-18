@@ -108,6 +108,7 @@ export async function GET(request, { params }) {
 export async function PUT(request, { params }) {
     try {
         const { id } = await params;
+        const body = await request.json();
         const {
             name,
             email,
@@ -137,9 +138,12 @@ export async function PUT(request, { params }) {
             town_id,
             subtown_id,
             division_id
-        } = await request.json();
+        } = body;
+
+        console.log(`PUT /api/efiling/users/${id} - Request body keys:`, Object.keys(body));
 
         if (!id) {
+            console.error('PUT /api/efiling/users/[id] - User ID is missing');
             return NextResponse.json(
                 { error: 'User ID is required' },
                 { status: 400 }
@@ -182,10 +186,19 @@ export async function PUT(request, { params }) {
             const currentCnic = currentUser.rows[0].cnic;
             const currentEmployeeId = currentUser.rows[0].employee_id;
 
+            if (!efilingUserId) {
+                console.error(`PUT /api/efiling/users/${id} - E-filing profile not found for user ${userId}`);
+                return NextResponse.json(
+                    { error: 'E-filing profile not found for this user' },
+                    { status: 404 }
+                );
+            }
+
             // Validate CNIC format if provided
             if (cnic) {
                 const cnicRegex = /^\d{5}-\d{7}-\d{1}$/;
                 if (!cnicRegex.test(cnic)) {
+                    console.error(`PUT /api/efiling/users/${id} - Invalid CNIC format: ${cnic}`);
                     return NextResponse.json(
                         { error: 'Invalid CNIC format. CNIC must be in the format: 11111-1111111-1 (13 digits with hyphens)' },
                         { status: 400 }
@@ -201,6 +214,7 @@ export async function PUT(request, { params }) {
                 );
 
                 if (existingUser.rows.length > 0) {
+                    console.error(`PUT /api/efiling/users/${id} - Email already exists: ${email}`);
                     return NextResponse.json(
                         { error: 'User with this email already exists' },
                         { status: 400 }
@@ -216,6 +230,7 @@ export async function PUT(request, { params }) {
                 );
 
                 if (existingCnic.rows.length > 0) {
+                    console.error(`PUT /api/efiling/users/${id} - CNIC already exists: ${cnic}`);
                     return NextResponse.json(
                         { error: 'User with this CNIC already exists' },
                         { status: 400 }
@@ -227,10 +242,11 @@ export async function PUT(request, { params }) {
             if (employee_id && employee_id !== currentEmployeeId) {
                 const existingEmployee = await client.query(
                     'SELECT id FROM efiling_users WHERE employee_id = $1 AND id != $2',
-                    [employee_id, id]
+                    [employee_id, efilingUserId]
                 );
 
                 if (existingEmployee.rows.length > 0) {
+                    console.error(`PUT /api/efiling/users/${id} - Employee ID already exists: ${employee_id}`);
                     return NextResponse.json(
                         { error: 'Employee ID already exists' },
                         { status: 400 }
@@ -492,7 +508,8 @@ export async function PUT(request, { params }) {
         }
 
     } catch (error) {
-        console.error('Error updating e-filing user:', error);
+        console.error(`Error updating e-filing user ${params?.id || 'unknown'}:`, error);
+        console.error('Error stack:', error.stack);
         return NextResponse.json(
             { error: 'Failed to update e-filing user', details: error.message },
             { status: 500 }

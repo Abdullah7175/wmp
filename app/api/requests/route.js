@@ -43,8 +43,9 @@ export async function GET(request) {
         
         // Get user ID for potential fallback filtering
         let efilingUserId = null;
+        let session = null;
         if (scopeInfo.apply) {
-            const session = await auth();
+            session = await auth();
             if (session?.user?.id) {
                 const efUserRes = await client.query(
                     'SELECT id FROM efiling_users WHERE user_id = $1 AND is_active = true',
@@ -315,20 +316,22 @@ export async function GET(request) {
 
                 if (whereClauses.length === beforeLength) {
                     // If no geography filters were added, check if user has any geography configured
-                    // If not, return helpful error. Otherwise, allow query to proceed (might be global user or geography mismatch)
+                    // If user has no geography, allow query to proceed but return empty results
+                    // (This is better than blocking access - user can see empty list and understand they need to configure geography)
                     const hasAnyGeo = scopeInfo.geography.divisionId || 
                                      scopeInfo.geography.townId || 
                                      scopeInfo.geography.districtId || 
                                      (scopeInfo.geography.zoneIds && scopeInfo.geography.zoneIds.length > 0);
                     
                     if (!hasAnyGeo) {
+                        // User has no geography configured - return empty results instead of error
+                        // This allows the frontend to display properly and show a message if needed
+                        console.warn('[WARNING] User has no geography configured. Returning empty results. User ID:', session?.user?.id);
                         return NextResponse.json({ 
-                            error: 'User geography not configured for scoped access. Please ensure your e-filing profile has division_id, town_id, or district_id set.',
-                            details: {
-                                geography: scopeInfo.geography,
-                                suggestion: 'Please update your e-filing profile to include your division, town, or district assignment.'
-                            }
-                        }, { status: 403 });
+                            data: [], 
+                            total: 0,
+                            message: 'No geography configured. Please update your e-filing profile to include your division, town, or district assignment.'
+                        }, { status: 200 });
                     }
                     // If geography exists but no filters were added, it might be a data mismatch
                     // Log warning but allow query to proceed

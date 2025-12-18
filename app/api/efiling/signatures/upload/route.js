@@ -57,7 +57,15 @@ export async function POST(request) {
             
             // Create user-specific folder path
             const userFolderName = userName.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
-            const uploadDir = join(process.cwd(), 'public', 'uploads', 'signatures', userFolderName);
+            
+            // Handle standalone mode - get correct base directory
+            let baseDir = process.cwd();
+            if (baseDir.includes('.next/standalone') || baseDir.includes('.next\\standalone')) {
+                // In standalone mode, go up two levels to get to project root
+                baseDir = join(baseDir, '..', '..');
+            }
+            
+            const uploadDir = join(baseDir, 'public', 'uploads', 'signatures', userFolderName);
             
             // Create directory if it doesn't exist
             if (!existsSync(uploadDir)) {
@@ -70,6 +78,13 @@ export async function POST(request) {
             const filePath = join(uploadDir, filename);
             
             await writeFile(filePath, buffer);
+            
+            // Verify file exists after writing
+            if (!existsSync(filePath)) {
+                console.error(`Failed to write signature file to disk: ${filePath}`);
+                return NextResponse.json({ error: 'Failed to save signature file to disk' }, { status: 500 });
+            }
+            console.log(`Signature file uploaded successfully: ${filePath}`);
 
             // Return the public URL
             publicUrl = `/uploads/signatures/${userFolderName}/${filename}`;
