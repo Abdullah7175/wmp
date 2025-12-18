@@ -460,7 +460,8 @@ export default function FileDetail() {
                         padding: 15mm !important;
                         box-shadow: none !important;
                         border: none !important;
-                        min-height: 250mm !important;
+                        min-height: auto !important;
+                        height: auto !important;
                         background: white !important;
                         display: block !important;
                         visibility: visible !important;
@@ -477,11 +478,31 @@ export default function FileDetail() {
                     /* Hide empty pages */
                     .page-content:empty {
                         display: none !important;
+                        height: 0 !important;
+                        min-height: 0 !important;
+                        page-break-after: avoid !important;
                     }
                     
                     /* Hide pages with no meaningful content */
                     .page-content:has(.prose:empty) {
                         display: none !important;
+                        height: 0 !important;
+                        min-height: 0 !important;
+                        page-break-after: avoid !important;
+                    }
+                    
+                    /* Prevent empty print sections from creating pages */
+                    .print-section:empty {
+                        display: none !important;
+                        height: 0 !important;
+                        min-height: 0 !important;
+                        page-break-before: avoid !important;
+                        page-break-after: avoid !important;
+                    }
+                    
+                    /* Only add page break if section has content */
+                    .print-section:not(:empty) {
+                        page-break-before: always;
                     }
                     
                     /* Print header on each page */
@@ -638,7 +659,6 @@ export default function FileDetail() {
                     
                     /* Print sections for signatures, attachments, comments */
                     .print-section {
-                        page-break-before: always;
                         page-break-inside: auto;
                         margin-top: 0;
                         padding: 15mm;
@@ -646,6 +666,16 @@ export default function FileDetail() {
                         background: white !important;
                         display: block !important;
                         visibility: visible !important;
+                    }
+                    
+                    /* Only add page break before if section has content */
+                    .print-section:not(:empty) {
+                        page-break-before: always;
+                    }
+                    
+                    /* Hide empty print sections */
+                    .print-section:empty {
+                        display: none !important;
                     }
                     
                     .print-section h3 {
@@ -752,7 +782,7 @@ export default function FileDetail() {
             `}</style>
             
             {/* Print-only file information header */}
-            <div className="print-only print-file-info">
+            <div className="print-only print-file-info" style={{ pageBreakAfter: 'auto' }}>
                 <h2>E-Filing Document</h2>
                 <div className="info-row">
                     <div className="info-label">File Number:</div>
