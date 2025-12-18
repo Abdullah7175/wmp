@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/db';
 import { getAllowedRecipients } from '@/lib/efilingGeographicRouting';
-import { getToken } from 'next-auth/jwt';
+import { auth } from '@/auth';
 
 /**
  * GET endpoint to fetch users who can receive this file based on marking rules and geography
@@ -13,9 +13,9 @@ export async function GET(request, { params }) {
         const { id } = await params;
         client = await connectToDatabase();
 
-        // Get current user from token
-        const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
-        if (!token?.user?.id) {
+        // Get current user from session
+        const session = await auth();
+        if (!session?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
@@ -40,7 +40,7 @@ export async function GET(request, { params }) {
             FROM efiling_users eu
             JOIN users u ON eu.user_id = u.id
             WHERE u.id = $1 AND eu.is_active = true
-        `, [token.user.id]);
+        `, [session.user.id]);
 
         if (currentUserRes.rows.length === 0) {
             return NextResponse.json({ error: 'Current user not found in e-filing system' }, { status: 403 });

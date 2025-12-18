@@ -76,15 +76,12 @@ export async function POST(request) {
             );
         }
         
-        const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
-        if (!token?.user?.id) {
+        const session = await auth();
+        if (!session?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
         
         client = await connectToDatabase();
-        
-        // Check if user is admin or the manager
-        const session = await auth();
         if (!session?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }

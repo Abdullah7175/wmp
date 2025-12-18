@@ -1,19 +1,19 @@
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/db';
-import { getToken } from 'next-auth/jwt';
+import { auth } from '@/auth';
 
-async function getEfilingUserId(token, client) {
-    if ([1, 2].includes(token.user.role)) {
+async function getEfilingUserId(session, client) {
+    if ([1, 2].includes(parseInt(session.user.role))) {
         const adminEfiling = await client.query(
             'SELECT id FROM efiling_users WHERE user_id = $1 AND is_active = true',
-            [token.user.id]
+            [session.user.id]
         );
         return adminEfiling.rows[0]?.id || null;
     }
     
     const efilingUser = await client.query(
         'SELECT id FROM efiling_users WHERE user_id = $1 AND is_active = true',
-        [token.user.id]
+        [session.user.id]
     );
     
     return efilingUser.rows[0]?.id || null;
@@ -23,14 +23,14 @@ async function getEfilingUserId(token, client) {
 export async function GET(request, { params }) {
     let client;
     try {
-        const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
-        if (!token?.user?.id) {
+        const session = await auth();
+        if (!session?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
         const { id } = await params;
         client = await connectToDatabase();
-        const efilingUserId = await getEfilingUserId(token, client);
+        const efilingUserId = await getEfilingUserId(session, client);
 
         // Get meeting with details
         const meetingResult = await client.query(
@@ -53,7 +53,7 @@ export async function GET(request, { params }) {
         const meeting = meetingResult.rows[0];
 
         // Check access: organizer or attendee
-        if (meeting.organizer_id !== efilingUserId && ![1, 2].includes(token.user.role)) {
+        if (meeting.organizer_id !== efilingUserId && ![1, 2].includes(parseInt(session.user.role))) {
             const isAttendee = await client.query(
                 'SELECT 1 FROM efiling_meeting_attendees WHERE meeting_id = $1 AND attendee_id = $2',
                 [id, efilingUserId]
@@ -122,15 +122,15 @@ export async function GET(request, { params }) {
 export async function PUT(request, { params }) {
     let client;
     try {
-        const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
-        if (!token?.user?.id) {
+        const session = await auth();
+        if (!session?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
         const { id } = await params;
         const body = await request.json();
         client = await connectToDatabase();
-        const efilingUserId = await getEfilingUserId(token, client);
+        const efilingUserId = await getEfilingUserId(session, client);
 
         // Check if meeting exists and user is organizer
         const meetingCheck = await client.query(
@@ -145,7 +145,7 @@ export async function PUT(request, { params }) {
         const meeting = meetingCheck.rows[0];
         
         // Only organizer or admin can update
-        if (meeting.organizer_id !== efilingUserId && ![1, 2].includes(token.user.role)) {
+        if (meeting.organizer_id !== efilingUserId && ![1, 2].includes(parseInt(session.user.role))) {
             return NextResponse.json({ error: 'Access denied' }, { status: 403 });
         }
 
@@ -267,14 +267,14 @@ export async function PUT(request, { params }) {
 export async function DELETE(request, { params }) {
     let client;
     try {
-        const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
-        if (!token?.user?.id) {
+        const session = await auth();
+        if (!session?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
         const { id } = await params;
         client = await connectToDatabase();
-        const efilingUserId = await getEfilingUserId(token, client);
+        const efilingUserId = await getEfilingUserId(session, client);
 
         // Check if meeting exists and user is organizer
         const meetingCheck = await client.query(
@@ -289,7 +289,7 @@ export async function DELETE(request, { params }) {
         const meeting = meetingCheck.rows[0];
         
         // Only organizer or admin can delete
-        if (meeting.organizer_id !== efilingUserId && ![1, 2].includes(token.user.role)) {
+        if (meeting.organizer_id !== efilingUserId && ![1, 2].includes(parseInt(session.user.role))) {
             return NextResponse.json({ error: 'Access denied' }, { status: 403 });
         }
 

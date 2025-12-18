@@ -3,7 +3,7 @@ import { connectToDatabase } from '@/lib/db';
 import { logAction, ENTITY_TYPES } from '@/lib/actionLogger';
 import { getAllowedRecipients, getSLA, validateGeographicMatch } from '@/lib/efilingGeographicRouting';
 import { isCEORole } from '@/lib/efilingSLAManager';
-import { getToken } from 'next-auth/jwt';
+import { auth } from '@/auth';
 import { 
     isWithinTeamWorkflow, 
     getTeamMembersForMarking, 
@@ -30,9 +30,9 @@ export async function POST(request, { params }) {
             return NextResponse.json({ error: 'User IDs array is required' }, { status: 400 });
         }
 
-        // Get current user from token
-        const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
-        if (!token?.user?.id) {
+        // Get current user from session
+        const session = await auth();
+        if (!session?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
@@ -93,7 +93,7 @@ export async function POST(request, { params }) {
             JOIN users u ON eu.user_id = u.id
             LEFT JOIN efiling_roles r ON eu.efiling_role_id = r.id
             WHERE u.id = $1 AND eu.is_active = true
-        `, [token.user.id]);
+        `, [session.user.id]);
 
         if (currentUserRes.rows.length === 0) {
             await client.query('ROLLBACK');
@@ -108,7 +108,7 @@ export async function POST(request, { params }) {
         const workflowState = await getWorkflowState(client, id);
 
         // ========== E-SIGNATURE VALIDATION (Updated for Team Workflow) ==========
-        const isAdmin = [1, 2].includes(token.user.role);
+        const isAdmin = [1, 2].includes(parseInt(session.user.role));
         
         if (!isAdmin) {
             // Check if e-signature is required for this marking

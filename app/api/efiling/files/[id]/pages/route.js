@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/db';
-import { getToken } from 'next-auth/jwt';
+import { auth } from '@/auth';
 import { canAddPages, getWorkflowState } from '@/lib/efilingWorkflowStateManager';
 import { isSEOrCEAssistant } from '@/lib/efilingTeamManager';
 
@@ -23,8 +23,8 @@ export async function POST(request, { params }) {
             );
         }
         
-        const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
-        if (!token?.user?.id) {
+        const session = await auth();
+        if (!session?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
         
@@ -38,7 +38,7 @@ export async function POST(request, { params }) {
             JOIN users u ON eu.user_id = u.id
             LEFT JOIN efiling_roles r ON eu.efiling_role_id = r.id
             WHERE u.id = $1 AND eu.is_active = true
-        `, [token.user.id]);
+        `, [session.user.id]);
         
         if (currentUserRes.rows.length === 0) {
             await client.query('ROLLBACK');

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/db';
-import { getToken } from 'next-auth/jwt';
+import { auth } from '@/auth';
 import { canEditFile, canAddPages, getWorkflowState } from '@/lib/efilingWorkflowStateManager';
 import { isTeamMember, canMarkFile } from '@/lib/efilingTeamManager';
 
@@ -22,9 +22,9 @@ export async function GET(request, { params }) {
     
     try {
         const { id } = await params;
-        const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
+        const session = await auth();
         
-        if (!token?.user?.id) {
+        if (!session?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
@@ -36,11 +36,11 @@ export async function GET(request, { params }) {
             FROM efiling_users eu
             LEFT JOIN efiling_roles r ON eu.efiling_role_id = r.id
             WHERE eu.user_id = $1 AND eu.is_active = true
-        `, [token.user.id]);
+        `, [session.user.id]);
         
         if (userRes.rows.length === 0) {
             // Not an efiling user - check if admin
-            const isSystemAdmin = [1, 2].includes(token.user.role);
+            const isSystemAdmin = [1, 2].includes(parseInt(session.user.role));
             if (!isSystemAdmin) {
                 return NextResponse.json({ error: 'User not found in e-filing system' }, { status: 403 });
             }
@@ -86,7 +86,7 @@ export async function GET(request, { params }) {
         const file = fileRes.rows[0];
         
         // Check if user is system admin
-        const isSystemAdmin = userEfiling.role_code === 'SYS_ADMIN' || [1, 2].includes(token.user.role);
+        const isSystemAdmin = userEfiling.role_code === 'SYS_ADMIN' || [1, 2].includes(parseInt(session.user.role));
         
         // Check if user is file creator
         const isCreator = file.created_by === userEfiling.id;
@@ -108,7 +108,7 @@ export async function GET(request, { params }) {
             SELECT COUNT(*) as count, MAX(timestamp) as last_signed_at
             FROM efiling_document_signatures
             WHERE file_id = $1 AND user_id = $2 AND is_active = true
-        `, [id, token.user.id]);
+        `, [id, session.user.id]);
         
         const hasSigned = signatureRes.rows[0].count > 0;
         const lastSignedAt = signatureRes.rows[0].last_signed_at;

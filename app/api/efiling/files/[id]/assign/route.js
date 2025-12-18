@@ -3,7 +3,7 @@ import { connectToDatabase } from '@/lib/db';
 import { eFileActionLogger } from '@/lib/efilingActionLogger';
 import { getAllowedRecipients, getSLA, validateGeographicMatch } from '@/lib/efilingGeographicRouting';
 import { isCEORole } from '@/lib/efilingSLAManager';
-import { getToken } from 'next-auth/jwt';
+import { auth } from '@/auth';
 
 export async function POST(request, { params }) {
     let client;
@@ -13,9 +13,9 @@ export async function POST(request, { params }) {
         const body = await request.json();
         const { to_user_id, remarks } = body;
 
-        // Actor identity from session token
-        const token = await getToken({ req: { headers: Object.fromEntries(request.headers) }, secret: process.env.NEXTAUTH_SECRET });
-        if (!token?.user?.id) {
+        // Actor identity from session
+        const session = await auth();
+        if (!session?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
@@ -49,7 +49,7 @@ export async function POST(request, { params }) {
             JOIN users u ON eu.user_id = u.id
             LEFT JOIN efiling_roles r ON eu.efiling_role_id = r.id
             WHERE u.id = $1 AND eu.is_active = true
-        `, [token.user.id]);
+        `, [session.user.id]);
         
         if (fromRes.rows.length === 0) {
             return NextResponse.json({ error: 'Current user not active in e-filing' }, { status: 403 });

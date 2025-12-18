@@ -235,9 +235,9 @@ export async function DELETE(request, { params }) {
         const { id } = await params;
 
         // Admin-only hard delete with full cleanup
-        const { getToken } = await import('next-auth/jwt');
-        const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
-        if (!token?.user?.role || ![1, 2].includes(token.user.role)) {
+        const { auth } = await import('@/auth');
+        const session = await auth();
+        if (!session?.user?.role || ![1, 2].includes(parseInt(session.user.role))) {
             return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
         }
 

@@ -1,19 +1,19 @@
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/db';
-import { getToken } from 'next-auth/jwt';
+import { auth } from '@/auth';
 
-async function getEfilingUserId(token, client) {
-    if ([1, 2].includes(token.user.role)) {
+async function getEfilingUserId(session, client) {
+    if ([1, 2].includes(parseInt(session.user.role))) {
         const adminEfiling = await client.query(
             'SELECT id FROM efiling_users WHERE user_id = $1 AND is_active = true',
-            [token.user.id]
+            [session.user.id]
         );
         return adminEfiling.rows[0]?.id || null;
     }
     
     const efilingUser = await client.query(
         'SELECT id FROM efiling_users WHERE user_id = $1 AND is_active = true',
-        [token.user.id]
+        [session.user.id]
     );
     
     return efilingUser.rows[0]?.id || null;
@@ -23,8 +23,8 @@ async function getEfilingUserId(token, client) {
 export async function POST(request, { params }) {
     let client;
     try {
-        const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
-        if (!token?.user?.id) {
+        const session = await auth();
+        if (!session?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
@@ -33,7 +33,7 @@ export async function POST(request, { params }) {
         const { acknowledgment_text } = body || {};
 
         client = await connectToDatabase();
-        const efilingUserId = await getEfilingUserId(token, client);
+        const efilingUserId = await getEfilingUserId(session, client);
 
         if (!efilingUserId) {
             return NextResponse.json({ error: 'User not found in e-filing system' }, { status: 403 });

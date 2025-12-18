@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/db';
 import { logAction, ENTITY_TYPES } from '@/lib/actionLogger';
-import { getToken } from 'next-auth/jwt';
+import { auth } from '@/auth';
 import { canEditFile, getWorkflowState } from '@/lib/efilingWorkflowStateManager';
 
 export async function POST(request, { params }) {
@@ -11,15 +11,15 @@ export async function POST(request, { params }) {
         const body = await request.json();
         const { content, template } = body;
 
-        const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
-        if (!token?.user?.id) {
+        const session = await auth();
+        if (!session?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
         client = await connectToDatabase();
         
         // Check if user can edit (workflow state check)
-        const isAdmin = [1, 2].includes(token.user.role);
+        const isAdmin = [1, 2].includes(parseInt(session.user.role));
         if (!isAdmin) {
             // Get user's efiling ID
             const userRes = await client.query(`
@@ -27,7 +27,7 @@ export async function POST(request, { params }) {
                 FROM efiling_users eu
                 JOIN users u ON eu.user_id = u.id
                 WHERE u.id = $1 AND eu.is_active = true
-            `, [token.user.id]);
+            `, [session.user.id]);
             
             if (userRes.rows.length === 0) {
                 return NextResponse.json({ error: 'User not found in e-filing system' }, { status: 403 });
@@ -231,15 +231,15 @@ export async function PUT(request, { params }) {
         const { id } = await params;
         const body = await request.json();
         
-        const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
-        if (!token?.user?.id) {
+        const session = await auth();
+        if (!session?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
         
         client = await connectToDatabase();
 
         // Check if user can edit (workflow state check)
-        const isAdmin = [1, 2].includes(token.user.role);
+        const isAdmin = [1, 2].includes(parseInt(session.user.role));
         if (!isAdmin) {
             // Get user's efiling ID
             const userRes = await client.query(`
@@ -247,7 +247,7 @@ export async function PUT(request, { params }) {
                 FROM efiling_users eu
                 JOIN users u ON eu.user_id = u.id
                 WHERE u.id = $1 AND eu.is_active = true
-            `, [token.user.id]);
+            `, [session.user.id]);
             
             if (userRes.rows.length === 0) {
                 return NextResponse.json({ error: 'User not found in e-filing system' }, { status: 403 });

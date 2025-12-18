@@ -1,14 +1,14 @@
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/db';
-import { getToken } from 'next-auth/jwt';
+import { auth } from '@/auth';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request) {
     let client;
     try {
-        const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
-        if (!token?.user?.role || ![1,2].includes(token.user.role)) {
+        const session = await auth();
+        if (!session?.user?.role || ![1,2].includes(parseInt(session.user.role))) {
             return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
         }
 

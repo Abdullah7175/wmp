@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/db';
 import { logAction, ENTITY_TYPES } from '@/lib/actionLogger';
 import { resumeSLA, isCEORole } from '@/lib/efilingSLAManager';
-import { getToken } from 'next-auth/jwt';
+import { auth } from '@/auth';
 
 /**
  * POST /api/efiling/files/[id]/complete
@@ -16,9 +16,9 @@ export async function POST(request, { params }) {
         const body = await request.json();
         const { remarks } = body;
 
-        // Get current user from token
-        const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
-        if (!token?.user?.id) {
+        // Get current user from session
+        const session = await auth();
+        if (!session?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
@@ -51,7 +51,7 @@ export async function POST(request, { params }) {
             LEFT JOIN efiling_users eu ON eu.user_id = $1 AND eu.is_active = true
             LEFT JOIN efiling_roles r ON r.id = eu.efiling_role_id
             WHERE f.id = $2
-        `, [token.user.id, id]);
+        `, [session.user.id, id]);
 
         if (fileRes.rows.length === 0) {
             await client.query('ROLLBACK');
@@ -185,9 +185,9 @@ export async function GET(request, { params }) {
     try {
         const { id } = await params;
 
-        // Get current user from token
-        const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
-        if (!token?.user?.id) {
+        // Get current user from session
+        const session = await auth();
+        if (!session?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
@@ -231,7 +231,7 @@ export async function GET(request, { params }) {
             LEFT JOIN efiling_users eu ON eu.user_id = $1 AND eu.is_active = true
             LEFT JOIN efiling_roles r ON r.id = eu.efiling_role_id
             WHERE f.id = $2
-        `, [token.user.id, id]);
+        `, [session.user.id, id]);
 
         if (result.rows.length === 0) {
             return NextResponse.json({ error: 'File not found' }, { status: 404 });
