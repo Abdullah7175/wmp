@@ -6,10 +6,11 @@ import { auth } from '@/auth';
 
 export async function POST(request) {
     let client;
+    let userId;
+    const method = 'whatsapp'; // Always use WhatsApp method
     try {
-        const { userId } = await request.json();
-        // Always use WhatsApp method
-        const method = 'whatsapp';
+        const body = await request.json();
+        userId = body.userId;
         
         // Get session to verify user
         const session = await auth(request);

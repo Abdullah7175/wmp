@@ -25,7 +25,7 @@ export async function GET(request) {
         const includeSystem = searchParams.get('include_system') !== 'false';
 
         const session = await auth(request);
-        if (!token?.user?.id) {
+        if (!session?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
