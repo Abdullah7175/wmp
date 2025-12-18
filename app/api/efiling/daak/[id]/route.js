@@ -1,36 +1,40 @@
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/db';
-import { getToken } from 'next-auth/jwt';
+import { auth } from '@/auth';
 
-async function getEfilingUserId(token, client) {
-    if ([1, 2].includes(token.user.role)) {
+async function getEfilingUserId(session, client) {
+    if (session?.user && [1, 2].includes(parseInt(session.user.role))) {
         const adminEfiling = await client.query(
             'SELECT id FROM efiling_users WHERE user_id = $1 AND is_active = true',
-            [token.user.id]
+            [session.user.id]
         );
         return adminEfiling.rows[0]?.id || null;
     }
     
-    const efilingUser = await client.query(
-        'SELECT id FROM efiling_users WHERE user_id = $1 AND is_active = true',
-        [token.user.id]
-    );
+    if (session?.user) {
+        const efilingUser = await client.query(
+            'SELECT id FROM efiling_users WHERE user_id = $1 AND is_active = true',
+            [session.user.id]
+        );
+        
+        return efilingUser.rows[0]?.id || null;
+    }
     
-    return efilingUser.rows[0]?.id || null;
+    return null;
 }
 
 // GET - Get single daak
 export async function GET(request, { params }) {
     let client;
     try {
-        const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
+        const session = await auth();
         if (!token?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
         const { id } = await params;
         client = await connectToDatabase();
-        const efilingUserId = await getEfilingUserId(token, client);
+        const efilingUserId = await getEfilingUserId(session, client);
 
         // Get daak with details
         const daakResult = await client.query(
@@ -61,7 +65,7 @@ export async function GET(request, { params }) {
         const daak = daakResult.rows[0];
 
         // Check access: public, creator, or recipient
-        if (!daak.is_public && daak.created_by !== efilingUserId && ![1, 2].includes(token.user.role)) {
+        if (!daak.is_public && daak.created_by !== efilingUserId && ![1, 2].includes(parseInt(session.user.role))) {
             const isRecipient = await client.query(
                 'SELECT 1 FROM efiling_daak_recipients WHERE daak_id = $1 AND efiling_user_id = $2',
                 [id, efilingUserId]
@@ -126,7 +130,7 @@ export async function GET(request, { params }) {
 export async function PUT(request, { params }) {
     let client;
     try {
-        const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
+        const session = await auth();
         if (!token?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
@@ -134,7 +138,7 @@ export async function PUT(request, { params }) {
         const { id } = await params;
         const body = await request.json();
         client = await connectToDatabase();
-        const efilingUserId = await getEfilingUserId(token, client);
+        const efilingUserId = await getEfilingUserId(session, client);
 
         // Check if daak exists and user is creator
         const daakCheck = await client.query(
@@ -149,7 +153,7 @@ export async function PUT(request, { params }) {
         const daak = daakCheck.rows[0];
         
         // Only creator or admin can update
-        if (daak.created_by !== efilingUserId && ![1, 2].includes(token.user.role)) {
+        if (daak.created_by !== efilingUserId && ![1, 2].includes(parseInt(session.user.role))) {
             return NextResponse.json({ error: 'Access denied' }, { status: 403 });
         }
 
@@ -247,14 +251,14 @@ export async function PUT(request, { params }) {
 export async function DELETE(request, { params }) {
     let client;
     try {
-        const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
+        const session = await auth();
         if (!token?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
         const { id } = await params;
         client = await connectToDatabase();
-        const efilingUserId = await getEfilingUserId(token, client);
+        const efilingUserId = await getEfilingUserId(session, client);
 
         // Check if daak exists and user is creator
         const daakCheck = await client.query(
@@ -269,7 +273,7 @@ export async function DELETE(request, { params }) {
         const daak = daakCheck.rows[0];
         
         // Only creator or admin can delete
-        if (daak.created_by !== efilingUserId && ![1, 2].includes(token.user.role)) {
+        if (daak.created_by !== efilingUserId && ![1, 2].includes(parseInt(session.user.role))) {
             return NextResponse.json({ error: 'Access denied' }, { status: 403 });
         }
 

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/db';
-import { getToken } from 'next-auth/jwt';
+import { auth } from '@/auth';
 import { getTeamMembers, getManagerForUser, isTeamMember } from '@/lib/efilingTeamManager';
 
 /**
@@ -14,8 +14,8 @@ export async function GET(request) {
         const { searchParams } = new URL(request.url);
         const managerId = searchParams.get('manager_id');
         
-        const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
-        if (!token?.user?.id) {
+        const session = await auth();
+        if (!session?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
         
@@ -30,7 +30,7 @@ export async function GET(request) {
                 FROM efiling_users eu
                 JOIN users u ON eu.user_id = u.id
                 WHERE u.id = $1 AND eu.is_active = true
-            `, [token.user.id]);
+            `, [session.user.id]);
             
             if (userRes.rows.length === 0) {
                 return NextResponse.json({ error: 'User not found in e-filing system' }, { status: 404 });
@@ -84,7 +84,11 @@ export async function POST(request) {
         client = await connectToDatabase();
         
         // Check if user is admin or the manager
-        const isAdmin = [1, 2].includes(token.user.role);
+        const session = await auth();
+        if (!session?.user?.id) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+        const isAdmin = [1, 2].includes(parseInt(session.user.role));
         
         if (!isAdmin) {
             // Verify user is the manager
@@ -93,7 +97,7 @@ export async function POST(request) {
                 FROM efiling_users eu
                 JOIN users u ON eu.user_id = u.id
                 WHERE u.id = $1 AND eu.id = $2 AND eu.is_active = true
-            `, [token.user.id, manager_id]);
+            `, [session.user.id, manager_id]);
             
             if (userRes.rows.length === 0) {
                 await client.release();
@@ -165,13 +169,13 @@ export async function DELETE(request) {
             );
         }
         
-        const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
-        if (!token?.user?.id) {
+        const session = await auth();
+        if (!session?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
         
         // Check if user is admin or the manager
-        const isAdmin = [1, 2].includes(token.user.role);
+        const isAdmin = [1, 2].includes(parseInt(session.user.role));
         
         client = await connectToDatabase();
         
@@ -182,7 +186,7 @@ export async function DELETE(request) {
                 FROM efiling_users eu
                 JOIN users u ON eu.user_id = u.id
                 WHERE u.id = $1 AND eu.id = $2 AND eu.is_active = true
-            `, [token.user.id, managerId]);
+            `, [session.user.id, managerId]);
             
             if (userRes.rows.length === 0) {
                 return NextResponse.json({ error: 'Unauthorized - Not the manager' }, { status: 403 });

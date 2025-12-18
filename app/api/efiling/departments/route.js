@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/db';
 import { eFileActionLogger, EFILING_ACTION_TYPES, EFILING_ENTITY_TYPES } from '@/lib/efilingActionLogger';
-import { getToken } from 'next-auth/jwt';
+import { auth } from '@/auth';
 import { getUserGeography, isGlobalRoleCode } from '@/lib/efilingGeographicRouting';
 
 export async function GET(request) {
@@ -35,15 +35,15 @@ export async function GET(request) {
             return NextResponse.json([]);
         }
         
-        const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
+        const session = await auth();
         let userGeography = null;
         let canSeeAll = false;
 
-        if (token?.user) {
-            if ([1, 2].includes(token.user.role)) {
+        if (session?.user) {
+            if ([1, 2].includes(parseInt(session.user.role))) {
                 canSeeAll = true;
             } else {
-                userGeography = await getUserGeography(client, token.user.id);
+                userGeography = await getUserGeography(client, session.user.id);
                 if (userGeography && isGlobalRoleCode(userGeography.role_code)) {
                     canSeeAll = true;
                 }

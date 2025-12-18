@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/db';
-import { getToken } from 'next-auth/jwt';
+import { auth } from '@/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,13 +19,13 @@ export const dynamic = 'force-dynamic';
 export async function GET(request) {
     let client;
     try {
-        const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
-        if (!token?.user?.id) {
+        const session = await auth();
+        if (!session?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
         client = await connectToDatabase();
-        const isAdmin = [1, 2].includes(token.user.role);
+        const isAdmin = [1, 2].includes(parseInt(session.user.role));
 
         // Get user's efiling profile if not admin
         let userEfilingId = null;
@@ -40,7 +40,7 @@ export async function GET(request) {
                 FROM efiling_users eu
                 JOIN users u ON eu.user_id = u.id
                 WHERE u.id = $1 AND eu.is_active = true
-            `, [token.user.id]);
+            `, [session.user.id]);
 
             if (userRes.rows.length > 0) {
                 const userEfiling = userRes.rows[0];

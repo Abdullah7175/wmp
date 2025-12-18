@@ -1,26 +1,30 @@
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/db';
-import { getToken } from 'next-auth/jwt';
+import { auth } from '@/auth';
 
 export const dynamic = 'force-dynamic';
 
 // Helper function to get efiling user ID
-async function getEfilingUserId(token, client) {
-    if ([1, 2].includes(token.user.role)) {
+async function getEfilingUserId(session, client) {
+    if (session?.user && [1, 2].includes(parseInt(session.user.role))) {
         // Admin can act as any user, but we'll use their efiling profile if exists
         const adminEfiling = await client.query(
             'SELECT id FROM efiling_users WHERE user_id = $1 AND is_active = true',
-            [token.user.id]
+            [session.user.id]
         );
         return adminEfiling.rows[0]?.id || null;
     }
     
-    const efilingUser = await client.query(
-        'SELECT id FROM efiling_users WHERE user_id = $1 AND is_active = true',
-        [token.user.id]
-    );
+    if (session?.user) {
+        const efilingUser = await client.query(
+            'SELECT id FROM efiling_users WHERE user_id = $1 AND is_active = true',
+            [session.user.id]
+        );
+        
+        return efilingUser.rows[0]?.id || null;
+    }
     
-    return efilingUser.rows[0]?.id || null;
+    return null;
 }
 
 // Helper function to expand recipients (roles, groups, teams, departments to users)
@@ -115,15 +119,15 @@ async function expandRecipients(client, recipientType, recipientId) {
 export async function GET(request) {
     let client;
     try {
-        const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
+        const session = await auth();
         if (!token?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
         client = await connectToDatabase();
-        const efilingUserId = await getEfilingUserId(token, client);
+        const efilingUserId = await getEfilingUserId(session, client);
         
-        if (!efilingUserId && ![1, 2].includes(token.user.role)) {
+        if (!efilingUserId && session?.user && ![1, 2].includes(parseInt(session.user.role))) {
             return NextResponse.json({ error: 'User not found in e-filing system' }, { status: 403 });
         }
 
@@ -137,7 +141,7 @@ export async function GET(request) {
         const receivedDaak = searchParams.get('received_daak'); // Only daak I received
         const acknowledged = searchParams.get('acknowledged'); // true/false
 
-        const isAdmin = [1, 2].includes(token.user.role);
+        const isAdmin = session?.user && [1, 2].includes(parseInt(session.user.role));
         const params = [];
         let paramCount = 0;
 
@@ -333,8 +337,8 @@ export async function GET(request) {
 export async function POST(request) {
     let client;
     try {
-        const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
-        if (!token?.user?.id) {
+        const session = await auth();
+        if (!session?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
@@ -360,9 +364,9 @@ export async function POST(request) {
         }
 
         client = await connectToDatabase();
-        const efilingUserId = await getEfilingUserId(token, client);
+        const efilingUserId = await getEfilingUserId(session, client);
         
-        if (!efilingUserId && ![1, 2].includes(token.user.role)) {
+        if (!efilingUserId && session?.user && ![1, 2].includes(parseInt(session.user.role))) {
             return NextResponse.json({ error: 'User not found in e-filing system' }, { status: 403 });
         }
 

@@ -1,14 +1,14 @@
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/db';
-import { getToken } from 'next-auth/jwt';
+import { auth } from '@/auth';
 
 async function requireAdmin(request) {
-    const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
-    const role = Number(token?.user?.role);
-    if (!token?.user || ![1, 2].includes(role)) {
+    const session = await auth();
+    const role = parseInt(session?.user?.role);
+    if (!session?.user || ![1, 2].includes(role)) {
         return { error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) };
     }
-    return { token };
+    return { session };
 }
 
 async function safeRollback(client) {
@@ -145,8 +145,8 @@ export async function GET(request) {
 }
 
 export async function POST(request) {
-    const auth = await requireAdmin(request);
-    if (auth.error) return auth.error;
+    const authResult = await requireAdmin(request);
+    if (authResult.error) return authResult.error;
 
     const client = await connectToDatabase();
 
@@ -191,8 +191,8 @@ export async function POST(request) {
 }
 
 export async function PUT(request) {
-    const auth = await requireAdmin(request);
-    if (auth.error) return auth.error;
+    const authResult = await requireAdmin(request);
+    if (authResult.error) return authResult.error;
 
     const client = await connectToDatabase();
 
@@ -251,8 +251,8 @@ export async function PUT(request) {
 }
 
 export async function DELETE(request) {
-    const auth = await requireAdmin(request);
-    if (auth.error) return auth.error;
+    const authResult = await requireAdmin(request);
+    if (authResult.error) return authResult.error;
 
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');

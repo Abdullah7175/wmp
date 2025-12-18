@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/db';
 import { eFileActionLogger, EFILING_ACTION_TYPES, EFILING_ENTITY_TYPES } from '@/lib/efilingActionLogger';
-import { getToken } from 'next-auth/jwt';
+import { auth } from '@/auth';
 import { getFiscalYear } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
@@ -36,19 +36,19 @@ export async function GET(request) {
     
     // Add authentication check for general access
     try {
-        const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
-        if (!token?.user?.id) {
+        const session = await auth();
+        if (!session?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
         
         // Allow access for admin/manager roles (1,2) or efiling users
-        if (![1,2].includes(token.user.role)) {
+        if (![1,2].includes(parseInt(session.user.role))) {
             // Check if this is an efiling user
             const client = await connectToDatabase();
             try {
                 const efilingUserCheck = await client.query(
                     'SELECT id FROM efiling_users WHERE user_id = $1 AND is_active = true', 
-                    [token.user.id]
+                    [session.user.id]
                 );
                 if (efilingUserCheck.rows.length === 0) {
                     await client.release();
@@ -62,7 +62,7 @@ export async function GET(request) {
         }
 
         // Admins should see all files by default (no server-side limit) unless a limit is explicitly provided
-        if ([1,2].includes(token.user.role) && !searchParams.get('limit')) {
+        if ([1,2].includes(parseInt(session.user.role)) && !searchParams.get('limit')) {
             limit = 0; // no limit
             offset = 0;
         }
@@ -107,13 +107,13 @@ export async function GET(request) {
 
                 // Access control: only creator or current assignee may view
                 try {
-                    const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
-                    if (!token?.user?.id) {
+                    const session = await auth();
+                    if (!session?.user?.id) {
                         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
                     }
                     // Admin/Manager bypasses ACL for single file fetch
-                    if (![1,2].includes(token.user.role)) {
-                        const userId = token.user.id;
+                    if (![1,2].includes(parseInt(session.user.role))) {
+                        const userId = session.user.id;
                         const efUserRes = await client.query('SELECT id FROM efiling_users WHERE user_id = $1 AND is_active = true', [userId]);
                         const efUserId = efUserRes.rows[0]?.id;
                         if (!efUserId) {
@@ -317,12 +317,12 @@ export async function GET(request) {
             }
             
             // Add user-based filtering for efiling users (only if no specific filters are applied)
-            const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
-            if (token?.user?.id && ![1,2].includes(token.user.role) && !created_by && !assigned_to) {
+            const session = await auth();
+            if (session?.user?.id && ![1,2].includes(parseInt(session.user.role)) && !created_by && !assigned_to) {
                 // For efiling users, only show files they created or are assigned to
                 const efilingUserRes = await client.query(
                     'SELECT id FROM efiling_users WHERE user_id = $1 AND is_active = true', 
-                    [token.user.id]
+                    [session.user.id]
                 );
                 if (efilingUserRes.rows.length > 0) {
                     const efilingUserId = efilingUserRes.rows[0].id;
@@ -416,11 +416,11 @@ export async function POST(request) {
         }
         
         // Get current user from session token
-        const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
-        if (!token?.user?.id) {
+        const session = await auth();
+        if (!session?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
-        const currentUserId = token.user.id;
+        const currentUserId = session.user.id;
         
         // Get user's efiling_users.id, department, and geography
         const userQuery = await client.query(`
@@ -799,8 +799,8 @@ export async function DELETE(request) {
     
     try {
         // Admin-only hard delete with full cleanup (mirror of /efiling/files/[id])
-        const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
-        if (!token?.user?.role || ![1, 2].includes(token.user.role)) {
+        const session = await auth();
+        if (!session?.user?.role || ![1, 2].includes(parseInt(session.user.role))) {
             return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
         }
 

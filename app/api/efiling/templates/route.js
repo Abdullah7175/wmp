@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/db';
-import { getToken } from 'next-auth/jwt';
+import { auth } from '@/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,7 +24,7 @@ export async function GET(request) {
         const userId = searchParams.get('user_id');
         const includeSystem = searchParams.get('include_system') !== 'false';
 
-        const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
+        const session = await auth();
         if (!token?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
@@ -37,9 +37,9 @@ export async function GET(request) {
             FROM efiling_users eu
             JOIN users u ON eu.user_id = u.id
             WHERE u.id = $1 AND eu.is_active = true
-        `, [token.user.id]);
+        `, [session.user.id]);
 
-        const isAdmin = [1, 2].includes(token.user.role);
+        const isAdmin = [1, 2].includes(parseInt(session.user.role));
         const userEfiling = userRes.rows[0] || null;
 
         // Build query with multiple departments/roles support
@@ -199,14 +199,14 @@ export async function POST(request) {
             );
         }
 
-        const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
-        if (!token?.user?.id) {
+        const session = await auth();
+        if (!session?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
         client = await connectToDatabase();
 
-        const isAdmin = [1, 2].includes(token.user.role);
+        const isAdmin = [1, 2].includes(parseInt(session.user.role));
 
         // Get user's e-filing profile
         const userRes = await client.query(`
@@ -214,7 +214,7 @@ export async function POST(request) {
             FROM efiling_users eu
             JOIN users u ON eu.user_id = u.id
             WHERE u.id = $1 AND eu.is_active = true
-        `, [token.user.id]);
+        `, [session.user.id]);
 
         if (userRes.rows.length === 0 && !isAdmin) {
             return NextResponse.json({ error: 'User not found in e-filing system' }, { status: 403 });
