@@ -27,7 +27,7 @@ export async function POST(req) {
 
     // Get base directory (handle standalone mode)
     let baseDir = process.cwd();
-    if (baseDir.includes('.next/standalone')) {
+    if (baseDir.includes('.next/standalone') || baseDir.includes('.next\\standalone')) {
       baseDir = path.join(baseDir, '..', '..');
     }
     
@@ -72,19 +72,21 @@ export async function POST(req) {
       
       // Get the correct public directory path
       // In standalone mode, process.cwd() is .next/standalone, so we need to go up
-      let publicDir = path.join(process.cwd(), 'public');
-      
-      // Check if we're in standalone mode
-      if (process.cwd().includes('.next/standalone')) {
-        // Go up two levels: .next/standalone -> .next -> root
-        publicDir = path.join(process.cwd(), '..', '..', 'public');
-      }
+      let publicDir = path.join(baseDir, 'public');
       
       const uploadsDir = path.join(publicDir, UPLOAD_CONFIG.UPLOAD_DIRS.finalVideos);
       await ensureUploadDir(uploadsDir);
       
       const finalPath = path.join(uploadsDir, finalFilename);
       await fs.writeFile(finalPath, combinedBuffer);
+      
+      // Verify file exists after writing
+      try {
+        await fs.access(finalPath);
+      } catch (accessError) {
+        console.error(`File verification failed: ${finalPath}`, accessError);
+        return createErrorResponse('File was written but verification failed', 500);
+      }
       
       const filePath = `/uploads/final-videos/${finalFilename}`;
 

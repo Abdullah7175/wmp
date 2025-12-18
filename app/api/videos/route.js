@@ -479,6 +479,14 @@ export async function POST(req) {
                 const buffer = await file.arrayBuffer();
                 await fs.writeFile(filePath, Buffer.from(buffer));
                 
+                // Verify file exists after writing
+                try {
+                    await fs.access(filePath);
+                } catch (accessError) {
+                    console.error(`File verification failed: ${filePath}`, accessError);
+                    continue; // Skip this file and continue with others
+                }
+                
                 const geoTag = `SRID=4326;POINT(${longitude} ${latitude})`;
                 const query = `
                     INSERT INTO videos (work_request_id, description, link, geo_tag, created_at, updated_at, creator_id, creator_type, file_name, file_size, file_type, creator_name)

@@ -46,7 +46,7 @@ export async function POST(req) {
     // Create temporary directory for chunks
     // In standalone mode, go up to root directory
     let baseDir = process.cwd();
-    if (baseDir.includes('.next/standalone')) {
+    if (baseDir.includes('.next/standalone') || baseDir.includes('.next\\standalone')) {
       baseDir = path.join(baseDir, '..', '..');
     }
     
@@ -100,7 +100,7 @@ export async function DELETE(req) {
 
     // In standalone mode, go up to root directory
     let baseDir = process.cwd();
-    if (baseDir.includes('.next/standalone')) {
+    if (baseDir.includes('.next/standalone') || baseDir.includes('.next\\standalone')) {
       baseDir = path.join(baseDir, '..', '..');
     }
     

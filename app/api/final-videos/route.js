@@ -254,8 +254,13 @@ export async function POST(req) {
                 return createErrorResponse('Work request not found', 404);
             }
 
-            // Save the file using optimized method
-            const uploadsDir = path.join(process.cwd(), 'public', UPLOAD_CONFIG.UPLOAD_DIRS.finalVideos);
+            // Handle standalone mode - get correct base directory
+            let baseDir = process.cwd();
+            if (baseDir.includes('.next/standalone') || baseDir.includes('.next\\standalone')) {
+                // In standalone mode, go up two levels to get to project root
+                baseDir = path.join(baseDir, '..', '..');
+            }
+            const uploadsDir = path.join(baseDir, 'public', UPLOAD_CONFIG.UPLOAD_DIRS.finalVideos);
             const filename = generateUniqueFilename(file.name);
             const saveResult = await saveFileStream(file, uploadsDir, filename);
 
@@ -366,9 +371,16 @@ export async function PUT(req) {
                     return createErrorResponse(`File validation failed: ${validationResult.errors.join(', ')}`, 400);
                 }
 
+                // Handle standalone mode - get correct base directory
+                let baseDir = process.cwd();
+                if (baseDir.includes('.next/standalone') || baseDir.includes('.next\\standalone')) {
+                    // In standalone mode, go up two levels to get to project root
+                    baseDir = path.join(baseDir, '..', '..');
+                }
+                
                 // Generate unique filename
                 const uniqueFilename = generateUniqueFilename(file.name);
-                const uploadDir = path.join(process.cwd(), 'public', UPLOAD_CONFIG.UPLOAD_DIRS.finalVideos);
+                const uploadDir = path.join(baseDir, 'public', UPLOAD_CONFIG.UPLOAD_DIRS.finalVideos);
 
                 // Ensure directory exists
                 await fs.mkdir(uploadDir, { recursive: true });
@@ -381,7 +393,7 @@ export async function PUT(req) {
 
                 // Delete old file if it exists
                 if (existingVideo[0].link) {
-                    const oldFilePath = path.join(process.cwd(), 'public', existingVideo[0].link);
+                    const oldFilePath = path.join(baseDir, 'public', existingVideo[0].link);
                     try {
                         await fs.unlink(oldFilePath);
                     } catch (unlinkError) {
@@ -457,10 +469,17 @@ export async function DELETE(req) {
             return NextResponse.json({ error: 'Final video not found' }, { status: 404 });
         }
 
+        // Handle standalone mode - get correct base directory
+        let baseDir = process.cwd();
+        if (baseDir.includes('.next/standalone') || baseDir.includes('.next\\standalone')) {
+            // In standalone mode, go up two levels to get to project root
+            baseDir = path.join(baseDir, '..', '..');
+        }
+        
         // Delete the file
         if (video.link) {
             try {
-                const filePath = path.join(process.cwd(), 'public', video.link);
+                const filePath = path.join(baseDir, 'public', video.link);
                 await fs.unlink(filePath);
             } catch (fileError) {
                 console.error('Error deleting final video file:', fileError);

@@ -1,9 +1,15 @@
 import { NextResponse } from 'next/server';
 import { promises as fs } from 'fs';
 import path from 'path';
+import { auth } from '@/auth';
 
 export async function POST(req) {
     try {
+        const session = await auth();
+        if (!session?.user) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
         const formData = await req.formData();
         const file = formData.get('file');
         const type = formData.get('type') || 'before-content';
@@ -57,6 +63,14 @@ export async function POST(req) {
 
         // Save file
         await fs.writeFile(filePath, Buffer.from(buffer));
+        
+        // Verify file exists after writing
+        try {
+            await fs.access(filePath);
+        } catch (accessError) {
+            console.error(`File verification failed: ${filePath}`, accessError);
+            return NextResponse.json({ error: 'File was written but verification failed' }, { status: 500 });
+        }
 
         // Return the public URL
         const link = `/uploads/${type}/${contentType}/${filename}`;

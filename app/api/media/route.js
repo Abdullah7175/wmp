@@ -2,9 +2,15 @@ import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/db';
 import { promises as fs } from 'fs';
 import path from 'path';
+import { auth } from '@/auth';
 
 export async function POST(req) {
     try {
+        const session = await auth();
+        if (!session?.user) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
         const formData = await req.formData();
         const workRequestId = formData.get('workRequestId');
         const geoTag = formData.get('geo_tag');
@@ -75,6 +81,14 @@ async function processMediaFiles(files, descriptions, workRequestId, geoTag, med
         const filename = `${sanitizedName}-${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
         const filePath = path.join(uploadsDir, filename);
         await fs.writeFile(filePath, Buffer.from(buffer));
+        
+        // Verify file exists after writing
+        try {
+            await fs.access(filePath);
+        } catch (accessError) {
+            console.error(`File verification failed: ${filePath}`, accessError);
+            continue; // Skip this file and continue with others
+        }
 
         const query = `
             INSERT INTO ${mediaType} 

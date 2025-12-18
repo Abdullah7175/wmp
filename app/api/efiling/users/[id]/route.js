@@ -106,8 +106,10 @@ export async function GET(request, { params }) {
 
 // Update e-filing user
 export async function PUT(request, { params }) {
+    let userId = null;
     try {
         const { id } = await params;
+        userId = id;
         const body = await request.json();
         const {
             name,
@@ -141,6 +143,9 @@ export async function PUT(request, { params }) {
         } = body;
 
         console.log(`PUT /api/efiling/users/${id} - Request body keys:`, Object.keys(body));
+        console.log(`PUT /api/efiling/users/${id} - Updating user with data:`, {
+            name, email, cnic, employee_id, department_id, efiling_role_id
+        });
 
         if (!id) {
             console.error('PUT /api/efiling/users/[id] - User ID is missing');
@@ -195,7 +200,7 @@ export async function PUT(request, { params }) {
             }
 
             // Validate CNIC format if provided
-            if (cnic) {
+            if (cnic !== undefined && cnic !== null && cnic !== '') {
                 const cnicRegex = /^\d{5}-\d{7}-\d{1}$/;
                 if (!cnicRegex.test(cnic)) {
                     console.error(`PUT /api/efiling/users/${id} - Invalid CNIC format: ${cnic}`);
@@ -208,6 +213,7 @@ export async function PUT(request, { params }) {
 
             // Check if email already exists (if changed)
             if (email && email !== currentEmail) {
+                console.log(`PUT /api/efiling/users/${id} - Checking email uniqueness: ${email} (current: ${currentEmail})`);
                 const existingUser = await client.query(
                     'SELECT id FROM users WHERE email = $1 AND id != $2',
                     [email, userId]
@@ -224,6 +230,7 @@ export async function PUT(request, { params }) {
 
             // Check if CNIC already exists (if changed)
             if (cnic && cnic !== currentCnic) {
+                console.log(`PUT /api/efiling/users/${id} - Checking CNIC uniqueness: ${cnic} (current: ${currentCnic})`);
                 const existingCnic = await client.query(
                     'SELECT id FROM users WHERE cnic = $1 AND id != $2',
                     [cnic, userId]
@@ -239,7 +246,8 @@ export async function PUT(request, { params }) {
             }
 
             // Check if employee_id already exists (if changed)
-            if (employee_id && employee_id !== currentEmployeeId) {
+            if (employee_id !== undefined && employee_id !== null && employee_id !== '' && employee_id !== currentEmployeeId) {
+                console.log(`PUT /api/efiling/users/${id} - Checking employee_id uniqueness: ${employee_id} (current: ${currentEmployeeId})`);
                 const existingEmployee = await client.query(
                     'SELECT id FROM efiling_users WHERE employee_id = $1 AND id != $2',
                     [employee_id, efilingUserId]
@@ -501,15 +509,78 @@ export async function PUT(request, { params }) {
 
         } catch (error) {
             // Rollback transaction on error
-            await client.query('ROLLBACK');
+            try {
+                await client.query('ROLLBACK');
+            } catch (rollbackError) {
+                console.error('Error during rollback:', rollbackError);
+            }
+            
+            // Check for database constraint violations
+            if (error.code === '23505') { // Unique violation
+                const constraint = error.constraint || 'unknown';
+                console.error(`PUT /api/efiling/users/${userId} - Database unique constraint violation: ${constraint}`, error.detail);
+                
+                // Try to provide a user-friendly error message
+                let errorMessage = 'A record with this information already exists';
+                if (constraint.includes('email')) {
+                    errorMessage = 'User with this email already exists';
+                } else if (constraint.includes('cnic')) {
+                    errorMessage = 'User with this CNIC already exists';
+                } else if (constraint.includes('employee_id')) {
+                    errorMessage = 'Employee ID already exists';
+                }
+                
+                return NextResponse.json(
+                    { error: errorMessage, details: error.detail },
+                    { status: 400 }
+                );
+            }
+            
+            // Check for foreign key violations
+            if (error.code === '23503') { // Foreign key violation
+                console.error(`PUT /api/efiling/users/${userId} - Foreign key constraint violation:`, error.detail);
+                return NextResponse.json(
+                    { error: 'Invalid reference. One or more referenced records do not exist.', details: error.detail },
+                    { status: 400 }
+                );
+            }
+            
+            // Check for not null violations
+            if (error.code === '23502') { // Not null violation
+                console.error(`PUT /api/efiling/users/${userId} - Not null constraint violation:`, error.detail);
+                return NextResponse.json(
+                    { error: 'Required field is missing', details: error.detail },
+                    { status: 400 }
+                );
+            }
+            
+            // Re-throw to be caught by outer catch
             throw error;
         } finally {
             await client.release();
         }
 
     } catch (error) {
-        console.error(`Error updating e-filing user ${params?.id || 'unknown'}:`, error);
+        console.error(`Error updating e-filing user ${userId || 'unknown'}:`, error);
         console.error('Error stack:', error.stack);
+        
+        // If it's already a NextResponse (from inner catch), return it
+        if (error instanceof Response) {
+            return error;
+        }
+        
+        // Check if it's a validation error that should return 400
+        if (error.message && (
+            error.message.includes('already exists') ||
+            error.message.includes('Invalid') ||
+            error.message.includes('required')
+        )) {
+            return NextResponse.json(
+                { error: error.message, details: error.details || error.message },
+                { status: 400 }
+            );
+        }
+        
         return NextResponse.json(
             { error: 'Failed to update e-filing user', details: error.message },
             { status: 500 }

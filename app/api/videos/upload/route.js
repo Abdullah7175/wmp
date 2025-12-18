@@ -118,7 +118,13 @@ export async function POST(req) {
                 return createErrorResponse('Work request not found', 404);
             }
 
-            const uploadsDir = path.join(process.cwd(), 'public', UPLOAD_CONFIG.UPLOAD_DIRS.videos);
+            // Handle standalone mode - get correct base directory
+            let baseDir = process.cwd();
+            if (baseDir.includes('.next/standalone') || baseDir.includes('.next\\standalone')) {
+                // In standalone mode, go up two levels to get to project root
+                baseDir = path.join(baseDir, '..', '..');
+            }
+            const uploadsDir = path.join(baseDir, 'public', UPLOAD_CONFIG.UPLOAD_DIRS.videos);
             const uploadedVideos = [];
             
             // Process files with optimized handling

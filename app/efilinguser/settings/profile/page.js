@@ -132,10 +132,20 @@ export default function ProfileSettings() {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        
+        if (!efilingUserId) {
+            toast({
+                title: "Error",
+                description: "E-filing user ID not found. Please refresh the page.",
+                variant: "destructive",
+            });
+            return;
+        }
+        
         setLoading(true);
 
         try {
-            const response = await fetch(`/api/efiling/users/${session.user.id}`, {
+            const response = await fetch(`/api/efiling/users/${efilingUserId}`, {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
