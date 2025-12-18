@@ -41,7 +41,7 @@ export default function CreateFileType() {
             loadCategories();
             loadRoles();
             loadDepartments();
-            loadSlaPolicies();
+            // Don't load SLA policies initially - wait for department selection
         }
     }, [session]);
 
@@ -86,9 +86,13 @@ export default function CreateFileType() {
         }
     };
 
-    const loadSlaPolicies = async () => {
+    const loadSlaPolicies = async (departmentId = null) => {
         try {
-            const response = await fetch('/api/efiling/sla-policies?is_active=true');
+            let url = '/api/efiling/sla-policies?is_active=true';
+            if (departmentId) {
+                url += `&department_id=${departmentId}`;
+            }
+            const response = await fetch(url);
             if (response.ok) {
                 const data = await response.json();
                 setSlaPolicies(data.slaPolicies || []);
@@ -104,6 +108,18 @@ export default function CreateFileType() {
             ...prev,
             [field]: value
         }));
+        
+        // Reload SLA policies when department changes
+        if (field === 'department_id') {
+            loadSlaPolicies(value || null);
+            // Clear SLA policy selection when department changes
+            if (value !== formData.department_id) {
+                setFormData(prev => ({
+                    ...prev,
+                    sla_policy_id: ''
+                }));
+            }
+        }
     };
 
     const handleSubmit = async (e) => {
@@ -262,9 +278,10 @@ export default function CreateFileType() {
                                 <Select 
                                     value={formData.sla_policy_id || undefined} 
                                     onValueChange={(value) => handleInputChange('sla_policy_id', value === 'none' ? '' : value)}
+                                    disabled={!formData.department_id}
                                 >
                                     <SelectTrigger>
-                                        <SelectValue placeholder="Select SLA policy (optional)">
+                                        <SelectValue placeholder={formData.department_id ? "Select SLA policy (optional)" : "Select department first"}>
                                             {formData.sla_policy_id && slaPolicies.find(p => p.id == formData.sla_policy_id)?.name}
                                         </SelectValue>
                                     </SelectTrigger>
@@ -272,11 +289,16 @@ export default function CreateFileType() {
                                         <SelectItem value="none">No SLA Policy</SelectItem>
                                         {slaPolicies.map((policy) => (
                                             <SelectItem key={policy.id} value={policy.id.toString()}>
-                                                {policy.name}
+                                                {policy.name} {policy.department_name ? `(${policy.department_name})` : '(Global)'}
                                             </SelectItem>
                                         ))}
                                     </SelectContent>
                                 </Select>
+                                {!formData.department_id && (
+                                    <p className="text-sm text-muted-foreground mt-1">
+                                        Please select a department first to see available SLA policies
+                                    </p>
+                                )}
                             </div>
 
                             <div>

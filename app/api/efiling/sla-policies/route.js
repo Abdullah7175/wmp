@@ -9,6 +9,7 @@ export async function GET(request) {
         const { searchParams } = new URL(request.url);
         const id = searchParams.get('id');
         const fileTypeId = searchParams.get('fileTypeId');
+        const departmentId = searchParams.get('department_id');
         const isActive = searchParams.get('is_active');
         const userId = searchParams.get('userId');
         const ipAddress = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip');
@@ -38,10 +39,10 @@ export async function GET(request) {
             const result = await client.query(`
                 SELECT 
                     sp.*,
-                    ft.name as file_type_name,
-                    ft.code as file_type_code
+                    d.name as department_name,
+                    d.code as department_code
                 FROM efiling_sla_policies sp
-                LEFT JOIN efiling_file_types ft ON sp.file_type_id = ft.id
+                LEFT JOIN efiling_departments d ON sp.department_id = d.id
                 WHERE sp.id = $1
             `, [id]);
 
@@ -69,10 +70,10 @@ export async function GET(request) {
             let query = `
                 SELECT 
                     sp.*,
-                    ft.name as file_type_name,
-                    ft.code as file_type_code
+                    d.name as department_name,
+                    d.code as department_code
                 FROM efiling_sla_policies sp
-                LEFT JOIN efiling_file_types ft ON sp.file_type_id = ft.id
+                LEFT JOIN efiling_departments d ON sp.department_id = d.id
                 WHERE 1=1
             `;
             
@@ -80,18 +81,28 @@ export async function GET(request) {
             let paramCount = 1;
 
             if (fileTypeId) {
-                query += ` AND sp.file_type_id = $${paramCount}`;
+                query += ` AND EXISTS (
+                    SELECT 1 FROM efiling_file_types ft 
+                    WHERE ft.sla_policy_id = sp.id AND ft.id = $${paramCount}
+                )`;
                 params.push(fileTypeId);
                 paramCount++;
             }
 
-            if (isActive !== null) {
+            if (departmentId) {
+                // Show policies for this department OR global policies (department_id IS NULL)
+                query += ` AND (sp.department_id = $${paramCount} OR sp.department_id IS NULL)`;
+                params.push(departmentId);
+                paramCount++;
+            }
+
+            if (isActive !== null && isActive !== '') {
                 query += ` AND sp.is_active = $${paramCount}`;
                 params.push(isActive === 'true');
                 paramCount++;
             }
 
-            query += ` ORDER BY sp.name ASC`;
+            query += ` ORDER BY sp.department_id NULLS LAST, sp.name ASC`;
 
             const result = await client.query(query, params);
 
@@ -131,18 +142,17 @@ export async function POST(request) {
         const { 
             name, 
             description, 
-            fileTypeId, 
-            stages, 
-            escalationRules, 
+            departmentId,
+            policyType,
             createdBy, 
             ipAddress, 
             userAgent 
         } = body;
 
         // Input validation
-        if (!name || !fileTypeId || !stages || !Array.isArray(stages)) {
+        if (!name) {
             return NextResponse.json(
-                { error: 'Name, file type ID, and stages array are required' },
+                { error: 'Name is required' },
                 { status: 400 }
             );
         }
@@ -170,17 +180,15 @@ export async function POST(request) {
         // Create SLA policy
         const result = await client.query(`
             INSERT INTO efiling_sla_policies (
-                name, description, file_type_id, stages, escalation_rules, 
-                is_active, created_by, created_at
-            ) VALUES ($1, $2, $3, $4, $5, true, $6, NOW())
+                name, description, department_id, policy_type, 
+                is_active, created_at
+            ) VALUES ($1, $2, $3, $4, true, NOW())
             RETURNING *
         `, [
             name,
             description,
-            fileTypeId,
-            JSON.stringify(stages),
-            JSON.stringify(escalationRules || {}),
-            createdBy
+            departmentId || null,
+            policyType || 'TIME_BASED'
         ]);
 
         const slaPolicy = result.rows[0];
@@ -193,8 +201,7 @@ export async function POST(request) {
             userId: createdBy,
             details: {
                 slaPolicyName: name,
-                fileTypeId,
-                stageCount: stages.length
+                departmentId: departmentId || 'global'
             },
             ipAddress,
             userAgent
@@ -206,9 +213,8 @@ export async function POST(request) {
                 id: slaPolicy.id,
                 name: slaPolicy.name,
                 description: slaPolicy.description,
-                fileTypeId: slaPolicy.file_type_id,
-                stages: slaPolicy.stages,
-                escalationRules: slaPolicy.escalation_rules
+                departmentId: slaPolicy.department_id,
+                policyType: slaPolicy.policy_type
             }
         }, { status: 201 });
 
