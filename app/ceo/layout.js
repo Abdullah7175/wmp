@@ -1,8 +1,20 @@
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 import CeoLayoutClient from "./CeoLayoutClient";
 
 export default async function CeoLayout({ children }) {
+  // Get headers to access cookies
+  const headersList = await headers();
+  const cookieHeader = headersList.get('cookie');
+  
+  // Debug: Log available cookies
+  console.log('CEO Layout - Cookie check:', {
+    hasCookieHeader: !!cookieHeader,
+    cookieHeader: cookieHeader ? cookieHeader.substring(0, 200) : null,
+    cookieNames: cookieHeader ? cookieHeader.split(';').map(c => c.split('=')[0].trim()) : []
+  });
+  
   const session = await auth();
   
   // Debug logging
