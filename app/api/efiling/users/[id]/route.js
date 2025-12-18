@@ -149,14 +149,25 @@ export async function PUT(request, { params }) {
         const client = await connectToDatabase();
 
         try {
-            // Get current user info
-            const currentUser = await client.query(
-                `SELECT u.id, u.email, u.cnic, eu.employee_id 
+            // First, try to find by efiling_users.id, if not found, try by users.id
+            let currentUser = await client.query(
+                `SELECT u.id, u.email, u.cnic, eu.id as efiling_user_id, eu.employee_id 
                  FROM users u 
                  JOIN efiling_users eu ON u.id = eu.user_id 
                  WHERE eu.id = $1`,
                 [id]
             );
+
+            // If not found by efiling_users.id, try by users.id
+            if (currentUser.rows.length === 0) {
+                currentUser = await client.query(
+                    `SELECT u.id, u.email, u.cnic, eu.id as efiling_user_id, eu.employee_id 
+                     FROM users u 
+                     JOIN efiling_users eu ON u.id = eu.user_id 
+                     WHERE u.id = $1`,
+                    [id]
+                );
+            }
 
             if (currentUser.rows.length === 0) {
                 return NextResponse.json(
@@ -166,6 +177,7 @@ export async function PUT(request, { params }) {
             }
 
             const userId = currentUser.rows[0].id;
+            const efilingUserId = currentUser.rows[0].efiling_user_id;
             const currentEmail = currentUser.rows[0].email;
             const currentCnic = currentUser.rows[0].cnic;
             const currentEmployeeId = currentUser.rows[0].employee_id;
@@ -457,7 +469,7 @@ export async function PUT(request, { params }) {
             }
 
             efilingUpdateQuery += ` WHERE id = $${paramCount}`;
-            efilingParams.push(id);
+            efilingParams.push(efilingUserId);
 
             if (efilingParams.length > 1) {
                 await client.query(efilingUpdateQuery, efilingParams);

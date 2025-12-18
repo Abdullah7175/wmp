@@ -472,7 +472,7 @@ export default function FileDetail() {
                     }
                     
                     .page-content:last-child {
-                        page-break-after: auto;
+                        page-break-after: avoid !important;
                     }
                     
                     /* Hide empty pages */
@@ -527,6 +527,19 @@ export default function FileDetail() {
                     /* Ensure content doesn't overflow */
                     * {
                         overflow: visible !important;
+                    }
+                    
+                    /* Prevent blank pages from empty containers */
+                    .container:empty,
+                    .space-y-6:empty {
+                        display: none !important;
+                        height: 0 !important;
+                        page-break-after: avoid !important;
+                    }
+                    
+                    /* Prevent last element from creating blank page */
+                    body > *:last-child {
+                        page-break-after: avoid !important;
                     }
                     
                     /* Hide navigation and sidebar on print */
@@ -631,6 +644,17 @@ export default function FileDetail() {
                         padding: 15mm;
                         margin-bottom: 10mm;
                         page-break-inside: avoid;
+                        page-break-after: auto !important;
+                    }
+                    
+                    /* Prevent blank pages at the end */
+                    body::after {
+                        display: none !important;
+                    }
+                    
+                    /* Hide any trailing empty elements */
+                    *:last-child:empty {
+                        display: none !important;
                     }
                     
                     .print-file-info h2 {
@@ -668,9 +692,15 @@ export default function FileDetail() {
                         visibility: visible !important;
                     }
                     
-                    /* Only add page break before if section has content */
-                    .print-section:not(:empty) {
+                    /* Only add page break before if section has content and is not the last element */
+                    .print-section:not(:empty):not(:last-of-type) {
                         page-break-before: always;
+                    }
+                    
+                    /* Last print section should not force a page break */
+                    .print-section:not(:empty):last-of-type {
+                        page-break-before: auto;
+                        page-break-after: avoid !important;
                     }
                     
                     /* Hide empty print sections */
