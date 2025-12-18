@@ -563,17 +563,16 @@ export async function PUT(request, { params }) {
     } catch (error) {
         console.error(`Error updating e-filing user ${userId || 'unknown'}:`, error);
         console.error('Error stack:', error.stack);
-        
-        // If it's already a NextResponse (from inner catch), return it
-        if (error instanceof Response) {
-            return error;
-        }
+        console.error('Error code:', error.code);
+        console.error('Error detail:', error.detail);
+        console.error('Error constraint:', error.constraint);
         
         // Check if it's a validation error that should return 400
         if (error.message && (
             error.message.includes('already exists') ||
             error.message.includes('Invalid') ||
-            error.message.includes('required')
+            error.message.includes('required') ||
+            error.message.includes('CNIC')
         )) {
             return NextResponse.json(
                 { error: error.message, details: error.details || error.message },
