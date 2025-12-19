@@ -63,8 +63,26 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             });
             
             console.log('Verifying password...');
-            const isValid = await bcrypt.compare(credentials.password, storedPassword);
-            console.log('Password verification result:', isValid);
+            let isValid = false;
+            try {
+              isValid = await bcrypt.compare(credentials.password, storedPassword);
+              console.log('Password verification result:', isValid);
+              
+              // If verification fails, try with trimmed input password (in case of whitespace)
+              if (!isValid && credentials.password.trim() !== credentials.password) {
+                console.log('Retrying with trimmed input password...');
+                isValid = await bcrypt.compare(credentials.password.trim(), storedPassword);
+                console.log('Password verification result (trimmed):', isValid);
+              }
+            } catch (compareError) {
+              console.error('Error during password comparison:', compareError.message);
+              console.error('Hash format check:', {
+                startsWith2a: storedPassword.startsWith('$2a$'),
+                startsWith2b: storedPassword.startsWith('$2b$'),
+                startsWith2y: storedPassword.startsWith('$2y$'),
+                hashLength: storedPassword.length
+              });
+            }
             
             if (isValid) {
               console.log('Password verified successfully');
