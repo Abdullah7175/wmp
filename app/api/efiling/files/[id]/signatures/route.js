@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/db';
 import { logAction } from '@/lib/actionLogger';
+import { auth } from '@/auth';
 
 // GET - Fetch signatures for a file
 export async function GET(request, { params }) {
@@ -8,7 +9,26 @@ export async function GET(request, { params }) {
     let client;
 
     try {
+        // SECURITY: Require authentication
+        const session = await auth();
+        if (!session?.user?.id) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
         client = await connectToDatabase();
+
+        // SECURITY: Check file access
+        const { checkFileAccess } = await import('@/lib/authMiddleware');
+        const userId = parseInt(session.user.id);
+        const isAdmin = [1, 2].includes(parseInt(session.user.role));
+        
+        const hasAccess = await checkFileAccess(client, parseInt(id), userId, isAdmin);
+        if (!hasAccess) {
+            return NextResponse.json(
+                { error: 'Forbidden - You do not have access to this file' },
+                { status: 403 }
+            );
+        }
         
         // Check if signatures table exists, create if not
         await client.query(`
@@ -63,6 +83,12 @@ export async function POST(request, { params }) {
     let client;
 
     try {
+        // SECURITY: Require authentication
+        const session = await auth();
+        if (!session?.user?.id) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
         const body = await request.json();
         const { user_id, user_name, user_role, type, content, position, font } = body;
 

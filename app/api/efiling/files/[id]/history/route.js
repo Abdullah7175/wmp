@@ -1,10 +1,17 @@
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/db';
 import { eFileActionLogger } from '@/lib/efilingActionLogger';
+import { auth } from '@/auth';
 
 export async function GET(request, { params }) {
     let client;
     try {
+        // SECURITY: Require authentication
+        const session = await auth();
+        if (!session?.user?.id) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
         const { id: fileId } = await params;
         const { searchParams } = new URL(request.url);
         const userId = searchParams.get('userId');
@@ -15,6 +22,19 @@ export async function GET(request, { params }) {
         }
 
         client = await connectToDatabase();
+
+        // SECURITY: Check file access
+        const { checkFileAccess } = await import('@/lib/authMiddleware');
+        const sessionUserId = parseInt(session.user.id);
+        const isAdmin = [1, 2].includes(parseInt(session.user.role));
+        
+        const hasAccess = await checkFileAccess(client, parseInt(fileId), sessionUserId, isAdmin);
+        if (!hasAccess) {
+            return NextResponse.json(
+                { error: 'Forbidden - You do not have access to this file' },
+                { status: 403 }
+            );
+        }
 
         // Check if SLA columns exist (check each column individually)
         let hasSlaDeadline = false;

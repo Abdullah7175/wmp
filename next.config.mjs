@@ -60,6 +60,25 @@ const nextConfig = {
   async headers() {
     return [
       {
+        // Allow PDFs to be displayed in iframes (SAMEORIGIN allows same-origin embedding)
+        source: '/api/uploads/:path*.pdf',
+        headers: [
+          {
+            key: 'X-Frame-Options',
+            value: 'SAMEORIGIN'
+          },
+          {
+            key: 'X-Content-Type-Options',
+            value: 'nosniff'
+          },
+          {
+            key: 'Content-Type',
+            value: 'application/pdf'
+          }
+        ]
+      },
+      {
+        // Default security headers for all other routes
         source: '/:path*',
         headers: [
           {
@@ -76,7 +95,7 @@ const nextConfig = {
           },
           {
             key: 'Content-Security-Policy',
-            value: "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https:;"
+            value: "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https:; frame-src 'self';"
           },
           {
             key: 'Strict-Transport-Security',

@@ -654,14 +654,33 @@ export default function DocumentViewer() {
                             ) : selectedAttachment.file_type === 'application/pdf' || selectedAttachment.file_name?.toLowerCase().endsWith('.pdf') ? (
                                 <div className="space-y-4">
                                     <div className="border rounded-lg overflow-hidden bg-gray-50">
-                                        <iframe
-                                            src={selectedAttachment.file_url}
+                                        {/* Use object tag as primary method, iframe as fallback */}
+                                        <object
+                                            data={selectedAttachment.file_url}
+                                            type="application/pdf"
                                             className="w-full h-[70vh] min-h-[500px] border-0"
                                             title={selectedAttachment.file_name}
                                             style={{ display: 'block' }}
-                                        />
+                                        >
+                                            {/* Fallback to iframe if object tag doesn't work */}
+                                            <iframe
+                                                src={selectedAttachment.file_url}
+                                                className="w-full h-[70vh] min-h-[500px] border-0"
+                                                title={selectedAttachment.file_name}
+                                                style={{ display: 'block' }}
+                                            />
+                                        </object>
                                     </div>
-                                    <div className="flex justify-end">
+                                    <div className="flex justify-end gap-2">
+                                        <Button 
+                                            variant="outline"
+                                            onClick={() => {
+                                                window.open(selectedAttachment.file_url, '_blank');
+                                            }}
+                                        >
+                                            <Eye className="w-4 h-4 mr-2" />
+                                            Open in New Tab
+                                        </Button>
                                         <Button 
                                             variant="outline"
                                             onClick={() => {

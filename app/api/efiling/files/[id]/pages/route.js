@@ -143,8 +143,27 @@ export async function POST(request, { params }) {
 export async function GET(request, { params }) {
     let client;
     try {
+        // SECURITY: Require authentication
+        const session = await auth();
+        if (!session?.user?.id) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
         const { id } = await params;
         client = await connectToDatabase();
+
+        // SECURITY: Check file access
+        const { checkFileAccess } = await import('@/lib/authMiddleware');
+        const userId = parseInt(session.user.id);
+        const isAdmin = [1, 2].includes(parseInt(session.user.role));
+        
+        const hasAccess = await checkFileAccess(client, parseInt(id), userId, isAdmin);
+        if (!hasAccess) {
+            return NextResponse.json(
+                { error: 'Forbidden - You do not have access to this file' },
+                { status: 403 }
+            );
+        }
         
         // Get all pages
         const pagesRes = await client.query(`

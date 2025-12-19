@@ -1,10 +1,21 @@
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/db';
 import { eFileActionLogger, EFILING_ACTION_TYPES, EFILING_ENTITY_TYPES } from '@/lib/efilingActionLogger';
+import { auth } from '@/auth';
+import { checkFileAccess } from '@/lib/authMiddleware';
 
 export async function DELETE(request, { params }) {
     let client;
     try {
+        // SECURITY: Require authentication
+        const session = await auth();
+        if (!session?.user?.id) {
+            return NextResponse.json(
+                { error: 'Unauthorized' },
+                { status: 401 }
+            );
+        }
+        
         const { id } = await params;
         
         if (!id) {
@@ -16,9 +27,9 @@ export async function DELETE(request, { params }) {
 
         client = await connectToDatabase();
         
-        // Get attachment info before deletion for logging
+        // Get attachment info before deletion for logging and access check
         const attachmentResult = await client.query(`
-            SELECT file_id, file_name, file_size, file_type, attachment_name FROM efiling_file_attachments WHERE id = $1
+            SELECT file_id, file_name, file_size, file_type, attachment_name FROM efiling_file_attachments WHERE id = $1 AND is_active = true
         `, [id]);
         
         if (attachmentResult.rows.length === 0) {
@@ -29,9 +40,19 @@ export async function DELETE(request, { params }) {
         }
         
         const attachment = attachmentResult.rows[0];
+        const fileId = attachment.file_id;
         
-        // Get user ID from request headers or session (in production, get from authentication)
-        const userId = request.headers.get('x-user-id') || 'system';
+        // SECURITY: Check if user has access to the file
+        const userId = session.user.id; // This is users.id
+        const isAdmin = session.user.role && [1, 2].includes(parseInt(session.user.role));
+        
+        const hasAccess = await checkFileAccess(client, fileId, userId, isAdmin);
+        if (!hasAccess) {
+            return NextResponse.json(
+                { error: 'Forbidden - You do not have permission to delete this attachment' },
+                { status: 403 }
+            );
+        }
         
         // Soft delete the attachment (mark as inactive)
         await client.query(`
@@ -40,12 +61,26 @@ export async function DELETE(request, { params }) {
             WHERE id = $1
         `, [id]);
         
+        // Get efiling_users.id for logging (userId is users.id, need efiling_users.id)
+        let efilingUserId = userId;
+        try {
+            const efilingUserResult = await client.query(
+                `SELECT id FROM efiling_users WHERE user_id = $1 AND is_active = true LIMIT 1`,
+                [userId]
+            );
+            if (efilingUserResult.rows.length > 0) {
+                efilingUserId = efilingUserResult.rows[0].id;
+            }
+        } catch (e) {
+            console.error('Error getting efiling user ID:', e);
+        }
+        
         // Log the action using efiling action logger
         await eFileActionLogger.logAction({
             entityType: EFILING_ENTITY_TYPES.EFILING_ATTACHMENT,
             entityId: id,
             action: EFILING_ACTION_TYPES.DOCUMENT_DELETED,
-            userId: userId,
+            userId: efilingUserId.toString(),
             details: {
                 fileId: attachment.file_id,
                 fileName: attachment.file_name,

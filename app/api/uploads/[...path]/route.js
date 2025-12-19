@@ -116,13 +116,26 @@ export async function GET(request, { params }) {
     }
 
     // Return the file with appropriate headers
+    const headers = {
+      'Content-Type': contentType,
+      'Content-Length': fileBuffer.length.toString(),
+      'Cache-Control': 'public, max-age=31536000', // Cache for 1 year
+    };
+    
+    // SECURITY: Allow PDFs to be displayed in iframes (same-origin only)
+    // This is safe because the file is served from the same origin and requires authentication
+    if (extension === 'pdf') {
+      headers['X-Frame-Options'] = 'SAMEORIGIN';
+      // Also set Content-Disposition to inline for PDFs so they can be displayed
+      headers['Content-Disposition'] = `inline; filename="${filePath[filePath.length - 1]}"`;
+    } else {
+      // For other file types, deny iframe embedding
+      headers['X-Frame-Options'] = 'DENY';
+    }
+    
     return new NextResponse(fileBuffer, {
       status: 200,
-      headers: {
-        'Content-Type': contentType,
-        'Content-Length': fileBuffer.length.toString(),
-        'Cache-Control': 'public, max-age=31536000', // Cache for 1 year
-      },
+      headers,
     });
 
   } catch (error) {

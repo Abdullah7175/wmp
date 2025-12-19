@@ -7,15 +7,18 @@ import { getUserGeography, isGlobalRoleCode } from '@/lib/efilingGeographicRouti
 export async function GET(request) {
     let client;
     try {
+        // SECURITY: Require authentication
+        const session = await auth();
+        if (!session?.user) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
         const { searchParams } = new URL(request.url);
         const id = searchParams.get('id');
         const categoryId = searchParams.get('categoryId');
 
-
-
         client = await connectToDatabase();
 
-        const session = await auth();
         let userGeography = null;
         let canSeeAll = false;
         if (session?.user) {
