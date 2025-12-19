@@ -10,7 +10,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   trustHost: true, // Allow localhost and other hosts in development
   basePath: "/api/auth", // Explicitly set the base path
   // Use NEXTAUTH_URL from environment or default to localhost
+  // For production with SSL, ensure this is set to https://wmp.kwsc.gos.pk
   url: process.env.NEXTAUTH_URL || process.env.AUTH_URL || "http://localhost:3000",
+  // Explicitly trust the host for CSRF token validation
+  useSecureCookies: process.env.NODE_ENV === 'production' || process.env.NEXTAUTH_URL?.startsWith('https://'),
   providers: [
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID,
@@ -238,12 +241,17 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       },
     },
     csrfToken: {
-      name: `${process.env.NODE_ENV === 'production' ? '__Host-' : ''}next-auth.csrf-token`,
+      // Use __Secure- instead of __Host- if behind a reverse proxy
+      // __Host- requires exact host match and no domain, which can fail behind proxies
+      name: `${process.env.NODE_ENV === 'production' && !process.env.BEHIND_PROXY ? '__Host-' : process.env.NODE_ENV === 'production' ? '__Secure-' : ''}next-auth.csrf-token`,
       options: {
         httpOnly: true,
         sameSite: 'lax',
         path: '/',
         secure: process.env.NODE_ENV === 'production' || process.env.NEXTAUTH_URL?.startsWith('https://'),
+        // __Host- prefix requires no domain attribute
+        // If behind proxy, you might need to set domain explicitly
+        ...(process.env.NODE_ENV === 'production' && process.env.BEHIND_PROXY && process.env.COOKIE_DOMAIN ? { domain: process.env.COOKIE_DOMAIN } : {}),
       },
     },
   },
