@@ -88,7 +88,7 @@ export async function POST(request, { params }) {
         
         // Get current user's efiling info
         const currentUserRes = await client.query(`
-            SELECT eu.id, eu.efiling_role_id, r.code as role_code
+            SELECT eu.id, eu.efiling_role_id, eu.department_id, r.code as role_code
             FROM efiling_users eu
             JOIN users u ON eu.user_id = u.id
             LEFT JOIN efiling_roles r ON eu.efiling_role_id = r.id
@@ -137,16 +137,94 @@ export async function POST(request, { params }) {
             fileDivisionId: fileRow.division_id
         });
 
-        // Add team members to allowed recipients if file is within team workflow
-        if (workflowState && workflowState.is_within_team) {
-            const teamMembers = await getTeamMembersForMarking(client, fileRow.created_by);
-            teamMembers.forEach(member => {
+        // Always add team members (not just when workflow is team internal)
+        // Users should be able to mark to team members for internal workflow
+        const creatorTeamMembers = await getTeamMembersForMarking(client, fileRow.created_by);
+        creatorTeamMembers.forEach(member => {
+            if (!allowedRecipients.find(r => r.id === member.id)) {
+                allowedRecipients.push({
+                    id: member.id,
+                    user_name: member.name,
+                    name: member.name,
+                    role_code: member.role_code,
+                    role_name: member.role_name,
+                    is_team_member: true,
+                    allowed_level_scope: 'team',
+                    allowed_reason: 'TEAM_MEMBER'
+                });
+            }
+        });
+        
+        // Also get current user's team members if they're different from creator
+        if (currentUser.id !== fileRow.created_by) {
+            const currentUserTeamMembers = await getTeamMembersForMarking(client, currentUser.id);
+            currentUserTeamMembers.forEach(member => {
                 if (!allowedRecipients.find(r => r.id === member.id)) {
                     allowedRecipients.push({
                         id: member.id,
+                        user_name: member.name,
                         name: member.name,
                         role_code: member.role_code,
-                        is_team_member: true
+                        role_name: member.role_name,
+                        is_team_member: true,
+                        allowed_level_scope: 'team',
+                        allowed_reason: 'TEAM_MEMBER'
+                    });
+                }
+            });
+        }
+        
+        // Always add department's Superintendent Engineer (SE) if current user is in a department
+        if (currentUser.department_id) {
+            const seRes = await client.query(`
+                SELECT 
+                    eu.id,
+                    u.name AS user_name,
+                    eu.efiling_role_id,
+                    r.code AS role_code,
+                    r.name AS role_name,
+                    eu.department_id,
+                    dept.name AS department_name,
+                    eu.district_id,
+                    d.title AS district_name,
+                    eu.town_id,
+                    t.town AS town_name,
+                    eu.division_id,
+                    div.name AS division_name
+                FROM efiling_users eu
+                JOIN users u ON eu.user_id = u.id
+                LEFT JOIN efiling_roles r ON eu.efiling_role_id = r.id
+                LEFT JOIN efiling_departments dept ON eu.department_id = dept.id
+                LEFT JOIN district d ON eu.district_id = d.id
+                LEFT JOIN town t ON eu.town_id = t.id
+                LEFT JOIN divisions div ON eu.division_id = div.id
+                WHERE eu.department_id = $1
+                AND eu.is_active = true
+                AND (UPPER(r.code) LIKE '%SE%' OR UPPER(r.code) = 'SE' OR UPPER(r.name) LIKE '%SUPERINTENDENT%ENGINEER%')
+                AND eu.id != $2
+                ORDER BY u.name ASC
+            `, [currentUser.department_id, currentUser.id]);
+            
+            // Add all SE users in the department
+            seRes.rows.forEach(se => {
+                if (!allowedRecipients.find(r => r.id === se.id)) {
+                    allowedRecipients.push({
+                        id: se.id,
+                        user_name: se.user_name,
+                        name: se.user_name,
+                        role_code: se.role_code,
+                        role_name: se.role_name,
+                        department_id: se.department_id,
+                        department_name: se.department_name,
+                        district_id: se.district_id,
+                        district_name: se.district_name,
+                        town_id: se.town_id,
+                        town_name: se.town_name,
+                        division_id: se.division_id,
+                        division_name: se.division_name,
+                        allowed_level_scope: 'department',
+                        allowed_reason: 'DEPARTMENT_SE',
+                        is_department_se: true
                     });
                 }
             });
@@ -493,9 +571,26 @@ export async function GET(request, { params }) {
         const file = fileRes.rows[0];
         const fromUserEfilingId = file.assigned_to || file.created_by;
         
+        // Get current user's efiling info to check department
+        const currentUserRes = await client.query(`
+            SELECT eu.id, eu.department_id, eu.efiling_role_id, r.code as role_code
+            FROM efiling_users eu
+            JOIN users u ON eu.user_id = u.id
+            LEFT JOIN efiling_roles r ON eu.efiling_role_id = r.id
+            WHERE u.id = $1 AND eu.is_active = true
+        `, [session.user.id]);
+
+        if (currentUserRes.rows.length === 0) {
+            return NextResponse.json({ error: 'Current user not found in e-filing system' }, { status: 403 });
+        }
+
+        const currentUser = currentUserRes.rows[0];
+        const currentUserEfilingId = currentUser.id;
+        const currentUserDepartmentId = currentUser.department_id;
+        
         // Get allowed recipients using geographic routing
         let allowedRecipients = await getAllowedRecipients(client, {
-            fromUserEfilingId,
+            fromUserEfilingId: fromUserEfilingId || currentUserEfilingId,
             fileId: id,
             fileDepartmentId: file.department_id,
             fileTypeId: file.file_type_id,
@@ -504,21 +599,102 @@ export async function GET(request, { params }) {
             fileDivisionId: file.division_id
         });
         
-        // Add team members if file is within team workflow
-        const workflowState = await getWorkflowState(client, id);
-        if (workflowState && workflowState.is_within_team) {
-            const teamMembers = await getTeamMembersForMarking(client, file.created_by);
-            teamMembers.forEach(member => {
+        // Always add team members (not just when workflow is team internal)
+        // Users should be able to mark to team members for internal workflow
+        // Get team members for both creator and current user (if they're different)
+        const creatorTeamMembers = await getTeamMembersForMarking(client, file.created_by);
+        creatorTeamMembers.forEach(member => {
+            if (!allowedRecipients.find(r => r.id === member.id)) {
+                allowedRecipients.push({
+                    id: member.id,
+                    user_name: member.name,
+                    name: member.name,
+                    role_code: member.role_code,
+                    role_name: member.role_name,
+                    is_team_member: true,
+                    allowed_level_scope: 'team',
+                    allowed_reason: 'TEAM_MEMBER'
+                });
+            }
+        });
+        
+        // Also get current user's team members if they're different from creator
+        if (currentUserEfilingId !== file.created_by) {
+            const currentUserTeamMembers = await getTeamMembersForMarking(client, currentUserEfilingId);
+            currentUserTeamMembers.forEach(member => {
                 if (!allowedRecipients.find(r => r.id === member.id)) {
                     allowedRecipients.push({
                         id: member.id,
+                        user_name: member.name,
                         name: member.name,
                         role_code: member.role_code,
-                        is_team_member: true
+                        role_name: member.role_name,
+                        is_team_member: true,
+                        allowed_level_scope: 'team',
+                        allowed_reason: 'TEAM_MEMBER'
                     });
                 }
             });
         }
+        
+        // Always add department's Superintendent Engineer (SE) if user is in a department
+        if (currentUserDepartmentId) {
+            const seRes = await client.query(`
+                SELECT 
+                    eu.id,
+                    u.name AS user_name,
+                    eu.efiling_role_id,
+                    r.code AS role_code,
+                    r.name AS role_name,
+                    eu.department_id,
+                    dept.name AS department_name,
+                    eu.district_id,
+                    d.title AS district_name,
+                    eu.town_id,
+                    t.town AS town_name,
+                    eu.division_id,
+                    div.name AS division_name
+                FROM efiling_users eu
+                JOIN users u ON eu.user_id = u.id
+                LEFT JOIN efiling_roles r ON eu.efiling_role_id = r.id
+                LEFT JOIN efiling_departments dept ON eu.department_id = dept.id
+                LEFT JOIN district d ON eu.district_id = d.id
+                LEFT JOIN town t ON eu.town_id = t.id
+                LEFT JOIN divisions div ON eu.division_id = div.id
+                WHERE eu.department_id = $1
+                AND eu.is_active = true
+                AND (UPPER(r.code) LIKE '%SE%' OR UPPER(r.code) = 'SE' OR UPPER(r.name) LIKE '%SUPERINTENDENT%ENGINEER%')
+                AND eu.id != $2
+                ORDER BY u.name ASC
+            `, [currentUserDepartmentId, currentUserEfilingId]);
+            
+            // Add all SE users in the department (there might be multiple)
+            seRes.rows.forEach(se => {
+                if (!allowedRecipients.find(r => r.id === se.id)) {
+                    allowedRecipients.push({
+                        id: se.id,
+                        user_name: se.user_name,
+                        name: se.user_name,
+                        role_code: se.role_code,
+                        role_name: se.role_name,
+                        department_id: se.department_id,
+                        department_name: se.department_name,
+                        district_id: se.district_id,
+                        district_name: se.district_name,
+                        town_id: se.town_id,
+                        town_name: se.town_name,
+                        division_id: se.division_id,
+                        division_name: se.division_name,
+                        allowed_level_scope: 'department',
+                        allowed_reason: 'DEPARTMENT_SE',
+                        is_department_se: true
+                    });
+                }
+            });
+        }
+        
+        // Get workflow state for display purposes
+        const workflowState = await getWorkflowState(client, id);
         
         // Also get movement history
         const movementsRes = await client.query(`

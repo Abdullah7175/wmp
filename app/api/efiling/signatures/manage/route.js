@@ -1,7 +1,16 @@
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/db';
+import { auth } from '@/auth';
 
 export async function POST(request) {
+    // SECURITY: Require authentication
+    const session = await auth();
+    if (!session?.user?.id) {
+        return NextResponse.json(
+            { error: 'Unauthorized' },
+            { status: 401 }
+        );
+    }
     try {
         const { action, signatureId, userId } = await request.json();
         
@@ -10,6 +19,44 @@ export async function POST(request) {
                 { error: 'Missing required fields' },
                 { status: 400 }
             );
+        }
+        
+        // SECURITY: Users can only manage their own signatures (unless admin)
+        const isAdmin = session.user.role && [1, 2].includes(parseInt(session.user.role));
+        if (!isAdmin) {
+            // Check if userId matches session user or is an efiling_users.id that maps to session user
+            const client = await connectToDatabase();
+            try {
+                const efilingUserCheck = await client.query(
+                    `SELECT user_id FROM efiling_users WHERE id = $1`,
+                    [userId]
+                );
+                if (efilingUserCheck.rows.length > 0) {
+                    const mappedUserId = efilingUserCheck.rows[0].user_id;
+                    if (parseInt(mappedUserId) !== parseInt(session.user.id)) {
+                        await client.release();
+                        return NextResponse.json(
+                            { error: 'Forbidden - You can only manage your own signatures' },
+                            { status: 403 }
+                        );
+                    }
+                } else {
+                    // userId might be users.id directly
+                    if (parseInt(userId) !== parseInt(session.user.id)) {
+                        await client.release();
+                        return NextResponse.json(
+                            { error: 'Forbidden - You can only manage your own signatures' },
+                            { status: 403 }
+                        );
+                    }
+                }
+            } catch (e) {
+                await client.release();
+                return NextResponse.json(
+                    { error: 'Forbidden - You can only manage your own signatures' },
+                    { status: 403 }
+                );
+            }
         }
 
         const client = await connectToDatabase();
@@ -112,6 +159,15 @@ export async function POST(request) {
 
 export async function GET(request) {
     try {
+        // SECURITY: Require authentication
+        const session = await auth();
+        if (!session?.user?.id) {
+            return NextResponse.json(
+                { error: 'Unauthorized' },
+                { status: 401 }
+            );
+        }
+        
         const { searchParams } = new URL(request.url);
         const userId = searchParams.get('userId');
         
@@ -120,6 +176,45 @@ export async function GET(request) {
                 { error: 'User ID is required' },
                 { status: 400 }
             );
+        }
+        
+        // SECURITY: Users can only view their own signatures (unless admin)
+        const isAdmin = session.user.role && [1, 2].includes(parseInt(session.user.role));
+        if (!isAdmin && parseInt(userId) !== parseInt(session.user.id)) {
+            // For efiling users, need to check if userId is efiling_users.id
+            // If so, map it to users.id for comparison
+            const client = await connectToDatabase();
+            try {
+                const efilingUserCheck = await client.query(
+                    `SELECT user_id FROM efiling_users WHERE id = $1`,
+                    [userId]
+                );
+                if (efilingUserCheck.rows.length > 0) {
+                    const mappedUserId = efilingUserCheck.rows[0].user_id;
+                    if (parseInt(mappedUserId) !== parseInt(session.user.id)) {
+                        await client.release();
+                        return NextResponse.json(
+                            { error: 'Forbidden - You can only view your own signatures' },
+                            { status: 403 }
+                        );
+                    }
+                } else {
+                    // userId might be users.id directly
+                    if (parseInt(userId) !== parseInt(session.user.id)) {
+                        await client.release();
+                        return NextResponse.json(
+                            { error: 'Forbidden - You can only view your own signatures' },
+                            { status: 403 }
+                        );
+                    }
+                }
+            } catch (e) {
+                await client.release();
+                return NextResponse.json(
+                    { error: 'Forbidden - You can only view your own signatures' },
+                    { status: 403 }
+                );
+            }
         }
 
         const client = await connectToDatabase();

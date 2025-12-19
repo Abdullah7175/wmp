@@ -850,9 +850,25 @@ export default function ProfileSettings() {
                                                 </span>
                                             ) : (
                                                 <img
-                                                    src={userSignature.file_url || userSignature.signature_data}
+                                                    src={
+                                                        userSignature.file_url 
+                                                            ? (userSignature.file_url.startsWith('/api/') 
+                                                                ? userSignature.file_url 
+                                                                : userSignature.file_url.startsWith('/uploads/')
+                                                                ? userSignature.file_url.replace('/uploads/', '/api/uploads/')
+                                                                : `/api/uploads${userSignature.file_url}`)
+                                                            : userSignature.signature_data
+                                                    }
                                                     alt="Signature"
                                                     className="max-h-16 max-w-48 object-contain"
+                                                    onError={(e) => {
+                                                        // Fallback to signature_data if file_url fails
+                                                        if (userSignature.signature_data && e.target.src !== userSignature.signature_data) {
+                                                            e.target.src = userSignature.signature_data;
+                                                        } else {
+                                                            console.error('Failed to load signature image:', userSignature.file_url);
+                                                        }
+                                                    }}
                                                 />
                                             )}
                                         </div>
