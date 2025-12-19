@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, Edit, Download, Eye, Clock, User, Building2, FileText, AlertCircle, Printer, FileDown } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { sanitizeHtml } from "@/lib/sanitizeHtml";
 
 export default function FileDetail() {
     const { data: session } = useSession();
@@ -267,16 +268,16 @@ export default function FileDetail() {
                     </div>
                 </div>
                 
-                {header && (<div className="mb-3 text-center text-xs text-gray-600" dangerouslySetInnerHTML={{ __html: header }} />)}
-                {title && (<h2 className="text-lg font-bold text-center mb-3" dangerouslySetInnerHTML={{ __html: title }} />)}
+                {header && (<div className="mb-3 text-center text-xs text-gray-600" dangerouslySetInnerHTML={{ __html: sanitizeHtml(header) }} />)}
+                {title && (<h2 className="text-lg font-bold text-center mb-3" dangerouslySetInnerHTML={{ __html: sanitizeHtml(title) }} />)}
                 {subject && (
                     <div className="mb-3">
                         <div className="font-semibold text-sm">Subject:</div>
-                        <div className="text-sm" dangerouslySetInnerHTML={{ __html: subject }} />
+                        <div className="text-sm" dangerouslySetInnerHTML={{ __html: sanitizeHtml(subject) }} />
                     </div>
                 )}
-                {matter && (<div className="prose text-sm" dangerouslySetInnerHTML={{ __html: matter }} />)}
-                {footer && (<div className="mt-4 text-xs text-gray-600" dangerouslySetInnerHTML={{ __html: footer }} />)}
+                {matter && (<div className="prose text-sm" dangerouslySetInnerHTML={{ __html: sanitizeHtml(matter) }} />)}
+                {footer && (<div className="mt-4 text-xs text-gray-600" dangerouslySetInnerHTML={{ __html: sanitizeHtml(footer) }} />)}
             </div>
         );
     };

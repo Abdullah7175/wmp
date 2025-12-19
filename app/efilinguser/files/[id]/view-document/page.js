@@ -11,6 +11,7 @@ import { ArrowLeft, Download, Eye, FileText, User, Calendar, Building2, Shield, 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import DocumentSignatureSystem from "../../../components/DocumentSignatureSystem";
 import Image from "next/image";
+import { sanitizeHtml } from "@/lib/sanitizeHtml";
 
 export default function DocumentViewer() {
     const { data: session } = useSession();
@@ -64,19 +65,7 @@ export default function DocumentViewer() {
         }
     };
 
-	const sanitizeHtml = (html) => {
-		if (!html || typeof html !== "string") return "";
-		let out = html;
-		out = out.replace(/<\s*(script|style|iframe)[^>]*>[\s\S]*?<\s*\/\s*\1\s*>/gi, "");
-		out = out
-			.replace(/on[a-zA-Z]+\s*=\s*"[^"]*"/g, "")
-			.replace(/on[a-zA-Z]+\s*=\s*'[^']*'/g, "")
-			.replace(/on[a-zA-Z]+\s*=\s*[^\s>]+/g, "")
-			.replace(/javascript\s*:/gi, "")
-			.replace(/vbscript\s*:/gi, "");
-		out = out.replace(/<\s*(object|embed)[^>]*>[\s\S]*?<\s*\/\s*\1\s*>/gi, "");
-		return out;
-	};
+	// SECURITY: Using centralized sanitization utility (DOMPurify-based)
 
     useEffect(() => {
 		if (params.id) fetchFileData();

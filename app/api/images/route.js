@@ -23,6 +23,12 @@ import {
 } from '@/lib/efilingGeographyFilters';
 
 export async function GET(request) {
+    // SECURITY: Require authentication
+    const session = await auth();
+    if (!session?.user) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
     const workRequestId = searchParams.get('workRequestId');
@@ -64,8 +70,18 @@ export async function GET(request) {
                 return NextResponse.json({ error: 'Image not found' }, { status: 404 });
             }
 
+            const image = result.rows[0];
+
+            // SECURITY: IDOR Fix - Check ownership or admin role
+            const isAdmin = [1, 2].includes(parseInt(session.user.role));
+            const isCreator = image.creator_id === parseInt(session.user.id) && image.creator_type === session.user.userType;
+            
+            if (!isCreator && !isAdmin) {
+                return NextResponse.json({ error: 'Forbidden - You do not have access to this image' }, { status: 403 });
+            }
+
             if (scopeInfo.apply && !scopeInfo.isGlobal) {
-                const allowed = recordMatchesGeography(result.rows[0], scopeInfo.geography, {
+                const allowed = recordMatchesGeography(image, scopeInfo.geography, {
                     getDistrict: (row) => row.town_district_id,
                 });
                 if (!allowed) {
@@ -73,7 +89,7 @@ export async function GET(request) {
                 }
             }
 
-            return NextResponse.json(result.rows[0], { status: 200 });
+            return NextResponse.json(image, { status: 200 });
         }
 
         let countQuery = `
@@ -362,13 +378,28 @@ export async function PUT(req) {
                 return NextResponse.json({ error: 'Image ID is required' }, { status: 400 });
             }
 
+            // SECURITY: Require authentication
+            const { auth } = await import('@/auth');
+            const session = await auth();
+            if (!session?.user) {
+                return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+            }
+
             // Get current image info to delete old file
-            const currentImageQuery = await client.query('SELECT link FROM images WHERE id = $1', [id]);
+            const currentImageQuery = await client.query('SELECT link, creator_id, creator_type FROM images WHERE id = $1', [id]);
             if (currentImageQuery.rows.length === 0) {
                 return NextResponse.json({ error: 'Image not found' }, { status: 404 });
             }
 
             const currentImage = currentImageQuery.rows[0];
+
+            // SECURITY: IDOR Fix - Check ownership or admin role
+            const isAdmin = [1, 2].includes(parseInt(session.user.role));
+            const isCreator = currentImage.creator_id === parseInt(session.user.id) && currentImage.creator_type === session.user.userType;
+            
+            if (!isCreator && !isAdmin) {
+                return NextResponse.json({ error: 'Forbidden - You can only modify your own images' }, { status: 403 });
+            }
             let newLink = currentImage.link;
 
             // Handle file upload if provided
@@ -525,6 +556,13 @@ export async function PUT(req) {
 
 export async function DELETE(req) {
     try {
+        // SECURITY: Require authentication
+        const { auth } = await import('@/auth');
+        const session = await auth();
+        if (!session?.user) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
         const body = await req.json();
         const client = await connectToDatabase();
 
@@ -535,11 +573,19 @@ export async function DELETE(req) {
         }
 
         // First get the image to delete the file
-        const getQuery = 'SELECT link FROM images WHERE id = $1';
+        const getQuery = 'SELECT link, creator_id, creator_type FROM images WHERE id = $1';
         const { rows: [image] } = await client.query(getQuery, [id]);
 
         if (!image) {
             return NextResponse.json({ error: 'Image not found' }, { status: 404 });
+        }
+
+        // SECURITY: IDOR Fix - Check ownership or admin role
+        const isAdmin = [1, 2].includes(parseInt(session.user.role));
+        const isCreator = image.creator_id === parseInt(session.user.id) && image.creator_type === session.user.userType;
+        
+        if (!isCreator && !isAdmin) {
+            return NextResponse.json({ error: 'Forbidden - You can only delete your own images' }, { status: 403 });
         }
 
         // Delete the file

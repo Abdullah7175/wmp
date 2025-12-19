@@ -19,9 +19,18 @@ export async function GET(request) {
             return NextResponse.json({ error: 'File path is required' }, { status: 400 });
         }
 
+        // SECURITY: Validate and sanitize path to prevent path traversal
+        // Remove any path traversal sequences
+        if (filePath.includes('..') || filePath.includes('//') || filePath.includes('\\\\')) {
+            return NextResponse.json({ error: 'Invalid file path' }, { status: 400 });
+        }
+
+        // Normalize the path
+        const normalizedPath = path.normalize(filePath).replace(/^(\.\.(\/|\\|$))+/, '');
+
         // Security check - ensure the path is within uploads directory
-        const fullPath = path.join(process.cwd(), 'public', filePath);
-        const uploadsDir = path.join(process.cwd(), 'public', 'uploads');
+        const uploadsDir = path.resolve(path.join(process.cwd(), 'public', 'uploads'));
+        const fullPath = path.resolve(path.join(process.cwd(), 'public', normalizedPath));
         
         // Check if the file path is within the uploads directory
         if (!fullPath.startsWith(uploadsDir)) {

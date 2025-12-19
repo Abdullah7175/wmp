@@ -128,6 +128,12 @@ import {
 } from '@/lib/efilingGeographyFilters';
 
 export async function GET(request) {
+    // SECURITY: Require authentication
+    const session = await auth();
+    if (!session?.user) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
     const workRequestId = searchParams.get('workRequestId');
@@ -173,9 +179,18 @@ export async function GET(request) {
                 return NextResponse.json({ error: 'Video not found' }, { status: 404 });
             }
 
+            const video = result.rows[0];
+
+            // SECURITY: IDOR Fix - Check ownership or admin role
+            const isAdmin = [1, 2].includes(parseInt(session.user.role));
+            const isCreator = video.creator_id === parseInt(session.user.id) && video.creator_type === session.user.userType;
+            
+            if (!isCreator && !isAdmin) {
+                return NextResponse.json({ error: 'Forbidden - You do not have access to this video' }, { status: 403 });
+            }
+
             if (scopeInfo.apply && !scopeInfo.isGlobal) {
-                const record = result.rows[0];
-                const allowed = recordMatchesGeography(record, scopeInfo.geography, {
+                const allowed = recordMatchesGeography(video, scopeInfo.geography, {
                     getDistrict: (row) => row.town_district_id,
                 });
                 if (!allowed) {
@@ -183,7 +198,7 @@ export async function GET(request) {
                 }
             }
 
-            return NextResponse.json(result.rows[0], { status: 200 });
+            return NextResponse.json(video, { status: 200 });
         } else if (creatorId && creatorType) {
             const query = `
                 SELECT 
@@ -558,13 +573,28 @@ export async function PUT(req) {
                 return NextResponse.json({ error: 'Video ID is required' }, { status: 400 });
             }
 
+            // SECURITY: Require authentication
+            const { auth } = await import('@/auth');
+            const session = await auth();
+            if (!session?.user) {
+                return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+            }
+
             // Get current video info to delete old file
-            const currentVideoQuery = await client.query('SELECT link FROM videos WHERE id = $1', [id]);
+            const currentVideoQuery = await client.query('SELECT link, creator_id, creator_type FROM videos WHERE id = $1', [id]);
             if (currentVideoQuery.rows.length === 0) {
                 return NextResponse.json({ error: 'Video not found' }, { status: 404 });
             }
 
             const currentVideo = currentVideoQuery.rows[0];
+
+            // SECURITY: IDOR Fix - Check ownership or admin role
+            const isAdmin = [1, 2].includes(parseInt(session.user.role));
+            const isCreator = currentVideo.creator_id === parseInt(session.user.id) && currentVideo.creator_type === session.user.userType;
+            
+            if (!isCreator && !isAdmin) {
+                return NextResponse.json({ error: 'Forbidden - You can only modify your own videos' }, { status: 403 });
+            }
             let newLink = currentVideo.link;
 
             // Handle file upload if provided
@@ -708,6 +738,13 @@ export async function PUT(req) {
 
 export async function DELETE(req) {
     try {
+        // SECURITY: Require authentication
+        const { auth } = await import('@/auth');
+        const session = await auth();
+        if (!session?.user) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
         const body = await req.json();
         const client = await connectToDatabase();
 
@@ -717,6 +754,22 @@ export async function DELETE(req) {
             return NextResponse.json({ error: 'Video Id is required' }, { status: 400 });
         }
 
+        // First get the video to check ownership
+        const getQuery = 'SELECT creator_id, creator_type FROM videos WHERE id = $1';
+        const { rows: [video] } = await client.query(getQuery, [id]);
+
+        if (!video) {
+            return NextResponse.json({ error: 'Video not found' }, { status: 404 });
+        }
+
+        // SECURITY: IDOR Fix - Check ownership or admin role
+        const isAdmin = [1, 2].includes(parseInt(session.user.role));
+        const isCreator = video.creator_id === parseInt(session.user.id) && video.creator_type === session.user.userType;
+        
+        if (!isCreator && !isAdmin) {
+            return NextResponse.json({ error: 'Forbidden - You can only delete your own videos' }, { status: 403 });
+        }
+
         const query = `
             DELETE FROM videos 
             WHERE id = $1
@@ -724,10 +777,6 @@ export async function DELETE(req) {
         `;
 
         const { rows: deletedVideo } = await client.query(query, [id]);
-
-        if (deletedVideo.length === 0) {
-            return NextResponse.json({ error: 'Video not found' }, { status: 404 });
-        }
 
         return NextResponse.json({ message: 'Video deleted successfully', user: deletedVideo[0] }, { status: 200 });
 

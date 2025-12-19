@@ -196,6 +196,13 @@ export async function POST(req) {
 
 export async function PUT(req) {
     try {
+        // SECURITY: Require authentication
+        const { auth } = await import('@/auth');
+        const session = await auth();
+        if (!session?.user) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
         const formData = await req.formData();
         
         const id = formData.get('id');
@@ -209,8 +216,24 @@ export async function PUT(req) {
         const client = await connectToDatabase();
 
         // First get current user to check if we have an existing image
-        const currentUserQuery = 'SELECT image FROM users WHERE id = $1';
+        const currentUserQuery = 'SELECT id, image FROM users WHERE id = $1';
         const currentUserResult = await client.query(currentUserQuery, [id]);
+        
+        if (currentUserResult.rows.length === 0) {
+            return NextResponse.json({ error: 'User not found' }, { status: 404 });
+        }
+
+        // SECURITY: IDOR Fix - Check ownership or admin role
+        const userId = parseInt(id);
+        const sessionUserId = parseInt(session.user.id);
+        const isAdmin = [1, 2].includes(parseInt(session.user.role));
+        
+        if (sessionUserId !== userId && !isAdmin) {
+            return NextResponse.json(
+                { error: 'Forbidden - You can only modify your own data' },
+                { status: 403 }
+            );
+        }
         
         let imageUrl = currentUserResult.rows[0]?.image || null;
         
@@ -280,6 +303,13 @@ export async function PUT(req) {
 
 export async function DELETE(req) {
     try {
+        // SECURITY: Require authentication
+        const { auth } = await import('@/auth');
+        const session = await auth();
+        if (!session?.user) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
         const body = await req.json();
         const client = await connectToDatabase();
 
@@ -290,7 +320,18 @@ export async function DELETE(req) {
         }
 
         // First get user to delete their image
-        const currentUser = await client.query('SELECT image FROM users WHERE id = $1', [id]);
+        const currentUser = await client.query('SELECT id, image FROM users WHERE id = $1', [id]);
+        
+        if (currentUser.rows.length === 0) {
+            return NextResponse.json({ error: 'User not found' }, { status: 404 });
+        }
+
+        // SECURITY: IDOR Fix - Admin-only delete
+        const isAdmin = [1, 2].includes(parseInt(session.user.role));
+        if (!isAdmin) {
+            return NextResponse.json({ error: 'Forbidden - Admin access required' }, { status: 403 });
+        }
+
         const imageUrl = currentUser.rows[0]?.image;
 
         const query = `

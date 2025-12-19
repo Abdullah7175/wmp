@@ -91,6 +91,11 @@ async function expandAttendees(client, attendeeType, sourceId) {
 
 // GET - List meetings
 export async function GET(request) {
+    // SECURITY: Require authentication
+    const session = await auth();
+    if (!session?.user) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
     let client;
     try {
         const session = await auth(request);

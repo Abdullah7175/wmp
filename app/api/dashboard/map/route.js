@@ -1,7 +1,13 @@
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/db';
+import { requireAuth } from '@/lib/authMiddleware';
 
 export async function GET(request) {
+    // SECURITY: Require authentication
+    const authResult = await requireAuth(request);
+    if (authResult instanceof NextResponse) {
+        return authResult; // Error response
+    }
     const { searchParams } = new URL(request.url);
     const district_id = searchParams.get('district_id');
     const town_id = searchParams.get('town_id');

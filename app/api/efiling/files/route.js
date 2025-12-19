@@ -8,6 +8,12 @@ import { getFiscalYear } from '@/lib/utils';
 export const dynamic = 'force-dynamic';
 
 export async function GET(request) {
+    // SECURITY: Require authentication
+    const session = await auth();
+    if (!session?.user) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
     

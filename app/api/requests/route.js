@@ -129,9 +129,21 @@ export async function GET(request) {
                 return NextResponse.json({ error: 'Request not found' }, { status: 404 });
             }
 
+            const request = result.rows[0];
+
+            // SECURITY: IDOR Fix - Check ownership or admin role
+            const session = await auth();
+            if (session?.user) {
+                const isAdmin = [1, 2].includes(parseInt(session.user.role));
+                const isCreator = request.creator_id === parseInt(session.user.id) && request.creator_type === session.user.userType;
+                
+                if (!isCreator && !isAdmin) {
+                    return NextResponse.json({ error: 'Forbidden - You do not have access to this request' }, { status: 403 });
+                }
+            }
+
             if (scopeInfo.apply && !scopeInfo.isGlobal) {
-                const record = result.rows[0];
-                const allowed = recordMatchesGeography(record, scopeInfo.geography, {
+                const allowed = recordMatchesGeography(request, scopeInfo.geography, {
                     getDistrict: (row) => row.town_district_id,
                 });
                 if (!allowed) {
@@ -139,7 +151,7 @@ export async function GET(request) {
                 }
             }
 
-            return NextResponse.json(result.rows[0], { status: 200 });
+            return NextResponse.json(request, { status: 200 });
         } else {
             // Paginated with optional filter and creator filters
             let countQuery = `
@@ -727,6 +739,12 @@ export async function POST(req) {
 export async function PUT(req) {
     let client;
     try {
+        // SECURITY: Require authentication
+        const session = await auth();
+        if (!session?.user) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
         console.log('Starting database connection for PUT requests API');
         client = await connectToDatabase();
         console.log('Database connected successfully for PUT requests API');
@@ -753,15 +771,28 @@ export async function PUT(req) {
             description
         } = body;
 
+        // Fetch current request to check ownership
+        const currentRequest = await client.query('SELECT creator_id, creator_type, status_id, assigned_to FROM work_requests WHERE id = $1', [id]);
+        if (currentRequest.rows.length === 0) {
+            return NextResponse.json({ error: 'Request not found' }, { status: 404 });
+        }
+
+        const request = currentRequest.rows[0];
+
+        // SECURITY: IDOR Fix - Check ownership or admin role
+        const isAdmin = [1, 2].includes(parseInt(session.user.role));
+        const isCreator = request.creator_id === parseInt(session.user.id) && request.creator_type === session.user.userType;
+        
+        if (!isCreator && !isAdmin) {
+            return NextResponse.json({ error: 'Forbidden - You can only modify your own requests' }, { status: 403 });
+        }
+
         // Fetch current status_id and assigned_to if not provided
         let finalStatusId = status_id;
         let finalAssignedTo = assigned_to;
         if (!status_id || !assigned_to) {
-            const current = await client.query('SELECT status_id, assigned_to FROM work_requests WHERE id = $1', [id]);
-            if (current.rows.length > 0) {
-                if (!status_id) finalStatusId = current.rows[0].status_id;
-                if (!assigned_to) finalAssignedTo = current.rows[0].assigned_to;
-            }
+            if (!status_id) finalStatusId = request.status_id;
+            if (!assigned_to) finalAssignedTo = request.assigned_to;
         }
 
         await client.query('BEGIN');

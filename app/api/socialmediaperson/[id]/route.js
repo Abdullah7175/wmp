@@ -20,6 +20,20 @@ async function saveUploadedFile(file) {
 
 export async function GET(request, { params }) {
     const { id } = await params;
+    
+    // SECURITY: Require authentication
+    const { auth } = await import('@/auth');
+    const session = await auth();
+    if (!session?.user) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // SECURITY: IDOR Fix - Admin-only access
+    const isAdmin = [1, 2].includes(parseInt(session.user.role));
+    if (!isAdmin) {
+        return NextResponse.json({ error: 'Forbidden - Admin access required' }, { status: 403 });
+    }
+
     const client = await connectToDatabase();
     try {
         const query = 'SELECT * FROM socialmediaperson WHERE id = $1';
@@ -38,6 +52,20 @@ export async function GET(request, { params }) {
 
 export async function PUT(req, { params }) {
     const { id } = await params;
+    
+    // SECURITY: Require authentication
+    const { auth } = await import('@/auth');
+    const session = await auth();
+    if (!session?.user) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // SECURITY: IDOR Fix - Admin-only access
+    const isAdmin = [1, 2].includes(parseInt(session.user.role));
+    if (!isAdmin) {
+        return NextResponse.json({ error: 'Forbidden - Admin access required' }, { status: 403 });
+    }
+
     try {
         const formData = await req.formData();
         const name = formData.get('name');

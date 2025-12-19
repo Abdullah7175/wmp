@@ -37,7 +37,16 @@ export async function GET(request, { params }) {
       return NextResponse.json({ error: 'Content not found' }, { status: 404 });
     }
 
-    return NextResponse.json(result.rows[0]);
+    // SECURITY: IDOR Fix - Check ownership or admin role
+    const content = result.rows[0];
+    const isCreator = content.creator_id === session.user.id && content.creator_type === session.user.userType;
+    const isAdmin = session.user.userType === 'user' && [1, 2].includes(session.user.role);
+
+    if (!isCreator && !isAdmin) {
+      return NextResponse.json({ error: 'Forbidden - You do not have access to this content' }, { status: 403 });
+    }
+
+    return NextResponse.json(content);
   } catch (error) {
     console.error('Error fetching before content:', error);
     return NextResponse.json({ error: 'Failed to fetch before content' }, { status: 500 });

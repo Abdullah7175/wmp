@@ -1,10 +1,19 @@
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/db';
 import bcrypt from 'bcryptjs';
+import { auth } from '@/auth';
+import { requireAuth } from '@/lib/authMiddleware';
 
 // Get e-filing user by ID
 export async function GET(request, { params }) {
     try {
+        // SECURITY: Require authentication
+        const authResult = await requireAuth(request);
+        if (authResult instanceof NextResponse) {
+            return authResult;
+        }
+        const { user: sessionUser } = authResult;
+
         const { id } = await params;
 
         if (!id) {
@@ -72,6 +81,33 @@ export async function GET(request, { params }) {
 
             const user = userResult.rows[0];
 
+            // SECURITY: IDOR Fix - Check ownership or admin role
+            const efilingUserId = parseInt(id);
+            const sessionUserId = parseInt(sessionUser.id);
+            const isAdmin = [1, 2].includes(parseInt(sessionUser.role));
+            
+            // Check if the e-filing user belongs to the session user
+            const userOwnershipCheck = await client.query(
+                `SELECT user_id FROM efiling_users WHERE id = $1`,
+                [efilingUserId]
+            );
+            
+            if (userOwnershipCheck.rows.length === 0) {
+                return NextResponse.json(
+                    { error: 'E-filing user not found' },
+                    { status: 404 }
+                );
+            }
+            
+            const efilingUserUserId = parseInt(userOwnershipCheck.rows[0].user_id);
+            
+            if (sessionUserId !== efilingUserUserId && !isAdmin) {
+                return NextResponse.json(
+                    { error: 'Forbidden - You can only access your own data' },
+                    { status: 403 }
+                );
+            }
+
             // Parse JSON fields
             if (user.signature_settings) {
                 try {
@@ -108,6 +144,13 @@ export async function GET(request, { params }) {
 export async function PUT(request, { params }) {
     let userId = null;
     try {
+        // SECURITY: Require authentication
+        const authResult = await requireAuth(request);
+        if (authResult instanceof NextResponse) {
+            return authResult;
+        }
+        const { user: sessionUser } = authResult;
+
         const { id } = await params;
         userId = id;
         const body = await request.json();
@@ -190,6 +233,17 @@ export async function PUT(request, { params }) {
             const currentEmail = currentUser.rows[0].email;
             const currentCnic = currentUser.rows[0].cnic;
             const currentEmployeeId = currentUser.rows[0].employee_id;
+
+            // SECURITY: IDOR Fix - Check ownership or admin role
+            const sessionUserId = parseInt(sessionUser.id);
+            const isAdmin = [1, 2].includes(parseInt(sessionUser.role));
+            
+            if (sessionUserId !== userId && !isAdmin) {
+                return NextResponse.json(
+                    { error: 'Forbidden - You can only modify your own data' },
+                    { status: 403 }
+                );
+            }
 
             if (!efilingUserId) {
                 console.error(`PUT /api/efiling/users/${id} - E-filing profile not found for user ${userId}`);

@@ -1,8 +1,13 @@
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/db';
-
+import { requireAuth } from '@/lib/authMiddleware';
 
 export async function GET(request) {
+    // SECURITY: Require authentication
+    const authResult = await requireAuth(request);
+    if (authResult instanceof NextResponse) {
+        return authResult; // Error response
+    }
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
     const client = await connectToDatabase();
@@ -59,6 +64,12 @@ export async function GET(request) {
 }
 
 export async function POST(req) {
+    // SECURITY: Require authentication
+    const authResult = await requireAuth(req);
+    if (authResult instanceof NextResponse) {
+        return authResult; // Error response
+    }
+    
     const client = await connectToDatabase();
 
     try {
@@ -136,6 +147,12 @@ export async function POST(req) {
 
 
 export async function DELETE(req) {
+    // SECURITY: Require authentication
+    const authResult = await requireAuth(req);
+    if (authResult instanceof NextResponse) {
+        return authResult; // Error response
+    }
+    
     try {
         const body = await req.json();
         const client = await connectToDatabase();

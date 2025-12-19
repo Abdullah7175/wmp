@@ -1,7 +1,13 @@
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/db';
+import { requireAuth } from '@/lib/authMiddleware';
 
 export async function GET(request, { params }) {
+    // SECURITY: Require authentication
+    const authResult = await requireAuth(request);
+    if (authResult instanceof NextResponse) {
+        return authResult; // Error response
+    }
     const { id } = await params;
     const client = await connectToDatabase();
 

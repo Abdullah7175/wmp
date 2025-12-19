@@ -2,6 +2,7 @@
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/db';
 import { Buffer } from 'buffer';
+import { requireAuth } from '@/lib/authMiddleware';
 // Update the path to your DB connection utility
 
 function decodeWKBToGeoPoint(wkbHex) {
@@ -32,6 +33,12 @@ function decodeWKBToGeoPoint(wkbHex) {
 }
 
 export async function GET(request) {
+    // SECURITY: Require authentication
+    const authResult = await requireAuth(request);
+    if (authResult instanceof NextResponse) {
+        return authResult; // Error response
+    }
+    
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
 
@@ -105,6 +112,12 @@ WHERE
 
 
 export async function POST(req) {
+    // SECURITY: Require authentication
+    const authResult = await requireAuth(req);
+    if (authResult instanceof NextResponse) {
+        return authResult; // Error response
+    }
+    
     const client = await connectToDatabase();
 
     try {
@@ -140,6 +153,12 @@ export async function POST(req) {
     }
 }
 export async function PUT(req) {
+    // SECURITY: Require authentication
+    const authResult = await requireAuth(req);
+    if (authResult instanceof NextResponse) {
+        return authResult; // Error response
+    }
+    
     const client = await connectToDatabase();
     const query = `
         UPDATE works

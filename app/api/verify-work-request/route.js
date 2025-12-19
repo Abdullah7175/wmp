@@ -1,7 +1,13 @@
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/db';
+import { requireAuth } from '@/lib/authMiddleware';
 
 export async function POST(req) {
+    // SECURITY: Require authentication
+    const authResult = await requireAuth(req);
+    if (authResult instanceof NextResponse) {
+        return authResult; // Error response
+    }
     try {
         const { workRequestId, contactNumber } = await req.json();
         

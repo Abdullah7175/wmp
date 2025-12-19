@@ -23,10 +23,16 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         password: { label: "Password", type: "password" }
       },
       async authorize(credentials) {
+        let client;
         try {
           console.log('Starting authentication for:', credentials.email);
           
-          const client = await connectToDatabase();
+          if (!credentials.email || !credentials.password) {
+            console.log('Missing email or password');
+            return null;
+          }
+          
+          client = await connectToDatabase();
           console.log('Database connected successfully');
           
           // Check users table first
@@ -37,12 +43,21 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             const user = userResult.rows[0];
             console.log('User found in users table, mapped userType: user');
             
-            const isValid = await bcrypt.compare(credentials.password, user.password);
+            // Check if password field exists and is not null
+            if (!user.password) {
+              console.log('User has no password set');
+              await client.release();
+              return null;
+            }
+            
             console.log('Verifying password...');
+            const isValid = await bcrypt.compare(credentials.password, user.password);
+            console.log('Password verification result:', isValid);
             
             if (isValid) {
               console.log('Password verified successfully');
               console.log('User authenticated:', { id: user.id, name: user.name, userType: 'user', role: user.role });
+              await client.release();
               return {
                 id: user.id.toString(),
                 name: user.name,
@@ -50,6 +65,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
                 role: user.role,
                 userType: 'user'
               };
+            } else {
+              console.log('Password verification failed for user');
             }
           }
           
@@ -60,12 +77,20 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             const agent = agentResult.rows[0];
             console.log('User found in agents table, mapped userType: agent');
             
-            const isValid = await bcrypt.compare(credentials.password, agent.password);
+            if (!agent.password) {
+              console.log('Agent has no password set');
+              await client.release();
+              return null;
+            }
+            
             console.log('Verifying password...');
+            const isValid = await bcrypt.compare(credentials.password, agent.password);
+            console.log('Password verification result:', isValid);
             
             if (isValid) {
               console.log('Password verified successfully');
               console.log('User authenticated:', { id: agent.id, name: agent.name, userType: 'agent', role: agent.role });
+              await client.release();
               return {
                 id: agent.id.toString(),
                 name: agent.name,
@@ -73,6 +98,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
                 role: agent.role,
                 userType: 'agent'
               };
+            } else {
+              console.log('Password verification failed for agent');
             }
           }
           
@@ -83,12 +110,20 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             const sm = smResult.rows[0];
             console.log('User found in socialmediaperson table, mapped userType: socialmedia');
             
-            const isValid = await bcrypt.compare(credentials.password, sm.password);
+            if (!sm.password) {
+              console.log('Social media person has no password set');
+              await client.release();
+              return null;
+            }
+            
             console.log('Verifying password...');
+            const isValid = await bcrypt.compare(credentials.password, sm.password);
+            console.log('Password verification result:', isValid);
             
             if (isValid) {
               console.log('Password verified successfully');
               console.log('User authenticated:', { id: sm.id, name: sm.name, userType: 'socialmedia', role: sm.role });
+              await client.release();
               return {
                 id: sm.id.toString(),
                 name: sm.name,
@@ -96,12 +131,19 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
                 role: sm.role,
                 userType: 'socialmedia'
               };
+            } else {
+              console.log('Password verification failed for social media person');
             }
           }
           
+          console.log('No matching user found or password incorrect');
+          await client.release();
           return null;
         } catch (error) {
           console.error('Authentication error:', error);
+          if (client) {
+            await client.release();
+          }
           return null;
         }
       }
@@ -111,7 +153,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     signIn: "/",
     error: "/"
   },
-  secret: process.env.NEXTAUTH_SECRET || "your-secret-key-here-make-it-long-and-random",
+  // SECURITY: No default secret - must be set in environment variables
+  secret: (() => {
+    if (!process.env.NEXTAUTH_SECRET) {
+      throw new Error('NEXTAUTH_SECRET must be set in environment variables');
+    }
+    return process.env.NEXTAUTH_SECRET;
+  })(),
   session: {
     strategy: "jwt",
     maxAge: 60 * 60 // 1 hour

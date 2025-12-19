@@ -1,11 +1,32 @@
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/db';
+import { requireAuth, checkFileAccess } from '@/lib/authMiddleware';
 
 export async function GET(request, { params }) {
     let client;
     try {
+        // SECURITY: Require authentication
+        const authResult = await requireAuth(request);
+        if (authResult instanceof NextResponse) {
+            return authResult;
+        }
+        const { user: sessionUser } = authResult;
+
         const { id } = await params;
         client = await connectToDatabase();
+
+        // SECURITY: IDOR Fix - Check file access
+        const fileId = parseInt(id);
+        const userId = parseInt(sessionUser.id);
+        const isAdmin = [1, 2].includes(parseInt(sessionUser.role));
+        
+        const hasAccess = await checkFileAccess(client, fileId, userId, isAdmin);
+        if (!hasAccess) {
+            return NextResponse.json(
+                { error: 'Forbidden - You do not have access to this file' },
+                { status: 403 }
+            );
+        }
 
         // Check if SLA columns exist (check each column individually)
         let hasSlaDeadline = false;
@@ -127,6 +148,13 @@ export async function GET(request, { params }) {
 export async function PUT(request, { params }) {
     let client;
     try {
+        // SECURITY: Require authentication
+        const authResult = await requireAuth(request);
+        if (authResult instanceof NextResponse) {
+            return authResult;
+        }
+        const { user: sessionUser } = authResult;
+
         const { id } = await params;
         const body = await request.json();
         
@@ -140,6 +168,19 @@ export async function PUT(request, { params }) {
         
         if (existingFile.rows.length === 0) {
             return NextResponse.json({ error: 'File not found' }, { status: 404 });
+        }
+
+        // SECURITY: IDOR Fix - Check file access
+        const fileId = parseInt(id);
+        const userId = parseInt(sessionUser.id);
+        const isAdmin = [1, 2].includes(parseInt(sessionUser.role));
+        
+        const hasAccess = await checkFileAccess(client, fileId, userId, isAdmin);
+        if (!hasAccess) {
+            return NextResponse.json(
+                { error: 'Forbidden - You do not have access to modify this file' },
+                { status: 403 }
+            );
         }
         
         // Update file fields
@@ -232,13 +273,19 @@ export async function PUT(request, { params }) {
 export async function DELETE(request, { params }) {
     let client;
     try {
+        // SECURITY: Require admin authentication
+        const authResult = await requireAuth(request);
+        if (authResult instanceof NextResponse) {
+            return authResult;
+        }
+        const { user: sessionUser } = authResult;
+
         const { id } = await params;
 
-        // Admin-only hard delete with full cleanup
-        const { auth } = await import('@/auth');
-        const session = await auth(request);
-        if (!session?.user?.role || ![1, 2].includes(parseInt(session.user.role))) {
-            return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        // SECURITY: IDOR Fix - Admin-only delete
+        const isAdmin = [1, 2].includes(parseInt(sessionUser.role));
+        if (!isAdmin) {
+            return NextResponse.json({ error: 'Forbidden - Admin access required' }, { status: 403 });
         }
 
         client = await connectToDatabase();

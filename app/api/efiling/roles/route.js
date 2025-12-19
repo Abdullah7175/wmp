@@ -5,6 +5,12 @@ import { auth } from '@/auth';
 import { getUserGeography, isGlobalRoleCode } from '@/lib/efilingGeographicRouting';
 
 export async function GET(request) {
+    // SECURITY: Require authentication
+    const session = await auth();
+    if (!session?.user) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    
     try {
         const { searchParams } = new URL(request.url);
         const id = searchParams.get('id');
@@ -13,7 +19,6 @@ export async function GET(request) {
         const client = await connectToDatabase();
 
         try {
-            const session = await auth();
             let userGeography = null;
             let canSeeAll = false;
 

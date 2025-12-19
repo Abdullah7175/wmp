@@ -32,6 +32,17 @@ export async function GET(request, { params }) {
             );
         }
 
+        // SECURITY: IDOR Fix - Check ownership or admin role
+        const sessionUserId = parseInt(session.user.id);
+        const isAdmin = [1, 2].includes(parseInt(session.user.role));
+        
+        if (sessionUserId !== userId && !isAdmin) {
+            return NextResponse.json(
+                { error: 'Forbidden - You can only access your own data' },
+                { status: 403 }
+            );
+        }
+
         client = await connectToDatabase();
         
         // Fetch user from database

@@ -1,15 +1,31 @@
 import { NextResponse } from 'next/server';
 import { readFile } from 'fs/promises';
-import { join } from 'path';
+import { join, resolve, normalize } from 'path';
 import { existsSync } from 'fs';
+import { auth } from '@/auth';
 
 export async function GET(request, { params }) {
   try {
+    // SECURITY: Require authentication
+    const session = await auth();
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const { path: filePath } = await params;
     
     if (!filePath || filePath.length === 0) {
       return NextResponse.json({ error: 'File path is required' }, { status: 400 });
     }
+
+    // SECURITY: Validate and sanitize path segments to prevent path traversal
+    const normalizedPath = filePath.map(segment => {
+      // Remove any path traversal sequences
+      if (segment.includes('..') || segment.includes('/') || segment.includes('\\')) {
+        throw new Error('Invalid path segment');
+      }
+      return segment;
+    });
 
     // Handle standalone mode - get correct base directory
     let baseDir = process.cwd();
@@ -19,7 +35,13 @@ export async function GET(request, { params }) {
     }
 
     // Construct the full file path
-    const fullPath = join(baseDir, 'public', 'uploads', ...filePath);
+    const uploadsDir = resolve(join(baseDir, 'public', 'uploads'));
+    const fullPath = resolve(join(uploadsDir, ...normalizedPath));
+
+    // SECURITY: Ensure resolved path stays within uploads directory
+    if (!fullPath.startsWith(uploadsDir)) {
+      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
+    }
     
     // Check if file exists
     if (!existsSync(fullPath)) {

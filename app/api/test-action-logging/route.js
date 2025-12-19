@@ -1,7 +1,13 @@
 import { NextResponse } from 'next/server';
 import { actionLogger, ACTION_TYPES, ENTITY_TYPES } from '@/lib/actionLogger';
+import { requireAuth } from '@/lib/authMiddleware';
 
 export async function GET(req) {
+    // SECURITY: Require authentication (debug endpoint should be protected)
+    const authResult = await requireAuth(req);
+    if (authResult instanceof NextResponse) {
+        return authResult; // Error response
+    }
     try {
         // Test logging an action
         const result = await actionLogger.create(req, ENTITY_TYPES.USER, 999, 'Test User', {
@@ -24,6 +30,12 @@ export async function GET(req) {
 }
 
 export async function POST(req) {
+    // SECURITY: Require authentication (debug endpoint should be protected)
+    const authResult = await requireAuth(req);
+    if (authResult instanceof NextResponse) {
+        return authResult; // Error response
+    }
+    
     try {
         const body = await req.json();
         const { actionType, entityType, entityId, entityName, details } = body;

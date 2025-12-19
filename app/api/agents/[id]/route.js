@@ -24,6 +24,14 @@ async function saveUploadedFile(file) {
 
 export async function GET(request, { params }) {
     const { id } = await params;
+    
+    // SECURITY: Require authentication
+    const { auth } = await import('@/auth');
+    const session = await auth();
+    if (!session?.user) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const client = await connectToDatabase();
     try {
         const query = 'SELECT * FROM agents WHERE id = $1';
@@ -31,6 +39,13 @@ export async function GET(request, { params }) {
         if (result.rows.length === 0) {
             return NextResponse.json({ error: 'Agent not found' }, { status: 404 });
         }
+
+        // SECURITY: IDOR Fix - Admin-only access for agent data
+        const isAdmin = [1, 2].includes(parseInt(session.user.role));
+        if (!isAdmin) {
+            return NextResponse.json({ error: 'Forbidden - Admin access required' }, { status: 403 });
+        }
+
         return NextResponse.json(result.rows[0], { status: 200 });
     } catch (error) {
         console.error('Error fetching agent:', error);
@@ -42,6 +57,20 @@ export async function GET(request, { params }) {
 
 export async function PUT(req, { params }) {
     const { id } = await params;
+    
+    // SECURITY: Require authentication
+    const { auth } = await import('@/auth');
+    const session = await auth();
+    if (!session?.user) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // SECURITY: IDOR Fix - Admin-only access
+    const isAdmin = [1, 2].includes(parseInt(session.user.role));
+    if (!isAdmin) {
+        return NextResponse.json({ error: 'Forbidden - Admin access required' }, { status: 403 });
+    }
+
     try {
         const formData = await req.formData();
         const name = formData.get('name');
@@ -155,6 +184,20 @@ export async function PUT(req, { params }) {
 
 export async function DELETE(req, { params }) {
     const { id } = await params;
+    
+    // SECURITY: Require authentication
+    const { auth } = await import('@/auth');
+    const session = await auth();
+    if (!session?.user) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // SECURITY: IDOR Fix - Admin-only access
+    const isAdmin = [1, 2].includes(parseInt(session.user.role));
+    if (!isAdmin) {
+        return NextResponse.json({ error: 'Forbidden - Admin access required' }, { status: 403 });
+    }
+
     try {
         const client = await connectToDatabase();
         const query = 'DELETE FROM agents WHERE id = $1 RETURNING *;';
