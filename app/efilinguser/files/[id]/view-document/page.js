@@ -654,48 +654,112 @@ export default function DocumentViewer() {
                             ) : selectedAttachment.file_type === 'application/pdf' || selectedAttachment.file_name?.toLowerCase().endsWith('.pdf') ? (
                                 <div className="space-y-4">
                                     <div className="border rounded-lg overflow-hidden bg-gray-50">
-                                        {/* Use object tag as primary method, iframe as fallback */}
-                                        <object
-                                            data={selectedAttachment.file_url}
-                                            type="application/pdf"
-                                            className="w-full h-[70vh] min-h-[500px] border-0"
-                                            title={selectedAttachment.file_name}
-                                            style={{ display: 'block' }}
-                                        >
-                                            {/* Fallback to iframe if object tag doesn't work */}
-                                            <iframe
-                                                src={selectedAttachment.file_url}
-                                                className="w-full h-[70vh] min-h-[500px] border-0"
-                                                title={selectedAttachment.file_name}
-                                                style={{ display: 'block' }}
-                                            />
-                                        </object>
+                                        {(() => {
+                                            // Helper function to get the correct PDF URL
+                                            const getPdfUrl = (fileUrl) => {
+                                                if (!fileUrl) {
+                                                    console.error('PDF file_url is missing');
+                                                    return null;
+                                                }
+                                                // If it's already an API URL, return as is
+                                                if (fileUrl.startsWith('/api/')) {
+                                                    return fileUrl;
+                                                }
+                                                // If it starts with /uploads/, convert to /api/uploads/
+                                                if (fileUrl.startsWith('/uploads/')) {
+                                                    const converted = fileUrl.replace('/uploads/', '/api/uploads/');
+                                                    console.log('PDF URL converted:', fileUrl, '->', converted);
+                                                    return converted;
+                                                }
+                                                // If it's a full URL, return as is
+                                                if (fileUrl.startsWith('http://') || fileUrl.startsWith('https://')) {
+                                                    return fileUrl;
+                                                }
+                                                // Otherwise, assume it's a relative path
+                                                const converted = `/api/uploads${fileUrl.startsWith('/') ? '' : '/'}${fileUrl}`;
+                                                console.log('PDF URL converted (relative):', fileUrl, '->', converted);
+                                                return converted;
+                                            };
+                                            
+                                            const pdfUrl = getPdfUrl(selectedAttachment.file_url);
+                                            
+                                            if (!pdfUrl) {
+                                                return (
+                                                    <div className="p-8 text-center text-gray-500">
+                                                        <FileText className="w-16 h-16 mx-auto mb-4 text-gray-400" />
+                                                        <p>PDF URL is missing or invalid</p>
+                                                        <p className="text-xs mt-2">File: {selectedAttachment.file_name}</p>
+                                                    </div>
+                                                );
+                                            }
+                                            
+                                            return (
+                                                <>
+                                                    {/* Use object tag as primary method, iframe as fallback */}
+                                                    <object
+                                                        data={pdfUrl}
+                                                        type="application/pdf"
+                                                        className="w-full h-[70vh] min-h-[500px] border-0"
+                                                        title={selectedAttachment.file_name}
+                                                        style={{ display: 'block' }}
+                                                        onError={(e) => {
+                                                            console.error('Object tag failed to load PDF:', pdfUrl, e);
+                                                        }}
+                                                    >
+                                                        {/* Fallback to iframe if object tag doesn't work */}
+                                                        <iframe
+                                                            src={pdfUrl}
+                                                            className="w-full h-[70vh] min-h-[500px] border-0"
+                                                            title={selectedAttachment.file_name}
+                                                            style={{ display: 'block' }}
+                                                            onError={(e) => {
+                                                                console.error('Iframe failed to load PDF:', pdfUrl, e);
+                                                            }}
+                                                        />
+                                                    </object>
+                                                </>
+                                            );
+                                        })()}
                                     </div>
                                     <div className="flex justify-end gap-2">
-                                        <Button 
-                                            variant="outline"
-                                            onClick={() => {
-                                                window.open(selectedAttachment.file_url, '_blank');
-                                            }}
-                                        >
-                                            <Eye className="w-4 h-4 mr-2" />
-                                            Open in New Tab
-                                        </Button>
-                                        <Button 
-                                            variant="outline"
-                                            onClick={() => {
-                                                const link = document.createElement('a');
-                                                link.href = selectedAttachment.file_url;
-                                                link.download = selectedAttachment.file_name;
-                                                link.target = '_blank';
-                                                document.body.appendChild(link);
-                                                link.click();
-                                                document.body.removeChild(link);
-                                            }}
-                                        >
-                                            <Download className="w-4 h-4 mr-2" />
-                                            Download File
-                                        </Button>
+                                        {(() => {
+                                            const getPdfUrl = (fileUrl) => {
+                                                if (!fileUrl) return null;
+                                                if (fileUrl.startsWith('/api/')) return fileUrl;
+                                                if (fileUrl.startsWith('/uploads/')) return fileUrl.replace('/uploads/', '/api/uploads/');
+                                                if (fileUrl.startsWith('http://') || fileUrl.startsWith('https://')) return fileUrl;
+                                                return `/api/uploads${fileUrl.startsWith('/') ? '' : '/'}${fileUrl}`;
+                                            };
+                                            const pdfUrl = getPdfUrl(selectedAttachment.file_url);
+                                            return (
+                                                <>
+                                                    <Button 
+                                                        variant="outline"
+                                                        onClick={() => {
+                                                            window.open(pdfUrl, '_blank');
+                                                        }}
+                                                    >
+                                                        <Eye className="w-4 h-4 mr-2" />
+                                                        Open in New Tab
+                                                    </Button>
+                                                    <Button 
+                                                        variant="outline"
+                                                        onClick={() => {
+                                                            const link = document.createElement('a');
+                                                            link.href = pdfUrl;
+                                                            link.download = selectedAttachment.file_name;
+                                                            link.target = '_blank';
+                                                            document.body.appendChild(link);
+                                                            link.click();
+                                                            document.body.removeChild(link);
+                                                        }}
+                                                    >
+                                                        <Download className="w-4 h-4 mr-2" />
+                                                        Download File
+                                                    </Button>
+                                                </>
+                                            );
+                                        })()}
                                     </div>
                                 </div>
                             ) : selectedAttachment.file_type === 'application/msword' || 

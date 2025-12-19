@@ -7,6 +7,20 @@ export async function efilingAuthMiddleware(request) {
     const isDev = process.env.NODE_ENV === 'development';
     const withSecurityHeaders = (res) => {
         try {
+            // Skip setting headers for API routes that handle their own headers (like /api/uploads/)
+            // These routes set their own X-Frame-Options and CSP headers
+            if (pathname.startsWith('/api/')) {
+                // For API routes, only set minimal headers if not already set
+                if (!res.headers.get('X-Frame-Options')) {
+                    // Check if this is a PDF file request - allow SAMEORIGIN for PDFs
+                    const isPdfRequest = pathname.includes('/api/uploads/') && 
+                                         pathname.toLowerCase().endsWith('.pdf');
+                    res.headers.set('X-Frame-Options', isPdfRequest ? 'SAMEORIGIN' : 'DENY');
+                }
+                return res;
+            }
+            
+            // For non-API routes, set full security headers
             res.headers.set('X-Frame-Options', 'DENY');
             res.headers.set('X-Content-Type-Options', 'nosniff');
             res.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');

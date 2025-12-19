@@ -71,8 +71,8 @@ export async function POST(request) {
             throw new Error('Failed to verify uploaded file');
         }
         
-        // Generate public URL
-        const fileUrl = `/uploads/efiling/attachments/${uniqueFileName}`;
+        // Generate public URL - use /api/uploads/ to ensure it goes through authenticated route
+        const fileUrl = `/api/uploads/efiling/attachments/${uniqueFileName}`;
         
         // Store attachment information with file URL
         const result = await client.query(`
