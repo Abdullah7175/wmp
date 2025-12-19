@@ -43,15 +43,27 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             const user = userResult.rows[0];
             console.log('User found in users table, mapped userType: user');
             
+            // Diagnostic logging for password verification
+            const storedPassword = user.password ? user.password.trim() : null;
+            
             // Check if password field exists and is not null
-            if (!user.password) {
+            if (!storedPassword) {
               console.log('User has no password set');
               await client.release();
               return null;
             }
+            const passwordLength = storedPassword ? storedPassword.length : 0;
+            const isBcryptHash = storedPassword && (storedPassword.startsWith('$2a$') || storedPassword.startsWith('$2b$') || storedPassword.startsWith('$2y$'));
+            console.log('Password diagnostic:', {
+              hasPassword: !!storedPassword,
+              passwordLength,
+              isBcryptHash,
+              hashPrefix: storedPassword ? storedPassword.substring(0, 7) : 'none',
+              inputPasswordLength: credentials.password ? credentials.password.length : 0
+            });
             
             console.log('Verifying password...');
-            const isValid = await bcrypt.compare(credentials.password, user.password);
+            const isValid = await bcrypt.compare(credentials.password, storedPassword);
             console.log('Password verification result:', isValid);
             
             if (isValid) {
@@ -77,14 +89,26 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             const agent = agentResult.rows[0];
             console.log('User found in agents table, mapped userType: agent');
             
-            if (!agent.password) {
+            // Diagnostic logging for password verification
+            const storedPassword = agent.password ? agent.password.trim() : null;
+            
+            if (!storedPassword) {
               console.log('Agent has no password set');
               await client.release();
               return null;
             }
+            const passwordLength = storedPassword ? storedPassword.length : 0;
+            const isBcryptHash = storedPassword && (storedPassword.startsWith('$2a$') || storedPassword.startsWith('$2b$') || storedPassword.startsWith('$2y$'));
+            console.log('Password diagnostic (agent):', {
+              hasPassword: !!storedPassword,
+              passwordLength,
+              isBcryptHash,
+              hashPrefix: storedPassword ? storedPassword.substring(0, 7) : 'none',
+              inputPasswordLength: credentials.password ? credentials.password.length : 0
+            });
             
             console.log('Verifying password...');
-            const isValid = await bcrypt.compare(credentials.password, agent.password);
+            const isValid = await bcrypt.compare(credentials.password, storedPassword);
             console.log('Password verification result:', isValid);
             
             if (isValid) {
@@ -110,14 +134,26 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             const sm = smResult.rows[0];
             console.log('User found in socialmediaperson table, mapped userType: socialmedia');
             
-            if (!sm.password) {
+            // Diagnostic logging for password verification
+            const storedPassword = sm.password ? sm.password.trim() : null;
+            
+            if (!storedPassword) {
               console.log('Social media person has no password set');
               await client.release();
               return null;
             }
+            const passwordLength = storedPassword ? storedPassword.length : 0;
+            const isBcryptHash = storedPassword && (storedPassword.startsWith('$2a$') || storedPassword.startsWith('$2b$') || storedPassword.startsWith('$2y$'));
+            console.log('Password diagnostic (socialmedia):', {
+              hasPassword: !!storedPassword,
+              passwordLength,
+              isBcryptHash,
+              hashPrefix: storedPassword ? storedPassword.substring(0, 7) : 'none',
+              inputPasswordLength: credentials.password ? credentials.password.length : 0
+            });
             
             console.log('Verifying password...');
-            const isValid = await bcrypt.compare(credentials.password, sm.password);
+            const isValid = await bcrypt.compare(credentials.password, storedPassword);
             console.log('Password verification result:', isValid);
             
             if (isValid) {
