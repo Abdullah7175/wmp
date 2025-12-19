@@ -24,8 +24,15 @@ export async function POST(request) {
         // OTP is stored in efiling_otp_codes.user_id as varchar(255) with efiling_users.id as string
         // We need to always convert users.id to efiling_users.id first
         
-        const session = await auth(request);
-        const sessionUserId = session?.user?.id;
+        let session;
+        let sessionUserId;
+        try {
+            session = await auth(request);
+            sessionUserId = session?.user?.id;
+        } catch (authError) {
+            console.error('Auth error in verify-auth:', authError);
+            // Continue without session - userId might be provided directly
+        }
         
         let efilingUserId = userId;
         
@@ -90,9 +97,24 @@ export async function POST(request) {
             storedCode: storedCode.substring(0, 2) + '****' // Mask for security
         });
         
+        // Check if current user is admin (for admin fallback verification)
+        const isAdmin = session?.user?.role && [1, 2].includes(parseInt(session.user.role));
+        
+        // SECURITY: Log verification attempt for admins (server-side only)
+        if (isAdmin) {
+            console.log(`[ADMIN OTP VERIFY] Admin ${session.user.id} (${session.user.name}) verifying OTP for user ${efilingUserId}`);
+            console.log(`[ADMIN OTP VERIFY] Provided code: ${code}, Stored code: ${storedCode}, Match: ${code === storedCode}`);
+        }
+        
         // Verify the code
         if (code !== storedCode) {
             console.log('OTP verification failed - code mismatch');
+            
+            // SECURITY: For admins, provide more detailed logging (server-side only)
+            if (isAdmin) {
+                console.log(`[ADMIN OTP VERIFY] Code mismatch. Expected: ${storedCode}, Provided: ${code}`);
+            }
+            
             return NextResponse.json(
                 { error: 'Invalid code' },
                 { status: 400 }

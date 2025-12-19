@@ -10,8 +10,15 @@ export async function POST(request) {
     const method = 'whatsapp'; // Always use WhatsApp method
     try {
         // Call auth first before reading request body to avoid "body already consumed" error
-        const session = await auth();
-        const sessionUserId = session?.user?.id; // This is users.id
+        let session;
+        let sessionUserId;
+        try {
+            session = await auth();
+            sessionUserId = session?.user?.id; // This is users.id
+        } catch (authError) {
+            console.error('Auth error in send-otp:', authError);
+            // Continue without session if auth fails - might be using userId directly
+        }
         
         const body = await request.json();
         userId = body.userId;
@@ -112,6 +119,9 @@ export async function POST(request) {
                 created_at = NOW()
         `, [efilingUserId, otpCode, method, expiresAt]);
         
+        // Check if current user is admin (for admin fallback when WhatsApp fails)
+        const isAdmin = session?.user?.role && [1, 2].includes(parseInt(session.user.role));
+        
         // Send OTP via WhatsApp
         try {
             console.log(`Attempting to send OTP ${otpCode} to ${phoneNumber} via WhatsApp...`);
@@ -119,6 +129,13 @@ export async function POST(request) {
             
             if (!whatsappResult.success) {
                 console.error('WhatsApp OTP send failed:', whatsappResult.error);
+                
+                // SECURITY: Log OTP for admin users only (server-side only, never exposed to browser)
+                if (isAdmin) {
+                    console.log(`[ADMIN OTP LOG] WhatsApp failed. OTP for user ${efilingUserId} (${userName}): ${otpCode}`);
+                    console.log(`[ADMIN OTP LOG] User can verify this OTP manually. Expires at: ${expiresAt.toISOString()}`);
+                }
+                
                 // Still store OTP in database even if WhatsApp fails
                 // Return error but allow manual OTP entry for testing
                 return NextResponse.json({
@@ -140,6 +157,12 @@ export async function POST(request) {
                 phoneNumber: phoneNumber,
                 otpCode: otpCode
             });
+            
+            // SECURITY: Log OTP for admin users only (server-side only, never exposed to browser)
+            if (isAdmin) {
+                console.log(`[ADMIN OTP LOG] WhatsApp exception. OTP for user ${efilingUserId} (${userName}): ${otpCode}`);
+                console.log(`[ADMIN OTP LOG] User can verify this OTP manually. Expires at: ${expiresAt.toISOString()}`);
+            }
             
             // Return error but don't fail completely - OTP is still stored in DB
             return NextResponse.json({
