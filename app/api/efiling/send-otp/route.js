@@ -121,6 +121,12 @@ export async function POST(request) {
         
         // Check if current user is admin (for admin fallback when WhatsApp fails)
         const isAdmin = session?.user?.role && [1, 2].includes(parseInt(session.user.role));
+        console.log('[OTP DEBUG] Admin check:', {
+            hasSession: !!session,
+            userRole: session?.user?.role,
+            isAdmin: isAdmin,
+            sessionUserId: sessionUserId
+        });
         
         // Send OTP via WhatsApp
         try {
