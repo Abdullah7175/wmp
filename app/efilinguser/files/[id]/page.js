@@ -1046,22 +1046,38 @@ export default function FileDetail() {
                         <div className="print-only print-section">
                             <h3>E-Signatures ({signatures.length})</h3>
                             <div className="print-signatures-grid">
-                                {signatures.map((s, idx) => (
-                                    <div key={s.id || idx} className="print-signature-item">
-                                        {s.content && s.type?.toLowerCase().includes('image') ? (
-                                            // eslint-disable-next-line @next/next/no-img-element
-                                            <img src={s.content} alt="signature" />
-                                        ) : (
-                                            <div style={{ padding: '3mm', border: '1px solid #ddd', backgroundColor: '#f9f9f9', fontFamily: 'monospace', fontSize: '8pt', marginBottom: '2mm' }}>
-                                                {s.content}
+                                {signatures.map((s, idx) => {
+                                    // Helper function to get the correct image URL for print
+                                    const getSignatureImageUrl = (content) => {
+                                        if (!content) return null;
+                                        if (content.startsWith('data:image/')) return content;
+                                        if (content.startsWith('/api/')) return content;
+                                        if (content.startsWith('/uploads/')) return content.replace('/uploads/', '/api/uploads/');
+                                        if (content.startsWith('http://') || content.startsWith('https://')) return content;
+                                        return `/api/uploads${content.startsWith('/') ? '' : '/'}${content}`;
+                                    };
+                                    
+                                    const imageUrl = s.content && s.type?.toLowerCase().includes('image') 
+                                        ? getSignatureImageUrl(s.content) 
+                                        : null;
+                                    
+                                    return (
+                                        <div key={s.id || idx} className="print-signature-item">
+                                            {imageUrl ? (
+                                                // eslint-disable-next-line @next/next/no-img-element
+                                                <img src={imageUrl} alt="signature" />
+                                            ) : s.content ? (
+                                                <div style={{ padding: '3mm', border: '1px solid #ddd', backgroundColor: '#f9f9f9', fontFamily: 'monospace', fontSize: '8pt', marginBottom: '2mm' }}>
+                                                    {s.content}
+                                                </div>
+                                            ) : null}
+                                            <div className="print-signature-details">
+                                                <div><strong>{s.user_name}</strong> <span style={{ color: '#666', fontWeight: 'normal' }}>({s.user_role})</span></div>
+                                                <div>{formatDate(s.timestamp)}</div>
                                             </div>
-                                        )}
-                                        <div className="print-signature-details">
-                                            <div><strong>{s.user_name}</strong> <span style={{ color: '#666', fontWeight: 'normal' }}>({s.user_role})</span></div>
-                                            <div>{formatDate(s.timestamp)}</div>
-                    </div>
-                </div>
-                                ))}
+                                        </div>
+                                    );
+                                })}
                             </div>
                         </div>
                     )}
@@ -1194,18 +1210,60 @@ export default function FileDetail() {
                             </CardHeader>
                             <CardContent>
                                 <div className="grid grid-cols-1 gap-3">
-                                    {signatures.map(s => (
-                                        <div key={s.id} className="border rounded p-2 text-sm">
-                                            {s.content && s.type?.toLowerCase().includes('image') ? (
-                                                // eslint-disable-next-line @next/next/no-img-element
-                                                <img src={s.content} alt="signature" className="w-full h-28 object-contain border rounded mb-2" />
-                                            ) : (
-                                                <div className="px-3 py-2 border rounded bg-gray-50 font-mono text-xs mb-2">{s.content}</div>
-                                            )}
-                                            <div className="font-medium">{s.user_name} <span className="text-gray-500">({s.user_role})</span></div>
-                                            <div className="text-gray-500 text-xs">{formatDate(s.timestamp)}</div>
-                                        </div>
-                                    ))}
+                                    {signatures.map(s => {
+                                        // Helper function to get the correct image URL
+                                        const getSignatureImageUrl = (content) => {
+                                            if (!content) return null;
+                                            // If it's a base64 data URL, return as is
+                                            if (content.startsWith('data:image/')) {
+                                                return content;
+                                            }
+                                            // If it's a file URL, convert to API route
+                                            if (content.startsWith('/api/')) {
+                                                return content;
+                                            }
+                                            if (content.startsWith('/uploads/')) {
+                                                return content.replace('/uploads/', '/api/uploads/');
+                                            }
+                                            // If it starts with http/https, return as is
+                                            if (content.startsWith('http://') || content.startsWith('https://')) {
+                                                return content;
+                                            }
+                                            // Otherwise, assume it's a relative path and try to convert
+                                            return `/api/uploads${content.startsWith('/') ? '' : '/'}${content}`;
+                                        };
+                                        
+                                        const imageUrl = s.content && s.type?.toLowerCase().includes('image') 
+                                            ? getSignatureImageUrl(s.content) 
+                                            : null;
+                                        
+                                        return (
+                                            <div key={s.id} className="border rounded p-2 text-sm">
+                                                {imageUrl ? (
+                                                    // eslint-disable-next-line @next/next/no-img-element
+                                                    <img 
+                                                        src={imageUrl} 
+                                                        alt="signature" 
+                                                        className="w-full h-28 object-contain border rounded mb-2" 
+                                                        onError={(e) => {
+                                                            // Fallback: if file URL fails, try original content or show error
+                                                            if (imageUrl !== s.content && s.content) {
+                                                                e.target.src = s.content;
+                                                            } else {
+                                                                console.error('Failed to load signature image:', imageUrl);
+                                                                e.target.style.display = 'none';
+                                                                e.target.nextElementSibling?.classList.remove('hidden');
+                                                            }
+                                                        }}
+                                                    />
+                                                ) : s.content ? (
+                                                    <div className="px-3 py-2 border rounded bg-gray-50 font-mono text-xs mb-2">{s.content}</div>
+                                                ) : null}
+                                                <div className="font-medium">{s.user_name} <span className="text-gray-500">({s.user_role})</span></div>
+                                                <div className="text-gray-500 text-xs">{formatDate(s.timestamp)}</div>
+                                            </div>
+                                        );
+                                    })}
                                 </div>
                             </CardContent>
                         </Card>

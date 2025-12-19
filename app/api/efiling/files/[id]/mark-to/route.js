@@ -22,18 +22,18 @@ import {
 export async function POST(request, { params }) {
     let client;
     try {
+        // SECURITY: Call auth() FIRST before reading request body to avoid "body already consumed" error
+        const session = await auth();
+        if (!session?.user?.id) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+        
         const { id } = await params;
         const body = await request.json();
         const { user_ids, remarks } = body;
 
         if (!user_ids || !Array.isArray(user_ids) || user_ids.length === 0) {
             return NextResponse.json({ error: 'User IDs array is required' }, { status: 400 });
-        }
-
-        // Get current user from session
-        const session = await auth(request);
-        if (!session?.user?.id) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
         client = await connectToDatabase();

@@ -130,6 +130,9 @@ export default function TeamsManagement() {
         if (code.includes('XEN') || code.includes('EXECUTIVE_ENGINEER') || code.includes('EE')) {
             return 'EE';
         }
+        if (code.includes('RE') || code.includes('RESIDENT_ENGINEER') || code.includes('RE')) {
+            return 'RE';
+        }
         if (code.includes('SE') || code.includes('SUPERINTENDENT_ENGINEER')) {
             return 'SE';
         }
