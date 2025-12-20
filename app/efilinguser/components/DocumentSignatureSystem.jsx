@@ -17,7 +17,8 @@ export default function DocumentSignatureSystem({
     onCommentAdded,
     userRole,
     canEditDocument,
-    hasUserSigned = false
+    hasUserSigned = false,
+    viewOnly = false
 }) {
     const { data: session } = useSession();
     const { toast } = useToast();
@@ -691,116 +692,300 @@ export default function DocumentSignatureSystem({
 
     return (
         <div className="space-y-6">
-            {/* Signature and Comment Controls */}
-            <div className={`grid gap-3 ${hasUserSigned ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-2'}`}>
-                {!hasUserSigned && (
-                    <Button
-                        onClick={() => setShowSignatureModal(true)}
-                        className="flex items-center justify-center gap-2 w-full"
-                        data-signature-button
-                    >
-                        <Pen className="w-4 h-4" />
-                        E-Signature
-                    </Button>
-                )}
-                <Button
-                    onClick={() => setShowCommentModal(true)}
-                    variant="outline"
-                    className="flex items-center justify-center gap-2 w-full"
-                    data-comment-button
-                >
-                    <MessageSquare className="w-4 h-4" />
-                    Add Comment
-                </Button>
-            </div>
+            {/* Signature and Comment Controls - Hide in viewOnly mode */}
+            {!viewOnly && (
+                <div className={`grid gap-3 ${hasUserSigned ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-2'}`}>
+                    {!hasUserSigned && canEditDocument && (
+                        <Button
+                            onClick={() => setShowSignatureModal(true)}
+                            className="flex items-center justify-center gap-2 w-full"
+                            data-signature-button
+                        >
+                            <Pen className="w-4 h-4" />
+                            E-Signature
+                        </Button>
+                    )}
+                    {canEditDocument && (
+                        <Button
+                            onClick={() => setShowCommentModal(true)}
+                            variant="outline"
+                            className="flex items-center justify-center gap-2 w-full"
+                            data-comment-button
+                        >
+                            <MessageSquare className="w-4 h-4" />
+                            Add Comment
+                        </Button>
+                    )}
+                </div>
+            )}
 
             {/* Signatures Display */}
             {signatures.length > 0 && (
-                <Card>
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                            <Shield className="w-5 h-5" />
-                            Document Signatures ({signatures.length})
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="space-y-3">
-                            {signatures.map((signature) => {
-                                // Helper function to get the correct image URL
-                                const getSignatureImageUrl = (content) => {
-                                    if (!content) return null;
-                                    // If it's a base64 data URL, return as is
-                                    if (content.startsWith('data:image/')) {
+                viewOnly ? (
+                    <div className="space-y-3">
+                        {signatures.map((signature) => {
+                            // Helper function to get the correct image URL
+                            const getSignatureImageUrl = (content) => {
+                                if (!content) return null;
+                                // If it's a base64 data URL, return as is
+                                if (content.startsWith('data:image/')) {
+                                    return content;
+                                }
+                                // If it's a file URL, convert to API route
+                                if (content.startsWith('/api/uploads/')) {
+                                    return content;
+                                }
+                                if (content.startsWith('/api/')) {
+                                    return content;
+                                }
+                                if (content.startsWith('/uploads/')) {
+                                    return content.replace('/uploads/', '/api/uploads/');
+                                }
+                                // If it starts with http/https, extract path and convert to API route
+                                if (content.startsWith('http://') || content.startsWith('https://')) {
+                                    try {
+                                        const url = new URL(content);
+                                        const path = url.pathname;
+                                        if (path.startsWith('/uploads/')) {
+                                            return path.replace('/uploads/', '/api/uploads/');
+                                        }
+                                        if (path.startsWith('/api/uploads/')) {
+                                            return path;
+                                        }
+                                        // If path doesn't match expected patterns, try to construct
+                                        return `/api/uploads${path}`;
+                                    } catch (e) {
+                                        console.error('Error parsing signature URL:', e);
                                         return content;
                                     }
-                                    // If it's a file URL, convert to API route
-                                    if (content.startsWith('/api/')) {
-                                        return content;
-                                    }
-                                    if (content.startsWith('/uploads/')) {
-                                        return content.replace('/uploads/', '/api/uploads/');
-                                    }
-                                    // If it starts with http/https, return as is
-                                    if (content.startsWith('http://') || content.startsWith('https://')) {
-                                        return content;
-                                    }
-                                    // Otherwise, assume it's a relative path and try to convert
-                                    return `/api/uploads${content.startsWith('/') ? '' : '/'}${content}`;
-                                };
-                                
-                                const imageUrl = signature.type === 'image' || (signature.type && signature.type.toLowerCase().includes('image'))
-                                    ? getSignatureImageUrl(signature.content)
-                                    : null;
-                                
-                                return (
-                                    <div key={signature.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-12 h-8 border rounded bg-white flex items-center justify-center">
-                                                {signature.type === 'text' ? (
-                                                    <span 
-                                                        className="text-sm font-bold"
-                                                        style={{ 
-                                                            fontFamily: signature.font || signatureFont,
-                                                            color: signature.color === 'black' ? '#000' : signature.color === 'blue' ? '#2563eb' : signature.color === 'red' ? '#dc2626' : '#000'
-                                                        }}
-                                                    >
-                                                        {signature.content}
-                                                    </span>
+                                }
+                                // Otherwise, assume it's a relative path and try to convert
+                                return `/api/uploads${content.startsWith('/') ? '' : '/'}${content}`;
+                            };
+                            
+                            const imageUrl = signature.type === 'image' || (signature.type && signature.type.toLowerCase().includes('image'))
+                                ? getSignatureImageUrl(signature.content)
+                                : null;
+                            
+                            return (
+                                <div key={signature.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-12 h-8 border rounded bg-white flex items-center justify-center">
+                                            {signature.type === 'text' ? (
+                                                <span 
+                                                    className="text-sm font-bold"
+                                                    style={{ 
+                                                        fontFamily: signature.font || signatureFont,
+                                                        color: signature.color === 'black' ? '#000' : signature.color === 'blue' ? '#2563eb' : signature.color === 'red' ? '#dc2626' : '#000'
+                                                    }}
+                                                >
+                                                    {signature.content}
+                                                </span>
                                                 ) : imageUrl ? (
                                                     <img
                                                         src={imageUrl}
                                                         alt="Signature"
                                                         className="w-10 h-6 object-contain"
+                                                        loading="lazy"
                                                         onError={(e) => {
-                                                            // Fallback to original content if imageUrl fails
+                                                            // Prevent infinite retries that cause flickering
+                                                            const img = e.target;
+                                                            if (img.dataset.retryCount === '1') {
+                                                                // Hide the broken image and show a placeholder
+                                                                img.style.display = 'none';
+                                                                const parent = img.parentElement;
+                                                                if (parent && !parent.querySelector('.signature-error')) {
+                                                                    const errorDiv = document.createElement('div');
+                                                                    errorDiv.className = 'signature-error text-xs text-gray-400 text-center p-2';
+                                                                    errorDiv.textContent = 'Image not found';
+                                                                    parent.appendChild(errorDiv);
+                                                                }
+                                                                console.error('Failed to load signature image after retry:', imageUrl);
+                                                                return;
+                                                            }
+                                                            img.dataset.retryCount = '1';
+                                                            // Try original content if different (without /api/ prefix)
                                                             if (imageUrl !== signature.content && signature.content) {
-                                                                e.target.src = signature.content;
+                                                                // If imageUrl starts with /api/uploads/, try without /api/ prefix
+                                                                if (imageUrl.startsWith('/api/uploads/')) {
+                                                                    const withoutApi = imageUrl.replace('/api/uploads/', '/uploads/');
+                                                                    setTimeout(() => {
+                                                                        img.src = withoutApi;
+                                                                    }, 100);
+                                                                } else {
+                                                                    setTimeout(() => {
+                                                                        img.src = signature.content;
+                                                                    }, 100);
+                                                                }
                                                             } else {
+                                                                img.style.display = 'none';
+                                                                const parent = img.parentElement;
+                                                                if (parent && !parent.querySelector('.signature-error')) {
+                                                                    const errorDiv = document.createElement('div');
+                                                                    errorDiv.className = 'signature-error text-xs text-gray-400 text-center p-2';
+                                                                    errorDiv.textContent = 'Image not found';
+                                                                    parent.appendChild(errorDiv);
+                                                                }
                                                                 console.error('Failed to load signature image:', imageUrl);
-                                                                e.target.style.display = 'none';
                                                             }
                                                         }}
                                                     />
                                                 ) : (
                                                     <span className="text-xs text-gray-400">No image</span>
                                                 )}
-                                            </div>
-                                            <div>
-                                                <div className="font-medium">{signature.user_name}</div>
-                                                <div className="text-sm text-gray-500">
-                                                    {signature.user_role} • {new Date(signature.timestamp).toLocaleString()}
-                                                </div>
-                                            </div>
                                         </div>
-                                        <div className="text-xs text-gray-400">
-                                            Position: ({Math.round(signature.position.x)}, {Math.round(signature.position.y)})
+                                        <div>
+                                            <div className="font-medium">{signature.user_name}</div>
+                                            <div className="text-sm text-gray-500">
+                                                {signature.user_role} • {new Date(signature.timestamp).toLocaleString()}
+                                            </div>
                                         </div>
                                     </div>
-                                );
-                            })}
-                        </div>
-                    </CardContent>
-                </Card>
+                                    <div className="text-xs text-gray-400">
+                                        Position: ({Math.round(signature.position.x)}, {Math.round(signature.position.y)})
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                ) : (
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2">
+                                <Shield className="w-5 h-5" />
+                                Document Signatures ({signatures.length})
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="space-y-3">
+                                {signatures.map((signature) => {
+                                    // Helper function to get the correct image URL
+                                    const getSignatureImageUrl = (content) => {
+                                        if (!content) return null;
+                                        // If it's a base64 data URL, return as is
+                                        if (content.startsWith('data:image/')) {
+                                            return content;
+                                        }
+                                        // If it's a file URL, convert to API route
+                                        if (content.startsWith('/api/uploads/')) {
+                                            return content;
+                                        }
+                                        if (content.startsWith('/api/')) {
+                                            return content;
+                                        }
+                                        if (content.startsWith('/uploads/')) {
+                                            return content.replace('/uploads/', '/api/uploads/');
+                                        }
+                                        // If it starts with http/https, extract path and convert to API route
+                                        if (content.startsWith('http://') || content.startsWith('https://')) {
+                                            try {
+                                                const url = new URL(content);
+                                                const path = url.pathname;
+                                                if (path.startsWith('/uploads/')) {
+                                                    return path.replace('/uploads/', '/api/uploads/');
+                                                }
+                                                if (path.startsWith('/api/uploads/')) {
+                                                    return path;
+                                                }
+                                                // If path doesn't match expected patterns, try to construct
+                                                return `/api/uploads${path}`;
+                                            } catch (e) {
+                                                console.error('Error parsing signature URL:', e);
+                                                return content;
+                                            }
+                                        }
+                                        // Otherwise, assume it's a relative path and try to convert
+                                        return `/api/uploads${content.startsWith('/') ? '' : '/'}${content}`;
+                                    };
+                                    
+                                    const imageUrl = signature.type === 'image' || (signature.type && signature.type.toLowerCase().includes('image'))
+                                        ? getSignatureImageUrl(signature.content)
+                                        : null;
+                                    
+                                    return (
+                                        <div key={signature.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-12 h-8 border rounded bg-white flex items-center justify-center">
+                                                    {signature.type === 'text' ? (
+                                                        <span 
+                                                            className="text-sm font-bold"
+                                                            style={{ 
+                                                                fontFamily: signature.font || signatureFont,
+                                                                color: signature.color === 'black' ? '#000' : signature.color === 'blue' ? '#2563eb' : signature.color === 'red' ? '#dc2626' : '#000'
+                                                            }}
+                                                        >
+                                                            {signature.content}
+                                                        </span>
+                                                ) : imageUrl ? (
+                                                    <img
+                                                        src={imageUrl}
+                                                        alt="Signature"
+                                                        className="w-10 h-6 object-contain"
+                                                        loading="lazy"
+                                                        onError={(e) => {
+                                                            // Prevent infinite retries that cause flickering
+                                                            const img = e.target;
+                                                            if (img.dataset.retryCount === '1') {
+                                                                // Hide the broken image and show a placeholder
+                                                                img.style.display = 'none';
+                                                                const parent = img.parentElement;
+                                                                if (parent && !parent.querySelector('.signature-error')) {
+                                                                    const errorDiv = document.createElement('div');
+                                                                    errorDiv.className = 'signature-error text-xs text-gray-400 text-center p-2';
+                                                                    errorDiv.textContent = 'Image not found';
+                                                                    parent.appendChild(errorDiv);
+                                                                }
+                                                                console.error('Failed to load signature image after retry:', imageUrl);
+                                                                return;
+                                                            }
+                                                            img.dataset.retryCount = '1';
+                                                            // Try original content if different (without /api/ prefix)
+                                                            if (imageUrl !== signature.content && signature.content) {
+                                                                // If imageUrl starts with /api/uploads/, try without /api/ prefix
+                                                                if (imageUrl.startsWith('/api/uploads/')) {
+                                                                    const withoutApi = imageUrl.replace('/api/uploads/', '/uploads/');
+                                                                    setTimeout(() => {
+                                                                        img.src = withoutApi;
+                                                                    }, 100);
+                                                                } else {
+                                                                    setTimeout(() => {
+                                                                        img.src = signature.content;
+                                                                    }, 100);
+                                                                }
+                                                            } else {
+                                                                img.style.display = 'none';
+                                                                const parent = img.parentElement;
+                                                                if (parent && !parent.querySelector('.signature-error')) {
+                                                                    const errorDiv = document.createElement('div');
+                                                                    errorDiv.className = 'signature-error text-xs text-gray-400 text-center p-2';
+                                                                    errorDiv.textContent = 'Image not found';
+                                                                    parent.appendChild(errorDiv);
+                                                                }
+                                                                console.error('Failed to load signature image:', imageUrl);
+                                                            }
+                                                        }}
+                                                    />
+                                                ) : (
+                                                    <span className="text-xs text-gray-400">No image</span>
+                                                )}
+                                                </div>
+                                                <div>
+                                                    <div className="font-medium">{signature.user_name}</div>
+                                                    <div className="text-sm text-gray-500">
+                                                        {signature.user_role} • {new Date(signature.timestamp).toLocaleString()}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div className="text-xs text-gray-400">
+                                                Position: ({Math.round(signature.position.x)}, {Math.round(signature.position.y)})
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </CardContent>
+                    </Card>
+                )
             )}
 
             {/* Comments Display */}

@@ -29,7 +29,7 @@ export async function DELETE(request, { params }) {
         
         // Get attachment info before deletion for logging and access check
         const attachmentResult = await client.query(`
-            SELECT file_id, file_name, file_size, file_type, attachment_name FROM efiling_file_attachments WHERE id = $1 AND is_active = true
+            SELECT file_id, file_name, file_size, file_type, file_url FROM efiling_file_attachments WHERE id = $1 AND is_active = true
         `, [id]);
         
         if (attachmentResult.rows.length === 0) {
@@ -98,7 +98,7 @@ export async function DELETE(request, { params }) {
                 fileName: attachment.file_name,
                 fileSize: attachment.file_size,
                 fileType: attachment.file_type,
-                attachmentName: attachment.attachment_name,
+                fileUrl: attachment.file_url,
                 description: `Attachment "${attachment.file_name}" deleted from file ${attachment.file_id}`
             },
             ipAddress: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip'),

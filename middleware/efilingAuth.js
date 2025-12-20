@@ -10,13 +10,8 @@ export async function efilingAuthMiddleware(request) {
             // Skip setting headers for API routes that handle their own headers (like /api/uploads/)
             // These routes set their own X-Frame-Options and CSP headers
             if (pathname.startsWith('/api/')) {
-                // For API routes, only set minimal headers if not already set
-                if (!res.headers.get('X-Frame-Options')) {
-                    // Check if this is a PDF file request - allow SAMEORIGIN for PDFs
-                    const isPdfRequest = pathname.includes('/api/uploads/') && 
-                                         pathname.toLowerCase().endsWith('.pdf');
-                    res.headers.set('X-Frame-Options', isPdfRequest ? 'SAMEORIGIN' : 'DENY');
-                }
+                // Don't set X-Frame-Options here - let the API route handler set it
+                // This allows /api/uploads/[...path]/route.js to set SAMEORIGIN for PDFs
                 return res;
             }
             
@@ -27,7 +22,8 @@ export async function efilingAuthMiddleware(request) {
             res.headers.set('Permissions-Policy', 'camera=(), geolocation=(), microphone=()');
             const scriptSrc = isDev ? "script-src 'self' 'unsafe-inline' 'unsafe-eval'" : "script-src 'self' 'unsafe-inline'";
             const connectSrc = isDev ? "connect-src 'self' ws: http://localhost:3000 ws: http://119.30.113.18:3000" : "connect-src 'self'";
-            const csp = `default-src 'self'; ${scriptSrc}; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; ${connectSrc}; frame-ancestors 'none'; object-src 'none'`;
+            // Allow object-src 'self' for PDF embedding via <object> tag
+            const csp = `default-src 'self'; ${scriptSrc}; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; ${connectSrc}; frame-ancestors 'none'; object-src 'self'`;
             res.headers.set('Content-Security-Policy', csp);
             
             // Ensure origin header is set for Server Actions (POST requests)

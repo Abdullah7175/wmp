@@ -1129,114 +1129,33 @@ export default function FileDetail() {
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2">
                                 <Shield className="w-5 h-5" />
-                                E-Signature
+                                Document Signatures
                             </CardTitle>
                         </CardHeader>
                         <CardContent>
-                            {hasUserSigned ? (
-                                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                                    <div className="flex items-start gap-3">
-                                        <Shield className="w-5 h-5 text-blue-600 mt-0.5" />
-                                        <div>
-                                            <p className="text-sm font-medium text-blue-900">
-                                                You have already signed this document.
-                                            </p>
-                                            <p className="text-xs text-blue-700 mt-1">
-                                                Your signature has been successfully recorded and cannot be modified.
-                                            </p>
-                                        </div>
-                                    </div>
-                                </div>
-                            ) : (
-                                <DocumentSignatureSystem
-                                    fileId={params.id}
-                                    userRole={userRole}
-                                    canEditDocument={true}
-                                    onSignatureAdded={(signature) => {
-                                        console.log('Signature added:', signature);
-                                        setHasUserSigned(true);
-                                        // Refresh signatures list
-                                        fetchExtras();
-                                        toast({
-                                            title: "Signature Added",
-                                            description: "Your signature has been successfully added to the document.",
-                                        });
-                                    }}
-                                    onCommentAdded={(comment) => {
-                                        console.log('Comment added:', comment);
-                                        // Refresh comments list
-                                        fetchComments();
-                                    }}
-                                />
-                            )}
+                            <DocumentSignatureSystem
+                                fileId={params.id}
+                                userRole={userRole}
+                                canEditDocument={true}
+                                hasUserSigned={hasUserSigned}
+                                onSignatureAdded={(signature) => {
+                                    console.log('Signature added:', signature);
+                                    setHasUserSigned(true);
+                                    // Refresh signatures list
+                                    fetchExtras();
+                                    toast({
+                                        title: "Signature Added",
+                                        description: "Your signature has been successfully added to the document.",
+                                    });
+                                }}
+                                onCommentAdded={(comment) => {
+                                    console.log('Comment added:', comment);
+                                    // Refresh comments list
+                                    fetchComments();
+                                }}
+                            />
                         </CardContent>
                     </Card>
-
-                    {signatures.length > 0 && (
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>E-Signatures</CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="grid grid-cols-1 gap-3">
-                                    {signatures.map(s => {
-                                        // Helper function to get the correct image URL
-                                        const getSignatureImageUrl = (content) => {
-                                            if (!content) return null;
-                                            // If it's a base64 data URL, return as is
-                                            if (content.startsWith('data:image/')) {
-                                                return content;
-                                            }
-                                            // If it's a file URL, convert to API route
-                                            if (content.startsWith('/api/')) {
-                                                return content;
-                                            }
-                                            if (content.startsWith('/uploads/')) {
-                                                return content.replace('/uploads/', '/api/uploads/');
-                                            }
-                                            // If it starts with http/https, return as is
-                                            if (content.startsWith('http://') || content.startsWith('https://')) {
-                                                return content;
-                                            }
-                                            // Otherwise, assume it's a relative path and try to convert
-                                            return `/api/uploads${content.startsWith('/') ? '' : '/'}${content}`;
-                                        };
-                                        
-                                        const imageUrl = s.content && s.type?.toLowerCase().includes('image') 
-                                            ? getSignatureImageUrl(s.content) 
-                                            : null;
-                                        
-                                        return (
-                                            <div key={s.id} className="border rounded p-2 text-sm">
-                                                {imageUrl ? (
-                                                    // eslint-disable-next-line @next/next/no-img-element
-                                                    <img 
-                                                        src={imageUrl} 
-                                                        alt="signature" 
-                                                        className="w-full h-28 object-contain border rounded mb-2" 
-                                                        onError={(e) => {
-                                                            // Fallback: if file URL fails, try original content or show error
-                                                            if (imageUrl !== s.content && s.content) {
-                                                                e.target.src = s.content;
-                                                            } else {
-                                                                console.error('Failed to load signature image:', imageUrl);
-                                                                e.target.style.display = 'none';
-                                                                e.target.nextElementSibling?.classList.remove('hidden');
-                                                            }
-                                                        }}
-                                                    />
-                                                ) : s.content ? (
-                                                    <div className="px-3 py-2 border rounded bg-gray-50 font-mono text-xs mb-2">{s.content}</div>
-                                                ) : null}
-                                                <div className="font-medium">{s.user_name} <span className="text-gray-500">({s.user_role})</span></div>
-                                                <div className="text-gray-500 text-xs">{formatDate(s.timestamp)}</div>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            </CardContent>
-                        </Card>
-                    )}
 
                     {beforeContent.length > 0 && (
                         <Card>
@@ -1418,29 +1337,134 @@ export default function FileDetail() {
                             ) : selectedAttachment.file_type === 'application/pdf' || selectedAttachment.file_name?.toLowerCase().endsWith('.pdf') ? (
                                 <div className="space-y-4">
                                     <div className="border rounded-lg overflow-hidden bg-gray-50">
-                                        <iframe
-                                            src={selectedAttachment.file_url}
-                                            className="w-full h-[70vh] min-h-[500px] border-0"
-                                            title={selectedAttachment.file_name}
-                                            style={{ display: 'block' }}
-                                        />
+                                        {(() => {
+                                            // Helper function to get the correct PDF URL
+                                            const getPdfUrl = (fileUrl) => {
+                                                if (!fileUrl) {
+                                                    console.error('PDF file_url is missing');
+                                                    return null;
+                                                }
+                                                // If it's already an API URL, return as is
+                                                if (fileUrl.startsWith('/api/uploads/')) {
+                                                    return fileUrl;
+                                                }
+                                                // If it starts with /uploads/, convert to /api/uploads/
+                                                if (fileUrl.startsWith('/uploads/')) {
+                                                    const converted = fileUrl.replace('/uploads/', '/api/uploads/');
+                                                    console.log('PDF URL converted:', fileUrl, '->', converted);
+                                                    return converted;
+                                                }
+                                                // If it's a full URL with domain, extract the path and convert
+                                                if (fileUrl.startsWith('http://') || fileUrl.startsWith('https://')) {
+                                                    try {
+                                                        const url = new URL(fileUrl);
+                                                        const path = url.pathname;
+                                                        if (path.startsWith('/uploads/')) {
+                                                            return path.replace('/uploads/', '/api/uploads/');
+                                                        }
+                                                        if (path.startsWith('/api/uploads/')) {
+                                                            return path;
+                                                        }
+                                                        // If path doesn't match expected patterns, try to construct
+                                                        return `/api/uploads${path}`;
+                                                    } catch (e) {
+                                                        console.error('Error parsing PDF URL:', e);
+                                                        return fileUrl;
+                                                    }
+                                                }
+                                                // Otherwise, assume it's a relative path
+                                                const converted = `/api/uploads${fileUrl.startsWith('/') ? '' : '/'}${fileUrl}`;
+                                                console.log('PDF URL converted (relative):', fileUrl, '->', converted);
+                                                return converted;
+                                            };
+                                            
+                                            const pdfUrl = getPdfUrl(selectedAttachment.file_url);
+                                            
+                                            if (!pdfUrl) {
+                                                return (
+                                                    <div className="p-8 text-center text-gray-500">
+                                                        <FileText className="w-16 h-16 mx-auto mb-4 text-gray-400" />
+                                                        <p>PDF URL is missing or invalid</p>
+                                                        <p className="text-xs mt-2">File: {selectedAttachment.file_name}</p>
+                                                    </div>
+                                                );
+                                            }
+                                            
+                                            return (
+                                                <>
+                                                    {/* Use iframe as primary method (object tag has CSP issues) */}
+                                                    <iframe
+                                                        src={pdfUrl}
+                                                        className="w-full h-[70vh] min-h-[500px] border-0"
+                                                        title={selectedAttachment.file_name}
+                                                        style={{ display: 'block' }}
+                                                        onError={(e) => {
+                                                            console.error('Iframe failed to load PDF:', pdfUrl, e);
+                                                            // Show error message if iframe fails
+                                                            const container = e.target.parentElement;
+                                                            if (container) {
+                                                                container.innerHTML = `
+                                                                    <div class="p-8 text-center text-red-600">
+                                                                        <p class="mb-2">Failed to load PDF preview</p>
+                                                                        <p class="text-sm text-gray-500">Please use "Open in New Tab" or "Download" buttons below</p>
+                                                                    </div>
+                                                                `;
+                                                            }
+                                                        }}
+                                                    />
+                                                </>
+                                            );
+                                        })()}
                                     </div>
-                                    <div className="flex justify-end">
-                                        <Button 
-                                            variant="outline"
-                                            onClick={() => {
-                                                const link = document.createElement('a');
-                                                link.href = selectedAttachment.file_url;
-                                                link.download = selectedAttachment.file_name;
-                                                link.target = '_blank';
-                                                document.body.appendChild(link);
-                                                link.click();
-                                                document.body.removeChild(link);
-                                            }}
-                                        >
-                                            <Download className="w-4 h-4 mr-2" />
-                                            Download File
-                                        </Button>
+                                    <div className="flex justify-end gap-2">
+                                        {(() => {
+                                            const getPdfUrl = (fileUrl) => {
+                                                if (!fileUrl) return null;
+                                                if (fileUrl.startsWith('/api/uploads/')) return fileUrl;
+                                                if (fileUrl.startsWith('/uploads/')) return fileUrl.replace('/uploads/', '/api/uploads/');
+                                                if (fileUrl.startsWith('http://') || fileUrl.startsWith('https://')) {
+                                                    try {
+                                                        const url = new URL(fileUrl);
+                                                        const path = url.pathname;
+                                                        if (path.startsWith('/uploads/')) return path.replace('/uploads/', '/api/uploads/');
+                                                        if (path.startsWith('/api/uploads/')) return path;
+                                                        return `/api/uploads${path}`;
+                                                    } catch (e) {
+                                                        return fileUrl;
+                                                    }
+                                                }
+                                                return `/api/uploads${fileUrl.startsWith('/') ? '' : '/'}${fileUrl}`;
+                                            };
+                                            const pdfUrl = getPdfUrl(selectedAttachment.file_url);
+                                            return (
+                                                <>
+                                                    <Button 
+                                                        variant="outline"
+                                                        onClick={() => {
+                                                            window.open(pdfUrl, '_blank');
+                                                        }}
+                                                    >
+                                                        <Eye className="w-4 h-4 mr-2" />
+                                                        Open in New Tab
+                                                    </Button>
+                                                    <Button 
+                                                        variant="outline"
+                                                        onClick={() => {
+                                                            const link = document.createElement('a');
+                                                            link.href = pdfUrl;
+                                                            link.download = selectedAttachment.file_name;
+                                                            link.target = '_blank';
+                                                            document.body.appendChild(link);
+                                                            link.click();
+                                                            document.body.removeChild(link);
+                                                        }}
+                                                    >
+                                                        <Download className="w-4 h-4 mr-2" />
+                                                        Download File
+                                                    </Button>
+                                                </>
+                                            );
+                                        })()}
                                     </div>
                                 </div>
                             ) : selectedAttachment.file_type === 'application/msword' || 

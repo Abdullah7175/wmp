@@ -608,15 +608,32 @@ export default function DocumentSignatureSystem({
                                         return content;
                                     }
                                     // If it's a file URL, convert to API route
+                                    if (content.startsWith('/api/uploads/')) {
+                                        return content;
+                                    }
                                     if (content.startsWith('/api/')) {
                                         return content;
                                     }
                                     if (content.startsWith('/uploads/')) {
                                         return content.replace('/uploads/', '/api/uploads/');
                                     }
-                                    // If it starts with http/https, return as is
+                                    // If it starts with http/https, extract path and convert to API route
                                     if (content.startsWith('http://') || content.startsWith('https://')) {
-                                        return content;
+                                        try {
+                                            const url = new URL(content);
+                                            const path = url.pathname;
+                                            if (path.startsWith('/uploads/')) {
+                                                return path.replace('/uploads/', '/api/uploads/');
+                                            }
+                                            if (path.startsWith('/api/uploads/')) {
+                                                return path;
+                                            }
+                                            // If path doesn't match expected patterns, try to construct
+                                            return `/api/uploads${path}`;
+                                        } catch (e) {
+                                            console.error('Error parsing signature URL:', e);
+                                            return content;
+                                        }
                                     }
                                     // Otherwise, assume it's a relative path and try to convert
                                     return `/api/uploads${content.startsWith('/') ? '' : '/'}${content}`;
@@ -642,13 +659,24 @@ export default function DocumentSignatureSystem({
                                                         src={imageUrl}
                                                         alt="Signature"
                                                         className="w-10 h-6 object-contain"
+                                                        loading="lazy"
                                                         onError={(e) => {
-                                                            // Fallback to original content if imageUrl fails
+                                                            // Prevent infinite retries that cause flickering
+                                                            const img = e.target;
+                                                            if (img.dataset.retryCount === '1') {
+                                                                img.style.display = 'none';
+                                                                console.error('Failed to load signature image after retry:', imageUrl);
+                                                                return;
+                                                            }
+                                                            img.dataset.retryCount = '1';
+                                                            // Try original content if different
                                                             if (imageUrl !== signature.content && signature.content) {
-                                                                e.target.src = signature.content;
+                                                                setTimeout(() => {
+                                                                    img.src = signature.content;
+                                                                }, 100);
                                                             } else {
+                                                                img.style.display = 'none';
                                                                 console.error('Failed to load signature image:', imageUrl);
-                                                                e.target.style.display = 'none';
                                                             }
                                                         }}
                                                     />
