@@ -49,7 +49,7 @@ async function setupStandalone() {
       process.exit(0); // Exit with success since build completed
     }
 
-    console.log('📁 Copying static files...');
+    console.log('📁 Copying build artifacts...');
     
     // Create .next directory in standalone if it doesn't exist
     const standaloneNextDir = path.join(standaloneDir, '.next');
@@ -62,6 +62,17 @@ async function setupStandalone() {
       console.log('✅ Static files copied');
     } else {
       console.warn('⚠️  Static directory not found');
+    }
+
+    // Copy server build files (includes client reference manifest)
+    const serverDir = path.join(rootDir, '.next', 'server');
+    const standaloneServerDir = path.join(standaloneNextDir, 'server');
+    if (fs.existsSync(serverDir)) {
+      // Copy the entire server directory to ensure all manifests are present
+      await copyDir(serverDir, standaloneServerDir);
+      console.log('✅ Server build files copied (including client manifests)');
+    } else {
+      console.warn('⚠️  Server directory not found');
     }
 
     // Copy public files

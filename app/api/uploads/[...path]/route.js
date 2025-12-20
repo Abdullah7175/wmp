@@ -33,22 +33,27 @@ export async function GET(request, { params }) {
     // Check for environment variable first
     if (process.env.APP_BASE_DIR) {
       baseDir = process.env.APP_BASE_DIR;
-    } else if (baseDir.includes('.next/standalone') || baseDir.includes('.next\\standalone')) {
-      // In standalone mode, go up two levels to get to project root
-      baseDir = join(baseDir, '..', '..');
-    }
-    
-    // Also check for common production paths
-    // If process.cwd() doesn't point to the right location, try /opt/wmp16
-    const testUploadsPath = join(baseDir, 'public', 'uploads');
-    if (!existsSync(testUploadsPath)) {
-      // Try alternative production paths
-      const productionPaths = ['/opt/wmp16', '/opt/wmp', process.cwd()];
-      for (const prodPath of productionPaths) {
-        const testPath = join(prodPath, 'public', 'uploads');
-        if (existsSync(testPath)) {
-          baseDir = prodPath;
-          break;
+    } else {
+      // Detect if we're in standalone mode
+      const cwd = process.cwd();
+      if (cwd.includes('.next/standalone') || cwd.includes('.next\\standalone')) {
+        // In standalone mode, go up to project root
+        // .next/standalone -> project root (two levels up)
+        baseDir = resolve(join(cwd, '..', '..'));
+      }
+      
+      // Also check for common production paths as fallback
+      const testUploadsPath = join(baseDir, 'public', 'uploads');
+      if (!existsSync(testUploadsPath)) {
+        // Try alternative production paths
+        const productionPaths = ['/opt/wmp16', '/opt/wmp'];
+        for (const prodPath of productionPaths) {
+          const testPath = join(prodPath, 'public', 'uploads');
+          if (existsSync(testPath)) {
+            baseDir = prodPath;
+            console.log(`Using production path: ${baseDir}`);
+            break;
+          }
         }
       }
     }
@@ -65,11 +70,27 @@ export async function GET(request, { params }) {
     
     // Check if file exists
     if (!existsSync(fullPath)) {
-      console.error(`File not found: ${fullPath}`);
-      console.error(`Requested path segments: ${filePath.join('/')}`);
-      console.error(`Base directory: ${baseDir}`);
-      console.error(`Uploads directory: ${uploadsDir}`);
-      console.error(`Normalized path segments: ${normalizedPath.join(', ')}`);
+      console.error(`[Uploads API] File not found: ${fullPath}`);
+      console.error(`[Uploads API] Requested path segments: ${filePath.join('/')}`);
+      console.error(`[Uploads API] Base directory: ${baseDir}`);
+      console.error(`[Uploads API] Process CWD: ${process.cwd()}`);
+      console.error(`[Uploads API] Uploads directory: ${uploadsDir}`);
+      console.error(`[Uploads API] Normalized path segments: ${normalizedPath.join(', ')}`);
+      console.error(`[Uploads API] Full resolved path: ${fullPath}`);
+      
+      // Also check if uploads directory exists
+      if (!existsSync(uploadsDir)) {
+        console.error(`[Uploads API] Uploads directory does not exist: ${uploadsDir}`);
+      } else {
+        // List what's actually in the uploads directory for debugging
+        try {
+          const fs = require('fs');
+          const uploadsContents = fs.readdirSync(uploadsDir);
+          console.error(`[Uploads API] Contents of uploads directory: ${uploadsContents.join(', ')}`);
+        } catch (e) {
+          console.error(`[Uploads API] Could not read uploads directory: ${e.message}`);
+        }
+      }
       
       // Return a proper 404 response without JSON for media files
       return new NextResponse('File not found', { 
@@ -78,6 +99,11 @@ export async function GET(request, { params }) {
           'Content-Type': 'text/plain',
         }
       });
+    }
+    
+    // Log successful file resolution (only for debugging - can be removed later)
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[Uploads API] Successfully resolved file: ${fullPath}`);
     }
 
     // Read the file
