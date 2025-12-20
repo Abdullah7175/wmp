@@ -42,8 +42,10 @@ export default function DocumentViewer() {
 				const fileData = await fileRes.json();
 				setFile(fileData);
 				if (Array.isArray(fileData.pages) && fileData.pages.length) {
-					setPages(fileData.pages);
-					setCurrentPageId(fileData.pages[0]?.id || 1);
+					// Reverse pages so last page shows on top
+					const reversedPages = [...fileData.pages].reverse();
+					setPages(reversedPages);
+					setCurrentPageId(reversedPages[0]?.id || 1);
 				} else {
 					setPages([{ id: 1, pageNumber: 1, title: "Main Document", content: fileData.document_content || {}, type: "MAIN" }]);
 				}

@@ -67,7 +67,13 @@ export default function FileDetail() {
             if (docRes.ok) {
                 const doc = await docRes.json();
                 console.log('Document data:', doc);
-                setPages(doc.pages || []);
+                // Reverse pages so last page shows on top
+                if (doc.pages && Array.isArray(doc.pages) && doc.pages.length > 0) {
+                    const reversedPages = [...doc.pages].reverse();
+                    setPages(reversedPages);
+                } else {
+                    setPages([]);
+                }
                 
                 // If no pages but document_content exists, create a single page
                 if ((!doc.pages || doc.pages.length === 0) && doc.document_content) {
