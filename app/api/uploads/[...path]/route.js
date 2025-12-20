@@ -29,9 +29,28 @@ export async function GET(request, { params }) {
 
     // Handle standalone mode - get correct base directory
     let baseDir = process.cwd();
-    if (baseDir.includes('.next/standalone') || baseDir.includes('.next\\standalone')) {
+    
+    // Check for environment variable first
+    if (process.env.APP_BASE_DIR) {
+      baseDir = process.env.APP_BASE_DIR;
+    } else if (baseDir.includes('.next/standalone') || baseDir.includes('.next\\standalone')) {
       // In standalone mode, go up two levels to get to project root
       baseDir = join(baseDir, '..', '..');
+    }
+    
+    // Also check for common production paths
+    // If process.cwd() doesn't point to the right location, try /opt/wmp16
+    const testUploadsPath = join(baseDir, 'public', 'uploads');
+    if (!existsSync(testUploadsPath)) {
+      // Try alternative production paths
+      const productionPaths = ['/opt/wmp16', '/opt/wmp', process.cwd()];
+      for (const prodPath of productionPaths) {
+        const testPath = join(prodPath, 'public', 'uploads');
+        if (existsSync(testPath)) {
+          baseDir = prodPath;
+          break;
+        }
+      }
     }
 
     // Construct the full file path
@@ -40,13 +59,17 @@ export async function GET(request, { params }) {
 
     // SECURITY: Ensure resolved path stays within uploads directory
     if (!fullPath.startsWith(uploadsDir)) {
+      console.error(`Path traversal attempt detected. Resolved path: ${fullPath}, Uploads dir: ${uploadsDir}`);
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
     
     // Check if file exists
     if (!existsSync(fullPath)) {
       console.error(`File not found: ${fullPath}`);
-      console.error(`Requested path: ${filePath.join('/')}`);
+      console.error(`Requested path segments: ${filePath.join('/')}`);
+      console.error(`Base directory: ${baseDir}`);
+      console.error(`Uploads directory: ${uploadsDir}`);
+      console.error(`Normalized path segments: ${normalizedPath.join(', ')}`);
       
       // Return a proper 404 response without JSON for media files
       return new NextResponse('File not found', { 
