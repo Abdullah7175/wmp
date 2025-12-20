@@ -30,9 +30,10 @@ export async function GET(request, { params }) {
     // Handle standalone mode - get correct base directory
     let baseDir = process.cwd();
     
-    // Check for environment variable first
+    // Check for environment variable first (highest priority)
     if (process.env.APP_BASE_DIR) {
       baseDir = process.env.APP_BASE_DIR;
+      console.log(`[Uploads API] Using APP_BASE_DIR: ${baseDir}`);
     } else {
       // Detect if we're in standalone mode
       const cwd = process.cwd();
@@ -40,18 +41,20 @@ export async function GET(request, { params }) {
         // In standalone mode, go up to project root
         // .next/standalone -> project root (two levels up)
         baseDir = resolve(join(cwd, '..', '..'));
+        console.log(`[Uploads API] Detected standalone mode, baseDir: ${baseDir}`);
       }
       
-      // Also check for common production paths as fallback
+      // Always verify and try alternative production paths as fallback
       const testUploadsPath = join(baseDir, 'public', 'uploads');
       if (!existsSync(testUploadsPath)) {
+        console.log(`[Uploads API] Uploads not found at ${testUploadsPath}, trying alternatives...`);
         // Try alternative production paths
-        const productionPaths = ['/opt/wmp16', '/opt/wmp'];
+        const productionPaths = ['/opt/wmp16', '/opt/wmp', process.cwd()];
         for (const prodPath of productionPaths) {
           const testPath = join(prodPath, 'public', 'uploads');
           if (existsSync(testPath)) {
             baseDir = prodPath;
-            console.log(`Using production path: ${baseDir}`);
+            console.log(`[Uploads API] Found uploads at: ${baseDir}`);
             break;
           }
         }
@@ -101,10 +104,8 @@ export async function GET(request, { params }) {
       });
     }
     
-    // Log successful file resolution (only for debugging - can be removed later)
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`[Uploads API] Successfully resolved file: ${fullPath}`);
-    }
+    // Log successful file resolution for debugging (can help diagnose path issues)
+    console.log(`[Uploads API] Successfully resolved file: ${fullPath} from request: ${filePath.join('/')}`);
 
     // Read the file
     const fileBuffer = await readFile(fullPath);
@@ -188,7 +189,12 @@ export async function GET(request, { params }) {
     });
 
   } catch (error) {
-    console.error('Error serving file:', error);
-    return NextResponse.json({ error: 'Failed to serve file' }, { status: 500 });
+    console.error('[Uploads API] Error serving file:', error);
+    console.error('[Uploads API] Error stack:', error.stack);
+    console.error('[Uploads API] Request path segments:', filePath?.join('/') || 'unknown');
+    return NextResponse.json({ 
+      error: 'Failed to serve file',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    }, { status: 500 });
   }
 }

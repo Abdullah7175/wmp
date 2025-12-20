@@ -860,42 +860,49 @@ export default function DocumentSignatureSystem({
                             <div className="space-y-3">
                                 {signatures.map((signature) => {
                                     // Helper function to get the correct image URL
+                                    // Files in public/uploads/ are served directly by Next.js at /uploads/
                                     const getSignatureImageUrl = (content) => {
                                         if (!content) return null;
                                         // If it's a base64 data URL, return as is
                                         if (content.startsWith('data:image/')) {
                                             return content;
                                         }
-                                        // If it's a file URL, convert to API route
-                                        if (content.startsWith('/api/uploads/')) {
+                                        // If it's already a direct /uploads/ path, return as is
+                                        if (content.startsWith('/uploads/')) {
                                             return content;
+                                        }
+                                        // If it's /api/uploads/, convert to direct /uploads/ (Next.js serves public/ directly)
+                                        if (content.startsWith('/api/uploads/')) {
+                                            return content.replace('/api/uploads/', '/uploads/');
                                         }
                                         if (content.startsWith('/api/')) {
+                                            // For other API routes, try to extract the uploads path
+                                            const match = content.match(/\/api\/uploads\/(.+)$/);
+                                            if (match) {
+                                                return `/uploads/${match[1]}`;
+                                            }
                                             return content;
                                         }
-                                        if (content.startsWith('/uploads/')) {
-                                            return content.replace('/uploads/', '/api/uploads/');
-                                        }
-                                        // If it starts with http/https, extract path and convert to API route
+                                        // If it starts with http/https, extract path and use direct /uploads/
                                         if (content.startsWith('http://') || content.startsWith('https://')) {
                                             try {
                                                 const url = new URL(content);
                                                 const path = url.pathname;
                                                 if (path.startsWith('/uploads/')) {
-                                                    return path.replace('/uploads/', '/api/uploads/');
+                                                    return path; // Already correct
                                                 }
                                                 if (path.startsWith('/api/uploads/')) {
-                                                    return path;
+                                                    return path.replace('/api/uploads/', '/uploads/');
                                                 }
-                                                // If path doesn't match expected patterns, try to construct
-                                                return `/api/uploads${path}`;
+                                                // Try to construct direct path
+                                                return path.startsWith('/') ? path : `/${path}`;
                                             } catch (e) {
                                                 console.error('Error parsing signature URL:', e);
                                                 return content;
                                             }
                                         }
-                                        // Otherwise, assume it's a relative path and try to convert
-                                        return `/api/uploads${content.startsWith('/') ? '' : '/'}${content}`;
+                                        // Otherwise, assume it's a relative path and use /uploads/
+                                        return `/uploads${content.startsWith('/') ? '' : '/'}${content}`;
                                     };
                                     
                                     const imageUrl = signature.type === 'image' || (signature.type && signature.type.toLowerCase().includes('image'))
@@ -1091,7 +1098,58 @@ export default function DocumentSignatureSystem({
                         </CardHeader>
                         <CardContent className="space-y-6">
                             {/* Show saved signature if available */}
-                            {activeSignature && (
+                            {activeSignature && (() => {
+                                // Helper function to get the correct image URL for saved signatures
+                                // Files in public/uploads/ are served directly by Next.js at /uploads/
+                                const getSavedSignatureImageUrl = (content) => {
+                                    if (!content) return null;
+                                    // If it's a base64 data URL, return as is
+                                    if (content.startsWith('data:image/')) {
+                                        return content;
+                                    }
+                                    // If it's already a direct /uploads/ path, return as is
+                                    if (content.startsWith('/uploads/')) {
+                                        return content;
+                                    }
+                                    // If it's /api/uploads/, convert to direct /uploads/ (Next.js serves public/ directly)
+                                    if (content.startsWith('/api/uploads/')) {
+                                        return content.replace('/api/uploads/', '/uploads/');
+                                    }
+                                    if (content.startsWith('/api/')) {
+                                        // For other API routes, try to extract the uploads path
+                                        const match = content.match(/\/api\/uploads\/(.+)$/);
+                                        if (match) {
+                                            return `/uploads/${match[1]}`;
+                                        }
+                                        return content;
+                                    }
+                                    // If it starts with http/https, extract path and use direct /uploads/
+                                    if (content.startsWith('http://') || content.startsWith('https://')) {
+                                        try {
+                                            const url = new URL(content);
+                                            const path = url.pathname;
+                                            if (path.startsWith('/uploads/')) {
+                                                return path; // Already correct
+                                            }
+                                            if (path.startsWith('/api/uploads/')) {
+                                                return path.replace('/api/uploads/', '/uploads/');
+                                            }
+                                            // Try to construct direct path
+                                            return path.startsWith('/') ? path : `/${path}`;
+                                        } catch (e) {
+                                            console.error('Error parsing saved signature URL:', e);
+                                            return content;
+                                        }
+                                    }
+                                    // Otherwise, assume it's a relative path and use /uploads/
+                                    return `/uploads${content.startsWith('/') ? '' : '/'}${content}`;
+                                };
+                                
+                                const signatureImageUrl = activeSignature.signature_type !== 'typed' 
+                                    ? getSavedSignatureImageUrl(activeSignature.file_url || activeSignature.signature_data)
+                                    : null;
+                                
+                                return (
                                 <div className="border rounded-lg p-4 bg-gray-50">
                                     <Label className="text-sm font-medium mb-2 block">Your Saved Signature</Label>
                                     <div className="flex items-center gap-4">
@@ -1106,12 +1164,25 @@ export default function DocumentSignatureSystem({
                                                 >
                                                     {activeSignature.signature_text || signatureText}
                                                 </span>
-                                            ) : (
+                                            ) : signatureImageUrl ? (
                                                 <img
-                                                    src={activeSignature.file_url || activeSignature.signature_data}
+                                                    src={signatureImageUrl}
                                                     alt="Signature"
                                                     className="max-h-16 max-w-48 object-contain"
+                                                    onError={(e) => {
+                                                        console.error('Failed to load saved signature image:', signatureImageUrl);
+                                                        e.target.style.display = 'none';
+                                                        const parent = e.target.parentElement;
+                                                        if (parent && !parent.querySelector('.signature-error')) {
+                                                            const errorDiv = document.createElement('div');
+                                                            errorDiv.className = 'signature-error text-xs text-gray-400 text-center';
+                                                            errorDiv.textContent = 'Image not found';
+                                                            parent.appendChild(errorDiv);
+                                                        }
+                                                    }}
                                                 />
+                                            ) : (
+                                                <span className="text-xs text-gray-400">No image available</span>
                                             )}
                                         </div>
                                         <div className="flex-1">
@@ -1135,7 +1206,8 @@ export default function DocumentSignatureSystem({
                                         </div>
                                     </div>
                                 </div>
-                            )}
+                                );
+                            })()}
                             
                             {!activeSignature && (
                                 <>

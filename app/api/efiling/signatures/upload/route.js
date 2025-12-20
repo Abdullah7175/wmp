@@ -86,9 +86,8 @@ export async function POST(request) {
             }
             console.log(`Signature file uploaded successfully: ${filePath}`);
 
-            // Return the public URL - use /api/uploads/ to ensure it goes through authenticated route
-            // The Next.js rewrite will handle /uploads/ but img src needs the full API path
-            publicUrl = `/api/uploads/signatures/${userFolderName}/${filename}`;
+            // Return the public URL - Next.js serves files from public/ directly at /uploads/
+            publicUrl = `/uploads/signatures/${userFolderName}/${filename}`;
         }
 
         // Save signature info to database with signature management
