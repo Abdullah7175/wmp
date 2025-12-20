@@ -115,6 +115,75 @@ export async function POST(request, { params }) {
             VALUES ($1, $2, $3, $4, $5, $6)
         `, [id, newPage.id, currentUser.id, currentUserRoleCode, additionType, notes || null]);
         
+        // Get user name for notifications
+        let userName = 'System';
+        try {
+            const nameRes = await client.query(`
+                SELECT u.name
+                FROM users u
+                JOIN efiling_users eu ON u.id = eu.user_id
+                WHERE eu.id = $1
+                LIMIT 1
+            `, [currentUser.id]);
+            if (nameRes.rows.length > 0) {
+                userName = nameRes.rows[0].name;
+            }
+        } catch (e) {
+            console.error('Error getting user name for notifications:', e);
+        }
+        
+        // Notify file creator and all users who have been marked to this file
+        try {
+            // Get file creator and current assignee
+            const fileMeta = await client.query(`
+                SELECT f.created_by, f.assigned_to
+                FROM efiling_files f
+                WHERE f.id = $1
+            `, [id]);
+            
+            if (fileMeta.rows.length > 0) {
+                const createdBy = fileMeta.rows[0]?.created_by;
+                const currentAssignee = fileMeta.rows[0]?.assigned_to;
+                
+                // Notify creator (if not the page adder)
+                if (createdBy && createdBy !== currentUser.id) {
+                    await client.query(`
+                        INSERT INTO efiling_notifications (user_id, file_id, type, message, priority, action_required, created_at)
+                        VALUES ($1, $2, $3, $4, 'normal', true, NOW())
+                    `, [createdBy, id, 'page_added', `${userName} added a new page "${page_title || 'Untitled'}" to file`]);
+                }
+                
+                // Notify current assignee (if not creator and not page adder)
+                if (currentAssignee && currentAssignee !== createdBy && currentAssignee !== currentUser.id) {
+                    await client.query(`
+                        INSERT INTO efiling_notifications (user_id, file_id, type, message, priority, action_required, created_at)
+                        VALUES ($1, $2, $3, $4, 'normal', true, NOW())
+                    `, [currentAssignee, id, 'page_added', `${userName} added a new page "${page_title || 'Untitled'}" to file`]);
+                }
+                
+                // Notify all users who have been marked to this file
+                const markedUsers = await client.query(`
+                    SELECT DISTINCT to_user_id
+                    FROM efiling_file_movements
+                    WHERE file_id = $1 AND to_user_id IS NOT NULL
+                `, [id]);
+                
+                for (const markedUser of markedUsers.rows) {
+                    const markedUserId = markedUser.to_user_id;
+                    // Skip if already notified (creator or assignee) or is the page adder
+                    if (markedUserId !== createdBy && markedUserId !== currentAssignee && markedUserId !== currentUser.id) {
+                        await client.query(`
+                            INSERT INTO efiling_notifications (user_id, file_id, type, message, priority, action_required, created_at)
+                            VALUES ($1, $2, $3, $4, 'normal', false, NOW())
+                        `, [markedUserId, id, 'page_added', `${userName} added a new page "${page_title || 'Untitled'}" to file`]);
+                    }
+                }
+            }
+        } catch (notifyError) {
+            console.error('Error creating page addition notifications:', notifyError);
+            // Don't fail the request if notifications fail
+        }
+        
         await client.query('COMMIT');
         
         return NextResponse.json({

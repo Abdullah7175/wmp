@@ -18,7 +18,7 @@ const SCOPE_LABELS = {
   town: "Town",
 };
 
-export default function MarkToModal({ showMarkToModal, onClose, fileId, fileNumber, subject }) {
+export default function MarkToModal({ showMarkToModal, onClose, fileId, fileNumber, subject, onSuccess }) {
   const { toast } = useToast();
   const { isGlobal } = useEfilingUser();
 
@@ -169,6 +169,7 @@ export default function MarkToModal({ showMarkToModal, onClose, fileId, fileNumb
           ? `File marked to ${selectedRecipients[0].user_name} (Team workflow - No TAT).`
           : `File marked to ${selectedRecipients[0].user_name}.`,
       });
+      onSuccess?.();
       onClose?.();
     } catch (err) {
       console.error("Failed to mark file:", err);

@@ -126,6 +126,49 @@ export async function GET(request, { params }) {
             // Continue without signatures
         }
 
+        // Comments - check if table exists first
+        let commentRes = { rows: [] };
+        try {
+            const commentTableCheck = await client.query(`
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables 
+                    WHERE table_schema = 'public' 
+                    AND table_name = 'efiling_document_comments'
+                );
+            `);
+            
+            if (commentTableCheck.rows[0]?.exists) {
+                commentRes = await client.query(`
+                    SELECT 
+                        c.id, 
+                        c.user_name, 
+                        c.user_role,
+                        c.text,
+                        c.timestamp,
+                        c.user_id,
+                        c.edited,
+                        c.edited_at,
+                        COALESCE(eu.designation, '') as designation,
+                        eu.town_id as user_town_id,
+                        eu.division_id as user_division_id,
+                        t.town as user_town_name,
+                        d.name as user_division_name,
+                        er.name as role_name
+                    FROM efiling_document_comments c
+                    LEFT JOIN users u ON c.user_id = u.id
+                    LEFT JOIN efiling_users eu ON u.id = eu.user_id
+                    LEFT JOIN efiling_roles er ON eu.efiling_role_id = er.id
+                    LEFT JOIN town t ON eu.town_id = t.id
+                    LEFT JOIN divisions d ON eu.division_id = d.id
+                    WHERE c.file_id = $1 AND c.is_active = true
+                    ORDER BY c.timestamp ASC
+                `, [id]);
+            }
+        } catch (commentError) {
+            console.warn('Could not fetch comments:', commentError.message);
+            // Continue without comments
+        }
+
         const events = [];
         // File created event with creator name, designation, and location
         let creatorDisplay = file.creator_name || 'System';
@@ -217,6 +260,36 @@ export async function GET(request, { params }) {
                     user_town_name: s.user_town_name,
                     user_division_name: s.user_division_name,
                     signType: s.type 
+                }
+            });
+        }
+
+        // Comments with role name, designation, and location
+        for (const c of commentRes.rows) {
+            // Build user display with designation and location
+            let userDisplay = c.user_name || 'Unknown User';
+            if (c.designation) {
+                userDisplay += ` (${c.designation})`;
+            }
+            if (c.user_town_name) {
+                userDisplay += ` - ${c.user_town_name}`;
+            } else if (c.user_division_name) {
+                userDisplay += ` - ${c.user_division_name}`;
+            }
+            
+            events.push({
+                type: 'COMMENT',
+                title: `Comment added by ${userDisplay}`,
+                timestamp: c.timestamp,
+                meta: { 
+                    user_name: c.user_name,
+                    designation: c.designation,
+                    role_name: c.role_name,
+                    user_town_name: c.user_town_name,
+                    user_division_name: c.user_division_name,
+                    text: c.text,
+                    edited: c.edited || false,
+                    edited_at: c.edited_at
                 }
             });
         }

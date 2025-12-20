@@ -161,7 +161,21 @@ export async function POST(request, { params }) {
             userData.division_id || null
         ]);
 
-        // Notify creator and current assignee
+        // Get efiling user ID for checking if user already notified themselves
+        let efilingUserId = null;
+        try {
+            const efilingUserRes = await client.query(
+                `SELECT id FROM efiling_users WHERE user_id = $1 AND is_active = true LIMIT 1`,
+                [user_id]
+            );
+            if (efilingUserRes.rows.length > 0) {
+                efilingUserId = efilingUserRes.rows[0].id;
+            }
+        } catch (e) {
+            console.error('Error getting efiling user ID for notifications:', e);
+        }
+        
+        // Notify creator, current assignee, and all users who have been marked to this file
         try {
             const meta = await client.query(`
                 SELECT f.created_by, f.assigned_to
@@ -171,17 +185,39 @@ export async function POST(request, { params }) {
             const createdBy = meta.rows[0]?.created_by;
             const currentAssignee = meta.rows[0]?.assigned_to;
             const message = `${user_name} added a ${type} signature`;
-            if (createdBy) {
+            
+            // Notify creator (if not the signer)
+            if (createdBy && createdBy !== efilingUserId) {
                 await client.query(`
                     INSERT INTO efiling_notifications (user_id, file_id, type, message, priority, action_required, created_at)
-                    VALUES ($1, $2, $3, $4, 'low', false, NOW())
+                    VALUES ($1, $2, $3, $4, 'normal', false, NOW())
                 `, [createdBy, id, 'signature_added', message]);
             }
-            if (currentAssignee && currentAssignee !== createdBy && currentAssignee !== user_id) {
+            
+            // Notify current assignee (if not creator and not signer)
+            if (currentAssignee && currentAssignee !== createdBy && currentAssignee !== efilingUserId) {
                 await client.query(`
                     INSERT INTO efiling_notifications (user_id, file_id, type, message, priority, action_required, created_at)
-                    VALUES ($1, $2, $3, $4, 'low', false, NOW())
+                    VALUES ($1, $2, $3, $4, 'normal', false, NOW())
                 `, [currentAssignee, id, 'signature_added', message]);
+            }
+            
+            // Notify all users who have been marked to this file
+            const markedUsers = await client.query(`
+                SELECT DISTINCT to_user_id
+                FROM efiling_file_movements
+                WHERE file_id = $1 AND to_user_id IS NOT NULL
+            `, [id]);
+            
+            for (const markedUser of markedUsers.rows) {
+                const markedUserId = markedUser.to_user_id;
+                // Skip if already notified (creator or assignee) or is the signer
+                if (markedUserId !== createdBy && markedUserId !== currentAssignee && markedUserId !== efilingUserId) {
+                    await client.query(`
+                        INSERT INTO efiling_notifications (user_id, file_id, type, message, priority, action_required, created_at)
+                        VALUES ($1, $2, $3, $4, 'normal', false, NOW())
+                    `, [markedUserId, id, 'signature_added', message]);
+                }
             }
         } catch (e) {
             console.warn('Signature notify failed', e);

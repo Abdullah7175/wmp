@@ -6,9 +6,10 @@ import { useRouter, useParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Edit, Download, Eye, Clock, User, Building2, FileText, AlertCircle, Printer, FileDown } from "lucide-react";
+import { ArrowLeft, Edit, Download, Eye, Clock, User, Building2, FileText, AlertCircle, Printer, FileDown, Forward, Shield, MessageSquare } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { sanitizeHtml } from "@/lib/sanitizeHtml";
+import MarkToModal from "../../components/MarkToModal";
 
 export default function FileDetail() {
     const { data: session } = useSession();
@@ -21,6 +22,8 @@ export default function FileDetail() {
     const [attachments, setAttachments] = useState([]);
     const [signatures, setSignatures] = useState([]);
     const [comments, setComments] = useState([]);
+    const [showMarkModal, setShowMarkModal] = useState(false);
+    const [timeline, setTimeline] = useState([]);
 
     useEffect(() => {
         if (!session?.user?.id || !params.id) return;
@@ -28,6 +31,7 @@ export default function FileDetail() {
             await fetchFile();
             await fetchExtras();
             await fetchComments();
+            await fetchTimeline();
         };
         loadData();
     }, [session?.user?.id, params.id]);
@@ -102,6 +106,18 @@ export default function FileDetail() {
             }
         } catch (e) {
             console.error('Comments load error', e);
+        }
+    };
+
+    const fetchTimeline = async () => {
+        try {
+            const res = await fetch(`/api/efiling/files/${params.id}/timeline`);
+            if (res.ok) {
+                const timelineData = await res.json();
+                setTimeline(Array.isArray(timelineData.events) ? timelineData.events : []);
+            }
+        } catch (e) {
+            console.error('Timeline load error', e);
         }
     };
 
@@ -936,6 +952,10 @@ export default function FileDetail() {
                             <CardTitle>Quick Actions</CardTitle>
                         </CardHeader>
                         <CardContent className="space-y-2">
+                            <Button variant="outline" className="w-full justify-start" onClick={() => setShowMarkModal(true)}>
+                                <Forward className="w-4 h-4 mr-2" />
+                                Mark / Forward File
+                            </Button>
                             <Button variant="outline" className="w-full justify-start">
                                 <Eye className="w-4 h-4 mr-2" />
                                 View History
@@ -944,34 +964,60 @@ export default function FileDetail() {
                                 <Download className="w-4 h-4 mr-2" />
                                 Download File
                             </Button>
-                            <Button variant="outline" className="w-full justify-start">
-                                <AlertCircle className="w-4 h-4 mr-2" />
-                                Report Issue
-                            </Button>
                         </CardContent>
                     </Card>
 
                     {/* File Status Timeline */}
                     <Card>
                         <CardHeader>
-                            <CardTitle>Status Timeline</CardTitle>
+                            <CardTitle className="flex items-center gap-2">
+                                <Clock className="w-4 h-4" />
+                                Status Timeline ({timeline.length})
+                            </CardTitle>
                         </CardHeader>
                         <CardContent>
-                            <div className="space-y-3">
-                                <div className="flex items-center">
-                                    <div className="w-2 h-2 bg-green-500 rounded-full mr-3"></div>
-                                    <div className="flex-1">
-                                        <p className="text-sm font-medium">File Created</p>
-                                        <p className="text-xs text-gray-500">{formatDate(file.created_at)}</p>
+                            <div className="space-y-4 max-h-80 overflow-auto pr-2">
+                                {timeline.length > 0 ? (
+                                    <div className="relative">
+                                        <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-gray-200"></div>
+                                        {timeline.map((event, index) => (
+                                            <div key={index} className="relative pl-10 pb-4">
+                                                <div className="absolute left-3 top-1 w-2 h-2 bg-blue-500 rounded-full border-2 border-white"></div>
+                                                <div className="bg-white rounded-lg border border-gray-200 p-3 shadow-sm">
+                                                    <div className="flex items-start justify-between mb-1">
+                                                        <div className="text-sm font-semibold text-gray-900">{event.title}</div>
+                                                        <Badge variant="outline" className="text-xs">
+                                                            {event.type}
+                                                        </Badge>
+                                                    </div>
+                                                    <div className="text-xs text-gray-500 mb-2">{formatDate(event.timestamp)}</div>
+                                                    {event.meta && event.meta.remarks && (
+                                                        <div className="text-xs text-gray-600 mt-2 space-y-1">
+                                                            <div className="mt-1 italic text-gray-500">"{event.meta.remarks}"</div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ))}
                                     </div>
-                                </div>
-                                {file.status_name !== 'Draft' && (
-                                    <div className="flex items-center">
-                                        <div className="w-2 h-2 bg-blue-500 rounded-full mr-3"></div>
-                                        <div className="flex-1">
-                                            <p className="text-sm font-medium">Status: {file.status_name}</p>
-                                            <p className="text-xs text-gray-500">{formatDate(file.updated_at)}</p>
+                                ) : (
+                                    <div className="space-y-3">
+                                        <div className="flex items-center">
+                                            <div className="w-2 h-2 bg-green-500 rounded-full mr-3"></div>
+                                            <div className="flex-1">
+                                                <p className="text-sm font-medium">File Created</p>
+                                                <p className="text-xs text-gray-500">{formatDate(file.created_at)}</p>
+                                            </div>
                                         </div>
+                                        {file.status_name !== 'Draft' && (
+                                            <div className="flex items-center">
+                                                <div className="w-2 h-2 bg-blue-500 rounded-full mr-3"></div>
+                                                <div className="flex-1">
+                                                    <p className="text-sm font-medium">Status: {file.status_name}</p>
+                                                    <p className="text-xs text-gray-500">{formatDate(file.updated_at)}</p>
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
                                 )}
                             </div>
@@ -980,6 +1026,21 @@ export default function FileDetail() {
                 </div>
             </div>
         </div>
+
+        {showMarkModal && (
+            <MarkToModal
+                showMarkToModal={showMarkModal}
+                fileId={params.id}
+                fileNumber={file?.file_number}
+                subject={file?.subject}
+                onClose={() => setShowMarkModal(false)}
+                onSuccess={async () => {
+                    // Refresh file data after successful marking
+                    await fetchFile();
+                    await fetchExtras();
+                }}
+            />
+        )}
         </>
     );
 } 

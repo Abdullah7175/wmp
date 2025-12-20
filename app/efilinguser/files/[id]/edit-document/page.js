@@ -966,14 +966,14 @@ export default function DocumentEditor() {
                                 >
                                     📋 Structured Editor
                                 </Button>
-                                <Button
+                                {/* <Button
                                     variant={editorType === 'blank' ? "default" : "outline"}
                                     size="sm"
                                     onClick={() => setEditorType('blank')}
                                     className="text-xs"
                                 >
                                     📄 Blank A4 Page
-                                </Button>
+                                </Button> */}
                             </div>
                         </div>
                     </div>

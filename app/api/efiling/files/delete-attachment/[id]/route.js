@@ -61,18 +61,30 @@ export async function DELETE(request, { params }) {
             WHERE id = $1
         `, [id]);
         
-        // Get efiling_users.id for logging (userId is users.id, need efiling_users.id)
-        let efilingUserId = userId;
+        // Get user ID for logging
+        // For admin users, use users.id directly; for efiling users, use efiling_users.id
+        let logUserId = userId.toString(); // Default to users.id
         try {
-            const efilingUserResult = await client.query(
-                `SELECT id FROM efiling_users WHERE user_id = $1 AND is_active = true LIMIT 1`,
-                [userId]
-            );
-            if (efilingUserResult.rows.length > 0) {
-                efilingUserId = efilingUserResult.rows[0].id;
+            // Check if user is admin
+            if (isAdmin) {
+                // Admin users - use users.id directly
+                logUserId = userId.toString();
+            } else {
+                // Regular efiling users - try to get efiling_users.id
+                const efilingUserResult = await client.query(
+                    `SELECT id FROM efiling_users WHERE user_id = $1 AND is_active = true LIMIT 1`,
+                    [userId]
+                );
+                if (efilingUserResult.rows.length > 0) {
+                    logUserId = efilingUserResult.rows[0].id.toString();
+                } else {
+                    // Fallback to users.id if no efiling_users record found
+                    logUserId = userId.toString();
+                }
             }
         } catch (e) {
-            console.error('Error getting efiling user ID:', e);
+            console.error('Error getting user ID for logging:', e);
+            logUserId = userId.toString(); // Fallback to users.id
         }
         
         // Log the action using efiling action logger
@@ -80,7 +92,7 @@ export async function DELETE(request, { params }) {
             entityType: EFILING_ENTITY_TYPES.EFILING_ATTACHMENT,
             entityId: id,
             action: EFILING_ACTION_TYPES.DOCUMENT_DELETED,
-            userId: efilingUserId.toString(),
+            userId: logUserId,
             details: {
                 fileId: attachment.file_id,
                 fileName: attachment.file_name,

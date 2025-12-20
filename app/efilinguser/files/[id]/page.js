@@ -11,6 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import Image from "next/image";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import DocumentSignatureSystem from "../../components/DocumentSignatureSystem";
+import MarkToModal from "../../components/MarkToModal";
 import { useEfilingUser } from "@/context/EfilingUserContext";
 import { sanitizeHtml } from "@/lib/sanitizeHtml";
 
@@ -34,12 +35,8 @@ export default function FileDetail() {
     const [hasUserSigned, setHasUserSigned] = useState(false);
 
     const [showMarkModal, setShowMarkModal] = useState(false);
-    const [markUsers, setMarkUsers] = useState([]);
-    const [markToUserId, setMarkToUserId] = useState("");
     const [selectedAttachment, setSelectedAttachment] = useState(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const [markRemarks, setMarkRemarks] = useState("");
-    const [markSubmitting, setMarkSubmitting] = useState(false);
 
     const fetchUserRole = async () => {
         try {
@@ -378,41 +375,13 @@ export default function FileDetail() {
         );
     };
 
-    const openMarkModal = async () => {
-        try {
-            setShowMarkModal(true);
-            // Load users for selection; in future, filter by workflow rules
-            const res = await fetch(`/api/efiling/users`);
-            if (res.ok) {
-                const data = await res.json();
-                setMarkUsers(Array.isArray(data) ? data : []);
-            } else { setMarkUsers([]); }
-        } catch { setMarkUsers([]); }
+    const openMarkModal = () => {
+        setShowMarkModal(true);
     };
 
-    const submitMark = async () => {
-        if (!markToUserId) { toast({ title: 'Select user', description: 'Please select a user to forward', variant: 'destructive' }); return; }
-        try {
-            setMarkSubmitting(true);
-            const res = await fetch(`/api/efiling/files/${params.id}/mark-to`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ user_ids: [parseInt(markToUserId)], remarks: markRemarks || '' })
-            });
-            if (!res.ok) {
-                const err = await res.json().catch(() => ({}));
-                throw new Error(err.error || 'Failed to mark');
-            }
-            toast({ title: 'Marked/Forwarded', description: 'File forwarded successfully' });
-            setShowMarkModal(false);
-            setMarkToUserId("");
-            setMarkRemarks("");
-            await Promise.all([fetchFile(), fetchTimeline()]);
-        } catch (e) {
-            toast({ title: 'Error', description: e.message, variant: 'destructive' });
-        } finally {
-            setMarkSubmitting(false);
-        }
+    const handleMarkToSuccess = async () => {
+        // Refresh file and timeline after successful marking
+        await Promise.all([fetchFile(), fetchTimeline()]);
     };
 
     if (loading) {
@@ -1413,32 +1382,14 @@ export default function FileDetail() {
             </div>
 
             {showMarkModal && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                    <Card className="w-full max-w-lg">
-                        <CardHeader>
-                            <CardTitle>Mark / Forward File</CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                            <div>
-                                <label className="text-sm font-medium text-gray-700">Select User</label>
-                                <select className="w-full border rounded p-2 mt-1" value={markToUserId} onChange={(e) => setMarkToUserId(e.target.value)}>
-                                    <option value="">-- Select --</option>
-                                    {markUsers.map(u => (
-                                        <option key={u.id} value={u.id}>{u.name} ({u.designation || u.role_name || 'User'})</option>
-                                    ))}
-                                </select>
-                            </div>
-                            <div>
-                                <label className="text-sm font-medium text-gray-700">Remarks (optional)</label>
-                                <textarea className="w-full border rounded p-2 mt-1" rows={3} value={markRemarks} onChange={(e) => setMarkRemarks(e.target.value)} />
-                            </div>
-                            <div className="flex justify-end gap-2">
-                                <Button variant="outline" onClick={() => setShowMarkModal(false)}>Cancel</Button>
-                                <Button onClick={submitMark} disabled={markSubmitting || !markToUserId}>{markSubmitting ? 'Forwarding...' : 'Forward'}</Button>
-                            </div>
-                        </CardContent>
-                    </Card>
-                </div>
+                <MarkToModal
+                    showMarkToModal={showMarkModal}
+                    fileId={params.id}
+                    fileNumber={file?.file_number}
+                    subject={file?.subject}
+                    onClose={() => setShowMarkModal(false)}
+                    onSuccess={handleMarkToSuccess}
+                />
             )}
 
             {/* Attachment Preview Modal */}

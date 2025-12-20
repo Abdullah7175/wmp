@@ -725,40 +725,79 @@ export default function DocumentSignatureSystem({
                     </CardHeader>
                     <CardContent>
                         <div className="space-y-3">
-                            {signatures.map((signature) => (
-                                <div key={signature.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-12 h-8 border rounded bg-white flex items-center justify-center">
-                                            {signature.type === 'text' ? (
-                                                <span 
-                                                    className="text-sm font-bold"
-                                                    style={{ 
-                                                        fontFamily: signature.font || signatureFont,
-                                                        color: signature.color === 'black' ? '#000' : signature.color === 'blue' ? '#2563eb' : signature.color === 'red' ? '#dc2626' : '#000'
-                                                    }}
-                                                >
-                                                    {signature.content}
-                                                </span>
-                                            ) : (
-                                                <img
-                                                    src={signature.content}
-                                                    alt="Signature"
-                                                    className="w-10 h-6 object-contain"
-                                                />
-                                            )}
-                                        </div>
-                                        <div>
-                                            <div className="font-medium">{signature.user_name}</div>
-                                            <div className="text-sm text-gray-500">
-                                                {signature.user_role} • {new Date(signature.timestamp).toLocaleString()}
+                            {signatures.map((signature) => {
+                                // Helper function to get the correct image URL
+                                const getSignatureImageUrl = (content) => {
+                                    if (!content) return null;
+                                    // If it's a base64 data URL, return as is
+                                    if (content.startsWith('data:image/')) {
+                                        return content;
+                                    }
+                                    // If it's a file URL, convert to API route
+                                    if (content.startsWith('/api/')) {
+                                        return content;
+                                    }
+                                    if (content.startsWith('/uploads/')) {
+                                        return content.replace('/uploads/', '/api/uploads/');
+                                    }
+                                    // If it starts with http/https, return as is
+                                    if (content.startsWith('http://') || content.startsWith('https://')) {
+                                        return content;
+                                    }
+                                    // Otherwise, assume it's a relative path and try to convert
+                                    return `/api/uploads${content.startsWith('/') ? '' : '/'}${content}`;
+                                };
+                                
+                                const imageUrl = signature.type === 'image' || (signature.type && signature.type.toLowerCase().includes('image'))
+                                    ? getSignatureImageUrl(signature.content)
+                                    : null;
+                                
+                                return (
+                                    <div key={signature.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-12 h-8 border rounded bg-white flex items-center justify-center">
+                                                {signature.type === 'text' ? (
+                                                    <span 
+                                                        className="text-sm font-bold"
+                                                        style={{ 
+                                                            fontFamily: signature.font || signatureFont,
+                                                            color: signature.color === 'black' ? '#000' : signature.color === 'blue' ? '#2563eb' : signature.color === 'red' ? '#dc2626' : '#000'
+                                                        }}
+                                                    >
+                                                        {signature.content}
+                                                    </span>
+                                                ) : imageUrl ? (
+                                                    <img
+                                                        src={imageUrl}
+                                                        alt="Signature"
+                                                        className="w-10 h-6 object-contain"
+                                                        onError={(e) => {
+                                                            // Fallback to original content if imageUrl fails
+                                                            if (imageUrl !== signature.content && signature.content) {
+                                                                e.target.src = signature.content;
+                                                            } else {
+                                                                console.error('Failed to load signature image:', imageUrl);
+                                                                e.target.style.display = 'none';
+                                                            }
+                                                        }}
+                                                    />
+                                                ) : (
+                                                    <span className="text-xs text-gray-400">No image</span>
+                                                )}
+                                            </div>
+                                            <div>
+                                                <div className="font-medium">{signature.user_name}</div>
+                                                <div className="text-sm text-gray-500">
+                                                    {signature.user_role} • {new Date(signature.timestamp).toLocaleString()}
+                                                </div>
                                             </div>
                                         </div>
+                                        <div className="text-xs text-gray-400">
+                                            Position: ({Math.round(signature.position.x)}, {Math.round(signature.position.y)})
+                                        </div>
                                     </div>
-                                    <div className="text-xs text-gray-400">
-                                        Position: ({Math.round(signature.position.x)}, {Math.round(signature.position.y)})
-                                    </div>
-                                </div>
-                            ))}
+                                );
+                            })}
                         </div>
                     </CardContent>
                 </Card>

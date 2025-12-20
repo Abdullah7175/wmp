@@ -85,11 +85,83 @@ export async function POST(request) {
         
         const attachment = result.rows[0];
         
+        // Get user name for notifications
+        let userName = 'System';
+        let efilingUserId = userId;
+        try {
+            // userId from header might be efiling_users.id or users.id - check both
+            const userRes = await client.query(`
+                SELECT eu.id as efiling_id, u.id as user_id, u.name
+                FROM efiling_users eu
+                JOIN users u ON eu.user_id = u.id
+                WHERE eu.id = $1 OR u.id = $1
+                LIMIT 1
+            `, [userId]);
+            if (userRes.rows.length > 0) {
+                userName = userRes.rows[0].name;
+                efilingUserId = userRes.rows[0].efiling_id || userId;
+            }
+        } catch (e) {
+            console.error('Error getting user name for notifications:', e);
+        }
+        
+        // Notify file creator and all users who have been marked to this file
+        try {
+            // Get file creator and current assignee
+            const fileMeta = await client.query(`
+                SELECT f.created_by, f.assigned_to
+                FROM efiling_files f
+                WHERE f.id = $1
+            `, [fileId]);
+            
+            if (fileMeta.rows.length > 0) {
+                const createdBy = fileMeta.rows[0]?.created_by;
+                const currentAssignee = fileMeta.rows[0]?.assigned_to;
+                
+                // Notify creator (if not the uploader)
+                if (createdBy && createdBy.toString() !== efilingUserId.toString()) {
+                    await client.query(`
+                        INSERT INTO efiling_notifications (user_id, file_id, type, message, priority, action_required, created_at)
+                        VALUES ($1, $2, $3, $4, 'normal', true, NOW())
+                    `, [createdBy, fileId, 'attachment_added', `${userName} added an attachment "${fileName}" to file`]);
+                }
+                
+                // Notify current assignee (if not creator and not uploader)
+                if (currentAssignee && currentAssignee.toString() !== createdBy?.toString() && currentAssignee.toString() !== efilingUserId.toString()) {
+                    await client.query(`
+                        INSERT INTO efiling_notifications (user_id, file_id, type, message, priority, action_required, created_at)
+                        VALUES ($1, $2, $3, $4, 'normal', true, NOW())
+                    `, [currentAssignee, fileId, 'attachment_added', `${userName} added an attachment "${fileName}" to file`]);
+                }
+                
+                // Notify all users who have been marked to this file
+                const markedUsers = await client.query(`
+                    SELECT DISTINCT to_user_id
+                    FROM efiling_file_movements
+                    WHERE file_id = $1 AND to_user_id IS NOT NULL
+                `, [fileId]);
+                
+                for (const markedUser of markedUsers.rows) {
+                    const markedUserId = markedUser.to_user_id;
+                    // Skip if already notified (creator or assignee) or is the uploader
+                    if (markedUserId.toString() !== createdBy?.toString() && markedUserId.toString() !== currentAssignee?.toString() && markedUserId.toString() !== efilingUserId.toString()) {
+                        await client.query(`
+                            INSERT INTO efiling_notifications (user_id, file_id, type, message, priority, action_required, created_at)
+                            VALUES ($1, $2, $3, $4, 'normal', false, NOW())
+                        `, [markedUserId, fileId, 'attachment_added', `${userName} added an attachment "${fileName}" to file`]);
+                    }
+                }
+            }
+        } catch (notifyError) {
+            console.error('Error creating attachment notifications:', notifyError);
+            // Don't fail the request if notifications fail
+        }
+        
         await eFileActionLogger.logAction({
             entityType: EFILING_ENTITY_TYPES.EFILING_ATTACHMENT,
             entityId: attachmentId,
             action: EFILING_ACTION_TYPES.DOCUMENT_UPLOADED,
-            userId: userId,
+            userId: efilingUserId.toString(),
             details: {
                 fileId: fileId,
                 fileName: fileName,
@@ -106,7 +178,7 @@ export async function POST(request) {
         await eFileActionLogger.logFileAction({
             fileId: fileId,
             action: EFILING_ACTION_TYPES.DOCUMENT_UPLOADED,
-            userId: userId,
+            userId: efilingUserId.toString(),
             details: {
                 description: `Attachment uploaded: ${fileName}`,
                 attachmentId,

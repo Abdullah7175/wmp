@@ -85,7 +85,14 @@ export async function GET(request, { params }) {
                 s.name AS status_name,
                 s.code AS status_code,
                 s.color AS status_color,
-                COALESCE(ab.designation, 'Unassigned') AS assigned_to_name,
+                CASE 
+                    WHEN f.assigned_to IS NULL THEN 'Unassigned'
+                    WHEN assigned_user.name IS NOT NULL AND assigned_efiling.designation IS NOT NULL AND assigned_efiling.designation != ''
+                    THEN assigned_user.name || ' (' || assigned_efiling.designation || ')'
+                    WHEN assigned_user.name IS NOT NULL THEN assigned_user.name
+                    WHEN assigned_efiling.designation IS NOT NULL THEN assigned_efiling.designation
+                    ELSE 'Unassigned'
+                END AS assigned_to_name,
                 ar.name AS current_stage_name,
                 ar.code AS current_stage_code,
                 ar.name AS current_stage,
@@ -122,8 +129,9 @@ export async function GET(request, { params }) {
             LEFT JOIN efiling_departments d ON f.department_id = d.id
             LEFT JOIN efiling_file_categories c ON f.category_id = c.id
             LEFT JOIN efiling_file_status s ON f.status_id = s.id
-            LEFT JOIN efiling_users ab ON f.assigned_to = ab.id
-            LEFT JOIN efiling_roles ar ON ab.efiling_role_id = ar.id
+            LEFT JOIN efiling_users assigned_efiling ON f.assigned_to = assigned_efiling.id
+            LEFT JOIN users assigned_user ON assigned_efiling.user_id = assigned_user.id
+            LEFT JOIN efiling_roles ar ON assigned_efiling.efiling_role_id = ar.id
             LEFT JOIN efiling_users creator_efiling ON f.created_by = creator_efiling.id
             LEFT JOIN users creator_users ON creator_efiling.user_id = creator_users.id
             WHERE f.id = $1
