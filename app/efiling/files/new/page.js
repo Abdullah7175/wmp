@@ -45,7 +45,7 @@ export default function CreateNewFile() {
                 fetch('/api/efiling/departments'),
                 fetch('/api/efiling/categories'),
                 fetch('/api/efiling/file-types'),
-                fetch('/api/requests?limit=1000')
+                fetch('/api/requests?limit=1000&scope=efiling')
             ]);
             if (deptRes.ok) setDepartments(await deptRes.json());
             if (catRes.ok) setCategories(await catRes.json());

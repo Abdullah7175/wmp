@@ -1152,20 +1152,20 @@ export default function DocumentSignatureSystem({
                                                     alt="Signature"
                                                     className="max-h-16 max-w-48 object-contain"
                                                     crossOrigin="anonymous"
-                                                    onError={(e) => {
+                                                    onError={async (e) => {
                                                         const img = e.target;
                                                         const originalSrc = img.src;
-                                                        console.error('Failed to load saved signature image:', originalSrc);
                                                         
-                                                        // Try API route as fallback if direct path failed
-                                                        if (originalSrc.includes('/uploads/') && !originalSrc.includes('/api/')) {
-                                                            const apiUrl = originalSrc.replace('/uploads/', '/api/uploads/');
-                                                            console.log('Trying API route fallback:', apiUrl);
-                                                            img.src = apiUrl;
-                                                            return;
+                                                        // Check what error we got
+                                                        try {
+                                                            const response = await fetch(originalSrc, { method: 'HEAD' });
+                                                            console.error(`[Signature Image] Failed to load: ${originalSrc}, Status: ${response.status} ${response.statusText}`);
+                                                            console.error(`[Signature Image] Response headers:`, Object.fromEntries(response.headers.entries()));
+                                                        } catch (fetchError) {
+                                                            console.error(`[Signature Image] Fetch error for ${originalSrc}:`, fetchError);
                                                         }
                                                         
-                                                        // If API route also failed or already tried, show error
+                                                        // If already retried, show error
                                                         if (img.dataset.retryAttempted === 'true') {
                                                             img.style.display = 'none';
                                                             const parent = img.parentElement;
@@ -1175,8 +1175,20 @@ export default function DocumentSignatureSystem({
                                                                 errorDiv.textContent = 'Image not found';
                                                                 parent.appendChild(errorDiv);
                                                             }
-                                                        } else {
-                                                            img.dataset.retryAttempted = 'true';
+                                                            return;
+                                                        }
+                                                        
+                                                        img.dataset.retryAttempted = 'true';
+                                                        
+                                                        // Try fallback - if it's /api/uploads/, try /uploads/ (in case nginx serves it directly)
+                                                        if (originalSrc.includes('/api/uploads/')) {
+                                                            const directUrl = originalSrc.replace('/api/uploads/', '/uploads/');
+                                                            console.log('[Signature Image] Trying direct path fallback:', directUrl);
+                                                            img.src = directUrl;
+                                                        } else if (originalSrc.includes('/uploads/') && !originalSrc.includes('/api/')) {
+                                                            const apiUrl = originalSrc.replace('/uploads/', '/api/uploads/');
+                                                            console.log('[Signature Image] Trying API route fallback:', apiUrl);
+                                                            img.src = apiUrl;
                                                         }
                                                     }}
                                                 />
