@@ -7,10 +7,24 @@ import { auth } from '@/auth';
 export async function GET(request, { params }) {
   try {
     // SECURITY: Require authentication
-    const session = await auth();
-    if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    let session;
+    try {
+      session = await auth();
+    } catch (authError) {
+      console.error('[Uploads API] Auth error:', authError);
+      // For images, we might want to allow unauthenticated access in some cases
+      // But for now, we'll log and return 401
+      return NextResponse.json({ error: 'Unauthorized - Auth failed' }, { status: 401 });
     }
+    
+    if (!session?.user) {
+      console.error('[Uploads API] No session or user. Session:', session);
+      console.error('[Uploads API] Request URL:', request.url);
+      console.error('[Uploads API] Request headers:', Object.fromEntries(request.headers.entries()));
+      return NextResponse.json({ error: 'Unauthorized - No session' }, { status: 401 });
+    }
+    
+    console.log('[Uploads API] Authenticated user:', session.user.id);
 
     const { path: filePath } = await params;
     

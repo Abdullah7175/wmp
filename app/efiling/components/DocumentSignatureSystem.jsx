@@ -601,50 +601,40 @@ export default function DocumentSignatureSystem({
                         <div className="space-y-3">
                             {signatures.map((signature) => {
                                 // Helper function to get the correct image URL
-                                // Helper function to get the correct image URL
-                                // Files in public/uploads/ are served directly by Next.js at /uploads/
+                                // Use the same logic as profile page - convert /uploads/ to /api/uploads/
                                 const getSignatureImageUrl = (content) => {
                                     if (!content) return null;
                                     // If it's a base64 data URL, return as is
                                     if (content.startsWith('data:image/')) {
                                         return content;
                                     }
-                                    // If it's already a direct /uploads/ path, return as is
-                                    if (content.startsWith('/uploads/')) {
-                                        return content;
-                                    }
-                                    // If it's /api/uploads/, convert to direct /uploads/ (Next.js serves public/ directly)
-                                    if (content.startsWith('/api/uploads/')) {
-                                        return content.replace('/api/uploads/', '/uploads/');
-                                    }
+                                    // Use same logic as profile page
                                     if (content.startsWith('/api/')) {
-                                        // For other API routes, try to extract the uploads path
-                                        const match = content.match(/\/api\/uploads\/(.+)$/);
-                                        if (match) {
-                                            return `/uploads/${match[1]}`;
-                                        }
-                                        return content;
+                                        return content; // Already correct
                                     }
-                                    // If it starts with http/https, extract path and use direct /uploads/
+                                    if (content.startsWith('/uploads/')) {
+                                        return content.replace('/uploads/', '/api/uploads/');
+                                    }
+                                    // If it starts with http/https, extract path and convert to /api/uploads/
                                     if (content.startsWith('http://') || content.startsWith('https://')) {
                                         try {
                                             const url = new URL(content);
                                             const path = url.pathname;
-                                            if (path.startsWith('/uploads/')) {
+                                            if (path.startsWith('/api/uploads/')) {
                                                 return path; // Already correct
                                             }
-                                            if (path.startsWith('/api/uploads/')) {
-                                                return path.replace('/api/uploads/', '/uploads/');
+                                            if (path.startsWith('/uploads/')) {
+                                                return path.replace('/uploads/', '/api/uploads/');
                                             }
-                                            // Try to construct direct path
-                                            return path.startsWith('/') ? path : `/${path}`;
+                                            // Try to construct API path
+                                            return `/api/uploads${path.startsWith('/') ? '' : '/'}${path}`;
                                         } catch (e) {
                                             console.error('Error parsing signature URL:', e);
                                             return content;
                                         }
                                     }
-                                    // Otherwise, assume it's a relative path and use /uploads/
-                                    return `/uploads${content.startsWith('/') ? '' : '/'}${content}`;
+                                    // Otherwise, assume it's a relative path and prepend /api/uploads/
+                                    return `/api/uploads${content.startsWith('/') ? '' : '/'}${content}`;
                                 };
                                 
                                 const imageUrl = signature.type === 'image' || (signature.type && signature.type.toLowerCase().includes('image'))
