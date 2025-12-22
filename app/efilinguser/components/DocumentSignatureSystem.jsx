@@ -1169,15 +1169,32 @@ export default function DocumentSignatureSystem({
                                                     src={signatureImageUrl}
                                                     alt="Signature"
                                                     className="max-h-16 max-w-48 object-contain"
+                                                    crossOrigin="anonymous"
                                                     onError={(e) => {
-                                                        console.error('Failed to load saved signature image:', signatureImageUrl);
-                                                        e.target.style.display = 'none';
-                                                        const parent = e.target.parentElement;
-                                                        if (parent && !parent.querySelector('.signature-error')) {
-                                                            const errorDiv = document.createElement('div');
-                                                            errorDiv.className = 'signature-error text-xs text-gray-400 text-center';
-                                                            errorDiv.textContent = 'Image not found';
-                                                            parent.appendChild(errorDiv);
+                                                        const img = e.target;
+                                                        const originalSrc = img.src;
+                                                        console.error('Failed to load saved signature image:', originalSrc);
+                                                        
+                                                        // Try API route as fallback if direct path failed
+                                                        if (originalSrc.includes('/uploads/') && !originalSrc.includes('/api/')) {
+                                                            const apiUrl = originalSrc.replace('/uploads/', '/api/uploads/');
+                                                            console.log('Trying API route fallback:', apiUrl);
+                                                            img.src = apiUrl;
+                                                            return;
+                                                        }
+                                                        
+                                                        // If API route also failed or already tried, show error
+                                                        if (img.dataset.retryAttempted === 'true') {
+                                                            img.style.display = 'none';
+                                                            const parent = img.parentElement;
+                                                            if (parent && !parent.querySelector('.signature-error')) {
+                                                                const errorDiv = document.createElement('div');
+                                                                errorDiv.className = 'signature-error text-xs text-gray-400 text-center';
+                                                                errorDiv.textContent = 'Image not found';
+                                                                parent.appendChild(errorDiv);
+                                                            }
+                                                        } else {
+                                                            img.dataset.retryAttempted = 'true';
                                                         }
                                                     }}
                                                 />

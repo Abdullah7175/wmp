@@ -178,6 +178,13 @@ export async function GET(request, { params }) {
       headers['X-Frame-Options'] = 'SAMEORIGIN';
       // Also set Content-Disposition to inline for PDFs so they can be displayed
       headers['Content-Disposition'] = `inline; filename="${filePath[filePath.length - 1]}"`;
+    } else if (['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(extension)) {
+      // For images, allow same-origin embedding and ensure proper content type
+      headers['X-Frame-Options'] = 'SAMEORIGIN';
+      headers['Content-Disposition'] = `inline; filename="${filePath[filePath.length - 1]}"`;
+      // Ensure CORS headers for images if needed
+      headers['Access-Control-Allow-Origin'] = '*';
+      headers['Access-Control-Allow-Methods'] = 'GET';
     } else {
       // For other file types, deny iframe embedding
       headers['X-Frame-Options'] = 'DENY';

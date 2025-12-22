@@ -5,16 +5,14 @@ const nextConfig = {
   trailingSlash: false,
   // Empty turbopack config to silence the warning when using webpack config
   turbopack: {},
-  // Removed rewrite - Next.js serves files from public/ directly
-  // Files in public/uploads/ will be accessible at /uploads/
-  // async rewrites() {
-  //   return [
-  //     {
-  //       source: '/uploads/:path*',
-  //       destination: '/api/uploads/:path*',
-  //     },
-  //   ];
-  // },
+  async rewrites() {
+    return [
+      {
+        source: '/uploads/:path*',
+        destination: '/api/uploads/:path*',
+      },
+    ];
+  },
   env: {
     // Use HTTPS in production, HTTP only for local development
     NEXTAUTH_URL: process.env.NEXTAUTH_URL || (process.env.NODE_ENV === 'production' ? 'https://wmp.kwsc.gos.pk' : 'http://wmp.kwsc.gos.pk:3000'),
