@@ -77,7 +77,7 @@ export async function GET(request) {
             return NextResponse.json(result.rows[0], { status: 200 });
         } else {
             let countQuery = 'SELECT COUNT(*) FROM users';
-            let dataQuery = 'SELECT id, name, email, contact_number, role, CASE WHEN image IS NOT NULL THEN CONCAT(\'http://119.30.113.18:3000\', image) ELSE NULL END as image, created_date FROM users';
+            let dataQuery = 'SELECT id, name, email, contact_number, role, image, created_date FROM users';
             let whereClauses = [];
             let params = [];
             let paramIdx = 1;

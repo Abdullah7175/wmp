@@ -244,6 +244,12 @@ export async function PUT(request, { params }) {
             paramCount++;
         }
         
+        if (body.work_request_id !== undefined) {
+            updateFields.push(`work_request_id = $${paramCount}`);
+            updateValues.push(body.work_request_id || null);
+            paramCount++;
+        }
+        
         if (updateFields.length === 0) {
             return NextResponse.json({ error: 'No fields to update' }, { status: 400 });
         }

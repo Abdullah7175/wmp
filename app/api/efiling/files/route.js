@@ -37,6 +37,19 @@ export async function GET(request) {
     const work_request_id = parseIntegerParam(searchParams.get('work_request_id'), 'work_request_id');
     const priority = searchParams.get('priority'); // String, not integer
     
+    // New filter parameters
+    const file_id = parseIntegerParam(searchParams.get('file_id'), 'file_id');
+    const district_id = parseIntegerParam(searchParams.get('district_id'), 'district_id');
+    const town_id = parseIntegerParam(searchParams.get('town_id'), 'town_id');
+    const division_id = parseIntegerParam(searchParams.get('division_id'), 'division_id');
+    const zone_id = parseIntegerParam(searchParams.get('zone_id'), 'zone_id');
+    const category_id = parseIntegerParam(searchParams.get('category_id'), 'category_id');
+    const file_type_id = parseIntegerParam(searchParams.get('file_type_id'), 'file_type_id');
+    const subject_search = searchParams.get('subject_search'); // Text search
+    const file_number_search = searchParams.get('file_number_search'); // Text search
+    const date_from = searchParams.get('date_from'); // Date string
+    const date_to = searchParams.get('date_to'); // Date string
+    
     let page = parseInt(searchParams.get('page') || '1');
     let limit = parseInt(searchParams.get('limit') || '10');
     let offset = (page - 1) * limit;
@@ -348,6 +361,73 @@ export async function GET(request) {
             if (priority) {
                 conditions.push(`f.priority = $${paramIndex}`);
                 params.push(priority);
+                paramIndex++;
+            }
+            
+            // New filter conditions
+            if (file_id) {
+                conditions.push(`f.id = $${paramIndex}`);
+                params.push(file_id);
+                paramIndex++;
+            }
+            
+            if (district_id) {
+                conditions.push(`f.district_id = $${paramIndex}`);
+                params.push(district_id);
+                paramIndex++;
+            }
+            
+            if (town_id) {
+                conditions.push(`f.town_id = $${paramIndex}`);
+                params.push(town_id);
+                paramIndex++;
+            }
+            
+            if (division_id) {
+                conditions.push(`f.division_id = $${paramIndex}`);
+                params.push(division_id);
+                paramIndex++;
+            }
+            
+            if (zone_id) {
+                conditions.push(`f.zone_id = $${paramIndex}`);
+                params.push(zone_id);
+                paramIndex++;
+            }
+            
+            if (category_id) {
+                conditions.push(`f.category_id = $${paramIndex}`);
+                params.push(category_id);
+                paramIndex++;
+            }
+            
+            if (file_type_id) {
+                conditions.push(`f.file_type_id = $${paramIndex}`);
+                params.push(file_type_id);
+                paramIndex++;
+            }
+            
+            if (subject_search) {
+                conditions.push(`LOWER(f.subject) LIKE $${paramIndex}`);
+                params.push(`%${subject_search.toLowerCase()}%`);
+                paramIndex++;
+            }
+            
+            if (file_number_search) {
+                conditions.push(`LOWER(f.file_number) LIKE $${paramIndex}`);
+                params.push(`%${file_number_search.toLowerCase()}%`);
+                paramIndex++;
+            }
+            
+            if (date_from) {
+                conditions.push(`DATE(f.created_at) >= $${paramIndex}`);
+                params.push(date_from);
+                paramIndex++;
+            }
+            
+            if (date_to) {
+                conditions.push(`DATE(f.created_at) <= $${paramIndex}`);
+                params.push(date_to);
                 paramIndex++;
             }
             

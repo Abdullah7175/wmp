@@ -112,7 +112,7 @@ export default function CreateNewFile() {
         
         setWorkRequestLoading(true);
         try {
-            const params = new URLSearchParams({ limit: '25', scope: 'efiling' });
+            const params = new URLSearchParams({ limit: '100', scope: 'efiling' });
             if (searchTerm) {
                 params.set('filter', searchTerm);
             }
@@ -574,10 +574,12 @@ export default function CreateNewFile() {
                                 <div>
                                     <Label htmlFor="work_request_id">Video Request ID (Optional)</Label>
                                     <SearchableDropdown
+                                        id="work_request_id"
                                         value={workRequestSelectValue}
                                         onChange={(selectedValue) => {
                                             console.log('[SearchableDropdown] onChange called with:', selectedValue, typeof selectedValue);
-                                            const finalValue = selectedValue === 'none' || selectedValue === '' ? '' : String(selectedValue);
+                                            // Handle the selected value - keep as string for formik, will be parsed on submit
+                                            const finalValue = selectedValue === 'none' || selectedValue === '' || selectedValue === null ? '' : String(selectedValue);
                                             console.log('[SearchableDropdown] Setting work_request_id to:', finalValue);
                                             formik.setFieldValue('work_request_id', finalValue);
                                             formik.setFieldTouched('work_request_id', true);
@@ -585,14 +587,17 @@ export default function CreateNewFile() {
                                         options={workRequestDropdownOptions}
                                         onSearch={sessionStatus === 'authenticated' && session?.user?.id ? handleWorkRequestSearch : undefined}
                                         isLoading={workRequestLoading}
-                                        emptyMessage="No work request found."
-                                        placeholder="Search or select a video request"
+                                        emptyMessage="No work request found. Try searching by ID, address, or type."
+                                        placeholder={workRequestLoading ? "Loading requests..." : "Search or select a video request"}
                                         className={formik.touched.work_request_id && formik.errors.work_request_id ? 'border-red-500' : ''}
                                     />
                                     <p className="text-sm text-gray-500 mt-1">Link this file to a specific video request for reference</p>
                                     {formik.touched.work_request_id && formik.errors.work_request_id && (<p className="text-red-500 text-sm mt-1">{formik.errors.work_request_id}</p>)}
                                     {formik.values.work_request_id && (
-                                        <p className="text-xs text-green-600 mt-1">Selected: {formik.values.work_request_id}</p>
+                                        <p className="text-xs text-green-600 mt-1">✓ Selected: Request #{formik.values.work_request_id}</p>
+                                    )}
+                                    {workRequestOptions.length === 0 && !workRequestLoading && (
+                                        <p className="text-xs text-amber-600 mt-1">⚠ No work requests available. They will appear as you search.</p>
                                     )}
                                 </div>
 

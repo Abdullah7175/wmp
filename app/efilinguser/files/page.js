@@ -43,8 +43,6 @@ export default function FilesPage() {
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
-    const [departmentFilter, setDepartmentFilter] = useState('all');
-    const [departments, setDepartments] = useState([]);
     const [statuses, setStatuses] = useState([]);
     const [myFiles, setMyFiles] = useState([]);
     const [assignedToMe, setAssignedToMe] = useState([]);
@@ -52,48 +50,79 @@ export default function FilesPage() {
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage, setItemsPerPage] = useState(10);
     const [markModalFile, setMarkModalFile] = useState(null);
+    
+    // New filter states
+    const [fileIdFilter, setFileIdFilter] = useState('');
+    const [townFilter, setTownFilter] = useState('all');
+    const [zoneFilter, setZoneFilter] = useState('all');
+    const [divisionFilter, setDivisionFilter] = useState('all');
+    const [subjectFilter, setSubjectFilter] = useState('');
+    const [dateFrom, setDateFrom] = useState('');
+    const [dateTo, setDateTo] = useState('');
+    
+    // Filter options
+    const [filterOptions, setFilterOptions] = useState({
+        towns: [],
+        zones: [],
+        divisions: []
+    });
 
     useEffect(() => {
         if (efilingUserId) {
             fetchFiles();
         }
-    }, [efilingUserId]);
+    }, [efilingUserId, activeTab, fileIdFilter, townFilter, zoneFilter, divisionFilter, subjectFilter, dateFrom, dateTo, statusFilter]);
 
     useEffect(() => {
-        fetchDepartments();
         fetchStatuses();
+        fetchFilterOptions();
     }, []);
 
     useEffect(() => {
         setCurrentPage(1);
-    }, [searchTerm, statusFilter, departmentFilter, activeTab]);
+    }, [searchTerm, statusFilter, fileIdFilter, townFilter, zoneFilter, divisionFilter, subjectFilter, dateFrom, dateTo, activeTab]);
 
     const fetchFiles = async () => {
         if (!efilingUserId) return;
         setLoading(true);
         try {
-            const [createdRes, assignedRes] = await Promise.all([
-                fetch(`/api/efiling/files?created_by=${efilingUserId}&limit=200`),
-                fetch(`/api/efiling/files?assigned_to=${efilingUserId}&limit=200`)
-            ]);
-
-            const createdJson = createdRes.ok ? await createdRes.json() : { files: [] };
-            const assignedJson = assignedRes.ok ? await assignedRes.json() : { files: [] };
-
-            const createdList = Array.isArray(createdJson.files) ? createdJson.files : [];
-            const assignedList = Array.isArray(assignedJson.files) ? assignedJson.files : [];
-
-            setMyFiles(createdList);
-            setAssignedToMe(assignedList);
+            // Build query parameters
+            const params = new URLSearchParams();
+            params.append('limit', '500'); // Increased limit for better filtering
+            
+            if (activeTab === 'mine') {
+                params.append('created_by', efilingUserId);
+            } else {
+                params.append('assigned_to', efilingUserId);
+            }
+            
+            // Apply filters
+            if (fileIdFilter) params.append('file_id', fileIdFilter);
+            if (townFilter !== 'all') params.append('town_id', townFilter);
+            if (zoneFilter !== 'all') params.append('zone_id', zoneFilter);
+            if (divisionFilter !== 'all') params.append('division_id', divisionFilter);
+            if (subjectFilter) params.append('subject_search', subjectFilter);
+            if (dateFrom) params.append('date_from', dateFrom);
+            if (dateTo) params.append('date_to', dateTo);
+            if (statusFilter !== 'all') params.append('status_id', statusFilter);
+            
+            const response = await fetch(`/api/efiling/files?${params.toString()}`);
+            const json = response.ok ? await response.json() : { files: [] };
+            const fileList = Array.isArray(json.files) ? json.files : [];
+            
+            if (activeTab === 'mine') {
+                setMyFiles(fileList);
+            } else {
+                setAssignedToMe(fileList);
+            }
 
             if (session?.user?.id) {
-                const uniqueCount = new Set([...createdList, ...assignedList].map((file) => file.id)).size;
                 logEfilingUserAction({
                     user_id: session.user.id,
                     action_type: EFILING_ACTIONS.FILE_VIEWED,
-                    description: `Accessed files list - found ${uniqueCount} files`,
+                    description: `Accessed files list - found ${fileList.length} files`,
                     entity_type: 'files_list',
-                    entity_name: 'My Files List'
+                    entity_name: activeTab === 'mine' ? 'My Files List' : 'Assigned Files List'
                 });
             }
         } catch (error) {
@@ -107,16 +136,20 @@ export default function FilesPage() {
             setLoading(false);
         }
     };
-
-    const fetchDepartments = async () => {
+    
+    const fetchFilterOptions = async () => {
         try {
-            const response = await fetch('/api/efiling/departments?is_active=true');
+            const response = await fetch('/api/efiling/files/filter-options');
             if (response.ok) {
                 const data = await response.json();
-                setDepartments(Array.isArray(data) ? data : []);
+                setFilterOptions({
+                    towns: Array.isArray(data.towns) ? data.towns : [],
+                    zones: Array.isArray(data.zones) ? data.zones : [],
+                    divisions: Array.isArray(data.divisions) ? data.divisions : []
+                });
             }
         } catch (error) {
-            console.error('Error fetching departments:', error);
+            console.error('Error fetching filter options:', error);
         }
     };
 
@@ -134,20 +167,17 @@ export default function FilesPage() {
 
     const filterRows = (rows) => {
         return rows.filter((file) => {
+            // General search (file number search)
             const matchesSearch = searchTerm
-                ? [file.file_number, file.subject, file.department_name, file.category_name]
-                    .some((value) => (value || "").toString().toLowerCase().includes(searchTerm.toLowerCase()))
+                ? (file.file_number || "").toString().toLowerCase().includes(searchTerm.toLowerCase())
                 : true;
 
-            const matchesStatus = statusFilter === 'all' || String(file.status_id) === String(statusFilter);
-            const matchesDepartment = departmentFilter === 'all' || String(file.department_id) === String(departmentFilter);
-
-            return matchesSearch && matchesStatus && matchesDepartment;
+            return matchesSearch;
         });
     };
 
-    const filteredMyFiles = useMemo(() => filterRows(myFiles), [myFiles, searchTerm, statusFilter, departmentFilter]);
-    const filteredAssignedFiles = useMemo(() => filterRows(assignedToMe), [assignedToMe, searchTerm, statusFilter, departmentFilter]);
+    const filteredMyFiles = useMemo(() => filterRows(myFiles), [myFiles, searchTerm]);
+    const filteredAssignedFiles = useMemo(() => filterRows(assignedToMe), [assignedToMe, searchTerm]);
 
     const handlePageChange = (page) => {
         setCurrentPage(page);
@@ -265,20 +295,45 @@ export default function FilesPage() {
             </div>
 
             <Card className="mb-6">
-                <CardContent className="pt-6">
-                    <div className="grid gap-4 md:grid-cols-4">
-                        <div className="md:col-span-2">
-                            <Label htmlFor="file-search" className="mb-1 block text-sm font-medium">Search</Label>
+                <CardHeader>
+                    <CardTitle className="flex items-center">
+                        <Search className="w-5 h-5 mr-2" />
+                        Filters
+                    </CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                        <div>
+                            <Label htmlFor="file-search" className="mb-1 block text-sm font-medium">File Number</Label>
                             <div className="relative">
                                 <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
                                 <Input
                                     id="file-search"
-                                    placeholder="Search by file number, subject, department, or category"
+                                    placeholder="Search by file number"
                                     value={searchTerm}
                                     onChange={(event) => setSearchTerm(event.target.value)}
                                     className="pl-9"
                                 />
                             </div>
+                        </div>
+                        <div>
+                            <Label htmlFor="file-id" className="mb-1 block text-sm font-medium">File ID</Label>
+                            <Input
+                                id="file-id"
+                                type="number"
+                                placeholder="Enter file ID"
+                                value={fileIdFilter}
+                                onChange={(event) => setFileIdFilter(event.target.value)}
+                            />
+                        </div>
+                        <div>
+                            <Label htmlFor="subject" className="mb-1 block text-sm font-medium">Subject</Label>
+                            <Input
+                                id="subject"
+                                placeholder="Search by subject"
+                                value={subjectFilter}
+                                onChange={(event) => setSubjectFilter(event.target.value)}
+                            />
                         </div>
                         <div>
                             <Label className="mb-1 block text-sm font-medium">Status</Label>
@@ -297,20 +352,70 @@ export default function FilesPage() {
                             </Select>
                         </div>
                         <div>
-                            <Label className="mb-1 block text-sm font-medium">Department</Label>
-                            <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
+                            <Label className="mb-1 block text-sm font-medium">Town</Label>
+                            <Select value={townFilter} onValueChange={setTownFilter}>
                                 <SelectTrigger>
-                                    <SelectValue placeholder="All departments" />
+                                    <SelectValue placeholder="All towns" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="all">All departments</SelectItem>
-                                    {departments.map((department) => (
-                                        <SelectItem key={department.id} value={String(department.id)}>
-                                            {department.name}
+                                    <SelectItem value="all">All towns</SelectItem>
+                                    {filterOptions.towns.map((town) => (
+                                        <SelectItem key={town.id} value={String(town.id)}>
+                                            {town.name} {town.district_name ? `(${town.district_name})` : ''}
                                         </SelectItem>
                                     ))}
                                 </SelectContent>
                             </Select>
+                        </div>
+                        <div>
+                            <Label className="mb-1 block text-sm font-medium">Zone</Label>
+                            <Select value={zoneFilter} onValueChange={setZoneFilter}>
+                                <SelectTrigger>
+                                    <SelectValue placeholder="All zones" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All zones</SelectItem>
+                                    {filterOptions.zones.map((zone) => (
+                                        <SelectItem key={zone.id} value={String(zone.id)}>
+                                            {zone.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div>
+                            <Label className="mb-1 block text-sm font-medium">Division</Label>
+                            <Select value={divisionFilter} onValueChange={setDivisionFilter}>
+                                <SelectTrigger>
+                                    <SelectValue placeholder="All divisions" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All divisions</SelectItem>
+                                    {filterOptions.divisions.map((division) => (
+                                        <SelectItem key={division.id} value={String(division.id)}>
+                                            {division.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div>
+                            <Label htmlFor="date-from" className="mb-1 block text-sm font-medium">Date From</Label>
+                            <Input
+                                id="date-from"
+                                type="date"
+                                value={dateFrom}
+                                onChange={(event) => setDateFrom(event.target.value)}
+                            />
+                        </div>
+                        <div>
+                            <Label htmlFor="date-to" className="mb-1 block text-sm font-medium">Date To</Label>
+                            <Input
+                                id="date-to"
+                                type="date"
+                                value={dateTo}
+                                onChange={(event) => setDateTo(event.target.value)}
+                            />
                         </div>
                     </div>
                     <div className="flex justify-end mt-4">
@@ -318,8 +423,14 @@ export default function FilesPage() {
                             variant="outline"
                             onClick={() => {
                                 setSearchTerm('');
+                                setFileIdFilter('');
                                 setStatusFilter('all');
-                                setDepartmentFilter('all');
+                                setTownFilter('all');
+                                setZoneFilter('all');
+                                setDivisionFilter('all');
+                                setSubjectFilter('');
+                                setDateFrom('');
+                                setDateTo('');
                             }}
                         >
                             Reset Filters

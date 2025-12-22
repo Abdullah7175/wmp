@@ -49,6 +49,28 @@ export default function FilesPage() {
     const [statuses, setStatuses] = useState([]);
     const isAdmin = (session?.user?.role === 1 || session?.user?.role === 2);
     
+    // New filter states
+    const [districtFilter, setDistrictFilter] = useState('all');
+    const [townFilter, setTownFilter] = useState('all');
+    const [divisionFilter, setDivisionFilter] = useState('all');
+    const [zoneFilter, setZoneFilter] = useState('all');
+    const [categoryFilter, setCategoryFilter] = useState('all');
+    const [fileTypeFilter, setFileTypeFilter] = useState('all');
+    const [subjectFilter, setSubjectFilter] = useState('');
+    const [fileIdFilter, setFileIdFilter] = useState('');
+    const [dateFrom, setDateFrom] = useState('');
+    const [dateTo, setDateTo] = useState('');
+    
+    // Filter options
+    const [filterOptions, setFilterOptions] = useState({
+        districts: [],
+        towns: [],
+        zones: [],
+        divisions: [],
+        categories: [],
+        fileTypes: []
+    });
+    
     // Pagination state
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage, setItemsPerPage] = useState(5);
@@ -58,25 +80,46 @@ export default function FilesPage() {
             fetchFiles();
             fetchDepartments();
             fetchStatuses();
+            fetchFilterOptions();
         }
     }, [session?.user?.id]);
 
     useEffect(() => {
-        filterFiles();
-    }, [searchTerm, statusFilter, departmentFilter, files]);
+        fetchFiles();
+    }, [searchTerm, statusFilter, departmentFilter, districtFilter, townFilter, divisionFilter, zoneFilter, categoryFilter, fileTypeFilter, subjectFilter, fileIdFilter, dateFrom, dateTo]);
 
     useEffect(() => {
         setCurrentPage(1); // Reset to first page when filters change
-    }, [searchTerm, statusFilter, departmentFilter]);
+    }, [searchTerm, statusFilter, departmentFilter, districtFilter, townFilter, divisionFilter, zoneFilter, categoryFilter, fileTypeFilter, subjectFilter, fileIdFilter, dateFrom, dateTo]);
 
     const fetchFiles = async () => {
         setLoading(true);
         try {
-            const response = await fetch('/api/efiling/files');
+            // Build query parameters
+            const params = new URLSearchParams();
+            params.append('limit', '500');
+            
+            // Apply filters
+            if (fileIdFilter) params.append('file_id', fileIdFilter);
+            if (departmentFilter !== 'all') params.append('department_id', departmentFilter);
+            if (districtFilter !== 'all') params.append('district_id', districtFilter);
+            if (townFilter !== 'all') params.append('town_id', townFilter);
+            if (divisionFilter !== 'all') params.append('division_id', divisionFilter);
+            if (zoneFilter !== 'all') params.append('zone_id', zoneFilter);
+            if (categoryFilter !== 'all') params.append('category_id', categoryFilter);
+            if (fileTypeFilter !== 'all') params.append('file_type_id', fileTypeFilter);
+            if (subjectFilter) params.append('subject_search', subjectFilter);
+            if (searchTerm) params.append('file_number_search', searchTerm);
+            if (dateFrom) params.append('date_from', dateFrom);
+            if (dateTo) params.append('date_to', dateTo);
+            if (statusFilter !== 'all') params.append('status_id', statusFilter);
+            
+            const response = await fetch(`/api/efiling/files?${params.toString()}`);
             if (response.ok) {
                 const data = await response.json();
                 console.log('Files fetched from API:', data);
                 setFiles(data.files || []);
+                setFilteredFiles(data.files || []);
             }
         } catch (error) {
             console.error('Error fetching files:', error);
@@ -87,6 +130,25 @@ export default function FilesPage() {
             });
         } finally {
             setLoading(false);
+        }
+    };
+    
+    const fetchFilterOptions = async () => {
+        try {
+            const response = await fetch('/api/efiling/files/filter-options');
+            if (response.ok) {
+                const data = await response.json();
+                setFilterOptions({
+                    districts: Array.isArray(data.districts) ? data.districts : [],
+                    towns: Array.isArray(data.towns) ? data.towns : [],
+                    zones: Array.isArray(data.zones) ? data.zones : [],
+                    divisions: Array.isArray(data.divisions) ? data.divisions : [],
+                    categories: Array.isArray(data.categories) ? data.categories : [],
+                    fileTypes: Array.isArray(data.fileTypes) ? data.fileTypes : []
+                });
+            }
+        } catch (error) {
+            console.error('Error fetching filter options:', error);
         }
     };
 
@@ -114,27 +176,7 @@ export default function FilesPage() {
         }
     };
 
-    const filterFiles = () => {
-        let filtered = files;
-
-        if (searchTerm) {
-            filtered = filtered.filter(file =>
-                file.file_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                file.subject?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                file.department_name?.toLowerCase().includes(searchTerm.toLowerCase())
-            );
-        }
-
-        if (statusFilter && statusFilter !== 'all') {
-            filtered = filtered.filter(file => file.status_id == statusFilter);
-        }
-
-        if (departmentFilter && departmentFilter !== 'all') {
-            filtered = filtered.filter(file => file.department_id == departmentFilter);
-        }
-
-        setFilteredFiles(filtered);
-    };
+    // Filtering is now done server-side via API
 
     // Calculate pagination
     const totalPages = Math.ceil(filteredFiles.length / itemsPerPage);
@@ -239,16 +281,29 @@ export default function FilesPage() {
                     </CardTitle>
                 </CardHeader>
                 <CardContent>
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
                         <div className="relative">
                             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                             <Input
-                                placeholder="Search files..."
+                                placeholder="Search by file number..."
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
                                 className="pl-10"
                             />
                         </div>
+                        
+                        <Input
+                            type="number"
+                            placeholder="File ID"
+                            value={fileIdFilter}
+                            onChange={(e) => setFileIdFilter(e.target.value)}
+                        />
+                        
+                        <Input
+                            placeholder="Search by subject..."
+                            value={subjectFilter}
+                            onChange={(e) => setSubjectFilter(e.target.value)}
+                        />
                         
                         <Select value={statusFilter} onValueChange={setStatusFilter}>
                             <SelectTrigger>
@@ -277,12 +332,132 @@ export default function FilesPage() {
                                 ))}
                             </SelectContent>
                         </Select>
-
+                        
+                        <Select value={districtFilter} onValueChange={setDistrictFilter}>
+                            <SelectTrigger>
+                                <SelectValue placeholder="All Districts" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Districts</SelectItem>
+                                {filterOptions.districts.map((district) => (
+                                    <SelectItem key={district.id} value={district.id.toString()}>
+                                        {district.name}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        
+                        <Select value={townFilter} onValueChange={setTownFilter}>
+                            <SelectTrigger>
+                                <SelectValue placeholder="All Towns" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Towns</SelectItem>
+                                {filterOptions.towns.map((town) => (
+                                    <SelectItem key={town.id} value={town.id.toString()}>
+                                        {town.name} {town.district_name ? `(${town.district_name})` : ''}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        
+                        <Select value={divisionFilter} onValueChange={setDivisionFilter}>
+                            <SelectTrigger>
+                                <SelectValue placeholder="All Divisions" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Divisions</SelectItem>
+                                {filterOptions.divisions.map((division) => (
+                                    <SelectItem key={division.id} value={division.id.toString()}>
+                                        {division.name}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        
+                        <Select value={zoneFilter} onValueChange={setZoneFilter}>
+                            <SelectTrigger>
+                                <SelectValue placeholder="All Zones" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Zones</SelectItem>
+                                {filterOptions.zones.map((zone) => (
+                                    <SelectItem key={zone.id} value={zone.id.toString()}>
+                                        {zone.name}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        
+                        <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                            <SelectTrigger>
+                                <SelectValue placeholder="All Categories" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Categories</SelectItem>
+                                {filterOptions.categories.map((category) => (
+                                    <SelectItem key={category.id} value={category.id.toString()}>
+                                        {category.name}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        
+                        <Select value={fileTypeFilter} onValueChange={setFileTypeFilter}>
+                            <SelectTrigger>
+                                <SelectValue placeholder="All File Types" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All File Types</SelectItem>
+                                {filterOptions.fileTypes.map((fileType) => (
+                                    <SelectItem key={fileType.id} value={fileType.id.toString()}>
+                                        {fileType.name}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        
+                        <Input
+                            type="date"
+                            placeholder="Date From"
+                            value={dateFrom}
+                            onChange={(e) => setDateFrom(e.target.value)}
+                        />
+                        
+                        <Input
+                            type="date"
+                            placeholder="Date To"
+                            value={dateTo}
+                            onChange={(e) => setDateTo(e.target.value)}
+                        />
+                        
                         <div className="flex items-center justify-end">
                             <Badge variant="secondary" className="bg-gray-100 text-gray-800">
                                 {filteredFiles.length} Files
                             </Badge>
                         </div>
+                    </div>
+                    <div className="flex justify-end mt-4">
+                        <Button
+                            variant="outline"
+                            onClick={() => {
+                                setSearchTerm('');
+                                setFileIdFilter('');
+                                setStatusFilter('all');
+                                setDepartmentFilter('all');
+                                setDistrictFilter('all');
+                                setTownFilter('all');
+                                setDivisionFilter('all');
+                                setZoneFilter('all');
+                                setCategoryFilter('all');
+                                setFileTypeFilter('all');
+                                setSubjectFilter('');
+                                setDateFrom('');
+                                setDateTo('');
+                            }}
+                        >
+                            Reset Filters
+                        </Button>
                     </div>
                 </CardContent>
             </Card>

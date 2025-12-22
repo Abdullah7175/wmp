@@ -8,6 +8,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, Edit, Download, Eye, Clock, User, Building2, FileText, AlertCircle, Printer, FileDown, Forward, Shield, MessageSquare } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
 import { sanitizeHtml } from "@/lib/sanitizeHtml";
 import MarkToModal from "../../components/MarkToModal";
 
@@ -24,6 +27,10 @@ export default function FileDetail() {
     const [comments, setComments] = useState([]);
     const [showMarkModal, setShowMarkModal] = useState(false);
     const [timeline, setTimeline] = useState([]);
+    const [showEditFileInfo, setShowEditFileInfo] = useState(false);
+    const [workRequests, setWorkRequests] = useState([]);
+    const [selectedWorkRequestId, setSelectedWorkRequestId] = useState(null);
+    const [savingFileInfo, setSavingFileInfo] = useState(false);
 
     useEffect(() => {
         if (!session?.user?.id || !params.id) return;
@@ -54,6 +61,61 @@ export default function FileDetail() {
             });
         } finally {
             setLoading(false);
+        }
+    };
+
+    const fetchWorkRequests = async () => {
+        try {
+            const res = await fetch('/api/requests?limit=1000&scope=efiling');
+            if (res.ok) {
+                const data = await res.json();
+                setWorkRequests(Array.isArray(data?.data) ? data.data : []);
+            }
+        } catch (error) {
+            console.error('Error fetching work requests:', error);
+        }
+    };
+
+    const handleSaveFileInfo = async () => {
+        if (!file) return;
+        
+        setSavingFileInfo(true);
+        try {
+            const workRequestId = selectedWorkRequestId === 'none' ? null : parseInt(selectedWorkRequestId);
+            
+            const res = await fetch(`/api/efiling/files/${file.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    work_request_id: workRequestId
+                })
+            });
+
+            if (res.ok) {
+                const updatedFile = await res.json();
+                setFile(updatedFile);
+                setShowEditFileInfo(false);
+                toast({ 
+                    title: "Success", 
+                    description: "File information updated successfully" 
+                });
+            } else {
+                const error = await res.json();
+                toast({ 
+                    title: "Error", 
+                    description: error.error || "Failed to update file information", 
+                    variant: "destructive" 
+                });
+            }
+        } catch (error) {
+            console.error('Error updating file information:', error);
+            toast({ 
+                title: "Error", 
+                description: "Failed to update file information", 
+                variant: "destructive" 
+            });
+        } finally {
+            setSavingFileInfo(false);
         }
     };
 
@@ -795,10 +857,25 @@ export default function FileDetail() {
                     {/* Assignment Information */}
                     <Card className="no-print">
                         <CardHeader>
-                            <CardTitle className="flex items-center">
-                                <User className="w-5 h-5 mr-2" />
-                                Assignment Information
-                            </CardTitle>
+                            <div className="flex items-center justify-between">
+                                <CardTitle className="flex items-center">
+                                    <User className="w-5 h-5 mr-2" />
+                                    Assignment Information
+                                </CardTitle>
+                                <Button 
+                                    variant="outline" 
+                                    size="sm"
+                                    onClick={() => {
+                                        setSelectedWorkRequestId(file?.work_request_id?.toString() || 'none');
+                                        fetchWorkRequests();
+                                        setShowEditFileInfo(true);
+                                    }}
+                                    className="flex items-center"
+                                >
+                                    <Edit className="w-4 h-4 mr-2" />
+                                    Edit
+                                </Button>
+                            </div>
                         </CardHeader>
                         <CardContent className="space-y-4">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1047,6 +1124,55 @@ export default function FileDetail() {
                 }}
             />
         )}
+
+        {/* Edit File Information Dialog */}
+        <Dialog open={showEditFileInfo} onOpenChange={setShowEditFileInfo}>
+            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                    <DialogTitle>Edit File Information</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4">
+                    <div>
+                        <Label htmlFor="work_request_id">Video Archiving Request ID</Label>
+                        <Select 
+                            value={selectedWorkRequestId || 'none'} 
+                            onValueChange={setSelectedWorkRequestId}
+                        >
+                            <SelectTrigger>
+                                <SelectValue placeholder="Select Video Request ID (Optional)" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="none">No Video Request</SelectItem>
+                                {workRequests.map((req) => (
+                                    <SelectItem key={req.id} value={req.id.toString()}>
+                                        #{req.id} - {req.address || 'No address'} ({req.complaint_type || 'No type'})
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        <p className="text-sm text-gray-500 mt-1">
+                            Link this file to a specific video archiving request for reference
+                        </p>
+                    </div>
+
+                    <div className="flex justify-end space-x-2 pt-4 border-t">
+                        <Button 
+                            variant="outline" 
+                            onClick={() => setShowEditFileInfo(false)}
+                            disabled={savingFileInfo}
+                        >
+                            Cancel
+                        </Button>
+                        <Button 
+                            onClick={handleSaveFileInfo}
+                            disabled={savingFileInfo}
+                        >
+                            {savingFileInfo ? 'Saving...' : 'Save Changes'}
+                        </Button>
+                    </div>
+                </div>
+            </DialogContent>
+        </Dialog>
         </>
     );
 } 

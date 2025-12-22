@@ -62,7 +62,7 @@ export async function GET(request) {
     let queryText = `
       SELECT 
         bc.*,
-        CASE WHEN bc.link IS NOT NULL THEN CONCAT('http://119.30.113.18:3000', bc.link) ELSE NULL END as link,
+        bc.link,
         wr.address,
         wr.description as work_description,
         wr.zone_id,
