@@ -731,12 +731,9 @@ export default function DocumentSignatureSystem({
                                 if (content.startsWith('data:image/')) {
                                     return content;
                                 }
-                                // If it's a file URL, convert to API route
-                                if (content.startsWith('/api/uploads/')) {
-                                    return content;
-                                }
+                                // Use same simple logic as profile page
                                 if (content.startsWith('/api/')) {
-                                    return content;
+                                    return content; // Already correct
                                 }
                                 if (content.startsWith('/uploads/')) {
                                     return content.replace('/uploads/', '/api/uploads/');
@@ -746,25 +743,32 @@ export default function DocumentSignatureSystem({
                                     try {
                                         const url = new URL(content);
                                         const path = url.pathname;
+                                        if (path.startsWith('/api/uploads/')) {
+                                            return path; // Already correct
+                                        }
                                         if (path.startsWith('/uploads/')) {
                                             return path.replace('/uploads/', '/api/uploads/');
                                         }
-                                        if (path.startsWith('/api/uploads/')) {
-                                            return path;
-                                        }
-                                        // If path doesn't match expected patterns, try to construct
-                                        return `/api/uploads${path}`;
+                                        // Try to construct API path
+                                        return `/api/uploads${path.startsWith('/') ? '' : '/'}${path}`;
                                     } catch (e) {
                                         console.error('Error parsing signature URL:', e);
                                         return content;
                                     }
                                 }
-                                // Otherwise, assume it's a relative path and try to convert
+                                // Otherwise, assume it's a relative path and prepend /api/uploads/
                                 return `/api/uploads${content.startsWith('/') ? '' : '/'}${content}`;
                             };
                             
+                            // Use same inline URL conversion as profile page
                             const imageUrl = signature.type === 'image' || (signature.type && signature.type.toLowerCase().includes('image'))
-                                ? getSignatureImageUrl(signature.content)
+                                ? (signature.content 
+                                    ? (signature.content.startsWith('/api/') 
+                                        ? signature.content 
+                                        : signature.content.startsWith('/uploads/')
+                                        ? signature.content.replace('/uploads/', '/api/uploads/')
+                                        : `/api/uploads${signature.content.startsWith('/') ? '' : '/'}${signature.content}`)
+                                    : null)
                                 : null;
                             
                             return (
@@ -788,10 +792,12 @@ export default function DocumentSignatureSystem({
                                                         className="w-10 h-6 object-contain"
                                                         loading="lazy"
                                                         onError={(e) => {
-                                                            // Prevent infinite retries that cause flickering
+                                                            // Use same simple fallback as profile page
                                                             const img = e.target;
-                                                            if (img.dataset.retryCount === '1') {
-                                                                // Hide the broken image and show a placeholder
+                                                            const originalSrc = img.src;
+                                                            
+                                                            // If already retried, hide and show error
+                                                            if (img.dataset.retryAttempted === 'true') {
                                                                 img.style.display = 'none';
                                                                 const parent = img.parentElement;
                                                                 if (parent && !parent.querySelector('.signature-error')) {
@@ -800,33 +806,25 @@ export default function DocumentSignatureSystem({
                                                                     errorDiv.textContent = 'Image not found';
                                                                     parent.appendChild(errorDiv);
                                                                 }
-                                                                console.error('Failed to load signature image after retry:', imageUrl);
+                                                                console.error('Failed to load signature image after retry:', originalSrc);
                                                                 return;
                                                             }
-                                                            img.dataset.retryCount = '1';
-                                                            // Try original content if different (without /api/ prefix)
-                                                            if (imageUrl !== signature.content && signature.content) {
-                                                                // If imageUrl starts with /api/uploads/, try without /api/ prefix
-                                                                if (imageUrl.startsWith('/api/uploads/')) {
-                                                                    const withoutApi = imageUrl.replace('/api/uploads/', '/uploads/');
-                                                                    setTimeout(() => {
-                                                                        img.src = withoutApi;
-                                                                    }, 100);
-                                                                } else {
-                                                                    setTimeout(() => {
-                                                                        img.src = signature.content;
-                                                                    }, 100);
-                                                                }
-                                                            } else {
-                                                                img.style.display = 'none';
-                                                                const parent = img.parentElement;
-                                                                if (parent && !parent.querySelector('.signature-error')) {
-                                                                    const errorDiv = document.createElement('div');
-                                                                    errorDiv.className = 'signature-error text-xs text-gray-400 text-center p-2';
-                                                                    errorDiv.textContent = 'Image not found';
-                                                                    parent.appendChild(errorDiv);
-                                                                }
-                                                                console.error('Failed to load signature image:', imageUrl);
+                                                            
+                                                            img.dataset.retryAttempted = 'true';
+                                                            
+                                                            // Try fallback - if it's /api/uploads/, try /uploads/ (in case nginx serves it directly)
+                                                            if (originalSrc.includes('/api/uploads/')) {
+                                                                const directUrl = originalSrc.replace('/api/uploads/', '/uploads/');
+                                                                console.log('[Signature Image] Trying direct path fallback:', directUrl);
+                                                                img.src = directUrl;
+                                                            } else if (originalSrc.includes('/uploads/') && !originalSrc.includes('/api/')) {
+                                                                const apiUrl = originalSrc.replace('/uploads/', '/api/uploads/');
+                                                                console.log('[Signature Image] Trying API route fallback:', apiUrl);
+                                                                img.src = apiUrl;
+                                                            } else if (signature.content && signature.content !== originalSrc) {
+                                                                // Try original content as last resort
+                                                                console.log('[Signature Image] Trying original content:', signature.content);
+                                                                img.src = signature.content;
                                                             }
                                                         }}
                                                     />
@@ -896,8 +894,15 @@ export default function DocumentSignatureSystem({
                                         return `/api/uploads${content.startsWith('/') ? '' : '/'}${content}`;
                                     };
                                     
+                                    // Use same inline URL conversion as profile page
                                     const imageUrl = signature.type === 'image' || (signature.type && signature.type.toLowerCase().includes('image'))
-                                        ? getSignatureImageUrl(signature.content)
+                                        ? (signature.content 
+                                            ? (signature.content.startsWith('/api/') 
+                                                ? signature.content 
+                                                : signature.content.startsWith('/uploads/')
+                                                ? signature.content.replace('/uploads/', '/api/uploads/')
+                                                : `/api/uploads${signature.content.startsWith('/') ? '' : '/'}${signature.content}`)
+                                            : null)
                                         : null;
                                     
                                     return (
@@ -921,10 +926,12 @@ export default function DocumentSignatureSystem({
                                                         className="w-10 h-6 object-contain"
                                                         loading="lazy"
                                                         onError={(e) => {
-                                                            // Prevent infinite retries that cause flickering
+                                                            // Use same simple fallback as profile page
                                                             const img = e.target;
-                                                            if (img.dataset.retryCount === '1') {
-                                                                // Hide the broken image and show a placeholder
+                                                            const originalSrc = img.src;
+                                                            
+                                                            // If already retried, hide and show error
+                                                            if (img.dataset.retryAttempted === 'true') {
                                                                 img.style.display = 'none';
                                                                 const parent = img.parentElement;
                                                                 if (parent && !parent.querySelector('.signature-error')) {
@@ -933,33 +940,25 @@ export default function DocumentSignatureSystem({
                                                                     errorDiv.textContent = 'Image not found';
                                                                     parent.appendChild(errorDiv);
                                                                 }
-                                                                console.error('Failed to load signature image after retry:', imageUrl);
+                                                                console.error('Failed to load signature image after retry:', originalSrc);
                                                                 return;
                                                             }
-                                                            img.dataset.retryCount = '1';
-                                                            // Try original content if different (without /api/ prefix)
-                                                            if (imageUrl !== signature.content && signature.content) {
-                                                                // If imageUrl starts with /api/uploads/, try without /api/ prefix
-                                                                if (imageUrl.startsWith('/api/uploads/')) {
-                                                                    const withoutApi = imageUrl.replace('/api/uploads/', '/uploads/');
-                                                                    setTimeout(() => {
-                                                                        img.src = withoutApi;
-                                                                    }, 100);
-                                                                } else {
-                                                                    setTimeout(() => {
-                                                                        img.src = signature.content;
-                                                                    }, 100);
-                                                                }
-                                                            } else {
-                                                                img.style.display = 'none';
-                                                                const parent = img.parentElement;
-                                                                if (parent && !parent.querySelector('.signature-error')) {
-                                                                    const errorDiv = document.createElement('div');
-                                                                    errorDiv.className = 'signature-error text-xs text-gray-400 text-center p-2';
-                                                                    errorDiv.textContent = 'Image not found';
-                                                                    parent.appendChild(errorDiv);
-                                                                }
-                                                                console.error('Failed to load signature image:', imageUrl);
+                                                            
+                                                            img.dataset.retryAttempted = 'true';
+                                                            
+                                                            // Try fallback - if it's /api/uploads/, try /uploads/ (in case nginx serves it directly)
+                                                            if (originalSrc.includes('/api/uploads/')) {
+                                                                const directUrl = originalSrc.replace('/api/uploads/', '/uploads/');
+                                                                console.log('[Signature Image] Trying direct path fallback:', directUrl);
+                                                                img.src = directUrl;
+                                                            } else if (originalSrc.includes('/uploads/') && !originalSrc.includes('/api/')) {
+                                                                const apiUrl = originalSrc.replace('/uploads/', '/api/uploads/');
+                                                                console.log('[Signature Image] Trying API route fallback:', apiUrl);
+                                                                img.src = apiUrl;
+                                                            } else if (signature.content && signature.content !== originalSrc) {
+                                                                // Try original content as last resort
+                                                                console.log('[Signature Image] Trying original content:', signature.content);
+                                                                img.src = signature.content;
                                                             }
                                                         }}
                                                     />
