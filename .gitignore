@@ -42,3 +42,9 @@ next-env.d.ts
 # public assets to ignore
 /public/uploads/videos/
 /public/uploads/final-videos/
+API_DOCUMENTATION.md
+MOBILE_APP_API_TOKENS.md
+MOBILE_APP_DEVELOPER_GUIDE.md
+MOBILE_APP_DEVELOPER_STARTER.md
+MOBILE_APP_QUICK_REFERENCE.md
+REACT_NATIVE_MOBILE_APP_PLAN.md
