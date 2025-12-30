@@ -267,7 +267,7 @@ export default function LoginPage() {
          <Image src="/logo.png" className="py-0 px-1" width="150" height="150" alt="logo" priority />
        </div>
        <div className="flex gap-4 items-center mb-8">
-         <h1 className="text-2xl font-semibold">Video Archiving Portal</h1>
+         <h1 className="text-2xl font-semibold">Works Management Portal</h1>
        </div>
 
       <motion.div
@@ -415,6 +415,9 @@ export default function LoginPage() {
           Need help? <a href="#" className="underline text-white">Contact support</a>
         </p>
       </motion.div>
+      <p className="text-xs text-gray-500">
+            Powered by ESSPL
+          </p>
     </div>
   );
 }

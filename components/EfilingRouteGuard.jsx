@@ -1,6 +1,6 @@
 "use client";
 
-import { useContext, useEffect, useMemo, useState } from "react";
+import { useContext, useEffect, useMemo, useState, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { usePathname, useRouter } from "next/navigation";
 
@@ -21,6 +21,9 @@ export function EfilingRouteGuard({ children, allowedRoles = [] }) {
 
   const [checking, setChecking] = useState(true);
   const [authorized, setAuthorized] = useState(false);
+  
+  // Track if we've already shown a toast to prevent infinite loops
+  const toastShownRef = useRef(false);
 
   const roleNumber = useMemo(() => {
     if (typeof contextRoleNumber === "number" && !Number.isNaN(contextRoleNumber)) {
@@ -32,11 +35,13 @@ export function EfilingRouteGuard({ children, allowedRoles = [] }) {
   }, [contextRoleNumber, session?.user?.role]);
 
   useEffect(() => {
+    // Wait for session and profile to finish loading
     if (status === "loading" || profileLoading) {
       setChecking(true);
       return;
     }
 
+    // If no session, redirect to login
     if (!session?.user?.id) {
       router.push("/elogin");
       setChecking(false);
@@ -49,55 +54,83 @@ export function EfilingRouteGuard({ children, allowedRoles = [] }) {
       normalizedAllowedRoles.length === 0 ||
       (roleNumber !== null && normalizedAllowedRoles.includes(roleNumber));
 
-    if (pathname?.startsWith("/efilinguser") && (isGlobal || efilingUserId)) {
-      setAuthorized(true);
-      setChecking(false);
-      return;
+    // For efilinguser routes, check if user has efiling profile
+    if (pathname?.startsWith("/efilinguser")) {
+      // If user is global or has efilingUserId, allow access
+      if (isGlobal || efilingUserId) {
+        setAuthorized(true);
+        setChecking(false);
+        toastShownRef.current = false;
+        return;
+      }
+      
+      // If profile is still loading, wait (don't redirect yet)
+      if (profileLoading) {
+        setChecking(true);
+        return;
+      }
+      
+      // If profile finished loading but no efilingUserId, redirect to login
+      // Only redirect once to prevent loops
+      if (!efilingUserId && !toastShownRef.current) {
+        toastShownRef.current = true;
+        toast({
+          title: "Access Unavailable",
+          description: "E-filing profile could not be found for your account.",
+          variant: "destructive",
+        });
+        router.push("/elogin");
+        setAuthorized(false);
+        setChecking(false);
+        return;
+      }
+      
+      // If we already showed toast, just keep checking
+      if (!efilingUserId) {
+        setChecking(true);
+        return;
+      }
     }
 
+    // For other routes, check global access
     if (isGlobal) {
       setAuthorized(true);
       setChecking(false);
+      toastShownRef.current = false;
       return;
     }
 
+    // Check role-based access
     if (!roleAllowed) {
-      toast({
-        title: "Access Denied",
-        description: "You don't have permission to access this page.",
-        variant: "destructive",
-      });
+      if (!toastShownRef.current) {
+        toastShownRef.current = true;
+        toast({
+          title: "Access Denied",
+          description: "You don't have permission to access this page.",
+          variant: "destructive",
+        });
+      }
       router.push("/elogin");
       setAuthorized(false);
       setChecking(false);
       return;
     }
 
-    if (normalizedAllowedRoles.length === 0 && !efilingUserId) {
-      toast({
-        title: "Access Unavailable",
-        description: "E-filing profile could not be found for your account.",
-        variant: "destructive",
-      });
-      router.push("/elogin");
-      setAuthorized(false);
-      setChecking(false);
-      return;
-    }
-
+    // Default: authorize access
     setAuthorized(true);
     setChecking(false);
+    toastShownRef.current = false;
   }, [
     session?.user?.id,
     roleNumber,
     allowedRoles,
     profileLoading,
     status,
-    toast,
     router,
     pathname,
     efilingUserId,
     isGlobal,
+    // Removed 'toast' from dependencies to prevent infinite loop
   ]);
 
   if (status === "loading" || profileLoading || checking) {

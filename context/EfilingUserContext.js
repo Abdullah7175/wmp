@@ -48,7 +48,9 @@ export function EfilingUserProvider({ children }) {
 
         const data = await res.json();
         if (!isMounted) return;
-        setProfile(data);
+        // Handle both response formats: { success: true, user: {...} } or direct user object
+        const profileData = data.success ? data.user : data;
+        setProfile(profileData);
         setError(null);
       } catch (err) {
         if (!isMounted) return;

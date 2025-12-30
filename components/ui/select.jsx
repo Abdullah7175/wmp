@@ -63,6 +63,14 @@ const SelectContent = React.forwardRef(({ className, children, position = "poppe
         className
       )}
       position={position}
+      onWheel={(e) => {
+        // Prevent page scroll when scrolling in select dropdown
+        e.stopPropagation();
+      }}
+      onTouchMove={(e) => {
+        // Prevent page scroll on mobile
+        e.stopPropagation();
+      }}
       {...props}
     >
       <SelectScrollUpButton />

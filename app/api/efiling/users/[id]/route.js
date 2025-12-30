@@ -125,7 +125,10 @@ export async function GET(request, { params }) {
                 }
             }
 
-            return NextResponse.json(user);
+            return NextResponse.json({
+                success: true,
+                user: user
+            });
 
         } finally {
             await client.release();

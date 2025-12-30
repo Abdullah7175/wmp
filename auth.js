@@ -290,8 +290,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       }
       
       if (account?.provider === 'google') {
+        let client;
         try {
-          const client = await connectToDatabase();
+          client = await connectToDatabase();
           
           // Check if user exists in any of our tables
           let userResult = await client.query('SELECT * FROM users WHERE email = $1', [user.email]);
@@ -324,11 +325,18 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             user.userType = 'user';
           }
           
-          await client.release();
           return true;
         } catch (error) {
           console.error('Error during Google sign in:', error);
           return false;
+        } finally {
+          if (client && typeof client.release === 'function') {
+            try {
+              await client.release();
+            } catch (releaseError) {
+              console.error('Error releasing database client in Google sign-in:', releaseError);
+            }
+          }
         }
       }
       return true;

@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { useSession } from "next-auth/react";
+import { OTPVerificationModal } from "@/components/OTPVerificationModal";
 import { X, Pen, Type, Upload, Shield, Smartphone, Key } from "lucide-react";
 import SignatureCanvas from "react-signature-canvas";
 
@@ -27,14 +28,10 @@ export default function ESignatureModal({
     const { data: session } = useSession();
     const { toast } = useToast();
     const [activeTab, setActiveTab] = useState("draw");
-    const [otpCode, setOtpCode] = useState("");
     const [signatureText, setSignatureText] = useState("");
     const [selectedFont, setSelectedFont] = useState("Dancing Script");
     const [signatureImage, setSignatureImage] = useState(null);
     const [scannedDocument, setScannedDocument] = useState(null);
-    const [loading, setLoading] = useState(false);
-    const [otpSent, setOtpSent] = useState(false);
-    const [countdown, setCountdown] = useState(0);
     const [showAuthModal, setShowAuthModal] = useState(false);
     const [pendingAction, setPendingAction] = useState(null);
     
@@ -53,14 +50,6 @@ export default function ESignatureModal({
         { value: "Tangerine", label: "Tangerine" }
     ];
 
-    // Countdown timer for OTP
-    useEffect(() => {
-        let timer;
-        if (countdown > 0) {
-            timer = setTimeout(() => setCountdown(countdown - 1), 1000);
-        }
-        return () => clearTimeout(timer);
-    }, [countdown]);
 
     // Load Google Fonts
     useEffect(() => {
@@ -132,92 +121,6 @@ export default function ESignatureModal({
         }
     };
 
-    // Send OTP
-    const sendOTP = async () => {
-        try {
-            setLoading(true);
-            const response = await fetch('/api/efiling/send-otp', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ method: 'whatsapp' })
-            });
-
-            const data = await response.json();
-
-            if (response.ok && data.success) {
-                setOtpSent(true);
-                setCountdown(60);
-                toast({
-                    title: "OTP Sent",
-                    description: data.message || "OTP has been sent to your registered WhatsApp number.",
-                });
-            } else {
-                // If WhatsApp fails but OTP is provided for testing
-                if (data.otpCode) {
-                    toast({
-                        title: "OTP Generated (Testing Mode)",
-                        description: `WhatsApp delivery failed. Your OTP is: ${data.otpCode}`,
-                        variant: "default",
-                    });
-                    setOtpSent(true);
-                    setCountdown(60);
-                } else {
-                    throw new Error(data.error || 'Failed to send OTP');
-                }
-            }
-        } catch (error) {
-            toast({
-                title: "Error",
-                description: error.message || "Failed to send OTP. Please try again.",
-                variant: "destructive",
-            });
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    // Verify authentication
-    const verifyAuthentication = async () => {
-        try {
-            setLoading(true);
-            
-            // Use WhatsApp OTP verification
-            const response = await fetch('/api/efiling/verify-auth', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    userId: session?.user?.id,
-                    code: otpCode
-                })
-            });
-
-            if (response.ok) {
-                setShowAuthModal(false);
-                setOtpCode("");
-                
-                // Execute the pending action
-                if (pendingAction === 'saveSignature') {
-                    await saveSignatureToDatabase();
-                }
-                
-                toast({
-                    title: "Authentication Successful",
-                    description: "Your identity has been verified.",
-                });
-            } else {
-                const errorData = await response.json();
-                throw new Error(errorData.error || 'Authentication failed');
-            }
-        } catch (error) {
-            toast({
-                title: "Authentication Failed",
-                description: error.message || "Invalid code. Please try again.",
-                variant: "destructive",
-            });
-        } finally {
-            setLoading(false);
-        }
-    };
 
     // Register Google email
     const registerGoogleEmail = async () => {
@@ -490,63 +393,19 @@ export default function ESignatureModal({
             </div>
 
             {/* Authentication Modal */}
-            {showAuthModal && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]">
-                    <Card className="w-full max-w-md">
-                        <CardHeader>
-                            <CardTitle className="flex items-center gap-2">
-                                <Shield className="w-5 h-5" />
-                                Verify Your Identity
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                            <div className="space-y-4">
-                                <div>
-                                    <Label>WhatsApp OTP Verification</Label>
-                                    <p className="text-sm text-muted-foreground mt-1 mb-4">
-                                        OTP will be sent to your registered WhatsApp number.
-                                    </p>
-                                </div>
-
-                                <div className="space-y-2">
-                                    <div className="flex justify-between items-center">
-                                        <Label htmlFor="otpCode">OTP Code</Label>
-                                        {!otpSent && (
-                                            <Button 
-                                                variant="outline" 
-                                                size="sm" 
-                                                onClick={sendOTP}
-                                                disabled={loading || countdown > 0}
-                                            >
-                                                {countdown > 0 ? `Resend in ${countdown}s` : "Send OTP"}
-                                            </Button>
-                                        )}
-                                    </div>
-                                    <Input
-                                        id="otpCode"
-                                        value={otpCode}
-                                        onChange={(e) => setOtpCode(e.target.value)}
-                                        placeholder="Enter 6-digit OTP"
-                                        maxLength={6}
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="flex justify-end gap-2 pt-4">
-                                <Button variant="outline" onClick={() => setShowAuthModal(false)}>
-                                    Cancel
-                                </Button>
-                                <Button 
-                                    onClick={verifyAuthentication}
-                                    disabled={loading || !otpCode}
-                                >
-                                    {loading ? "Verifying..." : "Verify"}
-                                </Button>
-                            </div>
-                        </CardContent>
-                    </Card>
-                </div>
-            )}
+            <OTPVerificationModal
+                show={showAuthModal}
+                onClose={() => {
+                    setShowAuthModal(false);
+                }}
+                onVerify={async () => {
+                    setShowAuthModal(false);
+                    // Execute the pending action
+                    if (pendingAction === 'saveSignature') {
+                        await saveSignatureToDatabase();
+                    }
+                }}
+            />
 
         </>
     );

@@ -26,9 +26,9 @@ export async function GET(request) {
             );
         }
 
-        const client = await connectToDatabase();
-
+        let client;
         try {
+            client = await connectToDatabase();
             // Check if the view exists, if not use direct joins
             let viewExists = false;
             try {
@@ -188,14 +188,31 @@ export async function GET(request) {
                 }
             }
 
-            return NextResponse.json(user);
+            return NextResponse.json({
+                success: true,
+                user: user
+            });
 
         } finally {
-            await client.release();
+            if (client && typeof client.release === 'function') {
+                try {
+                    await client.release();
+                } catch (releaseError) {
+                    console.error('Error releasing database client:', releaseError);
+                }
+            }
         }
 
     } catch (error) {
         console.error('Error fetching user profile:', error);
+        // Ensure client is released even if connectToDatabase fails
+        if (client && typeof client.release === 'function') {
+            try {
+                await client.release();
+            } catch (releaseError) {
+                console.error('Error releasing database client in error handler:', releaseError);
+            }
+        }
         return NextResponse.json(
             { error: 'Failed to fetch user profile', details: error.message },
             { status: 500 }

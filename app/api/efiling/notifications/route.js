@@ -60,7 +60,13 @@ export async function GET(request) {
             { status: 500 }
         );
     } finally {
-        if (client) await client.release();
+        if (client && typeof client.release === 'function') {
+            try {
+                await client.release();
+            } catch (releaseError) {
+                console.error('Error releasing database client:', releaseError);
+            }
+        }
     }
 }
 
@@ -110,7 +116,13 @@ export async function POST(request) {
             { status: 500 }
         );
     } finally {
-        if (client) await client.release();
+        if (client && typeof client.release === 'function') {
+            try {
+                await client.release();
+            } catch (releaseError) {
+                console.error('Error releasing database client:', releaseError);
+            }
+        }
     }
 }
 

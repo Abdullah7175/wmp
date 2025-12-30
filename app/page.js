@@ -19,10 +19,10 @@ export default function PortalSelectionPage() {
                         transition={{ duration: 0.6 }}
                         className="flex items-center justify-center gap-4 mb-6"
                     >
-                        <Image src="/logo.png" width={80} height={80} alt="KW&SC Logo" className="rounded-lg shadow-lg" priority />
+                        <Image src="/logo.png" width={80} height={80} alt="KW&SC Logo" className="shadow-lg" priority />
                         <div className="text-left">
-                            <h1 className="text-3xl font-bold text-gray-900">Works Management Portal</h1>
-                            <p className="text-lg text-gray-600">Karachi Water & Sewerage Corporation</p>
+                            {/* <h1 className="text-3xl font-bold text-gray-900">Works Management Portal</h1> */}
+                            <p className="text-lg font-bold text-gray-600">Karachi Water & Sewerage Corporation</p>
                         </div>
                     </motion.div>
                     <motion.p
@@ -31,7 +31,7 @@ export default function PortalSelectionPage() {
                         transition={{ duration: 0.6, delay: 0.2 }}
                         className="text-xl text-gray-700 max-w-2xl mx-auto"
                     >
-                        Choose your portal to access the comprehensive works management system
+                        Choose your portal to access the comprehensive management system
                     </motion.p>
                 </div>
 
@@ -48,35 +48,35 @@ export default function PortalSelectionPage() {
                                 <div className="mx-auto w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mb-4">
                                     <Video className="w-10 h-10 text-blue-600" />
                                 </div>
-                                <CardTitle className="text-2xl text-blue-900">Video Archiving Portal</CardTitle>
+                                <CardTitle className="text-2xl text-blue-900">WORKS MANAGEMENT PORTAL</CardTitle>
                                 <CardDescription className="text-gray-600">
-                                    Comprehensive video management and archiving system
+                                    Comprehensive works management system
                                 </CardDescription>
                             </CardHeader>
                             <CardContent className="space-y-6">
                                 <div className="space-y-3">
                                     <div className="flex items-center gap-3">
                                         <Video className="w-5 h-5 text-blue-600" />
-                                        <span className="text-gray-700">Video upload and management</span>
+                                        <span className="text-gray-700">Works upload and management</span>
                                     </div>
                                     <div className="flex items-center gap-3">
                                         <Database className="w-5 h-5 text-blue-600" />
-                                        <span className="text-gray-700">Advanced search and filtering</span>
+                                        <span className="text-gray-700">Works search and filtering</span>
                                     </div>
                                     <div className="flex items-center gap-3">
                                         <Users className="w-5 h-5 text-blue-600" />
-                                        <span className="text-gray-700">Multi-user access control</span>
+                                        <span className="text-gray-700">Works multi-user access control</span>
                                     </div>
                                     <div className="flex items-center gap-3">
                                         <BarChart3 className="w-5 h-5 text-blue-600" />
-                                        <span className="text-gray-700">Analytics and reporting</span>
+                                        <span className="text-gray-700">Works analytics and reporting</span>
                                     </div>
                                 </div>
                                 
                                 <div className="pt-4">
                                     <Link href="/login">
                                         <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 font-medium group">
-                                            <span>Access Video Portal</span>
+                                            <span>Access Works Management Portal</span>
                                             <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
                                         </Button>
                                     </Link>

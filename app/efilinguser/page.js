@@ -21,13 +21,14 @@ import {
 import { logEfilingUserAction, getUserInfoFromSession, EFILING_ACTIONS } from '@/lib/efilingUserActionLogger';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
+import { useEfilingUser } from '@/context/EfilingUserContext';
 
 export default function EFileUserDashboard() {
     const { data: session } = useSession();
     const router = useRouter();
+    const { efilingUserId, profile: userProfile, loading: profileLoading } = useEfilingUser();
     const [loading, setLoading] = useState(true);
     const [dataError, setDataError] = useState(false);
-    const [userData, setUserData] = useState(null);
     const [assignedFiles, setAssignedFiles] = useState([]);
     const [pendingActions, setPendingActions] = useState([]);
     const [recentActivities, setRecentActivities] = useState([]);
@@ -43,18 +44,7 @@ export default function EFileUserDashboard() {
     const { toast } = useToast();
 
     useEffect(() => {
-        loadUserData();
-    }, []);
-
-    useEffect(() => {
-        // Fallback: if session is available but userData not set, derive minimal userData
-        if (!userData && session?.user?.id) {
-            setUserData({ id: session.user.id, name: session.user.name || 'User' });
-        }
-    }, [session, userData]);
-
-    useEffect(() => {
-        if (userData?.id) {
+        if (!profileLoading && (efilingUserId || session?.user?.id)) {
             loadDashboardData();
             if (session?.user?.id) {
                 logEfilingUserAction({
@@ -66,62 +56,63 @@ export default function EFileUserDashboard() {
                 });
             }
         }
-    }, [userData, session]);
+    }, [efilingUserId, profileLoading, session?.user?.id]);
 
     useEffect(() => {
         const interval = setInterval(() => setNowTick(Date.now()), 30000);
         return () => clearInterval(interval);
     }, []);
 
-    const loadUserData = async () => {
-        try {
-            const userData = localStorage.getItem('users');
-            if (userData) {
-                const user = JSON.parse(userData);
-                setUserData(user);
-            } else {
-                // If no local user data, ensure we don't stay stuck in loading
-                setLoading(false);
-            }
-        } catch (error) {
-            console.error('Error loading user data:', error);
-            setLoading(false);
-        }
-    };
-
     const loadDashboardData = async () => {
         try {
             setLoading(true);
             
-            if (!userData?.id) {
+            // Use efilingUserId from context, or fallback to session user id
+            const userId = efilingUserId || session?.user?.id;
+            
+            if (!userId) {
                 setAssignedFiles([]);
                 setStats({ totalFiles: 0, pendingFiles: 0, completedFiles: 0, overdueFiles: 0 });
+                setLoading(false);
                 return;
             }
 
-            // Map users.id to efiling_users.id for accurate filtering
-            let efilingUserId = userData.id;
-            let userProfile = null;
-            try {
-                const mapRes = await fetch(`/api/efiling/users/profile?userId=${userData.id}`);
-                if (mapRes.ok) {
-                    const profile = await mapRes.json();
-                    if (profile?.efiling_user_id) efilingUserId = profile.efiling_user_id;
-                    userProfile = profile;
+            // Use profile from context if available, otherwise fetch it
+            let profileData = userProfile;
+            let finalEfilingUserId = efilingUserId;
+            
+            if (!profileData && session?.user?.id) {
+                try {
+                    const mapRes = await fetch(`/api/efiling/users/profile?userId=${session.user.id}`);
+                    if (mapRes.ok) {
+                        const data = await mapRes.json();
+                        // Handle both response formats: { success: true, user: {...} } or direct user object
+                        profileData = data.success ? data.user : data;
+                        if (profileData?.efiling_user_id) {
+                            finalEfilingUserId = profileData.efiling_user_id;
+                        }
+                    }
+                } catch (err) {
+                    console.error('Error fetching profile:', err);
                 }
-            } catch {}
+            }
+            
+            // If we still don't have efilingUserId, use the userId as fallback
+            if (!finalEfilingUserId) {
+                finalEfilingUserId = userId;
+            }
             
             const [myFilesRes, assignedFilesRes] = await Promise.all([
-                fetch(`/api/efiling/files?created_by=${efilingUserId}`),
-                fetch(`/api/efiling/files?assigned_to=${efilingUserId}`)
+                fetch(`/api/efiling/files?created_by=${finalEfilingUserId}`),
+                fetch(`/api/efiling/files?assigned_to=${finalEfilingUserId}`)
             ]);
 
             const myFiles = myFilesRes.ok ? await myFilesRes.json() : { files: [] };
             const assignedFiles = assignedFilesRes.ok ? await assignedFilesRes.json() : { files: [] };
             
             // Filter files based on user's department and role
-            const filteredMyFiles = filterFilesByDepartment(myFiles.files || [], userProfile);
-            const filteredAssignedFiles = filterFilesByDepartment(assignedFiles.files || [], userProfile);
+            const filteredMyFiles = filterFilesByDepartment(myFiles.files || [], profileData);
+            const filteredAssignedFiles = filterFilesByDepartment(assignedFiles.files || [], profileData);
             
             setCreatedCount(filteredMyFiles.length);
             setAssignedCount(filteredAssignedFiles.length);
@@ -145,7 +136,8 @@ export default function EFileUserDashboard() {
     const filterFilesByDepartment = (files, userProfile) => {
         if (!userProfile) return files;
         
-        const userRole = userProfile.efiling_role?.code;
+        // Handle both profile structures: { role_code, ... } or { efiling_role: { code, ... } }
+        const userRole = userProfile.role_code || userProfile.efiling_role?.code;
         const userDepartment = userProfile.department_id;
         
         // Admin users can see all files
@@ -357,7 +349,7 @@ export default function EFileUserDashboard() {
             {/* Header */}
             <div className="flex justify-between items-center">
                 <div>
-                    <h1 className="text-3xl font-bold">Welcome back, {userData?.name || 'User'}!</h1>
+                    <h1 className="text-3xl font-bold">Welcome back, {userProfile?.name || session?.user?.name || 'User'}!</h1>
                     <p className="text-muted-foreground">
                         Here&apos;s your personal e-filing dashboard - your files and assignments
                     </p>

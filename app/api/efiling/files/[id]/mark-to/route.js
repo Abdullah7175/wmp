@@ -18,6 +18,7 @@ import {
     markReturnToCreator,
     startTAT
 } from '@/lib/efilingWorkflowStateManager';
+import { sendWhatsAppMessage } from '@/lib/whatsappService';
 
 export async function POST(request, { params }) {
     let client;
@@ -450,9 +451,9 @@ export async function POST(request, { params }) {
                 // The file is assigned to SE/CE, and assistants can see it via their manager relationship
             }
 
-            // Get target user info for notification
+            // Get target user info for notification (including phone number for WhatsApp)
             const lastTarget = await client.query(`
-                SELECT eu.id, u.name as user_name, r.code as role_code
+                SELECT eu.id, u.name as user_name, u.contact_number, r.code as role_code
                 FROM efiling_users eu
                 LEFT JOIN users u ON eu.user_id = u.id
                 LEFT JOIN efiling_roles r ON r.id = eu.efiling_role_id
@@ -461,6 +462,7 @@ export async function POST(request, { params }) {
             
             const assigneeDisplayName = lastTarget.rows[0]?.user_name || 'User';
             const assigneeRole = (lastTarget.rows[0]?.role_code || '').toUpperCase();
+            const assigneePhone = lastTarget.rows[0]?.contact_number;
 
             // Notify new assignee
             try {
@@ -470,6 +472,91 @@ export async function POST(request, { params }) {
                 `, [newAssignee, id, 'file_assigned', `A file has been assigned to you: File ${fileRow.file_number || id}`]);
             } catch (e) {
                 console.warn('Notify assignee on mark-to failed', e);
+            }
+            
+            // Send WhatsApp notification to the assigned user
+            if (assigneePhone && !isTeamInternal) {
+                try {
+                    // Get final SLA deadline after update
+                    let finalSlaDeadline = slaDeadline;
+                    if (hasSlaDeadline) {
+                        const finalDeadlineRes = await client.query(`
+                            SELECT sla_deadline FROM efiling_files WHERE id = $1
+                        `, [id]);
+                        finalSlaDeadline = finalDeadlineRes.rows[0]?.sla_deadline || null;
+                    }
+                    
+                    // Calculate TAT time remaining
+                    let tatMessage = '';
+                    if (hasSlaDeadline && finalSlaDeadline) {
+                        const deadline = new Date(finalSlaDeadline);
+                        const now = new Date();
+                        const timeRemaining = deadline.getTime() - now.getTime();
+                        
+                        if (timeRemaining > 0) {
+                            const days = Math.floor(timeRemaining / (1000 * 60 * 60 * 24));
+                            const hours = Math.floor((timeRemaining % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                            const minutes = Math.floor((timeRemaining % (1000 * 60 * 60)) / (1000 * 60));
+                            
+                            let timeStr = '';
+                            if (days > 0) {
+                                timeStr = `${days} day${days > 1 ? 's' : ''} ${hours} hour${hours !== 1 ? 's' : ''}`;
+                            } else if (hours > 0) {
+                                timeStr = `${hours} hour${hours > 1 ? 's' : ''} ${minutes} minute${minutes !== 1 ? 's' : ''}`;
+                            } else {
+                                timeStr = `${minutes} minute${minutes !== 1 ? 's' : ''}`;
+                            }
+                            
+                            const deadlineStr = deadline.toLocaleString('en-PK', {
+                                year: 'numeric',
+                                month: 'short',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                            });
+                            
+                            tatMessage = `\n\n⏰ TAT Deadline: ${deadlineStr}\n⏳ Time Remaining: ${timeStr}`;
+                        } else {
+                            tatMessage = `\n\n⚠️ TAT Deadline has passed. Please complete this file urgently.`;
+                        }
+                    }
+                    
+                    // Get file subject for the message
+                    const fileSubject = fileRow.subject || 'N/A';
+                    const fileNumber = fileRow.file_number || `#${id}`;
+                    
+                    // Get the person who marked the file
+                    const fromUserInfo = await client.query(`
+                        SELECT u.name, eu.designation, r.code as role_code
+                        FROM efiling_users eu
+                        LEFT JOIN users u ON eu.user_id = u.id
+                        LEFT JOIN efiling_roles r ON r.id = eu.efiling_role_id
+                        WHERE eu.id = $1
+                    `, [currentUser.id]);
+                    
+                    const fromUserName = fromUserInfo.rows[0]?.name || 'User';
+                    const fromUserDesignation = fromUserInfo.rows[0]?.designation || '';
+                    const fromUserRole = (fromUserInfo.rows[0]?.role_code || '').toUpperCase();
+                    const fromUserDisplay = fromUserDesignation ? `${fromUserName} (${fromUserDesignation})` : fromUserName;
+                    
+                    const whatsappMessage = `📋 *File Assigned to You*\n\n` +
+                        `File Number: ${fileNumber}\n` +
+                        `Subject: ${fileSubject}\n` +
+                        `Marked by: ${fromUserDisplay} (${fromUserRole})${tatMessage}\n\n` +
+                        `Please review and take necessary action on this file.\n\n` +
+                        `Thank you,\nE-Filing System`;
+                    
+                    const whatsappResult = await sendWhatsAppMessage(assigneePhone, whatsappMessage);
+                    
+                    if (whatsappResult.success) {
+                        console.log(`WhatsApp notification sent to ${assigneeDisplayName} (${assigneePhone}) for file ${fileNumber}`);
+                    } else {
+                        console.warn(`Failed to send WhatsApp notification to ${assigneeDisplayName}:`, whatsappResult.error);
+                    }
+                } catch (whatsappError) {
+                    // Don't fail the mark-to operation if WhatsApp fails
+                    console.error('Error sending WhatsApp notification on mark-to:', whatsappError);
+                }
             }
             
             // Notify SE/CE assistants if file is marked to SE/CE

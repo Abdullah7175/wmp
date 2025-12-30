@@ -17,7 +17,7 @@ export async function POST(request) {
             // Continue without session - userId might be provided directly
         }
         
-        const { userId, code } = await request.json();
+        const { userId, code, method: providedMethod } = await request.json();
         
         if (!userId || !code) {
             return NextResponse.json(
@@ -26,8 +26,8 @@ export async function POST(request) {
             );
         }
         
-        // Always use WhatsApp method
-        const method = 'whatsapp';
+        // Use provided method or default to whatsapp
+        const method = providedMethod || 'whatsapp';
 
         client = await connectToDatabase();
         
@@ -190,11 +190,18 @@ export async function POST(request) {
         
         console.log('OTP verification successful for efiling user:', efilingUserId);
         
-        // Delete the used OTP (user_id is varchar, so use string)
+        // Mark OTP as verified instead of deleting (for failure tracking)
+        await client.query(`
+            UPDATE efiling_otp_codes 
+            SET verified = TRUE
+            WHERE user_id = $1 AND method = $2 AND otp_code = $3
+        `, [efilingUserIdStr, method, storedCode]);
+        
+        // Clean up old verified OTPs (older than 1 hour)
         await client.query(`
             DELETE FROM efiling_otp_codes 
-            WHERE user_id = $1 AND method = $2
-        `, [efilingUserIdStr, method]);
+            WHERE verified = TRUE AND created_at < NOW() - INTERVAL '1 hour'
+        `);
         
         // Log the successful authentication
         try {

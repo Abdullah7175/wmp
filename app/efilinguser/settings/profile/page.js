@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { UserCheck, Save, ArrowLeft, Eye, EyeOff, Lock, Pen, Shield, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useEfilingUser } from "@/context/EfilingUserContext";
+import { OTPVerificationModal } from "@/components/OTPVerificationModal";
 import SignatureCanvas from "react-signature-canvas";
 import { useRef } from "react";
 
@@ -22,6 +23,7 @@ export default function ProfileSettings() {
     const [profile, setProfile] = useState({
         name: '',
         email: '',
+        google_email: '',
         employee_id: '',
         designation: '',
         department: '',
@@ -43,10 +45,6 @@ export default function ProfileSettings() {
     const [userSignature, setUserSignature] = useState(null);
     const [showSignatureModal, setShowSignatureModal] = useState(false);
     const [showAuthModal, setShowAuthModal] = useState(false);
-    const [otpCode, setOtpCode] = useState("");
-    const [otpSent, setOtpSent] = useState(false);
-    const [countdown, setCountdown] = useState(0);
-    const [authLoading, setAuthLoading] = useState(false);
     
     // Google email registration states
     const [showEmailRegistration, setShowEmailRegistration] = useState(false);
@@ -82,14 +80,6 @@ export default function ProfileSettings() {
         }
     }, [session?.user?.id, efilingUserId]);
     
-    // Countdown timer for OTP
-    useEffect(() => {
-        let timer;
-        if (countdown > 0) {
-            timer = setTimeout(() => setCountdown(countdown - 1), 1000);
-        }
-        return () => clearTimeout(timer);
-    }, [countdown]);
 
     // Initialize canvas when signature modal opens and draw tab is active
     useEffect(() => {
@@ -115,14 +105,18 @@ export default function ProfileSettings() {
             const response = await fetch(`/api/efiling/users/profile?userId=${session.user.id}`);
             if (response.ok) {
                 const data = await response.json();
+                // Handle both response formats: { success: true, user: {...} } or direct user object
+                const userData = data.success ? data.user : data;
+                
                 setProfile({
-                    name: data.name || '',
-                    email: data.email || '',
-                    employee_id: data.employee_id || '',
-                    designation: data.designation || '',
-                    department: data.department_name || '',
-                    phone: data.contact_number || '',
-                    address: data.address || ''
+                    name: userData?.name || '',
+                    email: userData?.email || '',
+                    google_email: userData?.google_email || '',
+                    employee_id: userData?.employee_id || '',
+                    designation: userData?.designation || '',
+                    department: userData?.department_name || '',
+                    phone: userData?.contact_number || '',
+                    address: userData?.address || ''
                 });
             }
         } catch (error) {
@@ -153,6 +147,7 @@ export default function ProfileSettings() {
                 body: JSON.stringify({
                     name: profile.name,
                     email: profile.email,
+                    google_email: profile.google_email,
                     contact_number: profile.phone,
                     address: profile.address
                 }),
@@ -281,98 +276,6 @@ export default function ProfileSettings() {
         }
     };
     
-    const sendOTP = async () => {
-        try {
-            setAuthLoading(true);
-            
-            // Check if user has phone number
-            if (!profile.phone) {
-                toast({
-                    title: "Phone Number Required",
-                    description: "Please add your contact number in your profile first.",
-                    variant: "destructive",
-                });
-                return;
-            }
-
-            const response = await fetch('/api/efiling/send-otp', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    userId: session?.user?.id || efilingUserId
-                })
-            });
-
-            const data = await response.json();
-
-            if (response.ok && data.success) {
-                setOtpSent(true);
-                setCountdown(60);
-                toast({
-                    title: "OTP Sent",
-                    description: data.message || "OTP has been sent to your registered WhatsApp number.",
-                });
-            } else {
-                // If WhatsApp fails but OTP is provided for testing
-                if (data.otpCode) {
-                    toast({
-                        title: "OTP Generated (Testing Mode)",
-                        description: `WhatsApp delivery failed. Your OTP is: ${data.otpCode}`,
-                        variant: "default",
-                    });
-                    setOtpSent(true);
-                    setCountdown(60);
-                } else {
-                    throw new Error(data.error || 'Failed to send OTP');
-                }
-            }
-        } catch (error) {
-            toast({
-                title: "Error",
-                description: error.message || "Failed to send OTP. Please try again.",
-                variant: "destructive",
-            });
-        } finally {
-            setAuthLoading(false);
-        }
-    };
-    
-    const verifyAuthentication = async () => {
-        try {
-            setAuthLoading(true);
-            
-            // Use WhatsApp OTP verification
-            const response = await fetch('/api/efiling/verify-auth', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    userId: session?.user?.id || efilingUserId,
-                    code: otpCode
-                })
-            });
-
-            if (response.ok) {
-                setShowAuthModal(false);
-                setOtpCode("");
-                setShowSignatureModal(true);
-                toast({
-                    title: "Authentication Successful",
-                    description: "Your identity has been verified.",
-                });
-            } else {
-                const errorData = await response.json();
-                throw new Error(errorData.error || 'Authentication failed');
-            }
-        } catch (error) {
-            toast({
-                title: "Authentication Failed",
-                description: error.message || "Invalid code. Please try again.",
-                variant: "destructive",
-            });
-        } finally {
-            setAuthLoading(false);
-        }
-    };
     
     const registerGoogleEmail = async () => {
         try {
@@ -632,6 +535,20 @@ export default function ProfileSettings() {
                                         placeholder="Enter your email"
                                     />
                                 </div>
+                            </div>
+
+                            <div>
+                                <Label htmlFor="google_email">Google Email (for OTP verification)</Label>
+                                <Input
+                                    id="google_email"
+                                    type="email"
+                                    value={profile.google_email}
+                                    onChange={(e) => handleInputChange('google_email', e.target.value)}
+                                    placeholder="Enter your Google email address"
+                                />
+                                <p className="text-sm text-gray-500 mt-1">
+                                    This email will be used for OTP verification via email. Leave empty if you prefer WhatsApp OTP.
+                                </p>
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -898,63 +815,17 @@ export default function ProfileSettings() {
             </div>
             
             {/* Authentication Modal */}
-            {showAuthModal && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                    <Card className="w-full max-w-md">
-                        <CardHeader>
-                            <CardTitle className="flex items-center gap-2">
-                                <Shield className="w-5 h-5" />
-                                Verify Your Identity
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                            <div className="space-y-4">
-                                <div>
-                                    <Label>WhatsApp OTP Verification</Label>
-                                    <p className="text-sm text-muted-foreground mt-1 mb-4">
-                                        OTP will be sent to your registered WhatsApp number: {profile.phone ? profile.phone.replace(/(\d{4})(\d{3})(\d{4})/, '$1***$3') : 'Not set'}
-                                    </p>
-                                </div>
-
-                                <div className="space-y-2">
-                                    <div className="flex justify-between items-center">
-                                        <Label htmlFor="otpCode">OTP Code</Label>
-                                        {!otpSent && (
-                                            <Button 
-                                                variant="outline" 
-                                                size="sm" 
-                                                onClick={sendOTP}
-                                                disabled={authLoading || countdown > 0}
-                                            >
-                                                {countdown > 0 ? `Resend in ${countdown}s` : "Send OTP"}
-                                            </Button>
-                                        )}
-                                    </div>
-                                    <Input
-                                        id="otpCode"
-                                        value={otpCode}
-                                        onChange={(e) => setOtpCode(e.target.value)}
-                                        placeholder="Enter 6-digit OTP"
-                                        maxLength={6}
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="flex justify-end gap-2 pt-4">
-                                <Button variant="outline" onClick={() => setShowAuthModal(false)}>
-                                    Cancel
-                                </Button>
-                                <Button 
-                                    onClick={verifyAuthentication}
-                                    disabled={authLoading || !otpCode}
-                                >
-                                    {authLoading ? "Verifying..." : "Verify"}
-                                </Button>
-                            </div>
-                        </CardContent>
-                    </Card>
-                </div>
-            )}
+            <OTPVerificationModal
+                show={showAuthModal}
+                onClose={() => {
+                    setShowAuthModal(false);
+                }}
+                onVerify={() => {
+                    setShowAuthModal(false);
+                    setShowSignatureModal(true);
+                }}
+                efilingUserId={efilingUserId}
+            />
             
             {/* Signature Creation Modal */}
             {showSignatureModal && (

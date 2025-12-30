@@ -104,7 +104,9 @@ export default function EFileLoginPage() {
       const res = await fetch(`/api/efiling/users/profile?userId=${user.id}`, { cache: "no-store" });
 
       if (res.ok) {
-        const profile = await res.json();
+        const data = await res.json();
+        // Handle both response formats: { success: true, user: {...} } or direct user object
+        const profile = data.success ? data.user : data;
         const destination = resolveDestination(profile, user.role);
 
         if (destination) {
@@ -308,9 +310,9 @@ export default function EFileLoginPage() {
       <div className="flex items-center justify-center gap-0">
          <Image src="/logo.png" className="py-0 px-1" width="150" height="150" alt="logo" priority />
        </div>
-       <div className="flex gap-4 items-center mb-8">
+       {/* <div className="flex gap-4 items-center mb-8">
          <h1 className="text-2xl font-semibold">Works Management Portal</h1>
-       </div>
+       </div> */}
         
 
 
@@ -465,17 +467,17 @@ export default function EFileLoginPage() {
               </form>
 
               {/* Divider */}
-              <div className="relative my-6">
+              {/* <div className="relative my-6">
                 <div className="absolute inset-0 flex items-center">
                   <span className="w-full border-t border-gray-300" />
                 </div>
                 <div className="relative flex justify-center text-sm">
                   <span className="bg-white px-2 text-gray-500">Or continue with</span>
                 </div>
-              </div>
+              </div> */}
 
               {/* Google OAuth Button */}
-              <Button
+              {/* <Button
                 type="button"
                 variant="outline"
                 onClick={() => signIn("google", { callbackUrl: "/elogin" })}
@@ -483,7 +485,7 @@ export default function EFileLoginPage() {
               >
                 <Mail className="w-4 h-4 mr-2" />
                 Sign in with Google
-              </Button>
+              </Button> */}
 
               <div className="text-center">
                 <p className="text-xs text-gray-500">
@@ -505,6 +507,9 @@ export default function EFileLoginPage() {
           </div>
           <p className="text-xs text-gray-500">
             © 2025 KW&SC. All rights reserved.
+          </p>
+          <p className="text-xs text-gray-500">
+            Powered by ESSPL
           </p>
         </div>
       </div>
