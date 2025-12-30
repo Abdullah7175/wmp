@@ -37,20 +37,29 @@ export async function GET(request) {
         
         if (id) {
             const query = `
-                SELECT u.*, d.name as department_name, d.department_type,
-                       r.name as role_name, r.code as role_code,
-                       dist.title as district_name,
-                       t.town as town_name,
-                       st.subtown as subtown_name,
-                       div.name as division_name
-                FROM efiling_users u
-                LEFT JOIN efiling_departments d ON u.department_id = d.id
-                LEFT JOIN efiling_roles r ON u.efiling_role_id = r.id
-                LEFT JOIN district dist ON u.district_id = dist.id
-                LEFT JOIN town t ON u.town_id = t.id
-                LEFT JOIN subtown st ON u.subtown_id = st.id
-                LEFT JOIN divisions div ON u.division_id = div.id
-                WHERE u.id = $1
+                SELECT 
+                    eu.*,
+                    u.name,
+                    u.email,
+                    u.contact_number,
+                    u.cnic,
+                    d.name as department_name, 
+                    d.department_type,
+                    r.name as role_name, 
+                    r.code as role_code,
+                    dist.title as district_name,
+                    t.town as town_name,
+                    st.subtown as subtown_name,
+                    div.name as division_name
+                FROM efiling_users eu
+                LEFT JOIN users u ON eu.user_id = u.id
+                LEFT JOIN efiling_departments d ON eu.department_id = d.id
+                LEFT JOIN efiling_roles r ON eu.efiling_role_id = r.id
+                LEFT JOIN district dist ON eu.district_id = dist.id
+                LEFT JOIN town t ON eu.town_id = t.id
+                LEFT JOIN subtown st ON eu.subtown_id = st.id
+                LEFT JOIN divisions div ON eu.division_id = div.id
+                WHERE eu.id = $1
             `;
             const result = await client.query(query, [id]);
             
@@ -58,35 +67,47 @@ export async function GET(request) {
                 return NextResponse.json({ error: 'User not found' }, { status: 404 });
             }
             
-            return NextResponse.json(result.rows[0]);
+            return NextResponse.json({
+                success: true,
+                user: result.rows[0]
+            });
         } else {
             let query = `
-                SELECT u.*, d.name as department_name, d.department_type, 
-                       r.name as role_name, r.code as role_code,
-                       dist.title as district_name,
-                       t.town as town_name,
-                       st.subtown as subtown_name,
-                       div.name as division_name
-                FROM efiling_users u
-                LEFT JOIN efiling_departments d ON u.department_id = d.id
-                LEFT JOIN efiling_roles r ON u.efiling_role_id = r.id
-                LEFT JOIN district dist ON u.district_id = dist.id
-                LEFT JOIN town t ON u.town_id = t.id
-                LEFT JOIN subtown st ON u.subtown_id = st.id
-                LEFT JOIN divisions div ON u.division_id = div.id
+                SELECT 
+                    eu.*,
+                    u.name,
+                    u.email,
+                    u.contact_number,
+                    u.cnic,
+                    d.name as department_name, 
+                    d.department_type, 
+                    r.name as role_name, 
+                    r.code as role_code,
+                    dist.title as district_name,
+                    t.town as town_name,
+                    st.subtown as subtown_name,
+                    div.name as division_name
+                FROM efiling_users eu
+                LEFT JOIN users u ON eu.user_id = u.id
+                LEFT JOIN efiling_departments d ON eu.department_id = d.id
+                LEFT JOIN efiling_roles r ON eu.efiling_role_id = r.id
+                LEFT JOIN district dist ON eu.district_id = dist.id
+                LEFT JOIN town t ON eu.town_id = t.id
+                LEFT JOIN subtown st ON eu.subtown_id = st.id
+                LEFT JOIN divisions div ON eu.division_id = div.id
             `;
             const params = [];
             const conditions = [];
             let paramIndex = 1;
             
             if (department_id) {
-                conditions.push(`u.department_id = $${paramIndex}`);
+                conditions.push(`eu.department_id = $${paramIndex}`);
                 params.push(department_id);
                 paramIndex++;
             }
             
             if (is_active !== null && is_active !== undefined) {
-                conditions.push(`u.is_active = $${paramIndex}`);
+                conditions.push(`eu.is_active = $${paramIndex}`);
                 params.push(is_active === 'true');
                 paramIndex++;
             }
@@ -101,7 +122,7 @@ export async function GET(request) {
                 query += ` WHERE ${conditions.join(' AND ')}`;
             }
             
-            query += ` ORDER BY u.employee_id ASC`;
+            query += ` ORDER BY eu.employee_id ASC`;
             
             console.log('Executing users query:', query);
             console.log('Query parameters:', params);

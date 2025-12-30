@@ -410,19 +410,19 @@ export async function POST(request) {
 
         // Insert recipients
         if (allUserIds.size > 0) {
-            const recipientValues = Array.from(allUserIds).map((userId, idx) => {
-                const paramNum = idx * 3 + 1;
-                return `($${paramNum}, $${paramNum + 1}, $${paramNum + 2})`;
-            }).join(', ');
-
             const recipientParams = [];
+            const placeholders = [];
+            let paramIndex = 1;
+            
             Array.from(allUserIds).forEach(userId => {
+                placeholders.push(`($${paramIndex}, $${paramIndex + 1}, $${paramIndex + 2})`);
                 recipientParams.push(daak.id, userId, 'PENDING');
+                paramIndex += 3;
             });
 
             await client.query(
                 `INSERT INTO efiling_daak_recipients (daak_id, efiling_user_id, status)
-                 VALUES ${recipientValues}`,
+                 VALUES ${placeholders.join(', ')}`,
                 recipientParams
             );
         }

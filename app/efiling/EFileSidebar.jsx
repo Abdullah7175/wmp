@@ -99,6 +99,7 @@ const links = [
         subItems: [
             { href: "/efiling/daak", label: "All Daak", icon: <FileText className="w-4 h-4" /> },
             { href: "/efiling/daak/new", label: "Create Daak", icon: <FileText className="w-4 h-4" /> },
+            { href: "/efiling/daak/categories", label: "Daak Categories", icon: <Settings className="w-4 h-4" /> },
         ]
     },
     {

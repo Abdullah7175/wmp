@@ -18,6 +18,7 @@ export default function ProfileSettings() {
     const [profile, setProfile] = useState({
         name: '',
         email: '',
+        google_email: '',
         employee_id: '',
         designation: '',
         department: '',
@@ -45,18 +46,34 @@ export default function ProfileSettings() {
             const response = await fetch(`/api/efiling/users/${session.user.id}`);
             if (response.ok) {
                 const data = await response.json();
+                // Handle both response formats: { success: true, user: {...} } or direct user object
+                const userData = data.success ? data.user : data;
                 setProfile({
-                    name: data.name || '',
-                    email: data.email || '',
-                    employee_id: data.employee_id || '',
-                    designation: data.designation || '',
-                    department: data.department_name || '',
-                    phone: data.contact_number || '',
-                    address: data.address || ''
+                    name: userData.name || '',
+                    email: userData.email || '',
+                    google_email: userData.google_email || '',
+                    employee_id: userData.employee_id || '',
+                    designation: userData.designation || '',
+                    department: userData.department_name || '',
+                    phone: userData.contact_number || '',
+                    address: userData.address || ''
+                });
+            } else {
+                const errorData = await response.json().catch(() => ({ error: 'Failed to fetch profile' }));
+                console.error('Error fetching profile:', errorData);
+                toast({
+                    title: "Error",
+                    description: errorData.error || "Failed to load profile data",
+                    variant: "destructive",
                 });
             }
         } catch (error) {
             console.error('Error fetching profile:', error);
+            toast({
+                title: "Error",
+                description: "Failed to load profile data. Please try again.",
+                variant: "destructive",
+            });
         }
     };
 
@@ -73,6 +90,7 @@ export default function ProfileSettings() {
                 body: JSON.stringify({
                     name: profile.name,
                     email: profile.email,
+                    google_email: profile.google_email,
                     contact_number: profile.phone,
                     address: profile.address
                 }),
@@ -235,6 +253,20 @@ export default function ProfileSettings() {
                                         placeholder="Enter your email"
                                     />
                                 </div>
+                            </div>
+
+                            <div>
+                                <Label htmlFor="google_email">Google Email (for OTP verification)</Label>
+                                <Input
+                                    id="google_email"
+                                    type="email"
+                                    value={profile.google_email}
+                                    onChange={(e) => handleInputChange('google_email', e.target.value)}
+                                    placeholder="Enter your Google email address"
+                                />
+                                <p className="text-sm text-gray-500 mt-1">
+                                    This email will be used for OTP verification via email. Leave empty if you prefer WhatsApp OTP.
+                                </p>
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

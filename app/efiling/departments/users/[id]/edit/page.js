@@ -86,7 +86,9 @@ export default function EditEfilingUser() {
         try {
             const response = await fetch(`/api/efiling/users/${params.id}`);
             if (response.ok) {
-                const userData = await response.json();
+                const data = await response.json();
+                // Handle both response formats: { success: true, user: {...} } or direct user object
+                const userData = data.success ? data.user : data;
                 
                 // Transform the data to match our form structure
                 setFormData({
@@ -123,6 +125,7 @@ export default function EditEfilingUser() {
                 throw new Error('Failed to load user data');
             }
         } catch (error) {
+            console.error('Error loading user data:', error);
             toast({
                 title: "Error",
                 description: "Failed to load user data. Please try again.",

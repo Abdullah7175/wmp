@@ -26,8 +26,8 @@ export async function GET(request, { params }) {
         const client = await connectToDatabase();
 
         try {
-            // Get user data with joins to get related information
-            const userResult = await client.query(
+            // First, try to find by efiling_users.id, if not found, try by users.id
+            let userResult = await client.query(
                 `SELECT 
                     u.id,
                     u.name,
@@ -72,6 +72,54 @@ export async function GET(request, { params }) {
                 [id]
             );
 
+            // If not found by efiling_users.id, try by users.id
+            if (userResult.rows.length === 0) {
+                userResult = await client.query(
+                    `SELECT 
+                        u.id,
+                        u.name,
+                        u.email,
+                        u.contact_number,
+                        u.cnic,
+                        u.created_date,
+                        u.updated_date,
+                        eu.id as efiling_user_id,
+                        eu.employee_id,
+                        eu.designation,
+                        eu.address,
+                        eu.department_id,
+                        eu.efiling_role_id,
+                        eu.supervisor_id,
+                        eu.approval_level,
+                        eu.approval_amount_limit,
+                        eu.can_sign,
+                        eu.can_create_files,
+                        eu.can_approve_files,
+                        eu.can_reject_files,
+                        eu.can_transfer_files,
+                        eu.max_concurrent_files,
+                        eu.preferred_signature_method,
+                        eu.signature_settings,
+                        eu.notification_preferences,
+                        eu.is_active,
+                        eu.created_at,
+                        eu.updated_at,
+                        eu.google_email,
+                        eu.district_id,
+                        eu.town_id,
+                        eu.subtown_id,
+                        eu.division_id,
+                        d.name as department_name,
+                        r.name as role_name
+                    FROM users u
+                    JOIN efiling_users eu ON u.id = eu.user_id
+                    LEFT JOIN efiling_departments d ON eu.department_id = d.id
+                    LEFT JOIN efiling_roles r ON eu.efiling_role_id = r.id
+                    WHERE u.id = $1`,
+                    [id]
+                );
+            }
+
             if (userResult.rows.length === 0) {
                 return NextResponse.json(
                     { error: 'E-filing user not found' },
@@ -82,26 +130,12 @@ export async function GET(request, { params }) {
             const user = userResult.rows[0];
 
             // SECURITY: IDOR Fix - Check ownership or admin role
-            const efilingUserId = parseInt(id);
+            const efilingUserId = user.efiling_user_id;
+            const userId = user.id;
             const sessionUserId = parseInt(sessionUser.id);
             const isAdmin = [1, 2].includes(parseInt(sessionUser.role));
             
-            // Check if the e-filing user belongs to the session user
-            const userOwnershipCheck = await client.query(
-                `SELECT user_id FROM efiling_users WHERE id = $1`,
-                [efilingUserId]
-            );
-            
-            if (userOwnershipCheck.rows.length === 0) {
-                return NextResponse.json(
-                    { error: 'E-filing user not found' },
-                    { status: 404 }
-                );
-            }
-            
-            const efilingUserUserId = parseInt(userOwnershipCheck.rows[0].user_id);
-            
-            if (sessionUserId !== efilingUserUserId && !isAdmin) {
+            if (sessionUserId !== userId && !isAdmin) {
                 return NextResponse.json(
                     { error: 'Forbidden - You can only access your own data' },
                     { status: 403 }
