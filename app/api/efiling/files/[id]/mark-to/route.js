@@ -95,6 +95,33 @@ export async function POST(request, { params }) {
             LEFT JOIN efiling_roles r ON eu.efiling_role_id = r.id
             WHERE u.id = $1 AND eu.is_active = true
         `, [session.user.id]);
+        
+        // If current user's division_id is NULL, try to get it from role locations
+        if (currentUserRes.rows.length > 0 && !currentUserRes.rows[0].division_id && currentUserRes.rows[0].efiling_role_id) {
+            try {
+                const currentUserRoleLocRes = await client.query(`
+                    SELECT division_id, district_id, town_id
+                    FROM efiling_role_locations
+                    WHERE role_id = $1
+                    LIMIT 1
+                `, [currentUserRes.rows[0].efiling_role_id]);
+                
+                if (currentUserRoleLocRes.rows.length > 0) {
+                    const roleLoc = currentUserRoleLocRes.rows[0];
+                    if (roleLoc.division_id) {
+                        currentUserRes.rows[0].division_id = roleLoc.division_id;
+                    }
+                    if (!currentUserRes.rows[0].district_id && roleLoc.district_id) {
+                        currentUserRes.rows[0].district_id = roleLoc.district_id;
+                    }
+                    if (!currentUserRes.rows[0].town_id && roleLoc.town_id) {
+                        currentUserRes.rows[0].town_id = roleLoc.town_id;
+                    }
+                }
+            } catch (roleLocError) {
+                console.warn('Could not fetch role locations for current user:', roleLocError.message);
+            }
+        }
 
         if (currentUserRes.rows.length === 0) {
             await client.query('ROLLBACK');
@@ -343,8 +370,36 @@ export async function POST(request, { params }) {
                 throw new Error('Target user not found or inactive');
             }
             
-            const targetUser = target.rows[0];
+            let targetUser = target.rows[0];
             const toRoleCode = (targetUser.role_code || '').toUpperCase();
+            
+            // If user's personal division_id is NULL, try to get it from role locations
+            if (!targetUser.division_id && targetUser.efiling_role_id) {
+                try {
+                    const roleLocRes = await client.query(`
+                        SELECT division_id, district_id, town_id
+                        FROM efiling_role_locations
+                        WHERE role_id = $1
+                        LIMIT 1
+                    `, [targetUser.efiling_role_id]);
+                    
+                    if (roleLocRes.rows.length > 0) {
+                        const roleLoc = roleLocRes.rows[0];
+                        // Use role location as fallback if user's personal location is NULL
+                        if (!targetUser.division_id && roleLoc.division_id) {
+                            targetUser.division_id = roleLoc.division_id;
+                        }
+                        if (!targetUser.district_id && roleLoc.district_id) {
+                            targetUser.district_id = roleLoc.district_id;
+                        }
+                        if (!targetUser.town_id && roleLoc.town_id) {
+                            targetUser.town_id = roleLoc.town_id;
+                        }
+                    }
+                } catch (roleLocError) {
+                    console.warn('Could not fetch role locations for target user:', roleLocError.message);
+                }
+            }
 
             // Check if movement is within team workflow
             const isTeamInternal = await isWithinTeamWorkflow(client, id, currentUser.id, userId);
@@ -387,25 +442,127 @@ export async function POST(request, { params }) {
                 const isOrganizationalScope = organizationalScopes.includes(expectedScope.toLowerCase());
                 
                 if (!isOrganizationalScope) {
-                    const isValid = validateGeographicMatch(
-                        {
-                            district_id: fileRow.district_id,
-                            town_id: fileRow.town_id,
-                            division_id: fileRow.division_id
-                        },
-                        {
-                            district_id: targetUser.district_id,
-                            town_id: targetUser.town_id,
-                            division_id: targetUser.division_id
-                        },
-                        expectedScope
-                    );
+                    // Get file location (use role location as fallback if file division_id is NULL)
+                    let fileDivisionId = fileRow.division_id;
+                    let fileDistrictId = fileRow.district_id;
+                    let fileTownId = fileRow.town_id;
+                    
+                    // If file has no division_id, try to get it from creator's role location
+                    if (!fileDivisionId && fileRow.from_role_id) {
+                        try {
+                            const fileRoleLocRes = await client.query(`
+                                SELECT division_id, district_id, town_id
+                                FROM efiling_role_locations
+                                WHERE role_id = $1
+                                LIMIT 1
+                            `, [fileRow.from_role_id]);
+                            
+                            if (fileRoleLocRes.rows.length > 0) {
+                                const fileRoleLoc = fileRoleLocRes.rows[0];
+                                if (!fileDivisionId && fileRoleLoc.division_id) {
+                                    fileDivisionId = fileRoleLoc.division_id;
+                                }
+                                if (!fileDistrictId && fileRoleLoc.district_id) {
+                                    fileDistrictId = fileRoleLoc.district_id;
+                                }
+                                if (!fileTownId && fileRoleLoc.town_id) {
+                                    fileTownId = fileRoleLoc.town_id;
+                                }
+                            }
+                        } catch (fileRoleLocError) {
+                            console.warn('Could not fetch role locations for file creator:', fileRoleLocError.message);
+                        }
+                    }
+                    
+                    // For division scope, check if both users' roles have the same division_id in role_locations
+                    // This allows marking when both roles are in the same division even if personal division_id is NULL
+                    if (expectedScope.toLowerCase() === 'division' && currentUser.efiling_role_id && targetUser.efiling_role_id) {
+                        try {
+                            const roleDivisionsRes = await client.query(`
+                                SELECT 
+                                    rl1.division_id as from_role_division,
+                                    rl2.division_id as to_role_division
+                                FROM efiling_role_locations rl1
+                                CROSS JOIN efiling_role_locations rl2
+                                WHERE rl1.role_id = $1 AND rl2.role_id = $2
+                                AND rl1.division_id IS NOT NULL 
+                                AND rl2.division_id IS NOT NULL
+                                AND rl1.division_id = rl2.division_id
+                                LIMIT 1
+                            `, [currentUser.efiling_role_id, targetUser.efiling_role_id]);
+                            
+                            if (roleDivisionsRes.rows.length > 0) {
+                                // Both roles have the same division_id, allow the marking
+                                console.log('Allowing marking: Both users\' roles have matching division_id from role_locations');
+                            } else {
+                                // Roles don't have matching division_ids, check regular geographic match
+                                const isValid = validateGeographicMatch(
+                                    {
+                                        district_id: fileDistrictId,
+                                        town_id: fileTownId,
+                                        division_id: fileDivisionId
+                                    },
+                                    {
+                                        district_id: targetUser.district_id,
+                                        town_id: targetUser.town_id,
+                                        division_id: targetUser.division_id
+                                    },
+                                    expectedScope
+                                );
 
-                    if (!isValid) {
-                        throw new Error(
-                            `Geographic mismatch: File location does not match target user location. ` +
-                            `Required scope: ${expectedScope}`
+                                if (!isValid) {
+                                    throw new Error(
+                                        `Geographic mismatch: File location does not match target user location. ` +
+                                        `Required scope: ${expectedScope}`
+                                    );
+                                }
+                            }
+                        } catch (roleDivError) {
+                            console.warn('Error checking role divisions:', roleDivError.message);
+                            // Fall through to regular validation
+                            const isValid = validateGeographicMatch(
+                                {
+                                    district_id: fileDistrictId,
+                                    town_id: fileTownId,
+                                    division_id: fileDivisionId
+                                },
+                                {
+                                    district_id: targetUser.district_id,
+                                    town_id: targetUser.town_id,
+                                    division_id: targetUser.division_id
+                                },
+                                expectedScope
+                            );
+
+                            if (!isValid) {
+                                throw new Error(
+                                    `Geographic mismatch: File location does not match target user location. ` +
+                                    `Required scope: ${expectedScope}`
+                                );
+                            }
+                        }
+                    } else {
+                        // Regular validation for non-division scopes
+                        const isValid = validateGeographicMatch(
+                            {
+                                district_id: fileDistrictId,
+                                town_id: fileTownId,
+                                division_id: fileDivisionId
+                            },
+                            {
+                                district_id: targetUser.district_id,
+                                town_id: targetUser.town_id,
+                                division_id: targetUser.division_id
+                            },
+                            expectedScope
                         );
+
+                        if (!isValid) {
+                            throw new Error(
+                                `Geographic mismatch: File location does not match target user location. ` +
+                                `Required scope: ${expectedScope}`
+                            );
+                        }
                     }
                 }
             }
