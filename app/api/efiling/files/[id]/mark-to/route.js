@@ -1030,11 +1030,57 @@ export async function POST(request, { params }) {
                     
                     if (lastTargetRes.rows.length > 0) {
                         const lastTargetRoleCode = lastTargetRes.rows[0].role_code || '';
-                        const slaHours = await getSLA(client, currentUserRoleCode, lastTargetRoleCode);
+                        
+                        // Get target user's department and determine level scope from file location
+                        const targetUserDeptRes = await client.query(`
+                            SELECT eu.department_id, eu.division_id, eu.district_id
+                            FROM efiling_users eu
+                            WHERE eu.id = $1
+                        `, [newAssignee]);
+                        
+                        const targetUserDept = targetUserDeptRes.rows[0]?.department_id || fileRow.department_id;
+                        // Determine level scope: if both have division_id, use 'division', else 'district'
+                        const levelScope = (fileRow.division_id && targetUserDeptRes.rows[0]?.division_id) ? 'division' : 'district';
+                        
+                        const slaHours = await getSLA(client, currentUserRoleCode, lastTargetRoleCode, targetUserDept, levelScope);
+                        
+                        console.log('[MARK-TO] SLA calculation:', {
+                            fromRole: currentUserRoleCode,
+                            toRole: lastTargetRoleCode,
+                            departmentId: targetUserDept,
+                            levelScope: levelScope,
+                            slaHours: slaHours
+                        });
                         
                         const deadline = new Date();
                         deadline.setHours(deadline.getHours() + slaHours);
                         slaDeadline = deadline.toISOString();
+                        
+                        console.log('[MARK-TO] SLA deadline set:', {
+                            slaHours,
+                            deadline: slaDeadline,
+                            deadlineLocal: new Date(slaDeadline).toLocaleString()
+                        });
+                        
+                        // Log TAT deadline set event
+                        try {
+                            await client.query(`
+                                INSERT INTO efiling_tat_logs 
+                                (file_id, user_id, event_type, sla_deadline, time_remaining_hours, message, notification_sent, notification_method, created_at)
+                                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+                            `, [
+                                fileId,
+                                newAssignee,
+                                'DEADLINE_SET',
+                                slaDeadline,
+                                slaHours,
+                                `TAT deadline set: ${slaHours} hours from now`,
+                                false,
+                                null
+                            ]);
+                        } catch (logError) {
+                            console.warn('[MARK-TO] Error logging TAT deadline set:', logError.message);
+                        }
                     }
                 } catch (slaError) {
                     console.warn('[MARK-TO] Error computing SLA deadline:', slaError.message);
@@ -1046,7 +1092,7 @@ export async function POST(request, { params }) {
             console.log('[MARK-TO] Step 9: Executing UPDATE on efiling_files...');
             const updateQuery = hasSlaDeadline && slaDeadline
                 ? `UPDATE efiling_files
-                   SET assigned_to = $1, updated_at = NOW(), sla_deadline = COALESCE($2, sla_deadline)
+                   SET assigned_to = $1, updated_at = NOW(), sla_deadline = $2
                    WHERE id = $3`
                 : `UPDATE efiling_files
                    SET assigned_to = $1, updated_at = NOW()
