@@ -546,6 +546,10 @@ export async function PUT(request, { params }) {
             }
 
             // Auto-populate geographic fields from department if not provided and department changed
+            let autoDivisionId = null;
+            let autoTownId = null;
+            let autoDistrictId = null;
+
             if (department_id !== undefined && division_id === undefined && town_id === undefined && district_id === undefined) {
                 const deptLocRes = await client.query(
                     `SELECT division_id, district_id, town_id 
@@ -563,24 +567,68 @@ export async function PUT(request, { params }) {
                     const loc = deptLocRes.rows[0];
                     // Priority: division > town > district
                     if (loc.division_id) {
-                        efilingUpdateQuery += `, division_id = $${paramCount}`;
-                        efilingParams.push(loc.division_id);
-                        paramCount++;
+                        autoDivisionId = loc.division_id;
                     } else if (loc.town_id) {
-                        efilingUpdateQuery += `, town_id = $${paramCount}`;
-                        efilingParams.push(loc.town_id);
-                        paramCount++;
+                        autoTownId = loc.town_id;
                         if (loc.district_id) {
-                            efilingUpdateQuery += `, district_id = $${paramCount}`;
-                            efilingParams.push(loc.district_id);
-                            paramCount++;
+                            autoDistrictId = loc.district_id;
                         }
                     } else if (loc.district_id) {
-                        efilingUpdateQuery += `, district_id = $${paramCount}`;
-                        efilingParams.push(loc.district_id);
-                        paramCount++;
+                        autoDistrictId = loc.district_id;
                     }
                 }
+            }
+
+            // If division_id is still null and role_id is provided/changed, try to get it from role_locations
+            if (!autoDivisionId && !division_id && efiling_role_id !== undefined) {
+                try {
+                    const roleLocRes = await client.query(
+                        `SELECT division_id, district_id, town_id 
+                         FROM efiling_role_locations 
+                         WHERE role_id = $1 
+                         AND division_id IS NOT NULL
+                         ORDER BY 
+                             CASE WHEN division_id IS NOT NULL THEN 1 ELSE 2 END,
+                             CASE WHEN town_id IS NOT NULL THEN 1 ELSE 2 END,
+                             CASE WHEN district_id IS NOT NULL THEN 1 ELSE 2 END
+                         LIMIT 1`,
+                        [efiling_role_id]
+                    );
+
+                    if (roleLocRes.rows.length > 0) {
+                        const roleLoc = roleLocRes.rows[0];
+                        // Use role location as fallback if user's personal location is NULL
+                        if (!autoDivisionId && roleLoc.division_id) {
+                            autoDivisionId = roleLoc.division_id;
+                        }
+                        if (!autoTownId && roleLoc.town_id) {
+                            autoTownId = roleLoc.town_id;
+                        }
+                        if (!autoDistrictId && roleLoc.district_id) {
+                            autoDistrictId = roleLoc.district_id;
+                        }
+                    }
+                } catch (roleLocError) {
+                    console.warn('Could not fetch role locations for auto-population:', roleLocError.message);
+                    // Continue without role location fallback
+                }
+            }
+
+            // Add auto-populated geographic fields to the update query
+            if (autoDivisionId) {
+                efilingUpdateQuery += `, division_id = $${paramCount}`;
+                efilingParams.push(autoDivisionId);
+                paramCount++;
+            }
+            if (autoTownId) {
+                efilingUpdateQuery += `, town_id = $${paramCount}`;
+                efilingParams.push(autoTownId);
+                paramCount++;
+            }
+            if (autoDistrictId) {
+                efilingUpdateQuery += `, district_id = $${paramCount}`;
+                efilingParams.push(autoDistrictId);
+                paramCount++;
             }
 
             efilingUpdateQuery += ` WHERE id = $${paramCount}`;

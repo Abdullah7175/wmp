@@ -586,6 +586,7 @@ export async function POST(request, { params }) {
             const toUserData = toUserInfo.rows[0] || {};
 
             // Create movement record with team workflow flags and historical user info
+            // Ensure all parameters are properly typed to avoid PostgreSQL type inference issues
             const movementRes = await client.query(`
                 INSERT INTO efiling_file_movements (
                     file_id, from_user_id, to_user_id, 
@@ -595,27 +596,27 @@ export async function POST(request, { params }) {
                     from_user_name, from_user_designation, from_user_town_id, from_user_division_id,
                     to_user_name, to_user_designation, to_user_town_id, to_user_division_id
                 )
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+                VALUES ($1::INTEGER, $2::INTEGER, $3::INTEGER, $4::INTEGER, $5::INTEGER, $6::VARCHAR, $7::TEXT, $8::BOOLEAN, $9::BOOLEAN, $10::BOOLEAN, $11::VARCHAR, $12::VARCHAR, $13::INTEGER, $14::INTEGER, $15::VARCHAR, $16::VARCHAR, $17::INTEGER, $18::INTEGER)
                 RETURNING id
             `, [
-                id, 
-                fromUserEfilingId, 
-                userId, 
-                fileRow.department_id,
-                targetUser.department_id,
+                parseInt(id) || null, 
+                parseInt(fromUserEfilingId) || null, 
+                parseInt(userId) || null, 
+                fileRow.department_id ? parseInt(fileRow.department_id) : null,
+                targetUser.department_id ? parseInt(targetUser.department_id) : null,
                 'MARK_TO', 
-                remarks || null,
-                isTeamInternal,
-                isReturnToCreator,
-                shouldStartTAT,
-                fromUserData.name || null,
-                fromUserData.designation || null,
-                fromUserData.town_id || null,
-                fromUserData.division_id || null,
-                toUserData.name || null,
-                toUserData.designation || null,
-                toUserData.town_id || null,
-                toUserData.division_id || null
+                remarks && remarks.trim() ? remarks.trim() : null,
+                Boolean(isTeamInternal),
+                Boolean(isReturnToCreator),
+                Boolean(shouldStartTAT),
+                fromUserData.name ? String(fromUserData.name) : null,
+                fromUserData.designation ? String(fromUserData.designation) : null,
+                fromUserData.town_id ? parseInt(fromUserData.town_id) : null,
+                fromUserData.division_id ? parseInt(fromUserData.division_id) : null,
+                toUserData.name ? String(toUserData.name) : null,
+                toUserData.designation ? String(toUserData.designation) : null,
+                toUserData.town_id ? parseInt(toUserData.town_id) : null,
+                toUserData.division_id ? parseInt(toUserData.division_id) : null
             ]);
             
             const movements = [movementRes];

@@ -161,6 +161,41 @@ export async function POST(request) {
                 }
             }
 
+            // If division_id is still null and role_id is provided, try to get it from role_locations
+            if (!finalDivisionId && efiling_role_id) {
+                try {
+                    const roleLocRes = await client.query(
+                        `SELECT division_id, district_id, town_id 
+                         FROM efiling_role_locations 
+                         WHERE role_id = $1 
+                         AND division_id IS NOT NULL
+                         ORDER BY 
+                             CASE WHEN division_id IS NOT NULL THEN 1 ELSE 2 END,
+                             CASE WHEN town_id IS NOT NULL THEN 1 ELSE 2 END,
+                             CASE WHEN district_id IS NOT NULL THEN 1 ELSE 2 END
+                         LIMIT 1`,
+                        [efiling_role_id]
+                    );
+
+                    if (roleLocRes.rows.length > 0) {
+                        const roleLoc = roleLocRes.rows[0];
+                        // Use role location as fallback if user's personal location is NULL
+                        if (!finalDivisionId && roleLoc.division_id) {
+                            finalDivisionId = roleLoc.division_id;
+                        }
+                        if (!finalTownId && roleLoc.town_id) {
+                            finalTownId = roleLoc.town_id;
+                        }
+                        if (!finalDistrictId && roleLoc.district_id) {
+                            finalDistrictId = roleLoc.district_id;
+                        }
+                    }
+                } catch (roleLocError) {
+                    console.warn('Could not fetch role locations for auto-population:', roleLocError.message);
+                    // Continue without role location fallback
+                }
+            }
+
             // 2. Create e-filing user record
             const efilingUserResult = await client.query(
                 `INSERT INTO efiling_users (

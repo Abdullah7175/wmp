@@ -209,6 +209,51 @@ export default function CreateEfilingUser() {
         }
     };
 
+    // Auto-populate division_id from role when role is selected (if division_id is not already set)
+    const handleRoleChange = async (roleId) => {
+        handleInputChange('efiling_role_id', parseInt(roleId));
+
+        // Only auto-populate if division_id is not already set
+        if (!roleId || formData.division_id) {
+            return;
+        }
+
+        try {
+            // Fetch role locations to auto-populate division_id
+            const response = await fetch(`/api/efiling/roles/locations?role_id=${roleId}`);
+            if (response.ok) {
+                const data = await response.json();
+                const locations = data.success ? data.locations : (Array.isArray(data) ? data : []);
+                
+                if (locations.length > 0) {
+                    // Find first location with division_id
+                    const locationWithDivision = locations.find(loc => loc.division_id);
+                    
+                    if (locationWithDivision && locationWithDivision.division_id) {
+                        handleInputChange('division_id', locationWithDivision.division_id);
+                        
+                        // Also populate district and town if available and not already set
+                        if (!formData.district_id && locationWithDivision.district_id) {
+                            handleInputChange('district_id', locationWithDivision.district_id);
+                        }
+                        if (!formData.town_id && locationWithDivision.town_id) {
+                            handleInputChange('town_id', locationWithDivision.town_id);
+                        }
+                        
+                        toast({
+                            title: "Division auto-populated",
+                            description: `Division has been auto-populated from the selected role's location.`,
+                            variant: "default",
+                        });
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('Error fetching role locations:', error);
+            // Don't show error toast as this is auto-population
+        }
+    };
+
     const validateForm = () => {
         if (!formData.name || !formData.email || !formData.password || !formData.confirmPassword || !formData.efiling_role_id) {
             toast({
@@ -509,7 +554,7 @@ export default function CreateEfilingUser() {
                                     <Label htmlFor="efiling_role_id">E-Filing Role *</Label>
                                     <Select
                                         value={formData.efiling_role_id?.toString() || ''}
-                                        onValueChange={(value) => handleInputChange('efiling_role_id', parseInt(value))}
+                                        onValueChange={handleRoleChange}
                                     >
                                         <SelectTrigger>
                                             <SelectValue placeholder={Array.isArray(roles) && roles.length > 0 ? "Select role" : "Loading roles..."} />
