@@ -176,38 +176,41 @@ export async function POST(request, { params }) {
         }
         
         // Always add department's Superintendent Engineer (SE) if current user is in a department
-        if (currentUser.department_id) {
-            const seRes = await client.query(`
-                SELECT 
-                    eu.id,
-                    u.name AS user_name,
-                    eu.efiling_role_id,
-                    r.code AS role_code,
-                    r.name AS role_name,
-                    eu.department_id,
-                    dept.name AS department_name,
-                    eu.district_id,
-                    d.title AS district_name,
-                    eu.town_id,
-                    t.town AS town_name,
-                    eu.division_id,
-                    div.name AS division_name
-                FROM efiling_users eu
-                JOIN users u ON eu.user_id = u.id
-                LEFT JOIN efiling_roles r ON eu.efiling_role_id = r.id
-                LEFT JOIN efiling_departments dept ON eu.department_id = dept.id
-                LEFT JOIN district d ON eu.district_id = d.id
-                LEFT JOIN town t ON eu.town_id = t.id
-                LEFT JOIN divisions div ON eu.division_id = div.id
-                WHERE eu.department_id = $1
-                AND eu.is_active = true
-                AND (UPPER(r.code) LIKE '%SE%' OR UPPER(r.code) = 'SE' OR UPPER(r.name) LIKE '%SUPERINTENDENT%ENGINEER%')
-                AND eu.id != $2
-                ORDER BY u.name ASC
-            `, [currentUser.department_id, currentUser.id]);
-            
-            // Add all SE users in the department
-            seRes.rows.forEach(se => {
+        if (currentUser.department_id != null && currentUser.id != null) {
+            const departmentId = parseInt(currentUser.department_id, 10);
+            const userId = parseInt(currentUser.id, 10);
+            if (!isNaN(departmentId) && !isNaN(userId) && departmentId > 0 && userId > 0) {
+                const seRes = await client.query(`
+                    SELECT 
+                        eu.id,
+                        u.name AS user_name,
+                        eu.efiling_role_id,
+                        r.code AS role_code,
+                        r.name AS role_name,
+                        eu.department_id,
+                        dept.name AS department_name,
+                        eu.district_id,
+                        d.title AS district_name,
+                        eu.town_id,
+                        t.town AS town_name,
+                        eu.division_id,
+                        div.name AS division_name
+                    FROM efiling_users eu
+                    JOIN users u ON eu.user_id = u.id
+                    LEFT JOIN efiling_roles r ON eu.efiling_role_id = r.id
+                    LEFT JOIN efiling_departments dept ON eu.department_id = dept.id
+                    LEFT JOIN district d ON eu.district_id = d.id
+                    LEFT JOIN town t ON eu.town_id = t.id
+                    LEFT JOIN divisions div ON eu.division_id = div.id
+                    WHERE eu.department_id = $1
+                    AND eu.is_active = true
+                    AND (UPPER(r.code) LIKE '%SE%' OR UPPER(r.code) = 'SE' OR UPPER(r.name) LIKE '%SUPERINTENDENT%ENGINEER%')
+                    AND eu.id != $2
+                    ORDER BY u.name ASC
+                `, [departmentId, userId]);
+                
+                // Add all SE users in the department
+                seRes.rows.forEach(se => {
                 if (!allowedRecipients.find(r => r.id === se.id)) {
                     allowedRecipients.push({
                         id: se.id,
@@ -795,38 +798,41 @@ export async function GET(request, { params }) {
         }
         
         // Always add department's Superintendent Engineer (SE) if user is in a department
-        if (currentUserDepartmentId) {
-            const seRes = await client.query(`
-                SELECT 
-                    eu.id,
-                    u.name AS user_name,
-                    eu.efiling_role_id,
-                    r.code AS role_code,
-                    r.name AS role_name,
-                    eu.department_id,
-                    dept.name AS department_name,
-                    eu.district_id,
-                    d.title AS district_name,
-                    eu.town_id,
-                    t.town AS town_name,
-                    eu.division_id,
-                    div.name AS division_name
-                FROM efiling_users eu
-                JOIN users u ON eu.user_id = u.id
-                LEFT JOIN efiling_roles r ON eu.efiling_role_id = r.id
-                LEFT JOIN efiling_departments dept ON eu.department_id = dept.id
-                LEFT JOIN district d ON eu.district_id = d.id
-                LEFT JOIN town t ON eu.town_id = t.id
-                LEFT JOIN divisions div ON eu.division_id = div.id
-                WHERE eu.department_id = $1
-                AND eu.is_active = true
-                AND (UPPER(r.code) LIKE '%SE%' OR UPPER(r.code) = 'SE' OR UPPER(r.name) LIKE '%SUPERINTENDENT%ENGINEER%')
-                AND eu.id != $2
-                ORDER BY u.name ASC
-            `, [currentUserDepartmentId, currentUserEfilingId]);
-            
-            // Add all SE users in the department (there might be multiple)
-            seRes.rows.forEach(se => {
+        if (currentUserDepartmentId != null && currentUserEfilingId != null) {
+            const departmentId = parseInt(currentUserDepartmentId, 10);
+            const userId = parseInt(currentUserEfilingId, 10);
+            if (!isNaN(departmentId) && !isNaN(userId) && departmentId > 0 && userId > 0) {
+                const seRes = await client.query(`
+                    SELECT 
+                        eu.id,
+                        u.name AS user_name,
+                        eu.efiling_role_id,
+                        r.code AS role_code,
+                        r.name AS role_name,
+                        eu.department_id,
+                        dept.name AS department_name,
+                        eu.district_id,
+                        d.title AS district_name,
+                        eu.town_id,
+                        t.town AS town_name,
+                        eu.division_id,
+                        div.name AS division_name
+                    FROM efiling_users eu
+                    JOIN users u ON eu.user_id = u.id
+                    LEFT JOIN efiling_roles r ON eu.efiling_role_id = r.id
+                    LEFT JOIN efiling_departments dept ON eu.department_id = dept.id
+                    LEFT JOIN district d ON eu.district_id = d.id
+                    LEFT JOIN town t ON eu.town_id = t.id
+                    LEFT JOIN divisions div ON eu.division_id = div.id
+                    WHERE eu.department_id = $1
+                    AND eu.is_active = true
+                    AND (UPPER(r.code) LIKE '%SE%' OR UPPER(r.code) = 'SE' OR UPPER(r.name) LIKE '%SUPERINTENDENT%ENGINEER%')
+                    AND eu.id != $2
+                    ORDER BY u.name ASC
+                `, [departmentId, userId]);
+                
+                // Add all SE users in the department (there might be multiple)
+                seRes.rows.forEach(se => {
                 if (!allowedRecipients.find(r => r.id === se.id)) {
                     allowedRecipients.push({
                         id: se.id,
