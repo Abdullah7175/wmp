@@ -1000,30 +1000,25 @@ export default function DocumentSignatureSystem({
                                     if (content.startsWith('data:image/')) {
                                         return content;
                                     }
-                                    // Use same logic as profile page
+                                    // If it's already a full URL with /api/uploads/, return as-is
+                                    if (content.startsWith('http://') || content.startsWith('https://')) {
+                                        // If it already contains /api/uploads/, return the full URL as-is
+                                        if (content.includes('/api/uploads/')) {
+                                            return content;
+                                        }
+                                        // If it contains /uploads/ (without /api/), convert to /api/uploads/
+                                        if (content.includes('/uploads/')) {
+                                            return content.replace('/uploads/', '/api/uploads/');
+                                        }
+                                        // Otherwise return as-is (might be external URL)
+                                        return content;
+                                    }
+                                    // Use same logic as profile page for relative paths
                                     if (content.startsWith('/api/')) {
                                         return content; // Already correct
                                     }
                                     if (content.startsWith('/uploads/')) {
                                         return content.replace('/uploads/', '/api/uploads/');
-                                    }
-                                    // If it starts with http/https, extract path and convert to /api/uploads/
-                                    if (content.startsWith('http://') || content.startsWith('https://')) {
-                                        try {
-                                            const url = new URL(content);
-                                            const path = url.pathname;
-                                            if (path.startsWith('/api/uploads/')) {
-                                                return path; // Already correct
-                                            }
-                                            if (path.startsWith('/uploads/')) {
-                                                return path.replace('/uploads/', '/api/uploads/');
-                                            }
-                                            // Try to construct API path
-                                            return `/api/uploads${path.startsWith('/') ? '' : '/'}${path}`;
-                                        } catch (e) {
-                                            console.error('Error parsing saved signature URL:', e);
-                                            return content;
-                                        }
                                     }
                                     // Otherwise, assume it's a relative path and prepend /api/uploads/
                                     return `/api/uploads${content.startsWith('/') ? '' : '/'}${content}`;
@@ -1053,7 +1048,6 @@ export default function DocumentSignatureSystem({
                                                     src={signatureImageUrl}
                                                     alt="Signature"
                                                     className="max-h-16 max-w-48 object-contain"
-                                                    crossOrigin="anonymous"
                                                     onError={async (e) => {
                                                         const img = e.target;
                                                         const originalSrc = img.src;
