@@ -497,6 +497,7 @@ export default function FilesPage() {
                                         <TableHead>Subject</TableHead>
                                         <TableHead>Department</TableHead>
                                         <TableHead>Status</TableHead>
+                                        <TableHead>TAT</TableHead>
                                         <TableHead>Created</TableHead>
                                         <TableHead>Actions</TableHead>
                                     </TableRow>
@@ -523,6 +524,11 @@ export default function FilesPage() {
                                             </TableCell>
                                             <TableCell>
                                                 {getStatusBadge(file.status_code)}
+                                            </TableCell>
+                                            <TableCell>
+                                                <span className={`text-sm ${file.is_sla_breached ? 'text-red-600' : 'text-gray-700'}`}>
+                                                    {formatTimeRemaining(file)}
+                                                </span>
                                             </TableCell>
                                             <TableCell>
                                                 <div className="flex items-center space-x-2">

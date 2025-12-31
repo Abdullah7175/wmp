@@ -1371,6 +1371,31 @@ export async function GET(request, { params }) {
         const currentUserRoleCodeUpper = (currentUser.role_code || '').toUpperCase();
         const isSE = currentUserRoleCodeUpper === 'SE' || currentUserRoleCodeUpper.startsWith('SE_');
         
+        // Helper function to get role hierarchy level (lower number = lower level)
+        const getRoleLevel = (roleCode) => {
+            if (!roleCode) return 999;
+            const code = roleCode.toUpperCase();
+            if (code.includes('RE') || code.includes('RESIDENT_ENGINEER') || code.includes('XEN') || code.includes('EXECUTIVE_ENGINEER') || code.includes('EE')) {
+                return 1; // RE/XEN/EE = level 1
+            }
+            if (code.includes('SE') || code.includes('SUPERINTENDENT_ENGINEER')) {
+                return 2; // SE = level 2
+            }
+            if (code.includes('CE') || code.includes('CHIEF_ENGINEER')) {
+                return 3; // CE = level 3
+            }
+            if (code === 'COO') {
+                return 4; // COO = level 4
+            }
+            if (code === 'CEO' || code.includes('CEO')) {
+                return 5; // CEO = level 5
+            }
+            if (code === 'CFO' || code.includes('CFO')) {
+                return 6; // CFO = level 6
+            }
+            return 999; // Unknown = high level
+        };
+        
         // Get allowed recipients using geographic routing
         let allowedRecipients = await getAllowedRecipients(client, {
             fromUserEfilingId: fromUserEfilingId || currentUserEfilingId,
@@ -1662,6 +1687,46 @@ export async function GET(request, { params }) {
                 });
             }
         }
+        
+        // ========== CREATOR (RE/XEN) MARKING RESTRICTION - Filter Recipients ==========
+        // Rule: Once RE/XEN marks file to higher level, they cannot mark again until file is returned to them
+        const isCreator = currentUserEfilingId === file.created_by;
+        const currentUserLevel = getRoleLevel(currentUserRoleCodeUpper);
+        const isCreatorRole = currentUserLevel === 1; // RE/XEN/EE = level 1
+        
+        if (isCreator && isCreatorRole) {
+            // Check if file has been marked to higher level (SE or above) by checking movements
+            const higherLevelMovementRes = await client.query(`
+                SELECT m.id, m.to_user_id, r.code as to_role_code, m.created_at
+                FROM efiling_file_movements m
+                JOIN efiling_users eu_to ON m.to_user_id = eu_to.id
+                LEFT JOIN efiling_roles r ON eu_to.efiling_role_id = r.id
+                WHERE m.file_id = $1
+                AND m.from_user_id = $2
+                AND (
+                    r.code LIKE 'SE%' OR r.code LIKE 'CE%' OR r.code = 'CEO' OR r.code = 'COO' OR r.code = 'CFO'
+                    OR r.code LIKE '%SE%' OR r.code LIKE '%CE%' OR r.code LIKE '%CEO%' OR r.code LIKE '%COO%'
+                    OR UPPER(r.code) LIKE '%SUPERINTENDENT%' OR UPPER(r.code) LIKE '%CHIEF%'
+                )
+                ORDER BY m.created_at DESC
+                LIMIT 1
+            `, [fileId, currentUserEfilingId]);
+            
+            if (higherLevelMovementRes.rows.length > 0) {
+                // Creator has already marked to higher level
+                // Check if file is currently assigned back to creator (returned)
+                const workflowState = await getWorkflowState(client, fileId);
+                const isFileReturnedToCreator = (file.assigned_to === file.created_by) &&
+                                                 workflowState &&
+                                                 workflowState.current_state === 'RETURNED_TO_CREATOR';
+                
+                if (!isFileReturnedToCreator) {
+                    // Filter out all recipients - creator cannot mark to anyone
+                    allowedRecipients = [];
+                }
+            }
+        }
+        // ========== END CREATOR MARKING RESTRICTION ==========
         
         // Filter allowed recipients for higher authority users based on signature and comment requirements
         // If higher authority has only comment (no signature), they can only mark to RE/XEN (creator)
