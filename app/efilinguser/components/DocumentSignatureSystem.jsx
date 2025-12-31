@@ -37,6 +37,7 @@ export default function DocumentSignatureSystem({
     const [showAuthModal, setShowAuthModal] = useState(false);
     const [pendingAction, setPendingAction] = useState(null);
     const [pendingSignatureData, setPendingSignatureData] = useState(null);
+    const [actualUserRole, setActualUserRole] = useState(userRole || '');
     
     // New signature creation states
     const [signatureText, setSignatureText] = useState("");
@@ -64,6 +65,15 @@ export default function DocumentSignatureSystem({
     ];
 
 
+    // Fetch user role if not provided
+    useEffect(() => {
+        if (!userRole && efilingUserId) {
+            fetchUserRole();
+        } else if (userRole) {
+            setActualUserRole(userRole);
+        }
+    }, [userRole, efilingUserId]);
+
     // Load existing signatures and comments
     useEffect(() => {
         if (fileId) {
@@ -72,6 +82,28 @@ export default function DocumentSignatureSystem({
             loadUserSignatures();
         }
     }, [fileId, efilingUserId]);
+
+    const fetchUserRole = async () => {
+        if (!efilingUserId || !session?.user?.id) return;
+        try {
+            const response = await fetch(`/api/efiling/users/profile?userId=${session.user.id}`);
+            if (response.ok) {
+                const data = await response.json();
+                // Check various possible fields for role name/code
+                if (data.role_name) {
+                    setActualUserRole(data.role_name);
+                } else if (data.role_code) {
+                    setActualUserRole(data.role_code);
+                } else if (data.user?.role_name) {
+                    setActualUserRole(data.user.role_name);
+                } else if (data.user?.role_code) {
+                    setActualUserRole(data.user.role_code);
+                }
+            }
+        } catch (error) {
+            console.error('Error fetching user role:', error);
+        }
+    };
 
     // Initialize canvas when signature modal opens
     useEffect(() => {
@@ -136,7 +168,7 @@ export default function DocumentSignatureSystem({
                 id: Date.now(),
                 user_id: session?.user?.id,
                 user_name: session?.user?.name,
-                user_role: userRole,
+                user_role: actualUserRole || userRole || 'Unknown',
                 type: signatureData.type,
                 content: signatureData.content,
                 position: signatureData.position,
@@ -180,7 +212,7 @@ export default function DocumentSignatureSystem({
                 id: Date.now(),
                 user_id: session?.user?.id,
                 user_name: session?.user?.name,
-                user_role: userRole,
+                user_role: actualUserRole || userRole || 'Unknown',
                 text: commentText,
                 timestamp: new Date().toISOString(),
                 file_id: fileId
