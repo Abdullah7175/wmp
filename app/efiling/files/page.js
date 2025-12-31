@@ -193,6 +193,24 @@ export default function FilesPage() {
         setCurrentPage(1);
     };
 
+    const formatTimeRemaining = (file) => {
+        if (!file?.sla_deadline) return '-';
+        if (file.sla_paused) return 'Paused';
+        if (file.is_sla_breached) return 'Breached';
+
+        const minutesRemaining = file.minutes_remaining ?? Math.floor((new Date(file.sla_deadline).getTime() - Date.now()) / 60000);
+        if (Number.isNaN(minutesRemaining)) return '-';
+        if (minutesRemaining <= 0) return 'Breached';
+
+        const days = Math.floor(minutesRemaining / 1440);
+        const hours = Math.floor((minutesRemaining % 1440) / 60);
+        const minutes = minutesRemaining % 60;
+
+        if (days > 0) return `${days}d ${hours}h`;
+        if (hours > 0) return `${hours}h ${minutes}m`;
+        return `${minutes}m`;
+    };
+
     const getStatusBadge = (status) => {
         const statusConfig = {
             'DRAFT': { variant: 'secondary', icon: FileText },
