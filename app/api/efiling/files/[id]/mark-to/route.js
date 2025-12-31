@@ -233,10 +233,10 @@ export async function POST(request, { params }) {
         
         // Also add SE users from the same division (for RE and other roles that may not have department_id)
         // This allows RE to mark to SE even if they're in the same division but different departments
-        if (currentUser.division_id) {
-            const divisionId = parseInt(currentUser.division_id);
-            const userId = parseInt(currentUser.id);
-            if (divisionId && userId) {
+        if (currentUser.division_id != null && currentUser.id != null) {
+            const divisionId = parseInt(currentUser.division_id, 10);
+            const userId = parseInt(currentUser.id, 10);
+            if (!isNaN(divisionId) && !isNaN(userId) && divisionId > 0 && userId > 0) {
                 const seDivisionRes = await client.query(`
                     SELECT 
                         eu.id,
@@ -259,10 +259,10 @@ export async function POST(request, { params }) {
                     LEFT JOIN district d ON eu.district_id = d.id
                     LEFT JOIN town t ON eu.town_id = t.id
                     LEFT JOIN divisions div ON eu.division_id = div.id
-                    WHERE eu.division_id = $1::integer
+                    WHERE eu.division_id = $1
                     AND eu.is_active = true
                     AND (UPPER(r.code) LIKE '%SE%' OR UPPER(r.code) = 'SE' OR UPPER(r.name) LIKE '%SUPERINTENDENT%ENGINEER%')
-                    AND eu.id != $2::integer
+                    AND eu.id != $2
                     ORDER BY u.name ASC
                 `, [divisionId, userId]);
                 
@@ -852,10 +852,10 @@ export async function GET(request, { params }) {
         
         // Also add SE users from the same division (for RE and other roles that may not have department_id)
         // This allows RE to mark to SE even if they're in the same division but different departments
-        if (currentUserDivisionId) {
-            const divisionId = parseInt(currentUserDivisionId);
-            const userId = parseInt(currentUserEfilingId);
-            if (divisionId && userId) {
+        if (currentUserDivisionId != null && currentUserEfilingId != null) {
+            const divisionId = parseInt(currentUserDivisionId, 10);
+            const userId = parseInt(currentUserEfilingId, 10);
+            if (!isNaN(divisionId) && !isNaN(userId) && divisionId > 0 && userId > 0) {
                 const seDivisionRes = await client.query(`
                     SELECT 
                         eu.id,
@@ -878,10 +878,10 @@ export async function GET(request, { params }) {
                     LEFT JOIN district d ON eu.district_id = d.id
                     LEFT JOIN town t ON eu.town_id = t.id
                     LEFT JOIN divisions div ON eu.division_id = div.id
-                    WHERE eu.division_id = $1::integer
+                    WHERE eu.division_id = $1
                     AND eu.is_active = true
                     AND (UPPER(r.code) LIKE '%SE%' OR UPPER(r.code) = 'SE' OR UPPER(r.name) LIKE '%SUPERINTENDENT%ENGINEER%')
-                    AND eu.id != $2::integer
+                    AND eu.id != $2
                     ORDER BY u.name ASC
                 `, [divisionId, userId]);
                 
