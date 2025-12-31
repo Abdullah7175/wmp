@@ -31,6 +31,9 @@ export default function MarkToModal({ showMarkToModal, onClose, fileId, fileNumb
   const [error, setError] = useState(null);
   const [workflowState, setWorkflowState] = useState(null);
   const [isTeamInternal, setIsTeamInternal] = useState(false);
+  const [canMark, setCanMark] = useState(true);
+  const [isAssignedToSomeoneElse, setIsAssignedToSomeoneElse] = useState(false);
+  const [assignedToName, setAssignedToName] = useState(null);
 
   useEffect(() => {
     if (!showMarkToModal || !fileId) {
@@ -55,6 +58,9 @@ export default function MarkToModal({ showMarkToModal, onClose, fileId, fileNumb
 
         const data = await res.json();
         setAllowedRecipients(Array.isArray(data.allowed_recipients) ? data.allowed_recipients : []);
+        setCanMark(data.can_mark !== false);
+        setIsAssignedToSomeoneElse(data.is_assigned_to_someone_else === true);
+        setAssignedToName(data.assigned_to_name || null);
         
         // Fetch workflow state to show TAT status
         try {
@@ -203,6 +209,24 @@ export default function MarkToModal({ showMarkToModal, onClose, fileId, fileNumb
                 </div>
 
                 <div className="p-6">
+                    {/* File Already Assigned Warning */}
+                    {isAssignedToSomeoneElse && !canMark && (
+                        <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                            <div className="flex items-start gap-2">
+                                <AlertCircle className="w-5 h-5 text-yellow-600 mt-0.5" />
+                                <div className="flex-1">
+                                    <div className="font-medium text-yellow-900 mb-1">
+                                        File Already Assigned
+                                    </div>
+                                    <p className="text-sm text-yellow-700">
+                                        This file is already assigned to <strong>{assignedToName || 'another user'}</strong>. 
+                                        You cannot mark this file to another user at this time.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                    
                     {/* Workflow State Info */}
                     {workflowState && (
                         <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
@@ -275,8 +299,15 @@ export default function MarkToModal({ showMarkToModal, onClose, fileId, fileNumb
                                             <button
                                                 key={recipient.id}
                                                 type="button"
-                                                onClick={() => handleToggleRecipient(recipient.id)}
-                                                className={`w-full text-left p-3 border-b hover:bg-blue-50 transition ${
+                                                onClick={() => canMark && handleToggleRecipient(recipient.id)}
+                                                disabled={!canMark}
+                                                className={`w-full text-left p-3 border-b transition ${
+                                                    !canMark 
+                                                        ? 'opacity-50 cursor-not-allowed' 
+                                                        : selected 
+                                                            ? 'bg-blue-100 border-blue-300' 
+                                                            : 'hover:bg-blue-50'
+                                                } ${
                                                     selected ? "bg-blue-50 border-blue-200" : ""
                                                 }`}
                                             >
@@ -447,11 +478,13 @@ export default function MarkToModal({ showMarkToModal, onClose, fileId, fileNumb
                         </Button>
                         <Button 
                             onClick={handleSubmit}
-                            disabled={marking || selectedRecipients.length === 0}
+                            disabled={marking || selectedRecipients.length === 0 || !canMark}
                             className="bg-blue-600 hover:bg-blue-700"
                         >
                             {marking ? (
                                 'Marking...'
+                            ) : !canMark ? (
+                                'Cannot Mark File'
                             ) : (
                                 <>
                                     <Send className="w-4 h-4 mr-2" />

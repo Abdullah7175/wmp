@@ -131,6 +131,75 @@ export async function POST(request, { params }) {
         const { color } = body;
         const signatureColor = color || 'black';
 
+        // Step 1: Check if user has already signed this file
+        const existingSignatureRes = await client.query(`
+            SELECT COUNT(*) as count
+            FROM efiling_document_signatures
+            WHERE file_id = $1 AND user_id = $2 AND is_active = true
+        `, [id, user_id]);
+        
+        const hasAlreadySigned = parseInt(existingSignatureRes.rows[0].count) > 0;
+        
+        // Step 2: If user already signed, check if file was marked back by higher authority
+        if (hasAlreadySigned) {
+            // Get file info and current user's efiling ID
+            const fileRes = await client.query(`
+                SELECT f.created_by, eu.id as current_user_efiling_id
+                FROM efiling_files f
+                LEFT JOIN efiling_users eu ON eu.user_id = $1 AND eu.is_active = true
+                WHERE f.id = $2
+            `, [user_id, id]);
+            
+            if (fileRes.rows.length === 0) {
+                return NextResponse.json({ error: 'File not found' }, { status: 404 });
+            }
+            
+            const file = fileRes.rows[0];
+            const creatorEfilingId = file.created_by;
+            const currentUserEfilingId = file.current_user_efiling_id;
+            
+            // Check if current user is the creator
+            const isCreator = currentUserEfilingId && currentUserEfilingId === creatorEfilingId;
+            
+            if (!isCreator) {
+                // Non-creator cannot sign again
+                return NextResponse.json(
+                    { error: 'File is already signed. You cannot add e-signature again.' },
+                    { status: 403 }
+                );
+            }
+            
+            // For creator, check if file was marked back by higher authority (SE, CE, CEO, COO)
+            const latestMovementRes = await client.query(`
+                SELECT 
+                    m.is_return_to_creator,
+                    m.from_user_id,
+                    r.code as from_role_code
+                FROM efiling_file_movements m
+                LEFT JOIN efiling_users eu_from ON m.from_user_id = eu_from.id
+                LEFT JOIN efiling_roles r ON eu_from.efiling_role_id = r.id
+                WHERE m.file_id = $1
+                ORDER BY m.created_at DESC
+                LIMIT 1
+            `, [id]);
+            
+            const latestMovement = latestMovementRes.rows[0];
+            const wasMarkedBack = latestMovement && latestMovement.is_return_to_creator === true;
+            const fromRoleCode = latestMovement ? (latestMovement.from_role_code || '').toUpperCase() : '';
+            const isHigherAuthority = ['SE', 'CE', 'CEO', 'COO'].includes(fromRoleCode);
+            
+            if (!wasMarkedBack || !isHigherAuthority) {
+                // File was not marked back by higher authority, cannot sign again
+                return NextResponse.json(
+                    { error: 'File is already signed. You can only sign again if the file is marked back to you by SE, CE, CEO, or COO.' },
+                    { status: 403 }
+                );
+            }
+            
+            // File was marked back by higher authority, allow signing again
+            console.log('[SIGNATURES] Creator re-signing after file was marked back by', fromRoleCode);
+        }
+
         // Get historical user information (designation, town, division) at time of signature
         const userInfo = await client.query(`
             SELECT eu.designation, eu.town_id, eu.division_id

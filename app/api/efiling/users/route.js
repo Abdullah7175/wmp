@@ -195,10 +195,82 @@ export async function POST(request) {
             }
         }
         
-        const districtId = body.district_id || null;
-        const townId = body.town_id || null;
-        const subtownId = body.subtown_id || null;
-        const divisionId = body.division_id || null;
+        // Auto-populate geographic fields based on role locations (priority 1) and department locations (priority 2)
+        // Priority: Role locations > Department locations > User-provided values
+        let finalDistrictId = body.district_id || null;
+        let finalTownId = body.town_id || null;
+        let finalSubtownId = body.subtown_id || null;
+        let finalDivisionId = body.division_id || null;
+
+        // Priority 1: Get geographic information from role locations (roles define where users operate)
+        if (efiling_role_id && (!finalDivisionId || !finalTownId || !finalDistrictId)) {
+            try {
+                const roleLocRes = await client.query(
+                    `SELECT division_id, district_id, town_id, zone_id
+                     FROM efiling_role_locations 
+                     WHERE role_id = $1
+                     ORDER BY 
+                         CASE WHEN division_id IS NOT NULL THEN 1 ELSE 2 END,
+                         CASE WHEN town_id IS NOT NULL THEN 1 ELSE 2 END,
+                         CASE WHEN district_id IS NOT NULL THEN 1 ELSE 2 END
+                     LIMIT 1`,
+                    [efiling_role_id]
+                );
+
+                if (roleLocRes.rows.length > 0) {
+                    const roleLoc = roleLocRes.rows[0];
+                    // Use role location to populate missing geographic fields
+                    // Priority: division > town > district
+                    if (!finalDivisionId && roleLoc.division_id) {
+                        finalDivisionId = roleLoc.division_id;
+                    }
+                    if (!finalTownId && roleLoc.town_id) {
+                        finalTownId = roleLoc.town_id;
+                    }
+                    if (!finalDistrictId && roleLoc.district_id) {
+                        finalDistrictId = roleLoc.district_id;
+                    }
+                }
+            } catch (roleLocError) {
+                console.warn('Could not fetch role locations for auto-population:', roleLocError.message);
+                // Continue without role location
+            }
+        }
+
+        // Priority 2: If still missing geographic info, try department locations
+        if (department_id && (!finalDivisionId || !finalTownId || !finalDistrictId)) {
+            try {
+                const deptLocRes = await client.query(
+                    `SELECT division_id, district_id, town_id, zone_id
+                     FROM efiling_department_locations 
+                     WHERE department_id = $1 
+                     ORDER BY 
+                         CASE WHEN division_id IS NOT NULL THEN 1 ELSE 2 END,
+                         CASE WHEN town_id IS NOT NULL THEN 1 ELSE 2 END,
+                         CASE WHEN district_id IS NOT NULL THEN 1 ELSE 2 END
+                     LIMIT 1`,
+                    [department_id]
+                );
+
+                if (deptLocRes.rows.length > 0) {
+                    const loc = deptLocRes.rows[0];
+                    // Use department location to populate missing geographic fields
+                    // Priority: division > town > district
+                    if (!finalDivisionId && loc.division_id) {
+                        finalDivisionId = loc.division_id;
+                    }
+                    if (!finalTownId && loc.town_id) {
+                        finalTownId = loc.town_id;
+                    }
+                    if (!finalDistrictId && loc.district_id) {
+                        finalDistrictId = loc.district_id;
+                    }
+                }
+            } catch (deptLocError) {
+                console.warn('Could not fetch department locations for auto-population:', deptLocError.message);
+                // Continue without department location
+            }
+        }
 
         const query = `
             INSERT INTO efiling_users (
@@ -213,7 +285,7 @@ export async function POST(request) {
         const result = await client.query(query, [
             user_id, employee_id, designation, department_id, 
             efiling_role_id, supervisor_id,
-            districtId, townId, subtownId, divisionId
+            finalDistrictId, finalTownId, finalSubtownId, finalDivisionId
         ]);
         
         // Log the action

@@ -131,11 +131,56 @@ export async function GET(request, { params }) {
         // Check if user is team member
         const isTeamMemberOfCreator = isCreator ? false : await isTeamMember(client, file.created_by, userEfiling.id);
         
-        // Check editing permissions (updated for team workflow)
-        const canEdit = isSystemAdmin || await canEditFile(client, id, userEfiling.id);
+        // Check if user is higher authority (SE, CE, CEO, COO, etc.)
+        const userRoleCode = (userEfiling.role_code || '').toUpperCase();
+        // Check for exact matches or role codes that start with SE, CE, CEO, COO (with optional underscore/suffix)
+        // This matches: SE, SE_, SE_WE&M, CE, CE_, CE_WAT, CEO, CEO_, COO, COO_, ADLFA
+        const isHigherAuthority = userRoleCode === 'SE' || 
+                                 userRoleCode === 'CE' || 
+                                 userRoleCode === 'CEO' || 
+                                 userRoleCode === 'COO' || 
+                                 userRoleCode === 'ADLFA' ||
+                                 userRoleCode.startsWith('SE_') || 
+                                 userRoleCode.startsWith('CE_') || 
+                                 userRoleCode.startsWith('CEO_') || 
+                                 userRoleCode.startsWith('COO_');
         
-        // Check if user can add pages (SE/CE and assistants)
-        const canAddPage = await canAddPages(client, id, userEfiling.id);
+        console.log('[Permissions] User role check:', {
+            roleCode: userEfiling.role_code,
+            userRoleCode,
+            isHigherAuthority
+        });
+        
+        // Check if file was marked back to creator by higher authority (SE, CE, CEO, COO)
+        let wasMarkedBackByHigherAuthority = false;
+        if (isCreator && currentState === 'RETURNED_TO_CREATOR') {
+            const latestMovementRes = await client.query(`
+                SELECT 
+                    m.is_return_to_creator,
+                    m.from_user_id,
+                    r.code as from_role_code
+                FROM efiling_file_movements m
+                LEFT JOIN efiling_users eu_from ON m.from_user_id = eu_from.id
+                LEFT JOIN efiling_roles r ON eu_from.efiling_role_id = r.id
+                WHERE m.file_id = $1
+                ORDER BY m.created_at DESC
+                LIMIT 1
+            `, [id]);
+            
+            const latestMovement = latestMovementRes.rows[0];
+            if (latestMovement && latestMovement.is_return_to_creator === true) {
+                const fromRoleCode = (latestMovement.from_role_code || '').toUpperCase();
+                wasMarkedBackByHigherAuthority = ['SE', 'CE', 'CEO', 'COO'].includes(fromRoleCode);
+            }
+        }
+        
+        // Check editing permissions (updated for team workflow)
+        // If file was marked back by higher authority, creator can only add pages, not edit existing ones
+        // Higher authority users (SE, CE, CEO, COO) also cannot edit existing pages - they can only add new pages
+        const canEdit = isSystemAdmin || (await canEditFile(client, id, userEfiling.id) && !wasMarkedBackByHigherAuthority && !isHigherAuthority);
+        
+        // Check if user can add pages (SE/CE and assistants, or creator if file was marked back, or any higher authority)
+        const canAddPage = await canAddPages(client, id, userEfiling.id) || (isCreator && wasMarkedBackByHigherAuthority) || (isHigherAuthority && isAssigned);
         
         // Check if user can mark file (updated for team workflow)
         const canMark = isSystemAdmin || await canMarkFile(client, id, userEfiling.id);
@@ -189,6 +234,8 @@ export async function GET(request, { params }) {
             // Workflow state
             workflow_state: currentState,
             is_within_team: isWithinTeam,
+            wasMarkedBackByHigherAuthority,
+            isHigherAuthority,
             
             // Requirements
             requiresSignature: requiresSignatureForMarking && !hasSigned,

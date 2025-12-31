@@ -739,18 +739,60 @@ export async function POST(request) {
             created_by: createdBy, assigned_to: assigned_to || null, remarks, file_type_id
         });
         
-        // Auto-populate geography based on department type
+        // Auto-populate geography based on:
+        // 1. User's geographic assignments (personal location)
+        // 2. Department locations from efiling_department_locations table (department location)
+        // Priority: User's personal location > Department location
+        
         let fileDistrictId = null;
         let fileTownId = null;
         let fileDivisionId = null;
         
+        // First, use user's personal geographic assignments if available
         if (userDeptType === 'district') {
             fileDistrictId = userDistrictId;
             fileTownId = userTownId;
-        } else if (userDeptType === 'division') {
+        }
+        
+        // Set division_id if user has a division assignment (for divisional roles)
+        if (userDivisionId != null) {
             fileDivisionId = userDivisionId;
         }
-        // For 'global' type, geography fields remain null
+        
+        // If file geography is still incomplete, use department locations as fallback
+        if (deptToUse && (!fileDivisionId || !fileTownId || !fileDistrictId)) {
+            try {
+                const deptLocRes = await client.query(
+                    `SELECT division_id, district_id, town_id, zone_id
+                     FROM efiling_department_locations 
+                     WHERE department_id = $1 
+                     ORDER BY 
+                         CASE WHEN division_id IS NOT NULL THEN 1 ELSE 2 END,
+                         CASE WHEN town_id IS NOT NULL THEN 1 ELSE 2 END,
+                         CASE WHEN district_id IS NOT NULL THEN 1 ELSE 2 END
+                     LIMIT 1`,
+                    [deptToUse]
+                );
+                
+                if (deptLocRes.rows.length > 0) {
+                    const deptLoc = deptLocRes.rows[0];
+                    // Use department location to populate missing file geography
+                    // Priority: division > town > district
+                    if (!fileDivisionId && deptLoc.division_id) {
+                        fileDivisionId = deptLoc.division_id;
+                    }
+                    if (!fileTownId && deptLoc.town_id) {
+                        fileTownId = deptLoc.town_id;
+                    }
+                    if (!fileDistrictId && deptLoc.district_id) {
+                        fileDistrictId = deptLoc.district_id;
+                    }
+                }
+            } catch (deptLocError) {
+                console.warn('Could not fetch department locations for file geography:', deptLocError.message);
+                // Continue without department location - file geography may remain null
+            }
+        }
         
         const result = await client.query(query, [
             fileNumber, subject, categoryToUse, deptToUse, statusId,

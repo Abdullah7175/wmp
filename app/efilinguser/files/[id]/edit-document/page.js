@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Save, Send, Shield, Mic, MicOff, Building2, User, Calendar, X, Paperclip, MessageSquare } from "lucide-react";
+import { ArrowLeft, Save, Send, Shield, Mic, MicOff, Building2, User, Calendar, X, Paperclip, MessageSquare, AlertCircle } from "lucide-react";
 import TipTapEditor from "../../../components/TipTapEditor";
 import DocumentSignatureSystem from "../../../components/DocumentSignatureSystem";
 import MarkToModal from "../../../components/MarkToModal";
@@ -61,6 +61,8 @@ export default function DocumentEditor() {
     const [loadingTemplates, setLoadingTemplates] = useState(false);
     const [fileAssignedTo, setFileAssignedTo] = useState(null);
     const [isFileAtHigherLevel, setIsFileAtHigherLevel] = useState(false);
+    const [isHigherAuthority, setIsHigherAuthority] = useState(false);
+    const [wasMarkedBackByHigherAuthority, setWasMarkedBackByHigherAuthority] = useState(false);
 
     // Helper function to convert HTML to plain text
     const htmlToText = (html) => {
@@ -200,8 +202,12 @@ export default function DocumentEditor() {
                             // Check if user can edit based on workflow state
                             const canEdit = permissions?.canEdit || false;
                             const canAdd = permissions?.canAddPage || false;
+                            const wasMarkedBack = permissions?.wasMarkedBackByHigherAuthority || false;
+                            const isHigherAuth = permissions?.isHigherAuthority || false;
                             setCanEditDocument(canEdit);
                             setCanAddPage(canAdd);
+                            setWasMarkedBackByHigherAuthority(wasMarkedBack);
+                            setIsHigherAuthority(isHigherAuth);
                             setWorkflowState(permissions?.workflow_state);
                             setPermissionChecked(true);
                             
@@ -945,6 +951,40 @@ export default function DocumentEditor() {
                                         <AlertCircle className="w-5 h-5 text-amber-600 mt-0.5" />
                                         <div>
                                             <p className="text-sm font-medium text-amber-900">
+                                                This file is marked to a higher level
+                                            </p>
+                                            <p className="text-sm text-amber-700 mt-1">
+                                                Editing is disabled until the file is marked back to you.
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                            
+                            {/* Warning Message when file was marked back by higher authority */}
+                            {wasMarkedBackByHigherAuthority && (
+                                <div className="mt-2 bg-blue-50 border border-blue-200 rounded-lg p-3">
+                                    <div className="flex items-start gap-2">
+                                        <AlertCircle className="w-5 h-5 text-blue-600 mt-0.5" />
+                                        <div>
+                                            <p className="text-sm font-medium text-blue-900">
+                                                File Returned for Corrections
+                                            </p>
+                                            <p className="text-sm text-blue-700 mt-1">
+                                                This file was marked back to you. You can add new pages for corrections, but cannot edit existing pages. Please add a new page, make corrections, sign again, and mark forward.
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                            
+                            {/* Legacy warning (keeping for backward compatibility) */}
+                            {isFileAtHigherLevel && false && (
+                                <div className="mt-2 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                                    <div className="flex items-start gap-2">
+                                        <AlertCircle className="w-5 h-5 text-amber-600 mt-0.5" />
+                                        <div>
+                                            <p className="text-sm font-medium text-amber-900">
                                                 File is marked to a higher level
                                             </p>
                                             <p className="text-xs text-amber-700 mt-1">
@@ -956,16 +996,50 @@ export default function DocumentEditor() {
                                 </div>
                             )}
                             
+                            {/* Warning Message when file was marked back by higher authority */}
+                            {wasMarkedBackByHigherAuthority && (
+                                <div className="mt-2 bg-blue-50 border border-blue-200 rounded-lg p-3">
+                                    <div className="flex items-start gap-2">
+                                        <AlertCircle className="w-5 h-5 text-blue-600 mt-0.5" />
+                                        <div>
+                                            <p className="text-sm font-medium text-blue-900">
+                                                File Returned for Corrections
+                                            </p>
+                                            <p className="text-xs text-blue-700 mt-1">
+                                                This file was marked back to you by a higher authority. You can add new pages for corrections and sign again, but cannot edit existing pages. Please add a new page, make corrections, sign again, and mark forward.
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                            
+                            {/* Warning Message for higher authority users */}
+                            {/* {isHigherAuthority && !wasMarkedBackByHigherAuthority && (
+                                <div className="mt-2 bg-purple-50 border border-purple-200 rounded-lg p-3">
+                                    <div className="flex items-start gap-2">
+                                        <AlertCircle className="w-5 h-5 text-purple-600 mt-0.5" />
+                                        <div>
+                                            <p className="text-sm font-medium text-purple-900">
+                                                Higher Authority User (SE/CE/CEO/COO)
+                                            </p>
+                                            <p className="text-xs text-purple-700 mt-1">
+                                                As a higher authority user, you can add new pages, comments, attachments, and e-signatures, but cannot edit existing pages. To mark to higher level, you must add e-signature. To mark back to creator, you must add a comment.
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            )} */}
+                            
                             {/* Editor Type Toggle */}
                             <div className="flex items-center space-x-2 mt-2">
-                                <Button
+                                {/* <Button
                                     variant={editorType === 'structured' ? "default" : "outline"}
                                     size="sm"
                                     onClick={() => setEditorType('structured')}
                                     className="text-xs"
                                 >
                                     📋 Structured Editor
-                                </Button>
+                                </Button> */}
                                 {/* <Button
                                     variant={editorType === 'blank' ? "default" : "outline"}
                                     size="sm"
@@ -981,7 +1055,7 @@ export default function DocumentEditor() {
                     <div className="flex items-center space-x-2">
                         <Button
                             onClick={handleSave}
-                            disabled={saving || isFileAtHigherLevel}
+                            disabled={saving || isFileAtHigherLevel || wasMarkedBackByHigherAuthority || !canEditDocument}
                             className="bg-blue-600 hover:bg-blue-700"
                         >
                             {saving ? (
@@ -1007,11 +1081,11 @@ export default function DocumentEditor() {
                         </Button>
                         
                         <Button
-                            onClick={() => {
-                                if (hasUserSigned) {
+                            onClick={async () => {
+                                if (hasUserSigned && !wasMarkedBackByHigherAuthority) {
                                     toast({
                                         title: "Already Signed",
-                                        description: "You have already signed this document. Your signature has been successfully recorded and cannot be modified.",
+                                        description: "File is already signed. You can only sign again if the file is marked back to you by SE, CE, CEO, or COO.",
                                         variant: "default",
                                     });
                                     return;
@@ -1024,20 +1098,22 @@ export default function DocumentEditor() {
                             }}
                             variant="outline"
                             className="border-purple-600 text-purple-600 hover:bg-purple-50"
-                            disabled={hasUserSigned}
+                            disabled={hasUserSigned && !wasMarkedBackByHigherAuthority}
                         >
                             <Shield className="w-4 h-4 mr-2" />
-                            {hasUserSigned ? 'Already Signed' : 'E-Sign'}
+                            {hasUserSigned && !wasMarkedBackByHigherAuthority ? 'Already Signed' : 'E-Sign'}
                         </Button>
                         
-                        <Button
-                            onClick={() => setShowAttachmentModal(true)}
-                            variant="outline"
-                            className="border-blue-600 text-blue-600 hover:bg-blue-50"
-                        >
-                            <Paperclip className="w-4 h-4 mr-2" />
-                            Attachment
-                        </Button>
+                        {canEditDocument && (
+                            <Button
+                                onClick={() => setShowAttachmentModal(true)}
+                                variant="outline"
+                                className="border-blue-600 text-blue-600 hover:bg-blue-50"
+                            >
+                                <Paperclip className="w-4 h-4 mr-2" />
+                                Attachment
+                            </Button>
+                        )}
                         
                         <Button
                             onClick={() => {
@@ -1077,7 +1153,7 @@ export default function DocumentEditor() {
                                         <button
                                             onClick={() => deletePage(page.id)}
                                             className="ml-1 text-red-500 hover:text-red-700 text-sm font-bold w-5 h-5 flex items-center justify-center rounded-full hover:bg-red-100"
-                                            disabled={!canEditDocument || !permissionChecked || isFileAtHigherLevel}
+                                            disabled={(!canEditDocument || wasMarkedBackByHigherAuthority) || !permissionChecked || isFileAtHigherLevel}
                                             title="Delete page"
                                         >
                                             ×
@@ -1094,17 +1170,6 @@ export default function DocumentEditor() {
                                     title="Add a new page (for editing existing content)"
                                 >
                                     + Add Page
-                                </Button>
-                            )}
-                            {canAddPage && !canEditDocument && permissionChecked && (
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={handleAddPage}
-                                    className="text-green-600 border-green-600 hover:bg-green-50"
-                                    title="Add a new page (SE/CE and assistants only)"
-                                >
-                                    + Add Page (SE/CE)
                                 </Button>
                             )}
                         </div>
@@ -1226,7 +1291,7 @@ export default function DocumentEditor() {
                                                 onChange={(e) => updateCurrentPageContent({ title: e.target.value })}
                                                 className="w-full p-2 border border-gray-300 rounded-md min-h-[40px] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                                 placeholder="Enter document title"
-                                                disabled={!canEditDocument || !permissionChecked || isFileAtHigherLevel}
+                                                disabled={(!canEditDocument || wasMarkedBackByHigherAuthority) || !permissionChecked || isFileAtHigherLevel}
                                             />
                                         </div>
                                         <div>
@@ -1238,7 +1303,7 @@ export default function DocumentEditor() {
                                                 onChange={(e) => updateCurrentPageContent({ subject: e.target.value })}
                                                 className="w-full p-2 border border-gray-300 rounded-md min-h-[40px] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                                 placeholder="Enter document subject"
-                                                disabled={!canEditDocument || !permissionChecked || isFileAtHigherLevel}
+                                                disabled={(!canEditDocument || wasMarkedBackByHigherAuthority) || !permissionChecked || isFileAtHigherLevel}
                                             />
                                         </div>
                                         <div>
@@ -1250,7 +1315,7 @@ export default function DocumentEditor() {
                                                 onChange={(e) => updateCurrentPageContent({ date: e.target.value })}
                                                 className="w-full p-2 border border-gray-300 rounded-md min-h-[40px] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                                 placeholder="Enter date"
-                                                disabled={!canEditDocument || !permissionChecked || isFileAtHigherLevel}
+                                                disabled={(!canEditDocument || wasMarkedBackByHigherAuthority) || !permissionChecked || isFileAtHigherLevel}
                                             />
                                         </div>
                                         <div className="relative flex flex-col" style={{ height: '600px' }}>
@@ -1261,13 +1326,15 @@ export default function DocumentEditor() {
                                                     onChange={(value) => updateCurrentPageContent({ matter: value })}
                                                     placeholder="Enter main content..."
                                                     className="h-full"
-                                                    readOnly={!canEditDocument || !permissionChecked || isFileAtHigherLevel}
+                                                    readOnly={(!canEditDocument || wasMarkedBackByHigherAuthority) || !permissionChecked || isFileAtHigherLevel}
                                                 />
                                             </div>
-                                            {(!canEditDocument || !permissionChecked || isFileAtHigherLevel) && (
+                                            {(!canEditDocument || wasMarkedBackByHigherAuthority || !permissionChecked || isFileAtHigherLevel) && (
                                                 <p className="text-sm text-gray-500 mt-1">
-                                                    {isFileAtHigherLevel 
+                                                    {isFileAtHigherLevel
                                                         ? "This file is marked to a higher level. Editing is disabled until the file is marked back to you."
+                                                        : wasMarkedBackByHigherAuthority
+                                                        ? "This file was marked back to you. You can add new pages for corrections but cannot edit existing pages. Please add a new page, make corrections, sign again, and mark forward."
                                                         : "Only the document creator or authorized administrators can edit this content."
                                                     }
                                                 </p>
@@ -1282,7 +1349,7 @@ export default function DocumentEditor() {
                                                 onChange={(e) => updateCurrentPageContent({ footer: e.target.value })}
                                                 className="w-full p-2 border border-gray-300 rounded-md min-h-[40px] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                                 placeholder="Enter footer text"
-                                                disabled={!canEditDocument || !permissionChecked || isFileAtHigherLevel}
+                                                disabled={(!canEditDocument || wasMarkedBackByHigherAuthority) || !permissionChecked || isFileAtHigherLevel}
                                             />
                                         </div>
                                     </div>

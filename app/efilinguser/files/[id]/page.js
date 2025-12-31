@@ -6,12 +6,13 @@ import { useRouter, useParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Edit, Download, Eye, Clock, User, Building2, FileText, AlertCircle, MessageSquare, Forward, Printer, FileDown, X, Maximize2, Shield } from "lucide-react";
+import { ArrowLeft, Edit, Download, Eye, Clock, User, Building2, FileText, AlertCircle, MessageSquare, Forward, Printer, FileDown, X, Maximize2, Shield, Paperclip, Upload, Plus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import Image from "next/image";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import DocumentSignatureSystem from "../../components/DocumentSignatureSystem";
 import MarkToModal from "../../components/MarkToModal";
 import { useEfilingUser } from "@/context/EfilingUserContext";
@@ -43,6 +44,12 @@ export default function FileDetail() {
     const [workRequests, setWorkRequests] = useState([]);
     const [selectedWorkRequestId, setSelectedWorkRequestId] = useState(null);
     const [savingFileInfo, setSavingFileInfo] = useState(false);
+    const [isHigherAuthority, setIsHigherAuthority] = useState(false);
+    const [isCreator, setIsCreator] = useState(false);
+    const [showAttachmentUpload, setShowAttachmentUpload] = useState(false);
+    const [uploadingAttachment, setUploadingAttachment] = useState(false);
+    const [attachmentName, setAttachmentName] = useState("");
+    const [selectedFiles, setSelectedFiles] = useState([]);
 
     const fetchUserRole = async () => {
         try {
@@ -66,6 +73,7 @@ export default function FileDetail() {
             await fetchTimeline();
             await fetchComments();
             await fetchUserRole();
+            await fetchPermissions();
         };
         loadData();
     }, [session?.user?.id, params.id, efilingUserId]);
@@ -159,6 +167,23 @@ export default function FileDetail() {
         }
     };
 
+    const fetchPermissions = async () => {
+        try {
+            const permRes = await fetch(`/api/efiling/files/${params.id}/permissions`);
+            if (permRes.ok) {
+                const permData = await permRes.json();
+                const permissions = permData.permissions;
+                console.log('Permissions data:', permissions);
+                console.log('isHigherAuthority:', permissions?.isHigherAuthority);
+                console.log('isCreator:', permissions?.isCreator);
+                setIsHigherAuthority(permissions?.isHigherAuthority || false);
+                setIsCreator(permissions?.isCreator || false);
+            }
+        } catch (e) {
+            console.error('Error loading permissions:', e);
+        }
+    };
+
     const fetchExtras = async () => {
         try {
             const [docRes, attRes, sigRes] = await Promise.all([
@@ -207,6 +232,120 @@ export default function FileDetail() {
             }
         } catch (e) {
             console.error('Error loading extras', e);
+        }
+    };
+
+    const handleFileSelect = (event) => {
+        const files = Array.from(event.target.files);
+        const allowedTypes = [
+            'application/pdf',
+            'application/msword',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'image/jpeg',
+            'image/jpg',
+            'image/png'
+        ];
+        const maxSize = 5 * 1024 * 1024; // 5MB
+        
+        const validFiles = [];
+        const errors = [];
+        
+        files.forEach(file => {
+            if (!allowedTypes.includes(file.type)) {
+                errors.push(`${file.name}: File type not allowed. Only PDF, DOC, DOCX, JPG, JPEG, PNG are allowed.`);
+            } else if (file.size > maxSize) {
+                errors.push(`${file.name}: File size exceeds 5MB limit.`);
+            } else {
+                validFiles.push(file);
+            }
+        });
+        
+        if (errors.length > 0) {
+            toast({
+                title: "Invalid Files",
+                description: errors.join('\n'),
+                variant: "destructive",
+            });
+        }
+        
+        setSelectedFiles(validFiles);
+    };
+
+    const handleAttachmentUpload = async () => {
+        if (!attachmentName.trim()) {
+            toast({
+                title: "Error",
+                description: "Please enter a name for the attachment",
+                variant: "destructive",
+            });
+            return;
+        }
+
+        if (selectedFiles.length === 0) {
+            toast({
+                title: "Error",
+                description: "Please select at least one file to upload",
+                variant: "destructive",
+            });
+            return;
+        }
+
+        if (!efilingUserId) {
+            toast({
+                title: "Cannot upload",
+                description: "Your e-filing profile is not available. Please refresh and try again.",
+                variant: "destructive",
+            });
+            return;
+        }
+
+        setUploadingAttachment(true);
+        try {
+            const uploadPromises = selectedFiles.map(async (file) => {
+                const formData = new FormData();
+                formData.append('file', file);
+                formData.append('fileId', params.id);
+                formData.append('attachmentName', attachmentName);
+
+                const response = await fetch('/api/efiling/files/upload-attachment', {
+                    method: 'POST',
+                    headers: {
+                        'x-user-id': efilingUserId || session?.user?.id || 'system'
+                    },
+                    body: formData,
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Failed to upload ${file.name}`);
+                }
+
+                return response.json();
+            });
+
+            await Promise.all(uploadPromises);
+
+            toast({
+                title: "Success",
+                description: `${selectedFiles.length} file(s) uploaded successfully`,
+            });
+
+            // Reset form
+            setAttachmentName("");
+            setSelectedFiles([]);
+            setShowAttachmentUpload(false);
+            
+            // Reload attachments
+            fetchExtras();
+
+        } catch (error) {
+            console.error('Error uploading files:', error);
+            toast({
+                title: "Upload Failed",
+                description: error.message || "Failed to upload files",
+                variant: "destructive",
+            });
+        } finally {
+            setUploadingAttachment(false);
         }
     };
 
@@ -909,10 +1048,18 @@ export default function FileDetail() {
                     </div>
                 </div>
                 <div className="flex space-x-2 no-print">
-                    <Button onClick={() => router.push(`/efilinguser/files/${file.id}/edit-document`)} className="bg-blue-600 hover:bg-blue-700">
-                        <Edit className="w-4 h-4 mr-2" />
-                        Edit File
-                    </Button>
+                    {isCreator && (
+                        <Button onClick={() => router.push(`/efilinguser/files/${file.id}/edit-document`)} className="bg-blue-600 hover:bg-blue-700">
+                            <Edit className="w-4 h-4 mr-2" />
+                            Edit Document
+                        </Button>
+                    )}
+                    {isHigherAuthority && (
+                        <Button onClick={() => router.push(`/efilinguser/files/${file.id}/add-page`)} className="bg-blue-600 hover:bg-blue-700">
+                            <Edit className="w-4 h-4 mr-2" />
+                            Add Notesheet
+                        </Button>
+                    )}
                     <Button onClick={handlePrint} variant="outline" className="bg-green-50 hover:bg-green-100 text-green-700 border-green-300">
                         <Printer className="w-4 h-4 mr-2" />
                         Print
@@ -1316,7 +1463,20 @@ export default function FileDetail() {
 
                     <Card>
                         <CardHeader>
-                            <CardTitle>Attachments</CardTitle>
+                            <div className="flex items-center justify-between">
+                                <CardTitle>Attachments</CardTitle>
+                                {isHigherAuthority && (
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => setShowAttachmentUpload(true)}
+                                        className="flex items-center gap-2"
+                                    >
+                                        <Plus className="w-4 h-4" />
+                                        Add Attachment
+                                    </Button>
+                                )}
+                            </div>
                         </CardHeader>
                         <CardContent>
                             {attachments.length === 0 ? (
@@ -1652,6 +1812,86 @@ export default function FileDetail() {
                             </div>
                         </div>
                     )}
+                </DialogContent>
+            </Dialog>
+
+            {/* Attachment Upload Dialog */}
+            <Dialog open={showAttachmentUpload} onOpenChange={setShowAttachmentUpload}>
+                <DialogContent className="max-w-md">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <Upload className="w-5 h-5" />
+                            Upload Attachments
+                        </DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                        <div>
+                            <Label htmlFor="attachmentName">Attachment Name</Label>
+                            <Input
+                                id="attachmentName"
+                                value={attachmentName}
+                                onChange={(e) => setAttachmentName(e.target.value)}
+                                placeholder="Enter a name for these attachments"
+                                className="mt-1"
+                            />
+                            <p className="text-sm text-gray-500 mt-1">
+                                This name will be used to identify the group of files
+                            </p>
+                        </div>
+
+                        <div>
+                            <Label htmlFor="files">Select Files</Label>
+                            <Input
+                                id="files"
+                                type="file"
+                                multiple
+                                accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                                onChange={handleFileSelect}
+                                className="mt-1"
+                            />
+                            <p className="text-sm text-gray-500 mt-1">
+                                Allowed types: PDF, DOC, DOCX, JPG, JPEG, PNG (Max 5MB each)
+                            </p>
+                        </div>
+
+                        {selectedFiles.length > 0 && (
+                            <div>
+                                <Label>Selected Files ({selectedFiles.length})</Label>
+                                <div className="mt-2 space-y-1 max-h-32 overflow-y-auto">
+                                    {selectedFiles.map((file, index) => (
+                                        <div key={index} className="text-sm text-gray-600 flex items-center gap-2">
+                                            <Paperclip className="w-4 h-4" />
+                                            <span className="truncate">{file.name}</span>
+                                            <span className="text-xs text-gray-500">
+                                                ({(file.size / 1024).toFixed(1)} KB)
+                                            </span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="flex justify-end gap-2 pt-4 border-t">
+                            <Button
+                                variant="outline"
+                                onClick={() => {
+                                    setShowAttachmentUpload(false);
+                                    setAttachmentName("");
+                                    setSelectedFiles([]);
+                                }}
+                                disabled={uploadingAttachment}
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                onClick={handleAttachmentUpload}
+                                disabled={uploadingAttachment || !attachmentName.trim() || selectedFiles.length === 0}
+                                className="bg-blue-600 hover:bg-blue-700"
+                            >
+                                {uploadingAttachment ? 'Uploading...' : 'Upload'}
+                            </Button>
+                        </div>
+                    </div>
                 </DialogContent>
             </Dialog>
 

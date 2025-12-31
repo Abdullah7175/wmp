@@ -125,50 +125,20 @@ export async function POST(request) {
 
             const userId = userResult.rows[0].id;
 
-            // Auto-populate geographic fields from department if not provided
+            // Auto-populate geographic fields based on role locations (priority 1) and department locations (priority 2)
+            // Priority: Role locations > Department locations > User-provided values
             let finalDistrictId = district_id || null;
             let finalTownId = town_id || null;
             let finalSubtownId = subtown_id || null;
             let finalDivisionId = division_id || null;
 
-            if (!is_consultant && department_id && !finalDivisionId && !finalTownId && !finalDistrictId) {
-                // Fetch department locations to auto-populate
-                const deptLocRes = await client.query(
-                    `SELECT division_id, district_id, town_id 
-                     FROM efiling_department_locations 
-                     WHERE department_id = $1 
-                     ORDER BY 
-                         CASE WHEN division_id IS NOT NULL THEN 1 ELSE 2 END,
-                         CASE WHEN town_id IS NOT NULL THEN 1 ELSE 2 END,
-                         CASE WHEN district_id IS NOT NULL THEN 1 ELSE 2 END
-                     LIMIT 1`,
-                    [department_id]
-                );
-
-                if (deptLocRes.rows.length > 0) {
-                    const loc = deptLocRes.rows[0];
-                    // Priority: division > town > district
-                    if (loc.division_id) {
-                        finalDivisionId = loc.division_id;
-                    } else if (loc.town_id) {
-                        finalTownId = loc.town_id;
-                        if (loc.district_id) {
-                            finalDistrictId = loc.district_id;
-                        }
-                    } else if (loc.district_id) {
-                        finalDistrictId = loc.district_id;
-                    }
-                }
-            }
-
-            // If division_id is still null and role_id is provided, try to get it from role_locations
-            if (!finalDivisionId && efiling_role_id) {
+            // Priority 1: Get geographic information from role locations (roles define where users operate)
+            if (efiling_role_id && (!finalDivisionId || !finalTownId || !finalDistrictId)) {
                 try {
                     const roleLocRes = await client.query(
-                        `SELECT division_id, district_id, town_id 
+                        `SELECT division_id, district_id, town_id, zone_id
                          FROM efiling_role_locations 
-                         WHERE role_id = $1 
-                         AND division_id IS NOT NULL
+                         WHERE role_id = $1
                          ORDER BY 
                              CASE WHEN division_id IS NOT NULL THEN 1 ELSE 2 END,
                              CASE WHEN town_id IS NOT NULL THEN 1 ELSE 2 END,
@@ -179,7 +149,8 @@ export async function POST(request) {
 
                     if (roleLocRes.rows.length > 0) {
                         const roleLoc = roleLocRes.rows[0];
-                        // Use role location as fallback if user's personal location is NULL
+                        // Use role location to populate missing geographic fields
+                        // Priority: division > town > district
                         if (!finalDivisionId && roleLoc.division_id) {
                             finalDivisionId = roleLoc.division_id;
                         }
@@ -192,7 +163,42 @@ export async function POST(request) {
                     }
                 } catch (roleLocError) {
                     console.warn('Could not fetch role locations for auto-population:', roleLocError.message);
-                    // Continue without role location fallback
+                    // Continue without role location
+                }
+            }
+
+            // Priority 2: If still missing geographic info and not consultant, try department locations
+            if (!is_consultant && department_id && (!finalDivisionId || !finalTownId || !finalDistrictId)) {
+                try {
+                    const deptLocRes = await client.query(
+                        `SELECT division_id, district_id, town_id, zone_id
+                         FROM efiling_department_locations 
+                         WHERE department_id = $1 
+                         ORDER BY 
+                             CASE WHEN division_id IS NOT NULL THEN 1 ELSE 2 END,
+                             CASE WHEN town_id IS NOT NULL THEN 1 ELSE 2 END,
+                             CASE WHEN district_id IS NOT NULL THEN 1 ELSE 2 END
+                         LIMIT 1`,
+                        [department_id]
+                    );
+
+                    if (deptLocRes.rows.length > 0) {
+                        const loc = deptLocRes.rows[0];
+                        // Use department location to populate missing geographic fields
+                        // Priority: division > town > district
+                        if (!finalDivisionId && loc.division_id) {
+                            finalDivisionId = loc.division_id;
+                        }
+                        if (!finalTownId && loc.town_id) {
+                            finalTownId = loc.town_id;
+                        }
+                        if (!finalDistrictId && loc.district_id) {
+                            finalDistrictId = loc.district_id;
+                        }
+                    }
+                } catch (deptLocError) {
+                    console.warn('Could not fetch department locations for auto-population:', deptLocError.message);
+                    // Continue without department location
                 }
             }
 
