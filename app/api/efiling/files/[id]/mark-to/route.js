@@ -855,6 +855,7 @@ export async function GET(request, { params }) {
                     });
                 }
             });
+            }
         }
         
         // Also add SE users from the same division (for RE and other roles that may not have department_id)
