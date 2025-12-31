@@ -161,43 +161,73 @@ export async function POST(request, { params }) {
             // Check if current user is the creator
             const isCreator = currentUserEfilingId && currentUserEfilingId === creatorEfilingId;
             
-            if (!isCreator) {
-                // Non-creator cannot sign again
+            // Check if current user is higher authority (SE, CE, CEO, COO, ADLFA)
+            let isHigherAuthority = false;
+            if (currentUserEfilingId) {
+                const userRoleRes = await client.query(`
+                    SELECT r.code as role_code
+                    FROM efiling_users eu
+                    LEFT JOIN efiling_roles r ON eu.efiling_role_id = r.id
+                    WHERE eu.id = $1 AND eu.is_active = true
+                `, [currentUserEfilingId]);
+                
+                if (userRoleRes.rows.length > 0) {
+                    const userRoleCode = (userRoleRes.rows[0].role_code || '').toUpperCase();
+                    isHigherAuthority = userRoleCode === 'SE' || 
+                                       userRoleCode === 'CE' || 
+                                       userRoleCode === 'CEO' || 
+                                       userRoleCode === 'COO' || 
+                                       userRoleCode === 'ADLFA' ||
+                                       userRoleCode.startsWith('SE_') || 
+                                       userRoleCode.startsWith('CE_') || 
+                                       userRoleCode.startsWith('CEO_') || 
+                                       userRoleCode.startsWith('COO_');
+                }
+            }
+            
+            if (!isCreator && !isHigherAuthority) {
+                // Non-creator and non-higher-authority cannot sign again
                 return NextResponse.json(
                     { error: 'File is already signed. You cannot add e-signature again.' },
                     { status: 403 }
                 );
             }
             
-            // For creator, check if file was marked back by higher authority (SE, CE, CEO, COO)
-            const latestMovementRes = await client.query(`
-                SELECT 
-                    m.is_return_to_creator,
-                    m.from_user_id,
-                    r.code as from_role_code
-                FROM efiling_file_movements m
-                LEFT JOIN efiling_users eu_from ON m.from_user_id = eu_from.id
-                LEFT JOIN efiling_roles r ON eu_from.efiling_role_id = r.id
-                WHERE m.file_id = $1
-                ORDER BY m.created_at DESC
-                LIMIT 1
-            `, [id]);
-            
-            const latestMovement = latestMovementRes.rows[0];
-            const wasMarkedBack = latestMovement && latestMovement.is_return_to_creator === true;
-            const fromRoleCode = latestMovement ? (latestMovement.from_role_code || '').toUpperCase() : '';
-            const isHigherAuthority = ['SE', 'CE', 'CEO', 'COO'].includes(fromRoleCode);
-            
-            if (!wasMarkedBack || !isHigherAuthority) {
-                // File was not marked back by higher authority, cannot sign again
-                return NextResponse.json(
-                    { error: 'File is already signed. You can only sign again if the file is marked back to you by SE, CE, CEO, or COO.' },
-                    { status: 403 }
-                );
+            // Higher authority users can always add signatures (they can sign multiple times)
+            if (isHigherAuthority) {
+                console.log('[SIGNATURES] Higher authority user re-signing file');
+                // Allow them to proceed with adding signature - skip creator-specific checks
+            } else if (isCreator) {
+                // For creator only, check if file was marked back by higher authority (SE, CE, CEO, COO)
+                const latestMovementRes = await client.query(`
+                    SELECT 
+                        m.is_return_to_creator,
+                        m.from_user_id,
+                        r.code as from_role_code
+                    FROM efiling_file_movements m
+                    LEFT JOIN efiling_users eu_from ON m.from_user_id = eu_from.id
+                    LEFT JOIN efiling_roles r ON eu_from.efiling_role_id = r.id
+                    WHERE m.file_id = $1
+                    ORDER BY m.created_at DESC
+                    LIMIT 1
+                `, [id]);
+                
+                const latestMovement = latestMovementRes.rows[0];
+                const wasMarkedBack = latestMovement && latestMovement.is_return_to_creator === true;
+                const fromRoleCode = latestMovement ? (latestMovement.from_role_code || '').toUpperCase() : '';
+                const wasMarkedBackByHigherAuthority = ['SE', 'CE', 'CEO', 'COO'].includes(fromRoleCode);
+                
+                if (!wasMarkedBack || !wasMarkedBackByHigherAuthority) {
+                    // File was not marked back by higher authority, cannot sign again
+                    return NextResponse.json(
+                        { error: 'File is already signed. You can only sign again if the file is marked back to you by SE, CE, CEO, or COO.' },
+                        { status: 403 }
+                    );
+                }
+                
+                // File was marked back by higher authority, allow signing again
+                console.log('[SIGNATURES] Creator re-signing after file was marked back by', fromRoleCode);
             }
-            
-            // File was marked back by higher authority, allow signing again
-            console.log('[SIGNATURES] Creator re-signing after file was marked back by', fromRoleCode);
         }
 
         // Get historical user information (designation, town, division) at time of signature
