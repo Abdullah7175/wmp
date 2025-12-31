@@ -628,8 +628,11 @@ export async function POST(request, { params }) {
                 }
             }
             
-            // Rule 2: If higher authority (SE/CE/CEO/COO) is marking to higher level, require e-signature
+            // Rule 2: If higher authority (SE/CE/CEO/COO) is marking to higher level, require BOTH e-signature AND comment
+            // If only comment is present (no e-sign), they can only mark to RE/XEN (creator)
+            // If both e-sign AND comment are present, they can mark to higher levels
             if (isHigherAuthority && isMarkingToHigherLevel && !isAdmin) {
+                // Check for e-signature
                 const signatureRes = await client.query(`
                     SELECT COUNT(*) as count
                     FROM efiling_document_signatures
@@ -638,12 +641,48 @@ export async function POST(request, { params }) {
                 
                 const hasSigned = parseInt(signatureRes.rows[0].count) > 0;
                 
-                if (!hasSigned) {
+                // Check for comment
+                const commentRes = await client.query(`
+                    SELECT COUNT(*) as count
+                    FROM efiling_document_comments
+                    WHERE file_id = $1 AND user_id = $2 AND is_active = true
+                `, [fileId, session.user.id]);
+                
+                const hasCommented = parseInt(commentRes.rows[0].count) > 0;
+                
+                // Check if user has added pages (notesheet) - this also qualifies for marking to higher level
+                const pagesRes = await client.query(`
+                    SELECT COUNT(*) as count
+                    FROM efiling_document_pages
+                    WHERE file_id = $1 AND created_by = $2
+                `, [fileId, currentUserEfilingId]);
+                
+                const hasAddedPages = parseInt(pagesRes.rows[0].count) > 0;
+                
+                // To mark to higher level, user must have:
+                // - E-signature AND comment, OR
+                // - E-signature AND added pages (notesheet), OR
+                // - All three (signature, comment, pages)
+                const canMarkToHigherLevel = hasSigned && (hasCommented || hasAddedPages);
+                
+                if (!canMarkToHigherLevel) {
                     await client.query('ROLLBACK');
-                    return NextResponse.json({
-                        error: 'E-signature required before marking to higher level. Please add your e-signature, then mark the file forward.',
-                        code: 'SIGNATURE_REQUIRED_FOR_HIGHER_LEVEL'
-                    }, { status: 403 });
+                    if (!hasSigned && !hasCommented) {
+                        return NextResponse.json({
+                            error: 'E-signature and comment required before marking to higher level. Please add both your e-signature and a comment, then mark the file forward.',
+                            code: 'SIGNATURE_AND_COMMENT_REQUIRED_FOR_HIGHER_LEVEL'
+                        }, { status: 403 });
+                    } else if (!hasSigned) {
+                        return NextResponse.json({
+                            error: 'E-signature required before marking to higher level. You have added a comment, but you also need to add your e-signature to mark to higher levels. With only a comment, you can only mark back to the creator (RE/XEN).',
+                            code: 'SIGNATURE_REQUIRED_FOR_HIGHER_LEVEL'
+                        }, { status: 403 });
+                    } else {
+                        return NextResponse.json({
+                            error: 'Comment required before marking to higher level. You have added an e-signature, but you also need to add a comment (or add a notesheet page) to mark to higher levels. With only an e-signature, you can only mark back to the creator (RE/XEN).',
+                            code: 'COMMENT_REQUIRED_FOR_HIGHER_LEVEL'
+                        }, { status: 403 });
+                    }
                 }
             }
             // ========== END HIGHER AUTHORITY RULES VALIDATION ==========
@@ -1523,6 +1562,58 @@ export async function GET(request, { params }) {
                     }
                 });
             }
+        }
+        
+        // Filter allowed recipients for higher authority users based on signature and comment requirements
+        // If higher authority has only comment (no signature), they can only mark to RE/XEN (creator)
+        // If they have both signature AND comment (or added pages), they can mark to higher levels
+        const isHigherAuthorityGET = currentUserRoleCodeUpper === 'SE' || 
+                                     currentUserRoleCodeUpper === 'CE' || 
+                                     currentUserRoleCodeUpper === 'CEO' || 
+                                     currentUserRoleCodeUpper === 'COO' || 
+                                     currentUserRoleCodeUpper === 'ADLFA' ||
+                                     currentUserRoleCodeUpper.startsWith('SE_') || 
+                                     currentUserRoleCodeUpper.startsWith('CE_') || 
+                                     currentUserRoleCodeUpper.startsWith('CEO_') || 
+                                     currentUserRoleCodeUpper.startsWith('COO_');
+        
+        if (isHigherAuthorityGET && !isAdmin && currentUserEfilingId != null) {
+            // Check if user has signature
+            const signatureRes = await client.query(`
+                SELECT COUNT(*) as count
+                FROM efiling_document_signatures
+                WHERE file_id = $1 AND user_id = $2 AND is_active = true
+            `, [fileId, session.user.id]);
+            
+            const hasSigned = parseInt(signatureRes.rows[0].count) > 0;
+            
+            // Check if user has comment
+            const commentRes = await client.query(`
+                SELECT COUNT(*) as count
+                FROM efiling_document_comments
+                WHERE file_id = $1 AND user_id = $2 AND is_active = true
+            `, [fileId, session.user.id]);
+            
+            const hasCommented = parseInt(commentRes.rows[0].count) > 0;
+            
+            // Check if user has added pages (notesheet)
+            const pagesRes = await client.query(`
+                SELECT COUNT(*) as count
+                FROM efiling_document_pages
+                WHERE file_id = $1 AND created_by = $2
+            `, [fileId, currentUserEfilingId]);
+            
+            const hasAddedPages = parseInt(pagesRes.rows[0].count) > 0;
+            
+            // If user only has comment (no signature, no pages), filter to only show creator (RE/XEN)
+            // If user only has signature (no comment, no pages), also filter to only show creator
+            if ((hasCommented && !hasSigned && !hasAddedPages) || (hasSigned && !hasCommented && !hasAddedPages)) {
+                allowedRecipients = allowedRecipients.filter(recipient => {
+                    // Keep only the creator (RE/XEN)
+                    return recipient.id === file.created_by;
+                });
+            }
+            // If user has both signature AND (comment OR pages), they can see all recipients (no filtering needed)
         }
         
         // Filter out current user from allowed recipients - users can't mark to themselves
