@@ -234,58 +234,62 @@ export async function POST(request, { params }) {
         // Also add SE users from the same division (for RE and other roles that may not have department_id)
         // This allows RE to mark to SE even if they're in the same division but different departments
         if (currentUser.division_id) {
-            const seDivisionRes = await client.query(`
-                SELECT 
-                    eu.id,
-                    u.name AS user_name,
-                    eu.efiling_role_id,
-                    r.code AS role_code,
-                    r.name AS role_name,
-                    eu.department_id,
-                    dept.name AS department_name,
-                    eu.district_id,
-                    d.title AS district_name,
-                    eu.town_id,
-                    t.town AS town_name,
-                    eu.division_id,
-                    div.name AS division_name
-                FROM efiling_users eu
-                JOIN users u ON eu.user_id = u.id
-                LEFT JOIN efiling_roles r ON eu.efiling_role_id = r.id
-                LEFT JOIN efiling_departments dept ON eu.department_id = dept.id
-                LEFT JOIN district d ON eu.district_id = d.id
-                LEFT JOIN town t ON eu.town_id = t.id
-                LEFT JOIN divisions div ON eu.division_id = div.id
-                WHERE eu.division_id = $1
-                AND eu.is_active = true
-                AND (UPPER(r.code) LIKE '%SE%' OR UPPER(r.code) = 'SE' OR UPPER(r.name) LIKE '%SUPERINTENDENT%ENGINEER%')
-                AND eu.id != $2
-                ORDER BY u.name ASC
-            `, [currentUser.division_id, currentUser.id]);
-            
-            // Add all SE users in the division (if not already added via department)
-            seDivisionRes.rows.forEach(se => {
-                if (!allowedRecipients.find(r => r.id === se.id)) {
-                    allowedRecipients.push({
-                        id: se.id,
-                        user_name: se.user_name,
-                        name: se.user_name,
-                        role_code: se.role_code,
-                        role_name: se.role_name,
-                        department_id: se.department_id,
-                        department_name: se.department_name,
-                        district_id: se.district_id,
-                        district_name: se.district_name,
-                        town_id: se.town_id,
-                        town_name: se.town_name,
-                        division_id: se.division_id,
-                        division_name: se.division_name,
-                        allowed_level_scope: 'division',
-                        allowed_reason: 'DIVISION_SE',
-                        is_division_se: true
-                    });
-                }
-            });
+            const divisionId = parseInt(currentUser.division_id);
+            const userId = parseInt(currentUser.id);
+            if (divisionId && userId) {
+                const seDivisionRes = await client.query(`
+                    SELECT 
+                        eu.id,
+                        u.name AS user_name,
+                        eu.efiling_role_id,
+                        r.code AS role_code,
+                        r.name AS role_name,
+                        eu.department_id,
+                        dept.name AS department_name,
+                        eu.district_id,
+                        d.title AS district_name,
+                        eu.town_id,
+                        t.town AS town_name,
+                        eu.division_id,
+                        div.name AS division_name
+                    FROM efiling_users eu
+                    JOIN users u ON eu.user_id = u.id
+                    LEFT JOIN efiling_roles r ON eu.efiling_role_id = r.id
+                    LEFT JOIN efiling_departments dept ON eu.department_id = dept.id
+                    LEFT JOIN district d ON eu.district_id = d.id
+                    LEFT JOIN town t ON eu.town_id = t.id
+                    LEFT JOIN divisions div ON eu.division_id = div.id
+                    WHERE eu.division_id = $1::integer
+                    AND eu.is_active = true
+                    AND (UPPER(r.code) LIKE '%SE%' OR UPPER(r.code) = 'SE' OR UPPER(r.name) LIKE '%SUPERINTENDENT%ENGINEER%')
+                    AND eu.id != $2::integer
+                    ORDER BY u.name ASC
+                `, [divisionId, userId]);
+                
+                // Add all SE users in the division (if not already added via department)
+                seDivisionRes.rows.forEach(se => {
+                    if (!allowedRecipients.find(r => r.id === se.id)) {
+                        allowedRecipients.push({
+                            id: se.id,
+                            user_name: se.user_name,
+                            name: se.user_name,
+                            role_code: se.role_code,
+                            role_name: se.role_name,
+                            department_id: se.department_id,
+                            department_name: se.department_name,
+                            district_id: se.district_id,
+                            district_name: se.district_name,
+                            town_id: se.town_id,
+                            town_name: se.town_name,
+                            division_id: se.division_id,
+                            division_name: se.division_name,
+                            allowed_level_scope: 'division',
+                            allowed_reason: 'DIVISION_SE',
+                            is_division_se: true
+                        });
+                    }
+                });
+            }
         }
 
         const allowedRecipientMap = new Map(allowedRecipients.map((recipient) => [recipient.id, recipient]));
@@ -849,58 +853,62 @@ export async function GET(request, { params }) {
         // Also add SE users from the same division (for RE and other roles that may not have department_id)
         // This allows RE to mark to SE even if they're in the same division but different departments
         if (currentUserDivisionId) {
-            const seDivisionRes = await client.query(`
-                SELECT 
-                    eu.id,
-                    u.name AS user_name,
-                    eu.efiling_role_id,
-                    r.code AS role_code,
-                    r.name AS role_name,
-                    eu.department_id,
-                    dept.name AS department_name,
-                    eu.district_id,
-                    d.title AS district_name,
-                    eu.town_id,
-                    t.town AS town_name,
-                    eu.division_id,
-                    div.name AS division_name
-                FROM efiling_users eu
-                JOIN users u ON eu.user_id = u.id
-                LEFT JOIN efiling_roles r ON eu.efiling_role_id = r.id
-                LEFT JOIN efiling_departments dept ON eu.department_id = dept.id
-                LEFT JOIN district d ON eu.district_id = d.id
-                LEFT JOIN town t ON eu.town_id = t.id
-                LEFT JOIN divisions div ON eu.division_id = div.id
-                WHERE eu.division_id = $1
-                AND eu.is_active = true
-                AND (UPPER(r.code) LIKE '%SE%' OR UPPER(r.code) = 'SE' OR UPPER(r.name) LIKE '%SUPERINTENDENT%ENGINEER%')
-                AND eu.id != $2
-                ORDER BY u.name ASC
-            `, [currentUserDivisionId, currentUserEfilingId]);
-            
-            // Add all SE users in the division (if not already added via department)
-            seDivisionRes.rows.forEach(se => {
-                if (!allowedRecipients.find(r => r.id === se.id)) {
-                    allowedRecipients.push({
-                        id: se.id,
-                        user_name: se.user_name,
-                        name: se.user_name,
-                        role_code: se.role_code,
-                        role_name: se.role_name,
-                        department_id: se.department_id,
-                        department_name: se.department_name,
-                        district_id: se.district_id,
-                        district_name: se.district_name,
-                        town_id: se.town_id,
-                        town_name: se.town_name,
-                        division_id: se.division_id,
-                        division_name: se.division_name,
-                        allowed_level_scope: 'division',
-                        allowed_reason: 'DIVISION_SE',
-                        is_division_se: true
-                    });
-                }
-            });
+            const divisionId = parseInt(currentUserDivisionId);
+            const userId = parseInt(currentUserEfilingId);
+            if (divisionId && userId) {
+                const seDivisionRes = await client.query(`
+                    SELECT 
+                        eu.id,
+                        u.name AS user_name,
+                        eu.efiling_role_id,
+                        r.code AS role_code,
+                        r.name AS role_name,
+                        eu.department_id,
+                        dept.name AS department_name,
+                        eu.district_id,
+                        d.title AS district_name,
+                        eu.town_id,
+                        t.town AS town_name,
+                        eu.division_id,
+                        div.name AS division_name
+                    FROM efiling_users eu
+                    JOIN users u ON eu.user_id = u.id
+                    LEFT JOIN efiling_roles r ON eu.efiling_role_id = r.id
+                    LEFT JOIN efiling_departments dept ON eu.department_id = dept.id
+                    LEFT JOIN district d ON eu.district_id = d.id
+                    LEFT JOIN town t ON eu.town_id = t.id
+                    LEFT JOIN divisions div ON eu.division_id = div.id
+                    WHERE eu.division_id = $1::integer
+                    AND eu.is_active = true
+                    AND (UPPER(r.code) LIKE '%SE%' OR UPPER(r.code) = 'SE' OR UPPER(r.name) LIKE '%SUPERINTENDENT%ENGINEER%')
+                    AND eu.id != $2::integer
+                    ORDER BY u.name ASC
+                `, [divisionId, userId]);
+                
+                // Add all SE users in the division (if not already added via department)
+                seDivisionRes.rows.forEach(se => {
+                    if (!allowedRecipients.find(r => r.id === se.id)) {
+                        allowedRecipients.push({
+                            id: se.id,
+                            user_name: se.user_name,
+                            name: se.user_name,
+                            role_code: se.role_code,
+                            role_name: se.role_name,
+                            department_id: se.department_id,
+                            department_name: se.department_name,
+                            district_id: se.district_id,
+                            district_name: se.district_name,
+                            town_id: se.town_id,
+                            town_name: se.town_name,
+                            division_id: se.division_id,
+                            division_name: se.division_name,
+                            allowed_level_scope: 'division',
+                            allowed_reason: 'DIVISION_SE',
+                            is_division_se: true
+                        });
+                    }
+                });
+            }
         }
         
         // Get workflow state for display purposes
