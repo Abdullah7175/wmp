@@ -190,6 +190,7 @@ export async function POST(request, { params }) {
         }
 
         const currentUser = currentUserRes.rows[0];
+        const currentUserEfilingId = currentUser.id;
         const currentUserRoleCode = (currentUser.role_code || '').toUpperCase();
         const isCEO = isCEORole(currentUserRoleCode);
         const isCOO = currentUserRoleCode === 'COO';
@@ -516,8 +517,60 @@ export async function POST(request, { params }) {
         const allowedRecipientMap = new Map(allowedRecipients.map((recipient) => [recipient.id, recipient]));
 
         // Validate that current user can mark file (updated for team workflow)
+        // For higher authority users who have both signature and comment (or pages), allow marking even if not strictly assigned
         if (!isAdmin) {
-            const canMark = await canMarkFile(client, fileId, currentUser.id);
+            let canMark = await canMarkFile(client, fileId, currentUser.id);
+            
+            // If canMarkFile returned false, check if user is higher authority with both signature and comment (or pages)
+            if (!canMark) {
+                // Check if user is higher authority
+                const currentUserRoleCodeUpper = (currentUser.role_code || '').toUpperCase();
+                const isHigherAuthorityPOST = currentUserRoleCodeUpper === 'SE' || 
+                                             currentUserRoleCodeUpper === 'CE' || 
+                                             currentUserRoleCodeUpper === 'CEO' || 
+                                             currentUserRoleCodeUpper === 'COO' || 
+                                             currentUserRoleCodeUpper === 'ADLFA' ||
+                                             currentUserRoleCodeUpper.startsWith('SE_') || 
+                                             currentUserRoleCodeUpper.startsWith('CE_') || 
+                                             currentUserRoleCodeUpper.startsWith('CEO_') || 
+                                             currentUserRoleCodeUpper.startsWith('COO_');
+                
+                if (isHigherAuthorityPOST && currentUserEfilingId != null) {
+                    // Check if user has signature
+                    const signatureRes = await client.query(`
+                        SELECT COUNT(*) as count
+                        FROM efiling_document_signatures
+                        WHERE file_id = $1 AND user_id = $2 AND is_active = true
+                    `, [fileId, session.user.id]);
+                    
+                    const hasSigned = parseInt(signatureRes.rows[0].count) > 0;
+                    
+                    // Check if user has comment
+                    const commentRes = await client.query(`
+                        SELECT COUNT(*) as count
+                        FROM efiling_document_comments
+                        WHERE file_id = $1 AND user_id = $2 AND is_active = true
+                    `, [fileId, session.user.id]);
+                    
+                    const hasCommented = parseInt(commentRes.rows[0].count) > 0;
+                    
+                    // Check if user has added pages (notesheet)
+                    const pagesRes = await client.query(`
+                        SELECT COUNT(*) as count
+                        FROM efiling_document_pages
+                        WHERE file_id = $1 AND created_by = $2
+                    `, [fileId, currentUserEfilingId]);
+                    
+                    const hasAddedPages = parseInt(pagesRes.rows[0].count) > 0;
+                    
+                    // If user has both signature AND (comment OR pages), allow marking
+                    if (hasSigned && (hasCommented || hasAddedPages)) {
+                        canMark = true;
+                        console.log('[MARK-TO POST] Allowing marking for higher authority user with both signature and (comment OR pages)');
+                    }
+                }
+            }
+            
             if (!canMark) {
                 await client.query('ROLLBACK');
                 return NextResponse.json({ 
@@ -1577,6 +1630,11 @@ export async function GET(request, { params }) {
                                      currentUserRoleCodeUpper.startsWith('CEO_') || 
                                      currentUserRoleCodeUpper.startsWith('COO_');
         
+        let hasSigned = false;
+        let hasCommented = false;
+        let hasAddedPages = false;
+        let canMarkToHigherLevel = false;
+        
         if (isHigherAuthorityGET && !isAdmin && currentUserEfilingId != null) {
             // Check if user has signature
             const signatureRes = await client.query(`
@@ -1585,7 +1643,7 @@ export async function GET(request, { params }) {
                 WHERE file_id = $1 AND user_id = $2 AND is_active = true
             `, [fileId, session.user.id]);
             
-            const hasSigned = parseInt(signatureRes.rows[0].count) > 0;
+            hasSigned = parseInt(signatureRes.rows[0].count) > 0;
             
             // Check if user has comment
             const commentRes = await client.query(`
@@ -1594,7 +1652,7 @@ export async function GET(request, { params }) {
                 WHERE file_id = $1 AND user_id = $2 AND is_active = true
             `, [fileId, session.user.id]);
             
-            const hasCommented = parseInt(commentRes.rows[0].count) > 0;
+            hasCommented = parseInt(commentRes.rows[0].count) > 0;
             
             // Check if user has added pages (notesheet)
             const pagesRes = await client.query(`
@@ -1603,24 +1661,55 @@ export async function GET(request, { params }) {
                 WHERE file_id = $1 AND created_by = $2
             `, [fileId, currentUserEfilingId]);
             
-            const hasAddedPages = parseInt(pagesRes.rows[0].count) > 0;
+            hasAddedPages = parseInt(pagesRes.rows[0].count) > 0;
             
-            // If user only has comment (no signature, no pages), filter to only show creator (RE/XEN)
-            // If user only has signature (no comment, no pages), also filter to only show creator
-            if ((hasCommented && !hasSigned && !hasAddedPages) || (hasSigned && !hasCommented && !hasAddedPages)) {
+            // Debug logging
+            console.log('[MARK-TO GET] Higher authority filtering check:', {
+                hasSigned,
+                hasCommented,
+                hasAddedPages,
+                canMarkToHigherLevel: hasSigned && (hasCommented || hasAddedPages),
+                recipientCountBeforeFilter: allowedRecipients.length
+            });
+            
+            // If user has both signature AND (comment OR pages), they can see all recipients (no filtering needed)
+            // Otherwise, if user only has comment OR only has signature (but not both), filter to only show creator
+            canMarkToHigherLevel = hasSigned && (hasCommented || hasAddedPages);
+            
+            if (!canMarkToHigherLevel) {
+                // User doesn't have both signature AND (comment OR pages), so filter to only show creator (RE/XEN)
+                const recipientsBeforeFilter = allowedRecipients.length;
                 allowedRecipients = allowedRecipients.filter(recipient => {
                     // Keep only the creator (RE/XEN)
                     return recipient.id === file.created_by;
                 });
+                console.log('[MARK-TO GET] Filtered recipients:', {
+                    before: recipientsBeforeFilter,
+                    after: allowedRecipients.length,
+                    reason: 'User needs both signature AND (comment OR pages) to mark to higher levels'
+                });
+            } else {
+                console.log('[MARK-TO GET] No filtering applied - user has both signature AND (comment OR pages)');
             }
-            // If user has both signature AND (comment OR pages), they can see all recipients (no filtering needed)
         }
         
         // Filter out current user from allowed recipients - users can't mark to themselves
         allowedRecipients = allowedRecipients.filter(r => r.id !== currentUserEfilingId);
         
-        // Check if user can mark this file (reuse isAdmin from line 1179)
-        const canMark = isAdmin || await canMarkFile(client, fileId, currentUserEfilingId);
+        // Check if user can mark this file
+        // For higher authority users who have both signature and comment (or pages), allow marking even if not strictly assigned
+        let canMark = false;
+        if (isAdmin) {
+            canMark = true;
+        } else {
+            canMark = await canMarkFile(client, fileId, currentUserEfilingId);
+            
+            // If canMarkFile returned false, but user is higher authority with both signature and comment (or pages), allow marking
+            if (!canMark && isHigherAuthorityGET && currentUserEfilingId != null && canMarkToHigherLevel) {
+                canMark = true;
+                console.log('[MARK-TO GET] Allowing marking for higher authority user with both signature and (comment OR pages)');
+            }
+        }
         
         // Check if file is already assigned to someone else
         const isAssignedToSomeoneElse = file.assigned_to !== null && file.assigned_to !== currentUserEfilingId && file.assigned_to !== file.created_by;

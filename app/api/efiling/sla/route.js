@@ -79,8 +79,8 @@ export async function GET(request) {
 export async function POST(request) {
     let client;
     try {
-        // Check authentication - pass request to auth() for proper cookie reading
-        const session = await auth(request);
+        // Check authentication
+        const session = await auth();
         if (!session?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }

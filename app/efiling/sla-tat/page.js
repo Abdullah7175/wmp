@@ -91,7 +91,8 @@ export default function SLAMatrixPage() {
             const response = await fetch('/api/efiling/roles?is_active=true');
             if (response.ok) {
                 const data = await response.json();
-                setRoles(Array.isArray(data) ? data : []);
+                // API returns { success: true, roles: [...] } or direct array
+                setRoles(data.roles || (Array.isArray(data) ? data : []));
             }
         } catch (error) {
             console.error('Error loading roles:', error);
@@ -392,23 +393,47 @@ export default function SLAMatrixPage() {
                         <div className="grid grid-cols-2 gap-4">
                             <div>
                                 <Label htmlFor="from_role_code">From Role Code *</Label>
-                                <Input
-                                    id="from_role_code"
+                                <Select
                                     value={formData.from_role_code}
-                                    onChange={(e) => handleInputChange('from_role_code', e.target.value.toUpperCase())}
-                                    placeholder="e.g., CEO"
-                                    required
-                                />
+                                    onValueChange={(value) => handleInputChange('from_role_code', value)}
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Select role" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {roles.length > 0 ? (
+                                            roles.map((role) => (
+                                                <SelectItem key={role.id} value={role.code}>
+                                                    {role.name} ({role.code})
+                                                </SelectItem>
+                                            ))
+                                        ) : (
+                                            <SelectItem value="" disabled>Loading roles...</SelectItem>
+                                        )}
+                                    </SelectContent>
+                                </Select>
                             </div>
                             <div>
                                 <Label htmlFor="to_role_code">To Role Code *</Label>
-                                <Input
-                                    id="to_role_code"
+                                <Select
                                     value={formData.to_role_code}
-                                    onChange={(e) => handleInputChange('to_role_code', e.target.value.toUpperCase())}
-                                    placeholder="e.g., DIRECTOR"
-                                    required
-                                />
+                                    onValueChange={(value) => handleInputChange('to_role_code', value)}
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Select role" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {roles.length > 0 ? (
+                                            roles.map((role) => (
+                                                <SelectItem key={role.id} value={role.code}>
+                                                    {role.name} ({role.code})
+                                                </SelectItem>
+                                            ))
+                                        ) : (
+                                            <SelectItem value="" disabled>Loading roles...</SelectItem>
+                                        )}
+                                    </SelectContent>
+                                </Select>
                             </div>
                         </div>
 

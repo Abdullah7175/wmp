@@ -11,8 +11,8 @@ export async function PUT(request, { params }) {
     try {
         const { id } = await params;
         
-        // Check authentication - pass request to auth() for proper cookie reading
-        const session = await auth(request);
+        // Check authentication
+        const session = await auth();
         if (!session?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
@@ -109,8 +109,8 @@ export async function DELETE(request, { params }) {
     try {
         const { id } = await params;
         
-        // Check authentication - pass request to auth() for proper cookie reading
-        const session = await auth(request);
+        // Check authentication
+        const session = await auth();
         if (!session?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
