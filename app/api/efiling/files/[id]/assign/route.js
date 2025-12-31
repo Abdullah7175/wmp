@@ -99,24 +99,32 @@ export async function POST(request, { params }) {
             }
 
             const expectedScope = targetRecipient.allowed_level_scope || 'district';
-            const isValid = validateGeographicMatch(
-                {
-                    district_id: file.district_id,
-                    town_id: file.town_id,
-                    division_id: file.division_id
-                },
-                {
-                    district_id: toUser.district_id,
-                    town_id: toUser.town_id,
-                    division_id: toUser.division_id
-                },
-                expectedScope
-            );
+            
+            // Skip geographic validation for organizational scopes (department, team)
+            // These are organizational, not geographic, so geographic matching doesn't apply
+            const organizationalScopes = ['department', 'team', 'global'];
+            const isOrganizationalScope = organizationalScopes.includes(expectedScope.toLowerCase());
+            
+            if (!isOrganizationalScope) {
+                const isValid = validateGeographicMatch(
+                    {
+                        district_id: file.district_id,
+                        town_id: file.town_id,
+                        division_id: file.division_id
+                    },
+                    {
+                        district_id: toUser.district_id,
+                        town_id: toUser.town_id,
+                        division_id: toUser.division_id
+                    },
+                    expectedScope
+                );
 
-            if (!isValid) {
-                return NextResponse.json({ 
-                    error: `Geographic mismatch: Target user must be in same ${expectedScope}`
-                }, { status: 403 });
+                if (!isValid) {
+                    return NextResponse.json({ 
+                        error: `Geographic mismatch: Target user must be in same ${expectedScope}`
+                    }, { status: 403 });
+                }
             }
         }
 

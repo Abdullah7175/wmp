@@ -89,7 +89,7 @@ export async function POST(request, { params }) {
         
         // Get current user's efiling info
         const currentUserRes = await client.query(`
-            SELECT eu.id, eu.efiling_role_id, eu.department_id, r.code as role_code
+            SELECT eu.id, eu.efiling_role_id, eu.department_id, eu.division_id, r.code as role_code
             FROM efiling_users eu
             JOIN users u ON eu.user_id = u.id
             LEFT JOIN efiling_roles r ON eu.efiling_role_id = r.id
@@ -230,6 +230,63 @@ export async function POST(request, { params }) {
                 }
             });
         }
+        
+        // Also add SE users from the same division (for RE and other roles that may not have department_id)
+        // This allows RE to mark to SE even if they're in the same division but different departments
+        if (currentUser.division_id) {
+            const seDivisionRes = await client.query(`
+                SELECT 
+                    eu.id,
+                    u.name AS user_name,
+                    eu.efiling_role_id,
+                    r.code AS role_code,
+                    r.name AS role_name,
+                    eu.department_id,
+                    dept.name AS department_name,
+                    eu.district_id,
+                    d.title AS district_name,
+                    eu.town_id,
+                    t.town AS town_name,
+                    eu.division_id,
+                    div.name AS division_name
+                FROM efiling_users eu
+                JOIN users u ON eu.user_id = u.id
+                LEFT JOIN efiling_roles r ON eu.efiling_role_id = r.id
+                LEFT JOIN efiling_departments dept ON eu.department_id = dept.id
+                LEFT JOIN district d ON eu.district_id = d.id
+                LEFT JOIN town t ON eu.town_id = t.id
+                LEFT JOIN divisions div ON eu.division_id = div.id
+                WHERE eu.division_id = $1
+                AND eu.is_active = true
+                AND (UPPER(r.code) LIKE '%SE%' OR UPPER(r.code) = 'SE' OR UPPER(r.name) LIKE '%SUPERINTENDENT%ENGINEER%')
+                AND eu.id != $2
+                ORDER BY u.name ASC
+            `, [currentUser.division_id, currentUser.id]);
+            
+            // Add all SE users in the division (if not already added via department)
+            seDivisionRes.rows.forEach(se => {
+                if (!allowedRecipients.find(r => r.id === se.id)) {
+                    allowedRecipients.push({
+                        id: se.id,
+                        user_name: se.user_name,
+                        name: se.user_name,
+                        role_code: se.role_code,
+                        role_name: se.role_name,
+                        department_id: se.department_id,
+                        department_name: se.department_name,
+                        district_id: se.district_id,
+                        district_name: se.district_name,
+                        town_id: se.town_id,
+                        town_name: se.town_name,
+                        division_id: se.division_id,
+                        division_name: se.division_name,
+                        allowed_level_scope: 'division',
+                        allowed_reason: 'DIVISION_SE',
+                        is_division_se: true
+                    });
+                }
+            });
+        }
 
         const allowedRecipientMap = new Map(allowedRecipients.map((recipient) => [recipient.id, recipient]));
 
@@ -312,28 +369,36 @@ export async function POST(request, { params }) {
                 await updateWorkflowState(client, id, 'TEAM_INTERNAL', userId, true, false);
             }
 
-            // Validate geographic match (CEO/COO bypass, skip for team internal)
+            // Validate geographic match (CEO/COO bypass, skip for team internal, skip for organizational scopes)
             if (!isCEO && !isCOO && !isTeamInternal) {
                 const expectedScope = targetRecipient.allowed_level_scope || 'district';
-                const isValid = validateGeographicMatch(
-                    {
-                        district_id: fileRow.district_id,
-                        town_id: fileRow.town_id,
-                        division_id: fileRow.division_id
-                    },
-                    {
-                        district_id: targetUser.district_id,
-                        town_id: targetUser.town_id,
-                        division_id: targetUser.division_id
-                    },
-                    expectedScope
-                );
-
-                if (!isValid) {
-                    throw new Error(
-                        `Geographic mismatch: File location does not match target user location. ` +
-                        `Required scope: ${expectedScope}`
+                
+                // Skip geographic validation for organizational scopes (department, team)
+                // These are organizational, not geographic, so geographic matching doesn't apply
+                const organizationalScopes = ['department', 'team', 'global'];
+                const isOrganizationalScope = organizationalScopes.includes(expectedScope.toLowerCase());
+                
+                if (!isOrganizationalScope) {
+                    const isValid = validateGeographicMatch(
+                        {
+                            district_id: fileRow.district_id,
+                            town_id: fileRow.town_id,
+                            division_id: fileRow.division_id
+                        },
+                        {
+                            district_id: targetUser.district_id,
+                            town_id: targetUser.town_id,
+                            division_id: targetUser.division_id
+                        },
+                        expectedScope
                     );
+
+                    if (!isValid) {
+                        throw new Error(
+                            `Geographic mismatch: File location does not match target user location. ` +
+                            `Required scope: ${expectedScope}`
+                        );
+                    }
                 }
             }
 
@@ -658,9 +723,9 @@ export async function GET(request, { params }) {
         const file = fileRes.rows[0];
         const fromUserEfilingId = file.assigned_to || file.created_by;
         
-        // Get current user's efiling info to check department
+        // Get current user's efiling info to check department and division
         const currentUserRes = await client.query(`
-            SELECT eu.id, eu.department_id, eu.efiling_role_id, r.code as role_code
+            SELECT eu.id, eu.department_id, eu.division_id, eu.efiling_role_id, r.code as role_code
             FROM efiling_users eu
             JOIN users u ON eu.user_id = u.id
             LEFT JOIN efiling_roles r ON eu.efiling_role_id = r.id
@@ -674,6 +739,7 @@ export async function GET(request, { params }) {
         const currentUser = currentUserRes.rows[0];
         const currentUserEfilingId = currentUser.id;
         const currentUserDepartmentId = currentUser.department_id;
+        const currentUserDivisionId = currentUser.division_id;
         
         // Get allowed recipients using geographic routing
         let allowedRecipients = await getAllowedRecipients(client, {
@@ -775,6 +841,63 @@ export async function GET(request, { params }) {
                         allowed_level_scope: 'department',
                         allowed_reason: 'DEPARTMENT_SE',
                         is_department_se: true
+                    });
+                }
+            });
+        }
+        
+        // Also add SE users from the same division (for RE and other roles that may not have department_id)
+        // This allows RE to mark to SE even if they're in the same division but different departments
+        if (currentUserDivisionId) {
+            const seDivisionRes = await client.query(`
+                SELECT 
+                    eu.id,
+                    u.name AS user_name,
+                    eu.efiling_role_id,
+                    r.code AS role_code,
+                    r.name AS role_name,
+                    eu.department_id,
+                    dept.name AS department_name,
+                    eu.district_id,
+                    d.title AS district_name,
+                    eu.town_id,
+                    t.town AS town_name,
+                    eu.division_id,
+                    div.name AS division_name
+                FROM efiling_users eu
+                JOIN users u ON eu.user_id = u.id
+                LEFT JOIN efiling_roles r ON eu.efiling_role_id = r.id
+                LEFT JOIN efiling_departments dept ON eu.department_id = dept.id
+                LEFT JOIN district d ON eu.district_id = d.id
+                LEFT JOIN town t ON eu.town_id = t.id
+                LEFT JOIN divisions div ON eu.division_id = div.id
+                WHERE eu.division_id = $1
+                AND eu.is_active = true
+                AND (UPPER(r.code) LIKE '%SE%' OR UPPER(r.code) = 'SE' OR UPPER(r.name) LIKE '%SUPERINTENDENT%ENGINEER%')
+                AND eu.id != $2
+                ORDER BY u.name ASC
+            `, [currentUserDivisionId, currentUserEfilingId]);
+            
+            // Add all SE users in the division (if not already added via department)
+            seDivisionRes.rows.forEach(se => {
+                if (!allowedRecipients.find(r => r.id === se.id)) {
+                    allowedRecipients.push({
+                        id: se.id,
+                        user_name: se.user_name,
+                        name: se.user_name,
+                        role_code: se.role_code,
+                        role_name: se.role_name,
+                        department_id: se.department_id,
+                        department_name: se.department_name,
+                        district_id: se.district_id,
+                        district_name: se.district_name,
+                        town_id: se.town_id,
+                        town_name: se.town_name,
+                        division_id: se.division_id,
+                        division_name: se.division_name,
+                        allowed_level_scope: 'division',
+                        allowed_reason: 'DIVISION_SE',
+                        is_division_se: true
                     });
                 }
             });
