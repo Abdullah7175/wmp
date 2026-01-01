@@ -91,8 +91,16 @@ export default function MarkToModal({ showMarkToModal, onClose, fileId, fileNumb
   }, [showMarkToModal, fileId]);
 
   const handleToggleRecipient = (recipientId) => {
-    // Sequential workflow - only one recipient at a time
-    setSelectedIds([recipientId]);
+    // Multiple selection - toggle recipient
+    setSelectedIds(prev => {
+      if (prev.includes(recipientId)) {
+        // Remove if already selected
+        return prev.filter(id => id !== recipientId);
+      } else {
+        // Add if not selected
+        return [...prev, recipientId];
+      }
+    });
   };
 
   const filteredRecipients = useMemo(() => {
@@ -151,7 +159,7 @@ export default function MarkToModal({ showMarkToModal, onClose, fileId, fileNumb
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          user_ids: [selectedRecipients[0].id], // Only first one (sequential workflow)
+          user_ids: selectedRecipients.map(r => r.id), // All selected recipients
           remarks: summaryRemarks,
         }),
       });
@@ -164,14 +172,22 @@ export default function MarkToModal({ showMarkToModal, onClose, fileId, fileNumb
       const result = await res.json();
       const tatStarted = result.tat_started;
       const isTeamInternal = result.is_team_internal;
+      const userCount = selectedRecipients.length;
+      const userNameList = selectedRecipients.map(r => r.user_name).join(", ");
 
       toast({
         title: "Marked successfully",
-        description: tatStarted 
-          ? `File marked to ${selectedRecipients[0].user_name}. TAT timer has started.`
-          : isTeamInternal
-          ? `File marked to ${selectedRecipients[0].user_name} (Team workflow - No TAT).`
-          : `File marked to ${selectedRecipients[0].user_name}.`,
+        description: userCount === 1
+          ? (tatStarted 
+              ? `File marked to ${selectedRecipients[0].user_name}. TAT timer has started.`
+              : isTeamInternal
+              ? `File marked to ${selectedRecipients[0].user_name} (Team workflow - No TAT).`
+              : `File marked to ${selectedRecipients[0].user_name}.`)
+          : (tatStarted 
+              ? `File marked to ${userCount} users: ${userNameList}. TAT timer has started.`
+              : isTeamInternal
+              ? `File marked to ${userCount} users: ${userNameList} (Team workflow - No TAT).`
+              : `File marked to ${userCount} users: ${userNameList}.`),
       });
       onSuccess?.();
       onClose?.();
@@ -295,11 +311,21 @@ export default function MarkToModal({ showMarkToModal, onClose, fileId, fileNumb
                                             >
                                                 <CardContent className="p-4">
                                                     <div className="flex items-start justify-between">
-                                                        <div className="flex-1">
-                                                            <div className="flex items-center gap-2 mb-2">
-                                                                <div className="font-medium text-sm">
-                                                                    {recipient.user_name}
-                                                                </div>
+                                                        <div className="flex-1 flex items-start gap-2">
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={selected}
+                                                                onChange={() => {}}
+                                                                onClick={(e) => e.stopPropagation()}
+                                                                className="w-4 h-4 text-blue-600 rounded mt-0.5 flex-shrink-0"
+                                                                disabled={!canMark}
+                                                                readOnly
+                                                            />
+                                                            <div className="flex-1">
+                                                                <div className="flex items-center gap-2 mb-2">
+                                                                    <div className="font-medium text-sm">
+                                                                        {recipient.user_name}
+                                                                    </div>
                                                                 {isTeamMember && (
                                                                     <Badge variant="secondary" className="text-xs">
                                                                         Team Member
@@ -345,15 +371,8 @@ export default function MarkToModal({ showMarkToModal, onClose, fileId, fileNumb
                                                                     Team workflow - No TAT
                                                                 </div>
                                                             )}
-                                                        </div>
-                                                        <div className="ml-4">
-                                                            {selected ? (
-                                                                <div className="w-6 h-6 rounded-full bg-blue-600 flex items-center justify-center">
-                                                                    <X className="w-4 h-4 text-white" />
                                                                 </div>
-                                                            ) : (
-                                                                <div className="w-6 h-6 rounded-full border-2 border-gray-300"></div>
-                                                            )}
+                                                            </div>
                                                         </div>
                                                     </div>
                                                 </CardContent>
@@ -403,7 +422,11 @@ export default function MarkToModal({ showMarkToModal, onClose, fileId, fileNumb
                         ) : (
                             <>
                                 <Send className="w-4 h-4 mr-2" />
-                                Mark To {selectedRecipients.length > 0 ? `(${selectedRecipients.length})` : ''}
+                                Mark To {selectedRecipients.length > 0 
+                                  ? (selectedRecipients.length === 1 
+                                      ? selectedRecipients[0].user_name 
+                                      : `${selectedRecipients.length} Users`)
+                                  : 'User(s)'}
                             </>
                         )}
                     </Button>

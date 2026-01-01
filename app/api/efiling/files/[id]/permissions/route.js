@@ -32,9 +32,10 @@ export async function GET(request, { params }) {
         
         // Get user's efiling profile
         const userRes = await client.query(`
-            SELECT eu.id, eu.user_id, eu.efiling_role_id, r.code as role_code, r.name as role_name
+            SELECT eu.id, eu.user_id, eu.efiling_role_id, eu.department_id, r.code as role_code, r.name as role_name, dept.name as department_name
             FROM efiling_users eu
             LEFT JOIN efiling_roles r ON eu.efiling_role_id = r.id
+            LEFT JOIN efiling_departments dept ON eu.department_id = dept.id
             WHERE eu.user_id = $1 AND eu.is_active = true
         `, [session.user.id]);
         
@@ -131,17 +132,31 @@ export async function GET(request, { params }) {
         // Check if user is team member
         const isTeamMemberOfCreator = isCreator ? false : await isTeamMember(client, file.created_by, userEfiling.id);
         
-        // Check if user is higher authority (SE, CE, CEO, COO, etc.)
+        // Check if user is higher authority (SE, CE, DCE, CEO, COO, IAO-II, ADLFA, BUDGET, BILLING, etc.)
         const userRoleCode = (userEfiling.role_code || '').toUpperCase();
+        // Get user's department for department-based checks
+        const userDepartment = userEfiling.department_name ? userEfiling.department_name.toUpperCase() : '';
+        const isBudgetBilling = userRoleCode.includes('BUDGET') || 
+                               userRoleCode.includes('BILLING') ||
+                               userDepartment === 'BUDGET' ||
+                               userDepartment === 'BILLING' ||
+                               userDepartment.includes('BUDGET') ||
+                               userDepartment.includes('BILLING');
+        
         // Check for exact matches or role codes that start with SE, CE, CEO, COO (with optional underscore/suffix)
-        // This matches: SE, SE_, SE_WE&M, CE, CE_, CE_WAT, CEO, CEO_, COO, COO_, ADLFA
+        // This matches: SE, SE_, SE_WE&M, CE, CE_, CE_WAT, CEO, CEO_, COO, COO_, ADLFA, DCE, IAO-II
         const isHigherAuthority = userRoleCode === 'SE' || 
                                  userRoleCode === 'CE' || 
+                                 userRoleCode === 'DCE' ||
                                  userRoleCode === 'CEO' || 
                                  userRoleCode === 'COO' || 
                                  userRoleCode === 'ADLFA' ||
+                                 userRoleCode === 'IAO-II' ||
+                                 userRoleCode.includes('IAO-II') ||
+                                 isBudgetBilling ||
                                  userRoleCode.startsWith('SE_') || 
-                                 userRoleCode.startsWith('CE_') || 
+                                 userRoleCode.startsWith('CE_') ||
+                                 userRoleCode.startsWith('DCE_') ||
                                  userRoleCode.startsWith('CEO_') || 
                                  userRoleCode.startsWith('COO_');
         

@@ -20,6 +20,113 @@ import {
 } from '@/lib/efilingWorkflowStateManager';
 import { sendWhatsAppMessage } from '@/lib/whatsappService';
 
+// Role categorization functions for mark-to visibility rules (shared by POST and GET routes)
+const isGlobalRole = (roleCode) => {
+    if (!roleCode) return false;
+    const code = roleCode.toUpperCase();
+    // Global roles: SE, CE, DCE, CEO, CFO, COO, CIA, CCO, DMD, Director, Committee/MD/BILLING/BUDGET/IAO-II
+    // Check DCE first to avoid conflicts with CE check
+    if (code === 'DIRECTOR_MEDICAL_SERVICES' || code.startsWith('DIRECTOR_MEDICAL_SERVICES_') || (code.includes('DIRECTOR_MEDICAL_SERVICES') && !code.includes('ADLFA'))) {
+        return true;
+    }
+    if (code === 'MEDICAL_SCRUTINY_COMMITTEE' || code.startsWith('MEDICAL_SCRUTINY_COMMITTEE_') || (code.includes('MEDICAL_SCRUTINY_COMMITTEE') && !code.includes('ADLFA'))) {
+        return true;
+    }
+    if (code === 'CHIEF_INTERNAL_AUDITOR' || code.startsWith('CHIEF_INTERNAL_AUDITOR_') || (code.includes('CHIEF_INTERNAL_AUDITOR') && !code.includes('ADLFA'))) {
+        return true;
+    }
+    if (code == 'CONSULTANT' || code.startsWith('CONSULTANT_') || (code.includes('CONSULTANT') && !code.includes('ADLFA'))) {
+        return true;
+    }
+    if (code == 'DIRECTOR' || code.startsWith('DIRECTOR_') || (code.includes('DIRECTOR') && !code.includes('ADLFA'))) {
+        return true;
+    }
+    if (code === 'CON' || code.startsWith('CON_') || (code.includes('CON') && !code.includes('ADLFA'))) {
+        return true;
+    }
+    if (code === 'COMMITTEE' || code.startsWith('COMMITTEE_') || (code.includes('COMMITTEE') && !code.includes('ADLFA'))) {
+        return true;
+    }
+    if (code === 'COMMITE' || code.startsWith('COMMITE_') || (code.includes('COMMITE') && !code.includes('ADLFA'))) {
+        return true;
+    }
+    if (code === 'MD' || code.startsWith('MD_') || (code.includes('MD') && !code.includes('ADLFA'))) {
+        return true;
+    }
+    if (code === 'MANAGING_DIRECTOR' || code.startsWith('MANAGING_DIRECTOR_') || (code.includes('MANAGING_DIRECTOR') && !code.includes('ADLFA'))) {
+        return true;
+    }
+    if (code === 'BILLING' || code.startsWith('BILLING_') || (code.includes('BILLING') && !code.includes('ADLFA'))) {
+        return true;
+    }
+    if (code === 'BUDGET' || code.startsWith('BUDGET_') || (code.includes('BUDGET') && !code.includes('ADLFA'))) {
+        return true;
+    }
+    if (code === 'IAO-II' || code.startsWith('IAO-II_') || (code.includes('IAO-II') && !code.includes('ADLFA'))) {
+        return true;
+    }
+    if (code === 'DCE' || code.startsWith('DCE_') || (code.includes('DCE') && !code.includes('ADLFA'))) {
+        return true;
+    }
+    // Check SE
+    if (code === 'SE' || code.startsWith('SE_') || code.includes('SE')) {
+        return true;
+    }
+    // Check CE (but not AEE and not DCE)
+    if ((code === 'CE' || code.startsWith('CE_') || code.includes('CE')) && !code.includes('AEE') && !code.includes('DCE')) {
+        return true;
+    }
+    // Other global roles
+    return code === 'CEO' || code.includes('CEO') ||
+           code === 'CFO' || code.includes('CFO') ||
+           code === 'COO' || code.includes('COO') ||
+           code === 'CIA' || code.includes('CIA') || code.includes('CHIEF_INTERNAL_AUDITOR') ||
+           code === 'CCO' || code.includes('CCO') ||
+           code === 'DMD' || code.includes('DMD') || code.includes('DEPUTY_MANAGING_DIRECTOR') ||
+           (code.includes('DIRECTOR') && !code.includes('ASSISTANT')) ||
+           code.includes('COMMITTEE') ||
+           code.includes('COMMITE') ||
+           code === 'MD' || code.includes('MANAGING_DIRECTOR') ||
+           code.includes('BILLING') ||
+           code.includes('BUDGET') ||
+           code.includes('IAO-II');
+};
+
+const isMidLevelRole = (roleCode) => {
+    if (!roleCode) return false;
+    const code = roleCode.toUpperCase();
+    // Mid-level roles: XEN, RE, Admin officer, EE
+    return code.includes('XEN') || 
+           (code.includes('RE') && !code.includes('AEE')) || 
+           (code.includes('EXECUTIVE_ENGINEER') && !code.includes('ASSISTANT')) ||
+           (code.includes('EE') && !code.includes('AEE')) ||
+           code.includes('ADMIN_OFFICER') || code.includes('ADMIN OFFICER') ||
+           code.includes('ADMINISTRATIVE_OFFICER') || code.includes('ADMINISTRATIVE OFFICER');
+};
+
+const isLowerLevelRole = (roleCode) => {
+    if (!roleCode) return false;
+    const code = roleCode.toUpperCase();
+    // Lower-level roles: AEE, AOO, DAO, Sub-engineer
+    return (code.includes('AEE') && !code.includes('SE') && !code.includes('CE')) ||
+           code === 'AOO' || code.includes('AOO') ||
+           code === 'DAO' || code.includes('DAO') ||
+           code.includes('SUB-ENGINEER') || code.includes('SUBENGINEER') || code.includes('SUB_ENGINEER') ||
+           code.includes('SUB-ENGR') || code.includes('SUBENGR');
+};
+
+const isDepartmentManagerRole = (roleCode) => {
+    if (!roleCode) return false;
+    const code = roleCode.toUpperCase();
+    // Department manager roles that lower-level users can see: XEN, EE, RE, Admin officer
+    return code.includes('XEN') || 
+           (code.includes('RE') && !code.includes('AEE')) || 
+           (code.includes('EXECUTIVE_ENGINEER') && !code.includes('ASSISTANT')) ||
+           (code.includes('EE') && !code.includes('AEE')) ||
+           code.includes('ADMIN_OFFICER') || code.includes('ADMIN OFFICER') ||
+           code.includes('ADMINISTRATIVE_OFFICER') || code.includes('ADMINISTRATIVE OFFICER');
+};
+
 export async function POST(request, { params }) {
     let client;
     try {
@@ -198,34 +305,8 @@ export async function POST(request, { params }) {
         
         const workflowState = await getWorkflowState(client, fileId);
 
-        // ========== E-SIGNATURE VALIDATION (Updated for Team Workflow) ==========
-        const isAdmin = [1, 2].includes(parseInt(session.user.role));
-        
-        if (!isAdmin) {
-            // Check if e-signature is required for this marking
-            // Only one user_id for now (sequential workflow)
-            const toUserIdRaw = user_ids[0];
-            const toUserId = safeParseInt(toUserIdRaw);
-            
-            if (!toUserId) {
-                await client.query('ROLLBACK');
-                return NextResponse.json({ error: 'Invalid target user ID' }, { status: 400 });
-            }
-            
-            const signatureCheck = await canMarkFileForward(client, fileId, currentUser.id, toUserId);
-            
-            if (signatureCheck.requiresSignature && !signatureCheck.canMark) {
-                await client.query('ROLLBACK');
-                return NextResponse.json({
-                    error: signatureCheck.reason || 'E-signature required before marking forward',
-                    code: 'SIGNATURE_REQUIRED'
-                }, { status: 403 });
-            }
-        }
-        // ========== END E-SIGNATURE VALIDATION ==========
-
         // Pre-compute allowed recipients for validation and populate marking dropdowns
-        const allowedRecipients = await getAllowedRecipients(client, {
+        let allowedRecipients = await getAllowedRecipients(client, {
             fromUserEfilingId,
             fileId: fileId,
             fileDepartmentId: fileRow.department_id,
@@ -514,7 +595,136 @@ export async function POST(request, { params }) {
             }
         }
 
+        // ========== ROLE-BASED VISIBILITY FILTERING (POST) ==========
+        // Apply filtering based on current user's role level (same as GET route)
+        const currentUserRoleCodeUpperPOST = (currentUser.role_code || '').toUpperCase();
+        const currentUserIsGlobalPOST = isGlobalRole(currentUserRoleCodeUpperPOST);
+        const currentUserIsMidLevelPOST = isMidLevelRole(currentUserRoleCodeUpperPOST);
+        const currentUserIsLowerLevelPOST = isLowerLevelRole(currentUserRoleCodeUpperPOST);
+        
+        console.log('[MARK-TO POST] Role check:', {
+            roleCode: currentUser.role_code,
+            roleCodeUpper: currentUserRoleCodeUpperPOST,
+            isGlobal: currentUserIsGlobalPOST,
+            isMidLevel: currentUserIsMidLevelPOST,
+            isLowerLevel: currentUserIsLowerLevelPOST,
+            recipientsBeforeFilter: allowedRecipients.length
+        });
+        
+        if (currentUserIsGlobalPOST) {
+            // Global roles (SE, CE, DCE, CEO, CFO, COO, CIA, CCO, DMD, Director, Committee/MD/BILLING/BUDGET/IAO-II)
+            // Fetch ALL active e-filing users (bypass geographic routing restrictions)
+            const allUsersRes = await client.query(`
+                SELECT 
+                    eu.id,
+                    u.name AS user_name,
+                    eu.efiling_role_id,
+                    r.code AS role_code,
+                    r.name AS role_name,
+                    eu.department_id,
+                    dept.name AS department_name,
+                    eu.district_id,
+                    d.title AS district_name,
+                    eu.town_id,
+                    t.town AS town_name,
+                    eu.division_id,
+                    div.name AS division_name
+                FROM efiling_users eu
+                JOIN users u ON eu.user_id = u.id
+                LEFT JOIN efiling_roles r ON eu.efiling_role_id = r.id
+                LEFT JOIN efiling_departments dept ON eu.department_id = dept.id
+                LEFT JOIN district d ON eu.district_id = d.id
+                LEFT JOIN town t ON eu.town_id = t.id
+                LEFT JOIN divisions div ON eu.division_id = div.id
+                WHERE eu.is_active = true
+                AND eu.id != $1
+                ORDER BY u.name ASC
+            `, [currentUser.id]);
+            
+            // Replace allowedRecipients with all users (merge with existing to preserve metadata)
+            const allUsersMap = new Map(allUsersRes.rows.map(u => [u.id, u]));
+            allowedRecipients.forEach(existing => {
+                if (!allUsersMap.has(existing.id)) {
+                    allUsersMap.set(existing.id, {
+                        id: existing.id,
+                        user_name: existing.user_name || existing.name,
+                        name: existing.user_name || existing.name,
+                        role_code: existing.role_code,
+                        role_name: existing.role_name,
+                        department_id: existing.department_id,
+                        department_name: existing.department_name,
+                        district_id: existing.district_id,
+                        district_name: existing.district_name,
+                        town_id: existing.town_id,
+                        town_name: existing.town_name,
+                        division_id: existing.division_id,
+                        division_name: existing.division_name,
+                        ...existing
+                    });
+                }
+            });
+            allowedRecipients = Array.from(allUsersMap.values());
+            console.log('[MARK-TO POST] Global role - showing all users:', allowedRecipients.length);
+        } else if (currentUserIsLowerLevelPOST && currentUser.department_id != null) {
+            // Lower-level roles: Can only see department managers
+            allowedRecipients = allowedRecipients.filter(recipient => {
+                const recipientRoleCode = (recipient.role_code || '').toUpperCase();
+                const recipientDepartmentId = recipient.department_id;
+                return recipientDepartmentId === currentUser.department_id && 
+                       isDepartmentManagerRole(recipientRoleCode);
+            });
+        } else if (currentUserIsMidLevelPOST && currentUser.department_id != null) {
+            // Mid-level roles: Can see all users in their department
+            allowedRecipients = allowedRecipients.filter(recipient => {
+                const recipientDepartmentId = recipient.department_id;
+                return recipientDepartmentId === currentUser.department_id;
+            });
+        }
+        // ========== END ROLE-BASED VISIBILITY FILTERING (POST) ==========
+        
         const allowedRecipientMap = new Map(allowedRecipients.map((recipient) => [recipient.id, recipient]));
+
+        // ========== E-SIGNATURE VALIDATION (Updated for Team Workflow) ==========
+        // Validate all user_ids AFTER filtering - ensure they're in the allowed recipients list
+        const isAdmin = [1, 2].includes(parseInt(session.user.role));
+        const validatedUserIds = [];
+        
+        for (const userIdRaw of user_ids) {
+            const toUserId = safeParseInt(userIdRaw);
+            if (!toUserId) {
+                await client.query('ROLLBACK');
+                return NextResponse.json({ error: `Invalid target user ID: ${userIdRaw}` }, { status: 400 });
+            }
+            
+            // Check if user is in allowed recipients (after role-based filtering)
+            const targetRecipient = allowedRecipientMap.get(toUserId);
+            if (!targetRecipient) {
+                await client.query('ROLLBACK');
+                return NextResponse.json({ 
+                    error: `User ID ${toUserId} is not allowed based on your role and department restrictions. Please select users from the allowed list.` 
+                }, { status: 403 });
+            }
+            
+            // Check e-signature requirement (for non-admin)
+            if (!isAdmin) {
+                const signatureCheck = await canMarkFileForward(client, fileId, currentUser.id, toUserId);
+                if (signatureCheck.requiresSignature && !signatureCheck.canMark) {
+                    await client.query('ROLLBACK');
+                    return NextResponse.json({
+                        error: signatureCheck.reason || 'E-signature required before marking forward',
+                        code: 'SIGNATURE_REQUIRED'
+                    }, { status: 403 });
+                }
+            }
+            
+            validatedUserIds.push(toUserId);
+        }
+        
+        if (validatedUserIds.length === 0) {
+            await client.query('ROLLBACK');
+            return NextResponse.json({ error: 'No valid user IDs provided' }, { status: 400 });
+        }
+        // ========== END E-SIGNATURE VALIDATION ==========
 
         // Validate that current user can mark file (updated for team workflow)
         // For higher authority users who have both signature and comment (or pages), allow marking even if not strictly assigned
@@ -594,76 +804,85 @@ export async function POST(request, { params }) {
                 RETURNING id
             `, [fileId]);
 
-            // Process only first user_id (sequential workflow - one at a time)
-            // Ensure userId is a number (already validated in signature check, but validate again for safety)
-            const userIdRaw = user_ids[0];
-            const userId = safeParseInt(userIdRaw);
-            if (!userId) {
-                throw new Error('Invalid user ID provided for marking');
-            }
-            const targetRecipient = allowedRecipientMap.get(userId);
+            // ========== PROCESS MULTIPLE USER MARKING ==========
+            // Process all validated user_ids - create movements for all selected users
+            // Rules:
+            // - Global roles (SE, CE, DCE, CEO, CFO, COO, CIA, CCO, DMD, Director, Committee/MD/BILLING/BUDGET/IAO-II):
+            //   Can mark to multiple users from all available users
+            // - Mid-level roles (XEN, RE, EE, Admin officer):
+            //   Can mark to multiple users from their department only
+            // - Lower-level roles (AEE, AOO, DAO, Sub-engineer):
+            //   Can mark to multiple department managers (XEN, EE, RE, Admin officer) from their department only
+            // File will be assigned to the LAST user in the list, but movements are created for all
+            const processedMovements = [];
+            let lastProcessedUserId = null;
+            let lastTargetUser = null;
+            let shouldStartTAT = false;
+            let newState = workflowState?.current_state || 'TEAM_INTERNAL';
+            
+            for (const userId of validatedUserIds) {
+                const targetRecipient = allowedRecipientMap.get(userId);
+                if (!targetRecipient) {
+                    throw new Error(`User ID ${userId} is not allowed based on SLA matrix/location rules`);
+                }
 
-            if (!targetRecipient) {
-                throw new Error('Selected user is not allowed based on SLA matrix/location rules');
-            }
-
-            const target = await client.query(`
+                const target = await client.query(`
                 SELECT eu.id, eu.department_id, eu.efiling_role_id, 
                        eu.district_id, eu.town_id, eu.division_id,
                        r.code as role_code
                 FROM efiling_users eu
                 LEFT JOIN efiling_roles r ON eu.efiling_role_id = r.id
                 WHERE eu.id = $1 AND eu.is_active = true
-            `, [userId]);
-            
-            if (target.rows.length === 0) {
-                throw new Error('Target user not found or inactive');
-            }
-            
-            let targetUser = target.rows[0];
-            const toRoleCode = (targetUser.role_code || '').toUpperCase();
-            
-            // ========== HIGHER AUTHORITY RULES VALIDATION ==========
-            // Helper function to get role hierarchy level (lower number = lower level)
-            const getRoleLevel = (roleCode) => {
-                if (!roleCode) return 999;
-                const code = roleCode.toUpperCase();
-                if (code.includes('RE') || code.includes('RESIDENT_ENGINEER') || code.includes('XEN') || code.includes('EXECUTIVE_ENGINEER') || code.includes('EE')) {
-                    return 1; // RE/XEN/EE = level 1
+                `, [userId]);
+                
+                if (target.rows.length === 0) {
+                    throw new Error('Target user not found or inactive');
                 }
-                if (code.includes('SE') || code.includes('SUPERINTENDENT_ENGINEER')) {
-                    return 2; // SE = level 2
-                }
-                if (code.includes('CE') || code.includes('CHIEF_ENGINEER')) {
-                    return 3; // CE = level 3
-                }
-                if (code === 'COO') {
-                    return 4; // COO = level 4
-                }
-                if (code === 'CEO' || code.includes('CEO')) {
-                    return 5; // CEO = level 5
-                }
-                if (code === 'CFO' || code.includes('CFO')) {
-                    return 6; // CFO = level 6
-                }
-                return 999; // Unknown = high level
-            };
-            
-            // currentUserRoleCode is already declared in outer scope, reuse it
-            const isHigherAuthority = ['SE', 'CE', 'CEO', 'COO', 'ADLFA'].includes(currentUserRoleCode) || 
-                                     currentUserRoleCode.includes('SE_') || currentUserRoleCode.includes('CE_') || 
-                                     currentUserRoleCode.includes('CEO_') || currentUserRoleCode.includes('COO_');
-            
-            // Check if this is marking back to creator
-            const isReturningToCreator = (userId === fileRow.created_by);
-            
-            // Check if this is marking to higher level (comparing role hierarchy)
-            const currentUserLevel = getRoleLevel(currentUserRoleCode);
-            const targetUserLevel = getRoleLevel(toRoleCode);
-            const isMarkingToHigherLevel = targetUserLevel > currentUserLevel;
-            
-            // Rule 1: If higher authority (SE/CE/CEO/COO) is marking back to creator, require comment
-            if (isHigherAuthority && isReturningToCreator && !isAdmin) {
+                
+                let targetUser = target.rows[0];
+                const toRoleCode = (targetUser.role_code || '').toUpperCase();
+                
+                // ========== HIGHER AUTHORITY RULES VALIDATION ==========
+                // Helper function to get role hierarchy level (lower number = lower level)
+                const getRoleLevel = (roleCode) => {
+                    if (!roleCode) return 999;
+                    const code = roleCode.toUpperCase();
+                    if (code.includes('RE') || code.includes('RESIDENT_ENGINEER') || code.includes('XEN') || code.includes('EXECUTIVE_ENGINEER') || code.includes('EE')) {
+                        return 1; // RE/XEN/EE = level 1
+                    }
+                    if (code.includes('SE') || code.includes('SUPERINTENDENT_ENGINEER')) {
+                        return 2; // SE = level 2
+                    }
+                    if (code.includes('CE') || code.includes('CHIEF_ENGINEER')) {
+                        return 3; // CE = level 3
+                    }
+                    if (code === 'COO') {
+                        return 4; // COO = level 4
+                    }
+                    if (code === 'CEO' || code.includes('CEO')) {
+                        return 5; // CEO = level 5
+                    }
+                    if (code === 'CFO' || code.includes('CFO')) {
+                        return 6; // CFO = level 6
+                    }
+                    return 999; // Unknown = high level
+                };
+                
+                // currentUserRoleCode is already declared in outer scope, reuse it
+                const isHigherAuthority = ['SE', 'CE', 'CEO', 'COO', 'ADLFA'].includes(currentUserRoleCode) || 
+                                         currentUserRoleCode.includes('SE_') || currentUserRoleCode.includes('CE_') || 
+                                         currentUserRoleCode.includes('CEO_') || currentUserRoleCode.includes('COO_');
+                
+                // Check if this is marking back to creator
+                const isReturningToCreator = (userId === fileRow.created_by);
+                
+                // Check if this is marking to higher level (comparing role hierarchy)
+                const currentUserLevel = getRoleLevel(currentUserRoleCode);
+                const targetUserLevel = getRoleLevel(toRoleCode);
+                const isMarkingToHigherLevel = targetUserLevel > currentUserLevel;
+                
+                // Rule 1: If higher authority (SE/CE/CEO/COO) is marking back to creator, require comment
+                if (isHigherAuthority && isReturningToCreator && !isAdmin) {
                 const commentRes = await client.query(`
                     SELECT COUNT(*) as count
                     FROM efiling_document_comments
@@ -737,74 +956,82 @@ export async function POST(request, { params }) {
                         }, { status: 403 });
                     }
                 }
-            }
-            // ========== END HIGHER AUTHORITY RULES VALIDATION ==========
-            
-            // If user's personal division_id is NULL, try to get it from role locations
-            if (!targetUser.division_id && targetUser.efiling_role_id) {
-                try {
-                    const roleLocRes = await client.query(`
-                        SELECT division_id, district_id, town_id
-                        FROM efiling_role_locations
-                        WHERE role_id = $1
-                        LIMIT 1
-                    `, [targetUser.efiling_role_id]);
-                    
-                    if (roleLocRes.rows.length > 0) {
-                        const roleLoc = roleLocRes.rows[0];
-                        // Use role location as fallback if user's personal location is NULL
-                        if (!targetUser.division_id && roleLoc.division_id) {
-                            targetUser.division_id = roleLoc.division_id;
-                        }
-                        if (!targetUser.district_id && roleLoc.district_id) {
-                            targetUser.district_id = roleLoc.district_id;
-                        }
-                        if (!targetUser.town_id && roleLoc.town_id) {
-                            targetUser.town_id = roleLoc.town_id;
-                        }
-                    }
-                } catch (roleLocError) {
-                    console.warn('Could not fetch role locations for target user:', roleLocError.message);
                 }
-            }
+                // ========== END HIGHER AUTHORITY RULES VALIDATION ==========
+                
+                // If user's personal division_id is NULL, try to get it from role locations
+                if (!targetUser.division_id && targetUser.efiling_role_id) {
+                    try {
+                        const roleLocRes = await client.query(`
+                            SELECT division_id, district_id, town_id
+                            FROM efiling_role_locations
+                            WHERE role_id = $1
+                            LIMIT 1
+                        `, [targetUser.efiling_role_id]);
+                        
+                        if (roleLocRes.rows.length > 0) {
+                            const roleLoc = roleLocRes.rows[0];
+                            // Use role location as fallback if user's personal location is NULL
+                            if (!targetUser.division_id && roleLoc.division_id) {
+                                targetUser.division_id = roleLoc.division_id;
+                            }
+                            if (!targetUser.district_id && roleLoc.district_id) {
+                                targetUser.district_id = roleLoc.district_id;
+                            }
+                            if (!targetUser.town_id && roleLoc.town_id) {
+                                targetUser.town_id = roleLoc.town_id;
+                            }
+                        }
+                    } catch (roleLocError) {
+                        console.warn('Could not fetch role locations for target user:', roleLocError.message);
+                    }
+                }
 
-            // Check if this is moving to external (SE or higher) - this takes priority
-            // External flow: RE/XEN can mark to SE (Superintendent Engineer) - TAT starts
-            const externalRoles = ['SE', 'CE', 'CFO', 'COO', 'CEO'];
-            const isMovingToExternal = externalRoles.includes(toRoleCode);
-            
-            // Check if movement is within team workflow (only if not external)
-            // Internal flow: Team members - No TAT
-            const isTeamInternal = !isMovingToExternal && await isWithinTeamWorkflow(client, fileId, currentUser.id, userId);
-            
-            // Check if this is a return to creator
-            const isReturnToCreator = (userId === fileRow.created_by) && 
-                                     workflowState && 
-                                     workflowState.current_state === 'EXTERNAL';
-            
-            // Determine new workflow state
-            let newState = workflowState?.current_state || 'TEAM_INTERNAL';
-            let shouldStartTAT = false;
-            
-            if (isReturnToCreator) {
-                newState = 'RETURNED_TO_CREATOR';
-                await markReturnToCreator(client, fileId, fileRow.created_by);
-            } else if (isMovingToExternal) {
-                // External flow: Marking to SE or higher - TAT starts
-                newState = 'EXTERNAL';
-                shouldStartTAT = true;
-                await startTAT(client, fileId);
-            } else if (isTeamInternal) {
+                    // Check if this is moving to external (SE or higher) - this takes priority
+                    // External flow: RE/XEN can mark to SE (Superintendent Engineer) - TAT starts
+                    const externalRoles = ['SE', 'CE', 'CFO', 'COO', 'CEO'];
+                    const isMovingToExternal = externalRoles.includes(toRoleCode);
+                
+                // Check if movement is within team workflow (only if not external)
                 // Internal flow: Team members - No TAT
-                newState = 'TEAM_INTERNAL';
-                shouldStartTAT = false; // Explicitly set to false for team internal
-                // Update workflow state to keep it within team
-                await updateWorkflowState(client, fileId, 'TEAM_INTERNAL', userId, true, false);
-            }
+                const isTeamInternalForUser = !isMovingToExternal && await isWithinTeamWorkflow(client, fileId, currentUser.id, userId);
+            
+                // Check if this is a return to creator
+                const isReturnToCreator = (userId === fileRow.created_by) && 
+                                         workflowState && 
+                                         workflowState.current_state === 'EXTERNAL';
+            
+                // Track workflow state for this user (we'll use the last user's state)
+                let userNewState = workflowState?.current_state || 'TEAM_INTERNAL';
+                let userShouldStartTAT = false;
+                
+                if (isReturnToCreator) {
+                    userNewState = 'RETURNED_TO_CREATOR';
+                    // Only mark return once
+                    if (processedMovements.length === 0) {
+                        await markReturnToCreator(client, fileId, fileRow.created_by);
+                    }
+                } else if (isMovingToExternal) {
+                    // External flow: Marking to SE or higher - TAT starts
+                    userNewState = 'EXTERNAL';
+                    userShouldStartTAT = true;
+                    // Only start TAT once
+                    if (processedMovements.length === 0) {
+                        await startTAT(client, fileId);
+                    }
+                } else if (isTeamInternalForUser) {
+                    // Internal flow: Team members - No TAT
+                    userNewState = 'TEAM_INTERNAL';
+                    userShouldStartTAT = false;
+                }
+                
+                // Update for tracking (use last user's state)
+                newState = userNewState;
+                shouldStartTAT = userShouldStartTAT || shouldStartTAT; // If any user triggers TAT, set it
 
-            // Validate geographic match (CEO/COO bypass, skip for team internal, skip for organizational scopes)
-            if (!isCEO && !isCOO && !isTeamInternal) {
-                const expectedScope = targetRecipient.allowed_level_scope || 'district';
+                // Validate geographic match (CEO/COO bypass, skip for team internal, skip for organizational scopes)
+                if (!isCEO && !isCOO && !isTeamInternalForUser) {
+                    const expectedScope = targetRecipient.allowed_level_scope || 'district';
                 
                 // Skip geographic validation for organizational scopes (department, team)
                 // These are organizational, not geographic, so geographic matching doesn't apply
@@ -937,83 +1164,62 @@ export async function POST(request, { params }) {
                 }
             }
 
-            // Get fromUser object from database - match assign route pattern exactly
-            console.log('[MARK-TO] Step 1: Getting fromUser from database, fromUserEfilingId:', fromUserEfilingId);
-            const fromUserRes = await client.query(`
-                SELECT eu.id, eu.department_id, eu.efiling_role_id, eu.district_id, eu.town_id, eu.division_id,
-                       r.code as role_code
-                FROM efiling_users eu
-                LEFT JOIN efiling_roles r ON eu.efiling_role_id = r.id
-                WHERE eu.id = $1 AND eu.is_active = true
-            `, [fromUserEfilingId]);
+                // Get fromUser object from database - match assign route pattern exactly
+                console.log('[MARK-TO] Processing user:', userId, 'Getting fromUser from database, fromUserEfilingId:', fromUserEfilingId);
+                const fromUserRes = await client.query(`
+                    SELECT eu.id, eu.department_id, eu.efiling_role_id, eu.district_id, eu.town_id, eu.division_id,
+                           r.code as role_code
+                    FROM efiling_users eu
+                    LEFT JOIN efiling_roles r ON eu.efiling_role_id = r.id
+                    WHERE eu.id = $1 AND eu.is_active = true
+                `, [fromUserEfilingId]);
+                
+                if (fromUserRes.rows.length === 0) {
+                    console.error('[MARK-TO] From user not found:', fromUserEfilingId);
+                    throw new Error('From user not found or inactive');
+                }
+                const fromUser = fromUserRes.rows[0];
+
+                // Prepare INSERT parameters - match assign route pattern EXACTLY
+                const insertParams = [
+                    fileId,  // file_id - already validated as integer
+                    fromUser.id,  // from_user_id - use directly from query result
+                    targetUser.id,  // to_user_id - use directly from query result  
+                    fromUser.department_id,  // from_department_id - use directly from query result (can be null)
+                    targetUser.department_id,  // to_department_id - use directly from query result (can be null)
+                    'MARK_TO',  // action_type
+                    remarks || null  // remarks
+                ];
+
+                // Insert movement - EXACT same pattern as assign route
+                console.log('[MARK-TO] Creating movement for user:', userId);
+                const movementRes = await client.query(`
+                    INSERT INTO efiling_file_movements (
+                        file_id, from_user_id, to_user_id,
+                        from_department_id, to_department_id,
+                        action_type, remarks, created_at
+                    )
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+                    RETURNING id
+                `, insertParams);
+                
+                const movementId = movementRes.rows[0].id;
+                console.log('[MARK-TO] INSERT successful! Movement ID:', movementId);
+                processedMovements.push(movementRes.rows[0]);
+                
+                // Track last processed user for file assignment
+                lastProcessedUserId = userId;
+                lastTargetUser = targetUser;
+            } // End loop for all user_ids
             
-            if (fromUserRes.rows.length === 0) {
-                console.error('[MARK-TO] From user not found:', fromUserEfilingId);
-                throw new Error('From user not found or inactive');
+            if (!lastTargetUser || processedMovements.length === 0) {
+                throw new Error('No movements were created');
             }
-            const fromUser = fromUserRes.rows[0];
-            console.log('[MARK-TO] Step 2: Got fromUser:', {
-                id: fromUser.id,
-                id_type: typeof fromUser.id,
-                department_id: fromUser.department_id,
-                department_id_type: typeof fromUser.department_id
-            });
             
-            // targetUser already queried above - log it
-            console.log('[MARK-TO] Step 3: Using targetUser:', {
-                id: targetUser.id,
-                id_type: typeof targetUser.id,
-                department_id: targetUser.department_id,
-                department_id_type: typeof targetUser.department_id
-            });
-
-            // Prepare INSERT parameters - match assign route pattern EXACTLY
-            // Use values directly from query results, NO Number() conversions needed
-            console.log('[MARK-TO] Step 4: Preparing INSERT parameters...');
-            const insertParams = [
-                fileId,  // file_id - already validated as integer
-                fromUser.id,  // from_user_id - use directly from query result
-                targetUser.id,  // to_user_id - use directly from query result  
-                fromUser.department_id,  // from_department_id - use directly from query result (can be null)
-                targetUser.department_id,  // to_department_id - use directly from query result (can be null)
-                'MARK_TO',  // action_type
-                remarks || null  // remarks
-            ];
-            
-            console.log('[MARK-TO] Step 5: INSERT parameters prepared:', {
-                param_count: insertParams.length,
-                param_types: insertParams.map(p => typeof p),
-                param_values: insertParams.map((p, i) => ({
-                    index: i,
-                    name: ['fileId', 'fromUser.id', 'targetUser.id', 'fromUser.dept_id', 'targetUser.dept_id', 'action_type', 'remarks'][i],
-                    type: typeof p,
-                    value: p,
-                    isNull: p === null,
-                    isNumber: typeof p === 'number'
-                }))
-            });
-
-            // Insert movement - EXACT same pattern as assign route
-            console.log('[MARK-TO] Step 6: Executing INSERT into efiling_file_movements...');
-            const movementRes = await client.query(`
-                INSERT INTO efiling_file_movements (
-                    file_id, from_user_id, to_user_id,
-                    from_department_id, to_department_id,
-                    action_type, remarks, created_at
-                )
-                VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
-                RETURNING id
-            `, insertParams);
-            
-            const movementId = movementRes.rows[0].id;
-            console.log('[MARK-TO] Step 7: INSERT successful! Movement ID:', movementId);
-            
-            // Return in expected format
-            const movements = [movementRes];
-
-            // Update file assignment - use targetUser.id (efiling user ID) like assign route
-            const newAssignee = targetUser.id;
-            console.log('[MARK-TO] Step 8: Updating file assignment, newAssignee:', newAssignee);
+            // Update file assignment to the last user
+            const newAssignee = lastTargetUser.id;
+            const toRoleCode = (lastTargetUser.role_code || '').toUpperCase();
+            console.log('[MARK-TO] Step 8: Updating file assignment, newAssignee:', newAssignee, '(last of', processedMovements.length, 'users)');
             
             // Calculate SLA deadline from SLA matrix (only for external workflow and if SLA deadline column exists)
             let slaDeadline = hasSlaDeadline ? (fileRow.sla_deadline || null) : null;
@@ -1111,12 +1317,18 @@ export async function POST(request, { params }) {
             await client.query(updateQuery, updateParams);
             console.log('[MARK-TO] Step 11: UPDATE successful!');
             
+            // Determine if final assignment is team internal (based on last user)
+            const externalRoles = ['SE', 'CE', 'CFO', 'COO', 'CEO'];
+            const lastUserRoleCode = (lastTargetUser.role_code || '').toUpperCase();
+            const isMovingToExternalFinal = externalRoles.includes(lastUserRoleCode);
+            const isTeamInternalFinal = !isMovingToExternalFinal && await isWithinTeamWorkflow(client, fileId, currentUser.id, lastProcessedUserId);
+            
             // Update workflow state
-            await updateWorkflowState(client, fileId, newState, newAssignee, isTeamInternal, shouldStartTAT);
+            await updateWorkflowState(client, fileId, newState, newAssignee, isTeamInternalFinal, shouldStartTAT);
             
             // Special handling: If marked to SE/CE, also assign to their assistants (for simultaneous visibility)
-            if ((toRoleCode === 'SE' || toRoleCode === 'CE') && !isTeamInternal) {
-                const assistants = await getAssistantsForManager(client, userId);
+            if ((lastUserRoleCode === 'SE' || lastUserRoleCode === 'CE') && !isTeamInternalFinal) {
+                const assistants = await getAssistantsForManager(client, lastProcessedUserId);
                 // Note: We don't create separate movements for assistants, but they will see the file
                 // The file is assigned to SE/CE, and assistants can see it via their manager relationship
             }
@@ -1134,20 +1346,22 @@ export async function POST(request, { params }) {
             const assigneeRole = (lastTarget.rows[0]?.role_code || '').toUpperCase();
             const assigneePhone = lastTarget.rows[0]?.contact_number;
 
-            // Step 12: Create in-app notification for new assignee
-            console.log('[MARK-TO] Step 12: Creating in-app notification...');
-            try {
-                await client.query(`
-                    INSERT INTO efiling_notifications (user_id, file_id, type, message, priority, action_required, created_at)
-                    VALUES ($1, $2, $3, $4, 'normal', true, NOW())
-                `, [newAssignee, fileId, 'file_assigned', `A file has been assigned to you: File ${fileRow.file_number || fileId}`]);
-                console.log('[MARK-TO] Step 12: In-app notification created successfully');
-            } catch (e) {
-                console.warn('[MARK-TO] Step 12: Failed to create in-app notification:', e);
+            // Step 12: Create in-app notification for all assigned users
+            console.log('[MARK-TO] Step 12: Creating in-app notifications for', validatedUserIds.length, 'users...');
+            for (const userId of validatedUserIds) {
+                try {
+                    await client.query(`
+                        INSERT INTO efiling_notifications (user_id, file_id, type, message, priority, action_required, created_at)
+                        VALUES ($1, $2, $3, $4, 'normal', true, NOW())
+                    `, [userId, fileId, 'file_assigned', `A file has been assigned to you: File ${fileRow.file_number || fileId}`]);
+                } catch (e) {
+                    console.warn('[MARK-TO] Failed to create in-app notification for user:', userId, e);
+                }
             }
+            console.log('[MARK-TO] Step 12: In-app notifications created');
             
             // Step 13: Send WhatsApp notification to the assigned user (only for external workflow)
-            if (assigneePhone && !isTeamInternal) {
+            if (assigneePhone && !isTeamInternalFinal) {
                 console.log('[MARK-TO] Step 13: Starting WhatsApp notification process...');
                 console.log('[MARK-TO] Step 13a: Phone number:', assigneePhone, 'Is team internal:', isTeamInternal);
                 
@@ -1280,15 +1494,16 @@ export async function POST(request, { params }) {
             await logAction(request, 'MARK_TO', ENTITY_TYPES.EFILING_FILE, {
                 entityId: fileId,
                 entityName: `File ${fileRow.file_number || fileId}`,
-                details: { user_ids, remarks, movements_created: movements.length }
+                details: { user_ids, remarks, movements_created: processedMovements.length, assigned_to: newAssignee }
             });
 
             return NextResponse.json({ 
-                message: `File marked successfully`,
-                movement: movements[0].rows[0],
+                message: `File marked successfully to ${processedMovements.length} user(s)`,
+                movements: processedMovements,
                 workflow_state: newState,
-                is_team_internal: isTeamInternal,
+                is_team_internal: isTeamInternalFinal,
                 tat_started: shouldStartTAT,
+                assigned_to: newAssignee,
                 allowed_recipients: allowedRecipients
             });
         } catch (error) {
@@ -1687,6 +1902,95 @@ export async function GET(request, { params }) {
                 });
             }
         }
+        
+        // ========== ROLE-BASED VISIBILITY FILTERING ==========
+        // Apply filtering based on current user's role level
+        const currentUserIsGlobal = isGlobalRole(currentUserRoleCodeUpper);
+        const currentUserIsMidLevel = isMidLevelRole(currentUserRoleCodeUpper);
+        const currentUserIsLowerLevel = isLowerLevelRole(currentUserRoleCodeUpper);
+        
+        console.log('[MARK-TO GET] Role check:', {
+            roleCode: currentUser.role_code,
+            roleCodeUpper: currentUserRoleCodeUpper,
+            isGlobal: currentUserIsGlobal,
+            isMidLevel: currentUserIsMidLevel,
+            isLowerLevel: currentUserIsLowerLevel,
+            recipientsBeforeFilter: allowedRecipients.length
+        });
+        
+        if (currentUserIsGlobal) {
+            // Global roles (SE, CE, DCE, CEO, CFO, COO, CIA, CCO, DMD, Director, Committee/MD/BILLING/BUDGET/IAO-II)
+            // Fetch ALL active e-filing users (bypass geographic routing restrictions)
+            const allUsersRes = await client.query(`
+                SELECT 
+                    eu.id,
+                    u.name AS user_name,
+                    eu.efiling_role_id,
+                    r.code AS role_code,
+                    r.name AS role_name,
+                    eu.department_id,
+                    dept.name AS department_name,
+                    eu.district_id,
+                    d.title AS district_name,
+                    eu.town_id,
+                    t.town AS town_name,
+                    eu.division_id,
+                    div.name AS division_name
+                FROM efiling_users eu
+                JOIN users u ON eu.user_id = u.id
+                LEFT JOIN efiling_roles r ON eu.efiling_role_id = r.id
+                LEFT JOIN efiling_departments dept ON eu.department_id = dept.id
+                LEFT JOIN district d ON eu.district_id = d.id
+                LEFT JOIN town t ON eu.town_id = t.id
+                LEFT JOIN divisions div ON eu.division_id = div.id
+                WHERE eu.is_active = true
+                AND eu.id != $1
+                ORDER BY u.name ASC
+            `, [currentUserEfilingId]);
+            
+            // Replace allowedRecipients with all users (merge with existing to preserve metadata)
+            const allUsersMap = new Map(allUsersRes.rows.map(u => [u.id, u]));
+            allowedRecipients.forEach(existing => {
+                if (!allUsersMap.has(existing.id)) {
+                    allUsersMap.set(existing.id, {
+                        id: existing.id,
+                        user_name: existing.user_name || existing.name,
+                        name: existing.user_name || existing.name,
+                        role_code: existing.role_code,
+                        role_name: existing.role_name,
+                        department_id: existing.department_id,
+                        department_name: existing.department_name,
+                        district_id: existing.district_id,
+                        district_name: existing.district_name,
+                        town_id: existing.town_id,
+                        town_name: existing.town_name,
+                        division_id: existing.division_id,
+                        division_name: existing.division_name,
+                        ...existing
+                    });
+                }
+            });
+            allowedRecipients = Array.from(allUsersMap.values());
+            console.log('[MARK-TO GET] Global role - showing all users:', allowedRecipients.length);
+        } else if (currentUserIsLowerLevel && currentUserDepartmentId != null) {
+            // Lower-level roles (AEE, AOO, DAO, Sub-engineer): Can only see department managers
+            // Filter to only show XEN, EE, RE, Admin officer from same department
+            allowedRecipients = allowedRecipients.filter(recipient => {
+                const recipientRoleCode = (recipient.role_code || '').toUpperCase();
+                const recipientDepartmentId = recipient.department_id;
+                // Must be in same department AND be a department manager role
+                return recipientDepartmentId === currentUserDepartmentId && 
+                       isDepartmentManagerRole(recipientRoleCode);
+            });
+        } else if (currentUserIsMidLevel && currentUserDepartmentId != null) {
+            // Mid-level roles (XEN, RE, EE, Admin officer): Can see all users in their department
+            // Filter to only show users from same department
+            allowedRecipients = allowedRecipients.filter(recipient => {
+                const recipientDepartmentId = recipient.department_id;
+                return recipientDepartmentId === currentUserDepartmentId;
+            });
+        }
+        // ========== END ROLE-BASED VISIBILITY FILTERING ==========
         
         // ========== CREATOR (RE/XEN) MARKING RESTRICTION - Filter Recipients ==========
         // Rule: Once RE/XEN marks file to higher level, they cannot mark again until file is returned to them

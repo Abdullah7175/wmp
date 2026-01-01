@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic';
 export async function GET(request) {
     let client;
     try {
-        const session = await auth(request);
+        const session = await auth();
         if (!session?.user?.role || ![1,2].includes(parseInt(session.user.role))) {
             return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
         }

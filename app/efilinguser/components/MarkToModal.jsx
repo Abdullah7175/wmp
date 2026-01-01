@@ -93,8 +93,16 @@ export default function MarkToModal({ showMarkToModal, onClose, fileId, fileNumb
   }, [showMarkToModal, fileId]);
 
   const handleToggleRecipient = (recipientId) => {
-    // Sequential workflow - only one recipient at a time
-    setSelectedIds([recipientId]);
+    // Multiple selection - toggle recipient
+    setSelectedIds(prev => {
+      if (prev.includes(recipientId)) {
+        // Remove if already selected
+        return prev.filter(id => id !== recipientId);
+      } else {
+        // Add if not selected
+        return [...prev, recipientId];
+      }
+    });
   };
 
   const filteredRecipients = useMemo(() => {
@@ -137,15 +145,7 @@ export default function MarkToModal({ showMarkToModal, onClose, fileId, fileNumb
       return;
     }
 
-    // Sequential workflow - only one recipient
-    if (selectedRecipients.length > 1) {
-      toast({
-        title: "Multiple recipients not allowed",
-        description: "Please select only one user at a time (sequential workflow).",
-        variant: "destructive",
-      });
-      return;
-    }
+    // Multiple selection is now allowed
 
     setMarking(true);
     try {
@@ -166,14 +166,22 @@ export default function MarkToModal({ showMarkToModal, onClose, fileId, fileNumb
       const result = await res.json();
       const tatStarted = result.tat_started;
       const isTeamInternal = result.is_team_internal;
+      const userCount = selectedRecipients.length;
+      const userNameList = selectedRecipients.map(r => r.user_name).join(", ");
 
       toast({
         title: "Marked successfully",
-        description: tatStarted 
-          ? `File marked to ${selectedRecipients[0].user_name}. TAT timer has started.`
-          : isTeamInternal
-          ? `File marked to ${selectedRecipients[0].user_name} (Team workflow - No TAT).`
-          : `File marked to ${selectedRecipients[0].user_name}.`,
+        description: userCount === 1
+          ? (tatStarted 
+              ? `File marked to ${selectedRecipients[0].user_name}. TAT timer has started.`
+              : isTeamInternal
+              ? `File marked to ${selectedRecipients[0].user_name} (Team workflow - No TAT).`
+              : `File marked to ${selectedRecipients[0].user_name}.`)
+          : (tatStarted 
+              ? `File marked to ${userCount} users: ${userNameList}. TAT timer has started.`
+              : isTeamInternal
+              ? `File marked to ${userCount} users: ${userNameList} (Team workflow - No TAT).`
+              : `File marked to ${userCount} users: ${userNameList}.`),
       });
       onSuccess?.();
       onClose?.();
@@ -311,40 +319,51 @@ export default function MarkToModal({ showMarkToModal, onClose, fileId, fileNumb
                                                     selected ? "bg-blue-50 border-blue-200" : ""
                                                 }`}
                                             >
-                                                <div className="flex items-center justify-between">
-                                                    <div className="flex-1">
-                                                        <div className="flex items-center gap-2">
-                                                            <div className="font-medium text-sm text-gray-900">
-                                                                {recipient.user_name}
+                                                <div className="flex items-start justify-between">
+                                                    <div className="flex-1 flex items-start gap-2">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={selected}
+                                                            onChange={() => {}}
+                                                            onClick={(e) => e.stopPropagation()}
+                                                            className="w-4 h-4 text-blue-600 rounded mt-0.5 flex-shrink-0"
+                                                            disabled={!canMark}
+                                                            readOnly
+                                                        />
+                                                        <div className="flex-1">
+                                                            <div className="flex items-center gap-2">
+                                                                <div className="font-medium text-sm text-gray-900">
+                                                                    {recipient.user_name}
+                                                                </div>
+                                                                {isTeamMember && (
+                                                                    <Badge variant="secondary" className="text-xs">
+                                                                        <UsersRound className="w-3 h-3 mr-1" />
+                                                                        Team Member
+                                                                    </Badge>
+                                                                )}
                                                             </div>
-                                                            {isTeamMember && (
-                                                                <Badge variant="secondary" className="text-xs">
-                                                                    <UsersRound className="w-3 h-3 mr-1" />
-                                                                    Team Member
-                                                                </Badge>
-                                                            )}
-                                                        </div>
-                                                        <div className="text-xs text-gray-600 flex items-center gap-2 mt-1 flex-wrap">
-                                                            {recipient.role_name && (
-                                                                <span className="flex items-center gap-1">
-                                                                    <Shield className="w-3 h-3" />
-                                                                    {recipient.role_name} ({recipient.role_code})
-                                                                </span>
-                                                            )}
-                                                            {recipient.department_name && (
-                                                                <span className="flex items-center gap-1">
-                                                                    <Building2 className="w-3 h-3" />
-                                                                    {recipient.department_name}
-                                                                </span>
-                                                            )}
-                                                            {(recipient.district_name || recipient.town_name || recipient.division_name) && (
-                                                                <span className="flex items-center gap-1">
-                                                                    <MapPin className="w-3 h-3" />
-                                                                    {[recipient.division_name, recipient.district_name, recipient.town_name]
-                                                                        .filter(Boolean)
-                                                                        .join(" · ")}
-                                                                </span>
-                                                            )}
+                                                            <div className="text-xs text-gray-600 flex items-center gap-2 mt-1 flex-wrap">
+                                                                {recipient.role_name && (
+                                                                    <span className="flex items-center gap-1">
+                                                                        <Shield className="w-3 h-3" />
+                                                                        {recipient.role_name} ({recipient.role_code})
+                                                                    </span>
+                                                                )}
+                                                                {recipient.department_name && (
+                                                                    <span className="flex items-center gap-1">
+                                                                        <Building2 className="w-3 h-3" />
+                                                                        {recipient.department_name}
+                                                                    </span>
+                                                                )}
+                                                                {(recipient.district_name || recipient.town_name || recipient.division_name) && (
+                                                                    <span className="flex items-center gap-1">
+                                                                        <MapPin className="w-3 h-3" />
+                                                                        {[recipient.division_name, recipient.district_name, recipient.town_name]
+                                                                            .filter(Boolean)
+                                                                            .join(" · ")}
+                                                                    </span>
+                                                                )}
+                                                            </div>
                                                         </div>
                                                     </div>
                                                     <div className="flex flex-col items-end gap-1">
@@ -352,9 +371,6 @@ export default function MarkToModal({ showMarkToModal, onClose, fileId, fileNumb
                                                             <Badge variant="outline" className="text-xs">
                                                                 Scope: {scopeLabel}
                                                             </Badge>
-                                                        )}
-                                                        {selected && (
-                                                            <Badge variant="secondary" className="text-xs">Selected</Badge>
                                                         )}
                                                     </div>
                                                 </div>
@@ -488,7 +504,11 @@ export default function MarkToModal({ showMarkToModal, onClose, fileId, fileNumb
                             ) : (
                                 <>
                                     <Send className="w-4 h-4 mr-2" />
-                                    Mark To {selectedRecipients.length > 0 ? selectedRecipients[0].user_name : 'User'}
+                                    Mark To {selectedRecipients.length > 0 
+                                      ? (selectedRecipients.length === 1 
+                                          ? selectedRecipients[0].user_name 
+                                          : `${selectedRecipients.length} Users`)
+                                      : 'User(s)'}
                                 </>
                             )}
                         </Button>

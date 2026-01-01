@@ -237,9 +237,7 @@ export default function CreateFileType() {
                                     onValueChange={(value) => handleInputChange('categoryId', value)}
                                 >
                                     <SelectTrigger>
-                                        <SelectValue placeholder="Select category">
-                                            {formData.categoryId && categories.find(cat => cat.id == formData.categoryId)?.name}
-                                        </SelectValue>
+                                        <SelectValue placeholder="Select category" />
                                     </SelectTrigger>
                                     <SelectContent>
                                         {categories.map((category) => (

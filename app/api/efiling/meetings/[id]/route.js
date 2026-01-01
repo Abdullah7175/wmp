@@ -23,7 +23,7 @@ async function getEfilingUserId(session, client) {
 export async function GET(request, { params }) {
     let client;
     try {
-        const session = await auth(request);
+        const session = await auth();
         if (!session?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
@@ -122,7 +122,7 @@ export async function GET(request, { params }) {
 export async function PUT(request, { params }) {
     let client;
     try {
-        const session = await auth(request);
+        const session = await auth();
         if (!session?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
@@ -267,7 +267,7 @@ export async function PUT(request, { params }) {
 export async function DELETE(request, { params }) {
     let client;
     try {
-        const session = await auth(request);
+        const session = await auth();
         if (!session?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }

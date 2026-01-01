@@ -14,7 +14,7 @@ export async function POST(request, { params }) {
         const { to_user_id, remarks } = body;
 
         // Actor identity from session
-        const session = await auth(request);
+        const session = await auth();
         if (!session?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }

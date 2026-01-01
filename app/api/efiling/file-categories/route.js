@@ -40,7 +40,7 @@ export async function GET(request) {
 
         client = await connectToDatabase();
 
-        const session = await auth(request);
+        const session = await auth();
         let userGeography = null;
         let canSeeAll = false;
         if (session?.user) {

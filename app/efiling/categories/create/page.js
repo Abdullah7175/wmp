@@ -123,9 +123,7 @@ export default function CreateCategoryPage() {
                                 onValueChange={(value) => handleInputChange('department_id', value === "none" ? null : parseInt(value))}
                             >
                                 <SelectTrigger>
-                                    <SelectValue placeholder="Select department (optional)">
-                                        {formData.department_id ? departments.find(d => d.id == formData.department_id)?.name : "No Department"}
-                                    </SelectValue>
+                                    <SelectValue placeholder="Select department (optional)" />
                                 </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="none">No Department</SelectItem>

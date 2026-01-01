@@ -13,10 +13,110 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Users, Plus, Trash2, Search, Building2, Shield, UserCheck, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
-const TEAM_ROLES = {
-    EE: ['DAO', 'AEE', 'Sub-engineer'],
-    SE: ['AO', 'Assistant'],
-    CE: ['AO', 'Assistant']
+// Team member roles - these are the subordinates that can be added to teams
+const TEAM_MEMBER_ROLES = ['AEE', 'SUB-Engineer', 'AOO', 'AO', 'DAO'];
+
+// Manager roles - these are the team leaders who can have teams
+const MANAGER_ROLE_CODES = [
+    'XEN', 'RE', 'EE', 'SE', 'CE', 'MD', 'CEO', 'COO', 'CFO', 'CCO', 
+    'DIRECTOR', 'COMMITTEE', 'CIA', 'DMD',
+    // Common variations
+    'EXECUTIVE_ENGINEER', 'SUPERINTENDENT_ENGINEER', 'CHIEF_ENGINEER',
+    'DIRECTOR', 'CHIEF_EXECUTIVE_OFFICER', 'CHIEF_OPERATING_OFFICER',
+    'CHIEF_FINANCIAL_OFFICER', 'CHIEF_COMERCIAL_OFFICER',
+    'DEPUTY_MANAGING_DIRECTOR',
+    // Medical and audit roles
+    'DIRECTOR_MEDICAL_SERVICES', 'DIRECTOR MEDICAL SERVICES', 'DMS',
+    'MEDICAL_SCRUTINY_COMMITTEE', 'MEDICAL SCRUTINY COMMITTEE', 'MSC',
+    'CHIEF_INTERNAL_AUDITOR', 'CHIEF INTERNAL AUDITOR'
+];
+
+const MANAGER_ROLE_NAMES = [
+    'EXECUTIVE ENGINEER', 'XEN', 'X-EN',
+    'RESIDENT ENGINEER', 'RE',
+    'SUPERINTENDENT ENGINEER', 'SENIOR ENGINEER', 'SE',
+    'CHIEF ENGINEER', 'CE',
+    'MANAGING DIRECTOR', 'MD',
+    'CHIEF EXECUTIVE OFFICER', 'CEO',
+    'CHIEF OPERATING OFFICER', 'COO',
+    'CHIEF FINANCIAL OFFICER', 'CFO',
+    'CHIEF COMERCIAL OFFICER', 'CCO',
+    'DIRECTOR', 'COMMITTEE', 'CIA',
+    'DEPUTY MANAGING DIRECTOR', 'DMD',
+    // Medical and audit roles
+    'DIRECTOR MEDICAL SERVICES', 'DMS',
+    'MEDICAL SCRUTINY COMMITTEE', 'MSC',
+    'CHIEF INTERNAL AUDITOR'
+];
+
+// Helper function to check if a user is a manager
+const isManager = (user) => {
+    const roleCode = (user.role_code || '').toUpperCase();
+    const roleName = (user.role_name || '').toUpperCase();
+    
+    // First, explicitly exclude team member roles to avoid false positives
+    // This must be checked FIRST before checking for manager roles
+    const teamMemberIndicators = ['AEE', 'SUB-ENGINEER', 'SUBENGINEER', 'SUB_ENGINEER', 'SUB-ENGR', 'SUBENGR', 'AOO', 'AO', 'DAO'];
+    const isTeamMember = teamMemberIndicators.some(indicator => {
+        const indicatorUpper = indicator.toUpperCase();
+        // Check if role code starts with or exactly matches team member roles
+        return roleCode === indicatorUpper || 
+               roleCode.startsWith(indicatorUpper + '_') ||
+               roleCode.includes('_' + indicatorUpper + '_') ||
+               roleCode.endsWith('_' + indicatorUpper) ||
+               // Also check role name
+               roleName === indicatorUpper ||
+               roleName.includes(' ' + indicatorUpper) ||
+               roleName.includes(indicatorUpper + ' ');
+    });
+    
+    if (isTeamMember) {
+        return false; // Exclude team members from managers
+    }
+    
+    // Check manager role codes with more precise matching
+    // For "EE", make sure it doesn't match "AEE" (already excluded above, but double-check)
+    const matchesRoleCode = MANAGER_ROLE_CODES.some(mr => {
+        const mrUpper = mr.toUpperCase();
+        
+        // Special handling for "EE" - must not be preceded by "A"
+        if (mrUpper === 'EE' || mrUpper.includes('EXECUTIVE_ENGINEER')) {
+            // Only match if it's EE (not AEE) - check it's at start or after underscore, and not after 'A'
+            if (roleCode.startsWith('AEE') || roleCode.includes('_AEE') || roleCode.includes(' AEE')) {
+                return false; // Don't match AEE
+            }
+            // Match EE or EXECUTIVE_ENGINEER
+            return roleCode === 'EE' ||
+                   roleCode === 'EXECUTIVE_ENGINEER' ||
+                   roleCode.startsWith('EE_') ||
+                   roleCode.includes('_EE_') ||
+                   roleCode.endsWith('_EE') ||
+                   roleCode.includes('EXECUTIVE_ENGINEER');
+        }
+        
+        // For other roles, use exact match or match as whole word (with underscore boundaries)
+        return roleCode === mrUpper ||
+               roleCode.startsWith(mrUpper + '_') ||
+               roleCode.includes('_' + mrUpper + '_') ||
+               roleCode.endsWith('_' + mrUpper);
+    });
+    
+    // Check manager role names
+    const matchesRoleName = MANAGER_ROLE_NAMES.some(mrn => {
+        const mrnUpper = mrn.toUpperCase();
+        // Skip if it's EXECUTIVE ENGINEER and role name contains AEE (Assistant Executive Engineer)
+        if ((mrnUpper.includes('EXECUTIVE ENGINEER') || mrnUpper === 'EE' || mrnUpper === 'XEN') && 
+            (roleName.includes('ASSISTANT EXECUTIVE ENGINEER') || roleName.includes('AEE'))) {
+            return false;
+        }
+        // Check if role name contains the manager role name as a whole word
+        return roleName === mrnUpper ||
+               roleName.includes(' ' + mrnUpper + ' ') ||
+               roleName.startsWith(mrnUpper + ' ') ||
+               roleName.endsWith(' ' + mrnUpper);
+    });
+    
+    return matchesRoleCode || matchesRoleName;
 };
 
 export default function TeamsManagement() {
@@ -52,15 +152,8 @@ export default function TeamsManagement() {
                 const usersData = await managersRes.json();
                 const allManagers = Array.isArray(usersData) ? usersData : (usersData.users || []);
                 
-                // Filter for managers only (EE, SE, CE)
-                const managerRoles = ['EE', 'SE', 'CE', 'XEN', 'WAT_XEN', 'SE_CEN', 'CE_WAT'];
-                const managersList = allManagers.filter(user => {
-                    const roleCode = (user.role_code || '').toUpperCase();
-                    return managerRoles.some(mr => roleCode.includes(mr)) || 
-                           roleCode.includes('EXECUTIVE_ENGINEER') ||
-                           roleCode.includes('SUPERINTENDENT_ENGINEER') ||
-                           roleCode.includes('CHIEF_ENGINEER');
-                });
+                // Filter for managers only (XEN/RE/EE/SE/CE/MD/CEO/COO/CFO/CCO/Directors/Committee/CIA/DMD)
+                const managersList = allManagers.filter(isManager);
                 
                 const teamsData = [];
                 for (const manager of managersList) {
@@ -95,15 +188,8 @@ export default function TeamsManagement() {
             if (res.ok) {
                 const data = await res.json();
                 const users = Array.isArray(data) ? data : (data.users || []);
-                // Filter for EE, SE, CE roles only
-                const managerRoles = ['EE', 'SE', 'CE', 'XEN', 'WAT_XEN', 'SE_CEN', 'CE_WAT'];
-                const managersList = users.filter(user => {
-                    const roleCode = (user.role_code || '').toUpperCase();
-                    return managerRoles.some(mr => roleCode.includes(mr)) || 
-                           roleCode.includes('EXECUTIVE_ENGINEER') ||
-                           roleCode.includes('SUPERINTENDENT_ENGINEER') ||
-                           roleCode.includes('CHIEF_ENGINEER');
-                });
+                // Filter for manager roles only (XEN/RE/EE/SE/CE/MD/CEO/COO/CFO/CCO/Directors/Committee/CIA/DMD)
+                const managersList = users.filter(isManager);
                 setManagers(managersList);
             }
         } catch (error) {
@@ -124,29 +210,10 @@ export default function TeamsManagement() {
         }
     };
 
-    const getManagerRoleType = (roleCode) => {
-        if (!roleCode) return null;
-        const code = roleCode.toUpperCase();
-        if (code.includes('XEN') || code.includes('EXECUTIVE_ENGINEER') || code.includes('EE')) {
-            return 'EE';
-        }
-        if (code.includes('RE') || code.includes('RESIDENT_ENGINEER') || code.includes('RE')) {
-            return 'RE';
-        }
-        if (code.includes('SE') || code.includes('SUPERINTENDENT_ENGINEER')) {
-            return 'SE';
-        }
-        if (code.includes('CE') || code.includes('CHIEF_ENGINEER')) {
-            return 'CE';
-        }
-        return null;
-    };
-
+    // All managers can have team members from these roles
     const getAvailableTeamRoles = (managerId) => {
-        const manager = managers.find(m => m.id === parseInt(managerId));
-        if (!manager) return [];
-        const roleType = getManagerRoleType(manager.role_code);
-        return roleType ? TEAM_ROLES[roleType] : [];
+        // Return the standard team member roles
+        return TEAM_MEMBER_ROLES;
     };
 
     const handleAddTeamMember = async () => {
@@ -252,7 +319,7 @@ export default function TeamsManagement() {
             <div className="flex items-center justify-between mb-6">
                 <div>
                     <h1 className="text-2xl font-bold">Team Management</h1>
-                    <p className="text-gray-600">Manage team relationships (EE → DAO/AEE/Sub-engineer, SE/CE → AO/Assistant)</p>
+                    <p className="text-gray-600">Manage team relationships. Team Leaders: XEN/RE/EE/SE/CE/MD/CEO/COO/CFO/CCO/Directors/Director Medical Services/Medical Scrutiny Committee/CIA/DMD → Team Members: AEE/SUB-Engineer/AOO/AO/DAO</p>
                 </div>
                 <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
                     <DialogTrigger asChild>
@@ -267,7 +334,7 @@ export default function TeamsManagement() {
                         </DialogHeader>
                         <div className="space-y-4">
                             <div>
-                                <Label>Manager (EE/SE/CE)</Label>
+                                <Label>Manager (Team Leader)</Label>
                                 <Select
                                     value={formData.manager_id}
                                     onValueChange={(value) => {
@@ -285,6 +352,9 @@ export default function TeamsManagement() {
                                         ))}
                                     </SelectContent>
                                 </Select>
+                                {/* <p className="text-xs text-gray-500 mt-1">
+                                    Only showing: XEN, RE, EE, SE, CE, MD, CEO, COO, CFO, CCO, Directors, Committee, CIA, DMD
+                                </p> */}
                             </div>
 
                             {formData.manager_id && (
@@ -314,20 +384,34 @@ export default function TeamsManagement() {
                             {formData.manager_id && formData.team_role && (() => {
                                 const selectedManager = managers.find(m => m.id === parseInt(formData.manager_id));
                                 const managerDepartmentId = selectedManager?.department_id;
-                                const roleType = getManagerRoleType(selectedManager?.role_code);
                                 
-                                // Allowed team member roles based on team role selected
-                                const allowedTeamMemberRoles = {
-                                    'DAO': ['DAO'],
-                                    'AEE': ['AEE'],
-                                    'Sub-engineer': ['SUB_ENGINEER', 'SUB-ENGINEER', 'SUBENGINEER','SUB-ENGR','SUBENGR','SUB_ENGR'],
-                                    'AO': ['AO', 'ACCOUNT_OFFICER'],
-                                    'Assistant': ['ASSISTANT', 'ASST']
+                                // Map team role to allowed role codes and names
+                                const teamRoleMapping = {
+                                    'AEE': {
+                                        roleCodes: ['AEE', 'ASSISTANT_EXECUTIVE_ENGINEER', 'ASST_EXECUTIVE_ENGINEER'],
+                                        roleNames: ['AEE', 'ASSISTANT EXECUTIVE ENGINEER', 'ASST EXECUTIVE ENGINEER']
+                                    },
+                                    'SUB-Engineer': {
+                                        roleCodes: ['SUB_ENGINEER', 'SUB-ENGINEER', 'SUBENGINEER', 'SUB-ENGR', 'SUBENGR', 'SUB_ENGR'],
+                                        roleNames: ['SUB ENGINEER', 'SUB-ENGINEER', 'SUBENGINEER', 'SUB ENGR', 'SUB-ENGR', 'SUBENGR']
+                                    },
+                                    'AOO': {
+                                        roleCodes: ['AOO', 'ASSISTANT_OFFICER', 'ASST_OFFICER'],
+                                        roleNames: ['AOO', 'ASSISTANT OFFICER', 'ASST OFFICER', 'ACCOUNTS OFFICER']
+                                    },
+                                    'AO': {
+                                        roleCodes: ['AO', 'ACCOUNT_OFFICER', 'ACCOUNTS_OFFICER'],
+                                        roleNames: ['AO', 'ACCOUNT OFFICER', 'ACCOUNTS OFFICER']
+                                    },
+                                    'DAO': {
+                                        roleCodes: ['DAO', 'DISTRICT_ACCOUNT_OFFICER', 'DIS_ACCOUNT'],
+                                        roleNames: ['DAO', 'DISTRICT ACCOUNT OFFICER', 'DISTRICT OFFICER']
+                                    }
                                 };
                                 
-                                const allowedRoles = allowedTeamMemberRoles[formData.team_role] || [];
+                                const mapping = teamRoleMapping[formData.team_role] || { roleCodes: [], roleNames: [] };
                                 
-                                // Filter users: same department, allowed roles, not the manager
+                                // Filter users: same department, allowed roles, not the manager, and not a manager role
                                 const filteredUsers = allUsers.filter(user => {
                                     // Must be from same department
                                     if (user.department_id !== managerDepartmentId) {
@@ -339,32 +423,22 @@ export default function TeamsManagement() {
                                         return false;
                                     }
                                     
-                                    // Must have an allowed role
-                                    const userRoleCode = (user.role_code || '').toUpperCase();
-                                    const matchesRole = allowedRoles.some(allowedRole => 
-                                        userRoleCode.includes(allowedRole.toUpperCase()) ||
-                                        userRoleCode === allowedRole.toUpperCase()
+                                    // Must NOT be a manager role (exclude managers from team members)
+                                    if (isManager(user)) {
+                                        return false;
+                                    }
+                                    
+                                    // Must have the selected team role
+                                    const matchesRoleCode = mapping.roleCodes.some(roleCode => 
+                                        userRoleCode.includes(roleCode.toUpperCase()) ||
+                                        userRoleCode === roleCode.toUpperCase()
+                                    );
+                                    const matchesRoleName = mapping.roleNames.some(roleName => 
+                                        userRoleName.includes(roleName) ||
+                                        userRoleName === roleName
                                     );
                                     
-                                    // Also check role name for common variations
-                                    const userRoleName = (user.role_name || '').toUpperCase();
-                                    const matchesRoleName = allowedRoles.some(allowedRole => {
-                                        const roleMap = {
-                                            'DAO': ['DAO', 'DIVISIONAL ACCOUNT OFFICER', 'DIVISION ACCOUNT OFFICER'],
-                                            'AEE': ['AEE', 'ASSISTANT EXECUTIVE ENGINEER', 'ASST EXECUTIVE ENGINEER'],
-                                            'SUB_ENGINEER': ['SUB ENGINEER', 'SUB-ENGINEER', 'SUBENGINEER','SUB_ENGR'],
-                                            'SUB-ENGINEER': ['SUB ENGINEER', 'SUB-ENGINEER', 'SUBENGINEER','SUB-ENGR'],
-                                            'SUBENGINEER': ['SUB ENGINEER', 'SUB-ENGINEER', 'SUBENGINEER','SUBENGR'],
-                                            'AO': ['ACCOUNT OFFICER', 'AO'],
-                                            'ACCOUNT_OFFICER': ['ACCOUNT OFFICER', 'AO'],
-                                            'ASSISTANT': ['ASSISTANT', 'ASST'],
-                                            'ASST': ['ASSISTANT', 'ASST']
-                                        };
-                                        const variations = roleMap[allowedRole] || [allowedRole];
-                                        return variations.some(v => userRoleName.includes(v));
-                                    });
-                                    
-                                    return matchesRole || matchesRoleName;
+                                    return matchesRoleCode || matchesRoleName;
                                 });
                                 
                                 return (

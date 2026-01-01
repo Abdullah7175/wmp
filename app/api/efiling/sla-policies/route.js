@@ -140,7 +140,7 @@ export async function POST(request) {
     let client;
     try {
         // Get session for authentication
-        const session = await auth(request);
+        const session = await auth();
         if (!session?.user?.id) {
             return NextResponse.json(
                 { error: 'Unauthorized' },
