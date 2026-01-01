@@ -18,7 +18,13 @@ export async function GET(request) {
 
     try {
         if (id) {
-            const res = await client.query(`SELECT * FROM divisions WHERE id = $1`, [id]);
+            const res = await client.query(`
+                SELECT d.*, 
+                       dept.name as department_name
+                FROM divisions d
+                LEFT JOIN efiling_departments dept ON d.department_id = dept.id
+                WHERE d.id = $1
+            `, [id]);
             if (res.rows.length === 0) {
                 return NextResponse.json({ error: 'Division not found' }, { status: 404 });
             }
@@ -26,16 +32,22 @@ export async function GET(request) {
         }
 
         const params = [];
-        let query = `SELECT * FROM divisions WHERE 1=1`;
+        let query = `
+            SELECT d.*, 
+                   dept.name as department_name
+            FROM divisions d
+            LEFT JOIN efiling_departments dept ON d.department_id = dept.id
+            WHERE 1=1
+        `;
         if (isActive !== null) {
             params.push(isActive === 'true');
-            query += ` AND is_active = $${params.length}`;
+            query += ` AND d.is_active = $${params.length}`;
         }
         if (departmentId) {
             params.push(departmentId);
-            query += ` AND department_id = $${params.length}`;
+            query += ` AND d.department_id = $${params.length}`;
         }
-        query += ' ORDER BY name ASC';
+        query += ' ORDER BY d.name ASC';
         const res = await client.query(query, params);
         return NextResponse.json({ success: true, divisions: res.rows });
     } catch (error) {
