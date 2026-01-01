@@ -1,15 +1,7 @@
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/db';
+import { requireAdmin } from '@/lib/authMiddleware';
 import { auth } from '@/auth';
-
-async function requireAdmin(request) {
-    const session = await auth(request);
-    const role = parseInt(session?.user?.role);
-    if (!session?.user || ![1, 2].includes(role)) {
-        return { error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) };
-    }
-    return { session };
-}
 
 export async function GET(request) {
     // SECURITY: Require authentication
@@ -56,7 +48,7 @@ export async function GET(request) {
 
 export async function POST(request) {
     const authResult = await requireAdmin(request);
-    if (authResult.error) return authResult.error;
+    if (authResult instanceof NextResponse) return authResult;
 
     const client = await connectToDatabase();
     try {
@@ -95,7 +87,7 @@ export async function POST(request) {
 
 export async function PUT(request) {
     const authResult = await requireAdmin(request);
-    if (authResult.error) return authResult.error;
+    if (authResult instanceof NextResponse) return authResult;
 
     const client = await connectToDatabase();
     try {
@@ -147,7 +139,7 @@ export async function PUT(request) {
 
 export async function DELETE(request) {
     const authResult = await requireAdmin(request);
-    if (authResult.error) return authResult.error;
+    if (authResult instanceof NextResponse) return authResult;
 
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
