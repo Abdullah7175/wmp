@@ -326,52 +326,51 @@ export default function MarkToModal({ showMarkToModal, onClose, fileId, fileNumb
                                                                     <div className="font-medium text-sm">
                                                                         {recipient.user_name}
                                                                     </div>
-                                                                {isTeamMember && (
-                                                                    <Badge variant="secondary" className="text-xs">
-                                                                        Team Member
-                                                                    </Badge>
-                                                                )}
-                                                                {willStartTAT && (
-                                                                    <Badge className="bg-orange-100 text-orange-800 text-xs">
-                                                                        Will Start TAT
-                                                                    </Badge>
-                                                                )}
-                                                            </div>
-                                                            <div className="text-xs text-gray-600 space-y-1">
-                                                                <div className="flex items-center gap-1">
-                                                                    <Shield className="w-3 h-3" />
-                                                                    <span>{recipient.role_name} ({recipient.role_code})</span>
+                                                                    {isTeamMember && (
+                                                                        <Badge variant="secondary" className="text-xs">
+                                                                            Team Member
+                                                                        </Badge>
+                                                                    )}
+                                                                    {willStartTAT && (
+                                                                        <Badge className="bg-orange-100 text-orange-800 text-xs">
+                                                                            Will Start TAT
+                                                                        </Badge>
+                                                                    )}
                                                                 </div>
-                                                                {recipient.department_name && (
+                                                                <div className="text-xs text-gray-600 space-y-1">
                                                                     <div className="flex items-center gap-1">
-                                                                        <Building2 className="w-3 h-3" />
-                                                                        <span>{recipient.department_name}</span>
+                                                                        <Shield className="w-3 h-3" />
+                                                                        <span>{recipient.role_name} ({recipient.role_code})</span>
                                                                     </div>
-                                                                )}
-                                                                {(recipient.district_name || recipient.town_name || recipient.division_name) && (
-                                                                    <div className="flex items-center gap-1">
-                                                                        <MapPin className="w-3 h-3" />
-                                                                        <span>
-                                                                            {[
-                                                                                recipient.division_name,
-                                                                                recipient.district_name,
-                                                                                recipient.town_name
-                                                                            ].filter(Boolean).join(", ")}
-                                                                        </span>
-                                                                    </div>
-                                                                )}
-                                                                {scopeLabel && (
-                                                                    <div className="text-xs text-gray-500 mt-1">
-                                                                        Scope: {scopeLabel.toLowerCase()}
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                            {isTeamInternal && (
-                                                                <div className="mt-2 text-xs text-gray-500">
-                                                                    Team workflow - No TAT
+                                                                    {recipient.department_name && (
+                                                                        <div className="flex items-center gap-1">
+                                                                            <Building2 className="w-3 h-3" />
+                                                                            <span>{recipient.department_name}</span>
+                                                                        </div>
+                                                                    )}
+                                                                    {(recipient.district_name || recipient.town_name || recipient.division_name) && (
+                                                                        <div className="flex items-center gap-1">
+                                                                            <MapPin className="w-3 h-3" />
+                                                                            <span>
+                                                                                {[
+                                                                                    recipient.division_name,
+                                                                                    recipient.district_name,
+                                                                                    recipient.town_name
+                                                                                ].filter(Boolean).join(", ")}
+                                                                            </span>
+                                                                        </div>
+                                                                    )}
+                                                                    {scopeLabel && (
+                                                                        <div className="text-xs text-gray-500 mt-1">
+                                                                            Scope: {scopeLabel.toLowerCase()}
+                                                                        </div>
+                                                                    )}
                                                                 </div>
-                                                            )}
-                                                                </div>
+                                                                {isTeamInternal && (
+                                                                    <div className="mt-2 text-xs text-gray-500">
+                                                                        Team workflow - No TAT
+                                                                    </div>
+                                                                )}
                                                             </div>
                                                         </div>
                                                     </div>
