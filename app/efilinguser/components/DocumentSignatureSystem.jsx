@@ -666,10 +666,15 @@ export default function DocumentSignatureSystem({
                                 if (content.startsWith('data:image/')) {
                                     return content;
                                 }
-                                // Use same simple logic as profile page
-                                if (content.startsWith('/api/')) {
-                                    return content; // Already correct
+                                // If it's already a correct API route, return as is
+                                if (content.startsWith('/api/uploads/')) {
+                                    return content;
                                 }
+                                // If it starts with /api/ but not /api/uploads/, return as is (might be other API routes)
+                                if (content.startsWith('/api/')) {
+                                    return content;
+                                }
+                                // If it starts with /uploads/, convert to /api/uploads/
                                 if (content.startsWith('/uploads/')) {
                                     return content.replace('/uploads/', '/api/uploads/');
                                 }
@@ -678,32 +683,28 @@ export default function DocumentSignatureSystem({
                                     try {
                                         const url = new URL(content);
                                         const path = url.pathname;
+                                        // If path already starts with /api/uploads/, return it
                                         if (path.startsWith('/api/uploads/')) {
-                                            return path; // Already correct
+                                            return path;
                                         }
+                                        // If path starts with /uploads/, convert to /api/uploads/
                                         if (path.startsWith('/uploads/')) {
                                             return path.replace('/uploads/', '/api/uploads/');
                                         }
-                                        // Try to construct API path
-                                        return `/api/uploads${path.startsWith('/') ? '' : '/'}${path}`;
+                                        // If path doesn't start with /uploads/, assume it's a relative path and prepend /api/uploads/
+                                        return `/api/uploads${path.startsWith('/') ? path : '/' + path}`;
                                     } catch (e) {
                                         console.error('Error parsing signature URL:', e);
                                         return content;
                                     }
                                 }
                                 // Otherwise, assume it's a relative path and prepend /api/uploads/
-                                return `/api/uploads${content.startsWith('/') ? '' : '/'}${content}`;
+                                return `/api/uploads${content.startsWith('/') ? content : '/' + content}`;
                             };
                             
-                            // Use same inline URL conversion as profile page
+                            // Use the helper function for proper URL conversion
                             const imageUrl = signature.type === 'image' || (signature.type && signature.type.toLowerCase().includes('image'))
-                                ? (signature.content 
-                                    ? (signature.content.startsWith('/api/') 
-                                        ? signature.content 
-                                        : signature.content.startsWith('/uploads/')
-                                        ? signature.content.replace('/uploads/', '/api/uploads/')
-                                        : `/api/uploads${signature.content.startsWith('/') ? '' : '/'}${signature.content}`)
-                                    : null)
+                                ? getSignatureImageUrl(signature.content)
                                 : null;
                             
                             return (
@@ -727,7 +728,6 @@ export default function DocumentSignatureSystem({
                                                         className="w-10 h-6 object-contain"
                                                         loading="lazy"
                                                         onError={(e) => {
-                                                            // Use same simple fallback as profile page
                                                             const img = e.target;
                                                             const originalSrc = img.src;
                                                             
@@ -757,9 +757,15 @@ export default function DocumentSignatureSystem({
                                                                 console.log('[Signature Image] Trying API route fallback:', apiUrl);
                                                                 img.src = apiUrl;
                                                             } else if (signature.content && signature.content !== originalSrc) {
-                                                                // Try original content as last resort
-                                                                console.log('[Signature Image] Trying original content:', signature.content);
-                                                                img.src = signature.content;
+                                                                // Try original content converted using helper function
+                                                                const convertedUrl = getSignatureImageUrl(signature.content);
+                                                                if (convertedUrl && convertedUrl !== originalSrc) {
+                                                                    console.log('[Signature Image] Trying converted original content:', convertedUrl);
+                                                                    img.src = convertedUrl;
+                                                                } else {
+                                                                    console.log('[Signature Image] Trying original content as-is:', signature.content);
+                                                                    img.src = signature.content;
+                                                                }
                                                             }
                                                         }}
                                                     />
@@ -773,9 +779,6 @@ export default function DocumentSignatureSystem({
                                                 {signature.user_role} • {new Date(signature.timestamp).toLocaleString()}
                                             </div>
                                         </div>
-                                    </div>
-                                    <div className="text-xs text-gray-400">
-                                        Position: ({Math.round(signature.position.x)}, {Math.round(signature.position.y)})
                                     </div>
                                 </div>
                             );
@@ -793,51 +796,51 @@ export default function DocumentSignatureSystem({
                             <div className="space-y-3">
                                 {signatures.map((signature) => {
                                     // Helper function to get the correct image URL
-                                    // Use the same logic as profile page - convert /uploads/ to /api/uploads/
                                     const getSignatureImageUrl = (content) => {
                                         if (!content) return null;
                                         // If it's a base64 data URL, return as is
                                         if (content.startsWith('data:image/')) {
                                             return content;
                                         }
-                                        // Use same logic as profile page
-                                        if (content.startsWith('/api/')) {
-                                            return content; // Already correct
+                                        // If it's already a correct API route, return as is
+                                        if (content.startsWith('/api/uploads/')) {
+                                            return content;
                                         }
+                                        // If it starts with /api/ but not /api/uploads/, return as is (might be other API routes)
+                                        if (content.startsWith('/api/')) {
+                                            return content;
+                                        }
+                                        // If it starts with /uploads/, convert to /api/uploads/
                                         if (content.startsWith('/uploads/')) {
                                             return content.replace('/uploads/', '/api/uploads/');
                                         }
-                                        // If it starts with http/https, extract path and convert to /api/uploads/
+                                        // If it starts with http/https, extract path and convert to API route
                                         if (content.startsWith('http://') || content.startsWith('https://')) {
                                             try {
                                                 const url = new URL(content);
                                                 const path = url.pathname;
+                                                // If path already starts with /api/uploads/, return it
                                                 if (path.startsWith('/api/uploads/')) {
-                                                    return path; // Already correct
+                                                    return path;
                                                 }
+                                                // If path starts with /uploads/, convert to /api/uploads/
                                                 if (path.startsWith('/uploads/')) {
                                                     return path.replace('/uploads/', '/api/uploads/');
                                                 }
-                                                // Try to construct API path
-                                                return `/api/uploads${path.startsWith('/') ? '' : '/'}${path}`;
+                                                // If path doesn't start with /uploads/, assume it's a relative path and prepend /api/uploads/
+                                                return `/api/uploads${path.startsWith('/') ? path : '/' + path}`;
                                             } catch (e) {
                                                 console.error('Error parsing signature URL:', e);
                                                 return content;
                                             }
                                         }
                                         // Otherwise, assume it's a relative path and prepend /api/uploads/
-                                        return `/api/uploads${content.startsWith('/') ? '' : '/'}${content}`;
+                                        return `/api/uploads${content.startsWith('/') ? content : '/' + content}`;
                                     };
                                     
-                                    // Use same inline URL conversion as profile page
+                                    // Use the helper function for proper URL conversion
                                     const imageUrl = signature.type === 'image' || (signature.type && signature.type.toLowerCase().includes('image'))
-                                        ? (signature.content 
-                                            ? (signature.content.startsWith('/api/') 
-                                                ? signature.content 
-                                                : signature.content.startsWith('/uploads/')
-                                                ? signature.content.replace('/uploads/', '/api/uploads/')
-                                                : `/api/uploads${signature.content.startsWith('/') ? '' : '/'}${signature.content}`)
-                                            : null)
+                                        ? getSignatureImageUrl(signature.content)
                                         : null;
                                     
                                     return (
@@ -861,7 +864,6 @@ export default function DocumentSignatureSystem({
                                                         className="w-10 h-6 object-contain"
                                                         loading="lazy"
                                                         onError={(e) => {
-                                                            // Use same simple fallback as profile page
                                                             const img = e.target;
                                                             const originalSrc = img.src;
                                                             
@@ -891,9 +893,15 @@ export default function DocumentSignatureSystem({
                                                                 console.log('[Signature Image] Trying API route fallback:', apiUrl);
                                                                 img.src = apiUrl;
                                                             } else if (signature.content && signature.content !== originalSrc) {
-                                                                // Try original content as last resort
-                                                                console.log('[Signature Image] Trying original content:', signature.content);
-                                                                img.src = signature.content;
+                                                                // Try original content converted using helper function
+                                                                const convertedUrl = getSignatureImageUrl(signature.content);
+                                                                if (convertedUrl && convertedUrl !== originalSrc) {
+                                                                    console.log('[Signature Image] Trying converted original content:', convertedUrl);
+                                                                    img.src = convertedUrl;
+                                                                } else {
+                                                                    console.log('[Signature Image] Trying original content as-is:', signature.content);
+                                                                    img.src = signature.content;
+                                                                }
                                                             }
                                                         }}
                                                     />
@@ -907,9 +915,6 @@ export default function DocumentSignatureSystem({
                                                         {signature.user_role} • {new Date(signature.timestamp).toLocaleString()}
                                                     </div>
                                                 </div>
-                                            </div>
-                                            <div className="text-xs text-gray-400">
-                                                Position: ({Math.round(signature.position.x)}, {Math.round(signature.position.y)})
                                             </div>
                                         </div>
                                     );
