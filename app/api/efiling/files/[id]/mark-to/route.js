@@ -1291,10 +1291,16 @@ export async function POST(request, { params }) {
             const toRoleCode = (lastTargetUser.role_code || '').toUpperCase();
             console.log('[MARK-TO] Step 8: Updating file assignment, newAssignee:', newAssignee, '(last of', processedMovements.length, 'users)');
             
+            // Determine if final assignment is team internal (based on last user)
+            const externalRoles = ['SE', 'CE', 'CFO', 'COO', 'CEO','DCE','DIRECTOR_MEDICAL_SERVICES','MEDICAL_SCRUTINY_COMMITTEE','CHIEF_INTERNAL_AUDITOR','CONSULTANT','DIRECTOR','CON','COMMITTEE','COMMITE','MD','MANAGING_DIRECTOR','BILLING','BUDGET','IAO-II'];
+            const lastUserRoleCode = (lastTargetUser.role_code || '').toUpperCase();
+            const isMovingToExternalFinal = externalRoles.includes(lastUserRoleCode);
+            const isTeamInternalFinal = !isMovingToExternalFinal && await isWithinTeamWorkflow(client, fileId, currentUser.id, lastProcessedUserId);
+            
             // Calculate SLA deadline from SLA matrix (only for external workflow and if SLA deadline column exists)
             let slaDeadline = hasSlaDeadline ? (fileRow.sla_deadline || null) : null;
             
-            if (hasSlaDeadline && shouldStartTAT && !isTeamInternal) {
+            if (hasSlaDeadline && shouldStartTAT && !isTeamInternalFinal) {
                 try {
                     // Get role codes for SLA lookup
                     const lastTargetRes = await client.query(`
@@ -1387,12 +1393,6 @@ export async function POST(request, { params }) {
             await client.query(updateQuery, updateParams);
             console.log('[MARK-TO] Step 11: UPDATE successful!');
             
-            // Determine if final assignment is team internal (based on last user)
-            const externalRoles = ['SE', 'CE', 'CFO', 'COO', 'CEO'];
-            const lastUserRoleCode = (lastTargetUser.role_code || '').toUpperCase();
-            const isMovingToExternalFinal = externalRoles.includes(lastUserRoleCode);
-            const isTeamInternalFinal = !isMovingToExternalFinal && await isWithinTeamWorkflow(client, fileId, currentUser.id, lastProcessedUserId);
-            
             // Update workflow state
             await updateWorkflowState(client, fileId, newState, newAssignee, isTeamInternalFinal, shouldStartTAT);
             
@@ -1430,10 +1430,10 @@ export async function POST(request, { params }) {
             }
             console.log('[MARK-TO] Step 12: In-app notifications created');
             
-            // Step 13: Send WhatsApp notification to the assigned user (only for external workflow)
-            if (assigneePhone && !isTeamInternalFinal) {
+            // Step 13: Send WhatsApp notification to the assigned user (for all workflows - internal and external)
+            if (assigneePhone) {
                 console.log('[MARK-TO] Step 13: Starting WhatsApp notification process...');
-                console.log('[MARK-TO] Step 13a: Phone number:', assigneePhone, 'Is team internal:', isTeamInternal);
+                console.log('[MARK-TO] Step 13a: Phone number:', assigneePhone, 'Is team internal:', isTeamInternalFinal);
                 
                 try {
                     // Step 13b: Get file details
@@ -1527,13 +1527,13 @@ export async function POST(request, { params }) {
                     console.error('[MARK-TO] Step 13: Error stack:', whatsappError.stack);
                 }
             } else {
-                console.log('[MARK-TO] Step 13: Skipping WhatsApp notification - Phone:', assigneePhone, 'Is team internal:', isTeamInternal);
+                console.log('[MARK-TO] Step 13: Skipping WhatsApp notification - No phone number available for user:', assigneeDisplayName);
             }
             
             // Notify SE/CE assistants if file is marked to SE/CE
-            if ((toRoleCode === 'SE' || toRoleCode === 'CE') && !isTeamInternal) {
+            if ((toRoleCode === 'SE' || toRoleCode === 'CE') && !isTeamInternalFinal) {
                 try {
-                    const assistants = await getAssistantsForManager(client, userId);
+                    const assistants = await getAssistantsForManager(client, lastProcessedUserId);
                     for (const assistant of assistants) {
                         await client.query(`
                             INSERT INTO efiling_notifications (user_id, file_id, type, message, priority, action_required, created_at)
