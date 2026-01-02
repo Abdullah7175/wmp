@@ -127,6 +127,75 @@ const isDepartmentManagerRole = (roleCode) => {
            code.includes('ADMINISTRATIVE_OFFICER') || code.includes('ADMINISTRATIVE OFFICER');
 };
 
+/**
+ * Check if a role can bypass geographic validation when marking files
+ * These roles can mark files to anyone regardless of geographic restrictions
+ * @param {string} roleCode - Role code from efiling_roles
+ * @returns {boolean}
+ */
+const canBypassGeographicValidation = (roleCode) => {
+    if (!roleCode) return false;
+    const code = roleCode.toUpperCase();
+    
+    // Check specific roles that can bypass geographic validation
+    // SE, DCE, CE, CEO, CFO, COO, CCO, CIA, ADLFA, BUDGET, BILLING, DIRECTOR, etc.
+    
+    // Check SE (Superintendent Engineer)
+    if (code === 'SE' || code.startsWith('SE_') || code.includes('SE')) {
+        return true;
+    }
+    
+    // Check DCE (Deputy Chief Engineer) - check before CE to avoid conflicts
+    if (code === 'DCE' || code.startsWith('DCE_') || (code.includes('DCE') && !code.includes('ADLFA'))) {
+        return true;
+    }
+    
+    // Check CE (Chief Engineer) - but not AEE and not DCE
+    if ((code === 'CE' || code.startsWith('CE_') || code.includes('CE')) && !code.includes('AEE') && !code.includes('DCE')) {
+        return true;
+    }
+    
+    // Check CEO, CFO, COO, CCO, CIA
+    if (code === 'CEO' || code.includes('CEO')) {
+        return true;
+    }
+    if (code === 'CFO' || code.includes('CFO')) {
+        return true;
+    }
+    if (code === 'COO' || code.includes('COO')) {
+        return true;
+    }
+    if (code === 'CCO' || code.includes('CCO')) {
+        return true;
+    }
+    if (code === 'CIA' || code.includes('CIA') || code.includes('CHIEF_INTERNAL_AUDITOR')) {
+        return true;
+    }
+    
+    // Check ADLFA
+    if (code.includes('ADLFA')) {
+        return true;
+    }
+    
+    // Check BUDGET
+    if (code === 'BUDGET' || code.startsWith('BUDGET_') || code.includes('BUDGET')) {
+        return true;
+    }
+    
+    // Check BILLING
+    if (code === 'BILLING' || code.startsWith('BILLING_') || code.includes('BILLING')) {
+        return true;
+    }
+    
+    // Check DIRECTOR (but not ADLFA or ASSISTANT)
+    if ((code === 'DIRECTOR' || code.startsWith('DIRECTOR_') || code.includes('DIRECTOR')) && 
+        !code.includes('ADLFA') && !code.includes('ASSISTANT')) {
+        return true;
+    }
+    
+    return false;
+};
+
 export async function POST(request, { params }) {
     let client;
     try {
@@ -302,6 +371,7 @@ export async function POST(request, { params }) {
         const isCEO = isCEORole(currentUserRoleCode);
         const isCOO = currentUserRoleCode === 'COO';
         const isSE = currentUserRoleCode === 'SE' || currentUserRoleCode.startsWith('SE_');
+        const canBypassGeo = canBypassGeographicValidation(currentUserRoleCode);
         
         const workflowState = await getWorkflowState(client, fileId);
 
@@ -1029,8 +1099,8 @@ export async function POST(request, { params }) {
                 newState = userNewState;
                 shouldStartTAT = userShouldStartTAT || shouldStartTAT; // If any user triggers TAT, set it
 
-                // Validate geographic match (CEO/COO bypass, skip for team internal, skip for organizational scopes)
-                if (!isCEO && !isCOO && !isTeamInternalForUser) {
+                // Validate geographic match (bypass for certain roles, skip for team internal, skip for organizational scopes)
+                if (!canBypassGeo && !isTeamInternalForUser) {
                     const expectedScope = targetRecipient.allowed_level_scope || 'district';
                 
                 // Skip geographic validation for organizational scopes (department, team)
