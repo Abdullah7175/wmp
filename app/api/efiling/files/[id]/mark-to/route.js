@@ -177,6 +177,14 @@ const canBypassGeographicValidation = (roleCode) => {
         return true;
     }
     
+    // Check CON/CONSULTANT - Consultants can mark to anyone
+    if (code === 'CON' || code.startsWith('CON_') || (code.includes('CON') && !code.includes('ADLFA'))) {
+        return true;
+    }
+    if (code === 'CONSULTANT' || code.startsWith('CONSULTANT_') || (code.includes('CONSULTANT') && !code.includes('ADLFA'))) {
+        return true;
+    }
+    
     // Check BUDGET
     if (code === 'BUDGET' || code.startsWith('BUDGET_') || code.includes('BUDGET')) {
         return true;
