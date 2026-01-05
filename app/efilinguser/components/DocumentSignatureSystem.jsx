@@ -1072,6 +1072,13 @@ export default function DocumentSignatureSystem({
                                     ? getSavedSignatureImageUrl(activeSignature.file_url || activeSignature.signature_data)
                                     : null;
                                 
+                                // Debug: log the URL being used
+                                if (signatureImageUrl && activeSignature.signature_type !== 'typed') {
+                                    console.log('[Signature Debug] Original file_url:', activeSignature.file_url);
+                                    console.log('[Signature Debug] Original signature_data:', activeSignature.signature_data);
+                                    console.log('[Signature Debug] Constructed URL:', signatureImageUrl);
+                                }
+                                
                                 return (
                                 <div className="border rounded-lg p-4 bg-gray-50">
                                     <Label className="text-sm font-medium mb-2 block">Your Saved Signature</Label>
@@ -1093,9 +1100,18 @@ export default function DocumentSignatureSystem({
                                                     alt="Signature"
                                                     className="max-h-16 max-w-48 object-contain"
                                                     onLoad={(e) => {
-                                                        // Image loaded successfully, mark it
+                                                        // Image loaded successfully, mark it and remove any error messages
                                                         const img = e.target;
                                                         img.dataset.loaded = 'true';
+                                                        img.style.display = ''; // Make sure image is visible
+                                                        // Remove any error messages
+                                                        const parent = img.parentElement;
+                                                        if (parent) {
+                                                            const errorDiv = parent.querySelector('.signature-error');
+                                                            if (errorDiv) {
+                                                                errorDiv.remove();
+                                                            }
+                                                        }
                                                     }}
                                                     onError={async (e) => {
                                                         const img = e.target;
@@ -1106,8 +1122,11 @@ export default function DocumentSignatureSystem({
                                                             return; // Image actually loaded, ignore error
                                                         }
                                                         
-                                                        // If already retried, show error
-                                                        if (img.dataset.retryAttempted === 'true') {
+                                                        // Count retry attempts
+                                                        const retryCount = parseInt(img.dataset.retryCount || '0');
+                                                        
+                                                        // If we've tried all fallbacks, show error
+                                                        if (retryCount >= 3) {
                                                             img.style.display = 'none';
                                                             const parent = img.parentElement;
                                                             if (parent && !parent.querySelector('.signature-error')) {
@@ -1119,22 +1138,44 @@ export default function DocumentSignatureSystem({
                                                             return;
                                                         }
                                                         
-                                                        img.dataset.retryAttempted = 'true';
+                                                        img.dataset.retryCount = String(retryCount + 1);
                                                         
-                                                        // Try fallback - if it's /api/uploads/, try /uploads/ (in case nginx serves it directly)
-                                                        if (originalSrc.includes('/api/uploads/')) {
-                                                            const directUrl = originalSrc.replace('/api/uploads/', '/uploads/');
-                                                            console.log('[Signature Image] Trying direct path fallback:', directUrl);
-                                                            img.src = directUrl;
-                                                        } else if (originalSrc.includes('/uploads/') && !originalSrc.includes('/api/')) {
-                                                            const apiUrl = originalSrc.replace('/uploads/', '/api/uploads/');
-                                                            console.log('[Signature Image] Trying API route fallback:', apiUrl);
-                                                            img.src = apiUrl;
-                                                        } else if (originalSrc.match(/\.(jpg|jpeg)$/i)) {
-                                                            // Try .png extension if URL has .jpg/.jpeg
-                                                            const pngUrl = originalSrc.replace(/\.(jpg|jpeg)$/i, '.png');
-                                                            console.log('[Signature Image] Trying PNG extension:', pngUrl);
-                                                            img.src = pngUrl;
+                                                        // Try fallback strategies
+                                                        let newSrc = null;
+                                                        
+                                                        if (retryCount === 0 && originalSrc.includes('/api/uploads/')) {
+                                                            // First retry: try direct /uploads/ path
+                                                            newSrc = originalSrc.replace('/api/uploads/', '/uploads/');
+                                                            console.log('[Signature Image] Trying direct path fallback:', newSrc);
+                                                        } else if (retryCount === 1 && originalSrc.includes('/uploads/') && !originalSrc.includes('/api/')) {
+                                                            // Second retry: try /api/uploads/ path
+                                                            newSrc = originalSrc.replace('/uploads/', '/api/uploads/');
+                                                            console.log('[Signature Image] Trying API route fallback:', newSrc);
+                                                        } else if (retryCount === 2 && originalSrc.match(/\.(jpg|jpeg)$/i)) {
+                                                            // Third retry: try .png extension if URL has .jpg/.jpeg
+                                                            newSrc = originalSrc.replace(/\.(jpg|jpeg)$/i, '.png');
+                                                            console.log('[Signature Image] Trying PNG extension:', newSrc);
+                                                        } else if (retryCount === 2 && !originalSrc.match(/\.(jpg|jpeg)$/i)) {
+                                                            // If no extension issue, try the other path format
+                                                            if (originalSrc.includes('/api/uploads/')) {
+                                                                newSrc = originalSrc.replace('/api/uploads/', '/uploads/');
+                                                            } else if (originalSrc.includes('/uploads/')) {
+                                                                newSrc = originalSrc.replace('/uploads/', '/api/uploads/');
+                                                            }
+                                                        }
+                                                        
+                                                        if (newSrc) {
+                                                            img.src = newSrc;
+                                                        } else {
+                                                            // No more fallbacks, show error
+                                                            img.style.display = 'none';
+                                                            const parent = img.parentElement;
+                                                            if (parent && !parent.querySelector('.signature-error')) {
+                                                                const errorDiv = document.createElement('div');
+                                                                errorDiv.className = 'signature-error text-xs text-gray-400 text-center';
+                                                                errorDiv.textContent = 'Image not found';
+                                                                parent.appendChild(errorDiv);
+                                                            }
                                                         }
                                                     }}
                                                 />
