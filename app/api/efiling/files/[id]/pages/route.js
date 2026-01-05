@@ -3,6 +3,7 @@ import { connectToDatabase } from '@/lib/db';
 import { auth } from '@/auth';
 import { canAddPages, getWorkflowState } from '@/lib/efilingWorkflowStateManager';
 import { isSEOrCEAssistant } from '@/lib/efilingTeamManager';
+import { eFileActionLogger, EFILING_ACTION_TYPES, EFILING_ENTITY_TYPES } from '@/lib/efilingActionLogger';
 
 /**
  * POST /api/efiling/files/[id]/pages
@@ -182,6 +183,27 @@ export async function POST(request, { params }) {
         } catch (notifyError) {
             console.error('Error creating page addition notifications:', notifyError);
             // Don't fail the request if notifications fail
+        }
+        
+        // Log to timeline using eFileActionLogger
+        try {
+            await eFileActionLogger.logFileAction({
+                fileId: id,
+                action: EFILING_ACTION_TYPES.DOCUMENT_UPLOADED,
+                userId: currentUser.id.toString(),
+                details: {
+                    description: `Note sheet added: ${page_title || 'Untitled'}`,
+                    page_id: newPage.id,
+                    page_number: newPageNumber,
+                    page_type: page_type,
+                    addition_type: additionType
+                },
+                ipAddress: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip'),
+                userAgent: request.headers.get('user-agent')
+            });
+        } catch (logError) {
+            console.error('Error logging page addition to timeline:', logError);
+            // Don't fail the request if logging fails
         }
         
         await client.query('COMMIT');

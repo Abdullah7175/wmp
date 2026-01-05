@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/db';
 import { logAction } from '@/lib/actionLogger';
+import { eFileActionLogger, EFILING_ACTION_TYPES, EFILING_ENTITY_TYPES } from '@/lib/efilingActionLogger';
 
 // GET - Fetch comments for a file
 export async function GET(request, { params }) {
@@ -168,6 +169,26 @@ export async function POST(request, { params }) {
             details: 'Added comment to document',
             ip_address: request.headers.get('x-forwarded-for') || 'unknown'
         });
+
+        // Also log to timeline using eFileActionLogger
+        try {
+            await eFileActionLogger.logFileAction({
+                fileId: id,
+                action: EFILING_ACTION_TYPES.COMMENT_ADDED,
+                userId: user_id.toString(),
+                details: {
+                    description: 'Added comment to document',
+                    user_name: user_name,
+                    user_role: user_role,
+                    comment_text: text.substring(0, 100) // First 100 chars
+                },
+                ipAddress: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip'),
+                userAgent: request.headers.get('user-agent')
+            });
+        } catch (logError) {
+            console.error('Error logging comment to timeline:', logError);
+            // Don't fail the request if logging fails
+        }
 
         return NextResponse.json(result.rows[0]);
     } catch (error) {

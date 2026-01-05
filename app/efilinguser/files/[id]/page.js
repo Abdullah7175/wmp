@@ -1550,7 +1550,8 @@ export default function FileDetail() {
                                                         alt={a.file_name} 
                                                         width={200} 
                                                         height={150} 
-                                                        className="w-full h-32 object-cover rounded mb-2" 
+                                                        className="w-full h-32 object-cover rounded mb-2"
+                                                        unoptimized
                                                     />
                                                     <div className="absolute top-2 right-2 bg-black bg-opacity-50 text-white p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">
                                                         <Maximize2 className="w-4 h-4" />
