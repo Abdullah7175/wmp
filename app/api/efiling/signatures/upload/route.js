@@ -120,6 +120,7 @@ export async function POST(request) {
             
             // Store mimeType for database
             fileType = mimeType;
+        }
 
         // Save signature info to database with signature management
         const client = await connectToDatabase();
