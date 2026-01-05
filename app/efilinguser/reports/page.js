@@ -7,10 +7,27 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BarChart3, FileText, Users, Building2, Calendar, TrendingUp, Download } from "lucide-react";
 import { logEfilingUserAction, EFILING_ACTIONS } from '@/lib/efilingUserActionLogger';
+import { useEfilingUser } from "@/context/EfilingUserContext";
+import { useToast } from "@/hooks/use-toast";
+import { isExternalUser } from "@/lib/efilingRoleHelpers";
 
 export default function Reports() {
     const { data: session } = useSession();
     const router = useRouter();
+    const { toast } = useToast();
+    const { roleCode, loading: profileLoading } = useEfilingUser();
+
+    // Redirect external users (ADLFA/CON) - they cannot access reports
+    useEffect(() => {
+        if (!profileLoading && isExternalUser(roleCode)) {
+            toast({
+                title: "Access Restricted",
+                description: "External users cannot access reports. Redirecting...",
+                variant: "destructive",
+            });
+            router.push('/efilinguser/files');
+        }
+    }, [profileLoading, roleCode, router, toast]);
     const [stats, setStats] = useState({
         totalFiles: 0,
         totalUsers: 0,

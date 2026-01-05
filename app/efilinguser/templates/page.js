@@ -14,11 +14,26 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { FileText, Search, Plus, Edit, Eye, X, Building2, Shield, BarChart3 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useEfilingUser } from "@/context/EfilingUserContext";
+import { useRouter } from "next/navigation";
+import { isExternalUser } from "@/lib/efilingRoleHelpers";
 
 export default function MyTemplates() {
     const { data: session } = useSession();
+    const router = useRouter();
     const { toast } = useToast();
-    const { profile } = useEfilingUser();
+    const { profile, roleCode, loading: profileLoading } = useEfilingUser();
+
+    // Redirect external users (ADLFA/CON) - they cannot access templates
+    useEffect(() => {
+        if (!profileLoading && isExternalUser(roleCode)) {
+            toast({
+                title: "Access Restricted",
+                description: "External users cannot access templates. Redirecting...",
+                variant: "destructive",
+            });
+            router.push('/efilinguser/files');
+        }
+    }, [profileLoading, roleCode, router, toast]);
     
     const [templates, setTemplates] = useState([]);
     const [categories, setCategories] = useState([]);

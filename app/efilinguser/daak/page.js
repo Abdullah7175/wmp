@@ -25,12 +25,14 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useEfilingUser } from "@/context/EfilingUserContext";
+import { isExternalUser } from "@/lib/efilingRoleHelpers";
 
 export default function DaakPage() {
     const { data: session } = useSession();
     const router = useRouter();
     const { toast } = useToast();
-    const { efilingUserId } = useEfilingUser();
+    const { efilingUserId, roleCode } = useEfilingUser();
+    const isExternal = isExternalUser(roleCode);
     const [loading, setLoading] = useState(true);
     const [daak, setDaak] = useState([]);
     const [categories, setCategories] = useState([]);
@@ -150,7 +152,7 @@ export default function DaakPage() {
                     <h1 className="text-3xl font-bold">E-Posted (Daak)</h1>
                     <p className="text-gray-600 mt-1">View and manage your daak</p>
                 </div>
-                {activeTab === "my_daak" && (
+                {!isExternal && activeTab === "my_daak" && (
                     <Button onClick={() => router.push("/efilinguser/daak/new")}>
                         <Plus className="w-4 h-4 mr-2" />
                         Create Daak

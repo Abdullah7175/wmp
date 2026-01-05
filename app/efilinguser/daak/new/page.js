@@ -14,11 +14,24 @@ import { X, Plus, Save, Send } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useEfilingUser } from "@/context/EfilingUserContext";
 import TipTapEditor from "@/app/efilinguser/components/TipTapEditor";
+import { isExternalUser } from "@/lib/efilingRoleHelpers";
 
 export default function CreateDaakPage() {
     const router = useRouter();
     const { toast } = useToast();
-    const { efilingUserId } = useEfilingUser();
+    const { efilingUserId, roleCode, loading: profileLoading } = useEfilingUser();
+
+    // Redirect external users (ADLFA/CON) - they cannot create daak
+    useEffect(() => {
+        if (!profileLoading && isExternalUser(roleCode)) {
+            toast({
+                title: "Access Restricted",
+                description: "External users cannot create daak. Redirecting...",
+                variant: "destructive",
+            });
+            router.push('/efilinguser/daak');
+        }
+    }, [profileLoading, roleCode, router, toast]);
     const [loading, setLoading] = useState(false);
     const [categories, setCategories] = useState([]);
     const [departments, setDepartments] = useState([]);

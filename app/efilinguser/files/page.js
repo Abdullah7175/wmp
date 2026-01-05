@@ -34,19 +34,22 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Pagination } from "@/components/ui/pagination";
 import MarkToModal from "../components/MarkToModal";
 import { useEfilingUser } from "@/context/EfilingUserContext";
+import { isExternalUser } from "@/lib/efilingRoleHelpers";
 
 export default function FilesPage() {
     const { data: session } = useSession();
     const router = useRouter();
     const { toast } = useToast();
-    const { efilingUserId, profile: userProfile, isGlobal } = useEfilingUser();
+    const { efilingUserId, profile: userProfile, isGlobal, roleCode, loading: profileLoading } = useEfilingUser();
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
     const [statuses, setStatuses] = useState([]);
     const [myFiles, setMyFiles] = useState([]);
     const [assignedToMe, setAssignedToMe] = useState([]);
-    const [activeTab, setActiveTab] = useState('mine');
+    const isExternal = isExternalUser(roleCode);
+    // External users (ADLFA/CON) should only see "assigned" tab (marked to them)
+    const [activeTab, setActiveTab] = useState(isExternal ? 'assigned' : 'mine');
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage, setItemsPerPage] = useState(10);
     const [markModalFile, setMarkModalFile] = useState(null);
@@ -90,7 +93,11 @@ export default function FilesPage() {
             const params = new URLSearchParams();
             params.append('limit', '500'); // Increased limit for better filtering
             
-            if (activeTab === 'mine') {
+            // External users (ADLFA/CON) should only see files assigned/marked to them
+            if (isExternal) {
+                // For external users, fetch files assigned to them (which includes marked files)
+                params.append('assigned_to', efilingUserId);
+            } else if (activeTab === 'mine') {
                 params.append('created_by', efilingUserId);
             } else {
                 params.append('assigned_to', efilingUserId);
@@ -286,12 +293,16 @@ export default function FilesPage() {
             <div className="flex items-center justify-between mb-6">
                 <div>
                     <h1 className="text-3xl font-bold text-gray-900">My Files</h1>
-                    <p className="text-gray-600 mt-2">Files I created or that are assigned to me</p>
+                    <p className="text-gray-600 mt-2">
+                        {isExternal ? "Files marked to me" : "Files I created or that are assigned to me"}
+                    </p>
                 </div>
-                <Button onClick={handleCreateFile} className="bg-blue-600 hover:bg-blue-700">
-                    <Plus className="w-4 h-4 mr-2" />
-                    Create New File
-                </Button>
+                {!isExternal && (
+                    <Button onClick={handleCreateFile} className="bg-blue-600 hover:bg-blue-700">
+                        <Plus className="w-4 h-4 mr-2" />
+                        Create New File
+                    </Button>
+                )}
             </div>
 
             <Card className="mb-6">
@@ -441,7 +452,7 @@ export default function FilesPage() {
 
             <Tabs value={activeTab} onValueChange={(value) => { setActiveTab(value); setCurrentPage(1); }}>
                 <TabsList>
-                    <TabsTrigger value="mine">My Files</TabsTrigger>
+                    {!isExternal && <TabsTrigger value="mine">My Files</TabsTrigger>}
                     <TabsTrigger value="assigned">Marked To Me</TabsTrigger>
                 </TabsList>
 

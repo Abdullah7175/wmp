@@ -23,11 +23,13 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useEfilingUser } from "@/context/EfilingUserContext";
+import { isExternalUser } from "@/lib/efilingRoleHelpers";
 
 export default function MeetingsPage() {
     const router = useRouter();
     const { toast } = useToast();
-    const { efilingUserId } = useEfilingUser();
+    const { efilingUserId, roleCode } = useEfilingUser();
+    const isExternal = isExternalUser(roleCode);
     const [loading, setLoading] = useState(true);
     const [meetings, setMeetings] = useState([]);
     const [searchTerm, setSearchTerm] = useState("");
@@ -135,10 +137,12 @@ export default function MeetingsPage() {
                     <h1 className="text-3xl font-bold">Meetings</h1>
                     <p className="text-gray-600 mt-1">View and manage your meetings</p>
                 </div>
-                <Button onClick={() => router.push("/efilinguser/meetings/new")}>
-                    <Plus className="w-4 h-4 mr-2" />
-                    Create Meeting
-                </Button>
+                {!isExternal && (
+                    <Button onClick={() => router.push("/efilinguser/meetings/new")}>
+                        <Plus className="w-4 h-4 mr-2" />
+                        Create Meeting
+                    </Button>
+                )}
             </div>
 
             <Card>

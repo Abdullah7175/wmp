@@ -14,11 +14,24 @@ import { X, Plus, Save, Calendar as CalendarIcon, MapPin, Video, Clock, Users, E
 import { useToast } from "@/hooks/use-toast";
 import { useEfilingUser } from "@/context/EfilingUserContext";
 import { cn } from "@/lib/utils";
+import { isExternalUser } from "@/lib/efilingRoleHelpers";
 
 export default function CreateMeetingPage() {
     const router = useRouter();
     const { toast } = useToast();
-    const { efilingUserId } = useEfilingUser();
+    const { efilingUserId, roleCode, loading: profileLoading } = useEfilingUser();
+
+    // Redirect external users (ADLFA/CON) - they cannot create meetings
+    useEffect(() => {
+        if (!profileLoading && isExternalUser(roleCode)) {
+            toast({
+                title: "Access Restricted",
+                description: "External users cannot create meetings. Redirecting...",
+                variant: "destructive",
+            });
+            router.push('/efilinguser/meetings');
+        }
+    }, [profileLoading, roleCode, router, toast]);
     const [loading, setLoading] = useState(false);
     const [departments, setDepartments] = useState([]);
     const [roles, setRoles] = useState([]);

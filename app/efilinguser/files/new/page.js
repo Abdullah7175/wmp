@@ -28,6 +28,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useEfilingUser } from "@/context/EfilingUserContext";
 import { SearchableDropdown } from "@/components/SearchableDropdown";
+import { isExternalUser } from "@/lib/efilingRoleHelpers";
 import { getFiscalYear } from "@/lib/utils";
 
 const validationSchema = Yup.object({
@@ -53,7 +54,19 @@ export default function CreateNewFile() {
     const { data: session, status: sessionStatus } = useSession();
     const router = useRouter();
     const { toast } = useToast();
-    const { profile: userProfile, isGlobal } = useEfilingUser();
+    const { profile: userProfile, isGlobal, roleCode, loading: profileLoading } = useEfilingUser();
+
+    // Redirect external users (ADLFA/CON) - they cannot create files
+    useEffect(() => {
+        if (!profileLoading && isExternalUser(roleCode)) {
+            toast({
+                title: "Access Restricted",
+                description: "External users cannot create files. Redirecting...",
+                variant: "destructive",
+            });
+            router.push('/efilinguser/files');
+        }
+    }, [profileLoading, roleCode, router, toast]);
 
     const [loading, setLoading] = useState(false);
     const [departments, setDepartments] = useState([]);

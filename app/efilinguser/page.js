@@ -22,11 +22,13 @@ import { logEfilingUserAction, getUserInfoFromSession, EFILING_ACTIONS } from '@
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { useEfilingUser } from '@/context/EfilingUserContext';
+import { isExternalUser } from '@/lib/efilingRoleHelpers';
 
 export default function EFileUserDashboard() {
     const { data: session } = useSession();
     const router = useRouter();
-    const { efilingUserId, profile: userProfile, loading: profileLoading } = useEfilingUser();
+    const { efilingUserId, profile: userProfile, loading: profileLoading, roleCode } = useEfilingUser();
+    const { toast } = useToast();
     const [loading, setLoading] = useState(true);
     const [dataError, setDataError] = useState(false);
     const [assignedFiles, setAssignedFiles] = useState([]);
@@ -41,7 +43,19 @@ export default function EFileUserDashboard() {
     const [createdCount, setCreatedCount] = useState(0);
     const [assignedCount, setAssignedCount] = useState(0);
     const [nowTick, setNowTick] = useState(Date.now());
-    const { toast } = useToast();
+
+    // Redirect external users (ADLFA/CON) to files page
+    useEffect(() => {
+        if (!profileLoading && isExternalUser(roleCode)) {
+            toast({
+                title: "Access Restricted",
+                description: "External users cannot access the dashboard. Redirecting to files...",
+                variant: "default",
+            });
+            router.push('/efilinguser/files');
+            return;
+        }
+    }, [profileLoading, roleCode, router, toast]);
 
     useEffect(() => {
         if (!profileLoading && (efilingUserId || session?.user?.id)) {

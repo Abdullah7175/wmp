@@ -13,6 +13,8 @@ import { useUserContext } from "@/context/UserContext";
 import { EfilingUserProvider, useEfilingUser } from "@/context/EfilingUserContext";
 import { EfilingRouteGuard } from "@/components/EfilingRouteGuard";
 import { EFileSidebar } from "./EFileSidebar.jsx";
+import { EFileSidebarExternal } from "./EFileSidebarExternal.jsx";
+import { isExternalUser } from "@/lib/efilingRoleHelpers";
 
 export default function EFileLayout({ children }) {
   return (
@@ -30,7 +32,10 @@ function EFileLayoutShell({ children }) {
   const router = useRouter();
   const { setUser } = useUserContext();
   const { data: session } = useSession();
-  const { profile, loading, error, efilingUserId, isGlobal } = useEfilingUser();
+  const { profile, loading, error, efilingUserId, isGlobal, roleCode } = useEfilingUser();
+  
+  // Check if user is external (ADLFA or CON)
+  const isExternal = isExternalUser(roleCode);
 
   const [notifications, setNotifications] = useState([]);
   const [showDropdown, setShowDropdown] = useState(false);
@@ -171,7 +176,7 @@ function EFileLayoutShell({ children }) {
 
   return (
     <>
-      <EFileSidebar />
+      {isExternal ? <EFileSidebarExternal /> : <EFileSidebar />}
       <main className="w-full">
         <div className="h-16 border-b w-full bg-blue-900 text-white flex items-center justify-between p-4 shadow-sm">
           <div className="flex gap-4 items-center">
@@ -186,15 +191,17 @@ function EFileLayoutShell({ children }) {
           </div>
           <div className="flex gap-4 items-center">
             <div className="hidden md:flex gap-2">
-              <Button
-                onClick={() => router.push("/efilinguser/files/new")}
-                variant="secondary"
-                size="sm"
-                className="bg-blue-800 hover:bg-blue-700"
-              >
-                <FileText className="w-4 h-4 mr-1" />
-                New File
-              </Button>
+              {!isExternal && (
+                <Button
+                  onClick={() => router.push("/efilinguser/files/new")}
+                  variant="secondary"
+                  size="sm"
+                  className="bg-blue-800 hover:bg-blue-700"
+                >
+                  <FileText className="w-4 h-4 mr-1" />
+                  New File
+                </Button>
+              )}
               <Button
                 onClick={() => router.push("/efilinguser/files")}
                 variant="secondary"
