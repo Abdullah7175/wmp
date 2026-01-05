@@ -34,6 +34,7 @@ export async function POST(request) {
         let publicUrl = null;
         let filename = null;
         let buffer = null;
+        let fileType = 'image/png'; // default, will be updated based on actual image format
         
         // Handle typed signatures differently
         if (signatureType === 'typed') {
@@ -43,8 +44,36 @@ export async function POST(request) {
             filename = null;
             buffer = null;
         } else {
-            // Convert base64 to buffer first to check size
-            const base64Data = signatureData.replace(/^data:image\/png;base64,/, '');
+            // Detect image format from data URL and extract base64 data
+            let imageFormat = 'png'; // default
+            let mimeType = 'image/png'; // default
+            let base64Data = signatureData;
+            
+            // Extract format from data URL (e.g., data:image/jpeg;base64,... or data:image/png;base64,...)
+            const dataUrlMatch = signatureData.match(/^data:image\/(\w+);base64,(.+)$/);
+            if (dataUrlMatch) {
+                imageFormat = dataUrlMatch[1].toLowerCase();
+                base64Data = dataUrlMatch[2];
+                
+                // Map format to MIME type
+                const formatMap = {
+                    'jpeg': 'image/jpeg',
+                    'jpg': 'image/jpeg',
+                    'png': 'image/png',
+                    'gif': 'image/gif',
+                    'webp': 'image/webp'
+                };
+                mimeType = formatMap[imageFormat] || 'image/png';
+                
+                // Normalize jpg to jpeg for file extension
+                if (imageFormat === 'jpg') {
+                    imageFormat = 'jpeg';
+                }
+            } else {
+                // Fallback: try to extract base64 without format info
+                base64Data = signatureData.replace(/^data:image\/[^;]+;base64,/, '').replace(/^data:image\/[^,]+,/, '');
+            }
+            
             buffer = Buffer.from(base64Data, 'base64');
             
             // Validate file size (5MB max for signature images)
@@ -72,9 +101,9 @@ export async function POST(request) {
                 await mkdir(uploadDir, { recursive: true });
             }
 
-            // Generate unique filename
+            // Generate unique filename with original format extension
             const timestamp = Date.now();
-            filename = `${signatureType}_${timestamp}.png`;
+            filename = `${signatureType}_${timestamp}.${imageFormat}`;
             const filePath = join(uploadDir, filename);
             
             await writeFile(filePath, buffer);
@@ -84,11 +113,13 @@ export async function POST(request) {
                 console.error(`Failed to write signature file to disk: ${filePath}`);
                 return NextResponse.json({ error: 'Failed to save signature file to disk' }, { status: 500 });
             }
-            console.log(`Signature file uploaded successfully: ${filePath}`);
+            console.log(`Signature file uploaded successfully: ${filePath} (format: ${imageFormat})`);
 
             // Return the public URL - Next.js serves files from public/ directly at /uploads/
             publicUrl = `/uploads/signatures/${userFolderName}/${filename}`;
-        }
+            
+            // Store mimeType for database
+            fileType = mimeType;
 
         // Save signature info to database with signature management
         const client = await connectToDatabase();
@@ -130,7 +161,7 @@ export async function POST(request) {
                         `${signatureType}_signature`,
                         filename,
                         buffer?.length || 0,
-                        'image/png',
+                        fileType || 'image/png',
                         publicUrl,
                         signatureData,
                         signatureColor || 'black',
@@ -189,7 +220,7 @@ export async function POST(request) {
                         signatureType,
                         filename,
                         buffer?.length || 0,
-                        'image/png',
+                        fileType || 'image/png',
                         publicUrl,
                         signatureData,
                         signatureColor || 'black'

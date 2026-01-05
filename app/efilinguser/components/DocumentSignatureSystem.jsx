@@ -678,11 +678,7 @@ export default function DocumentSignatureSystem({
                                     }
                                 }
 
-                                // 3. Fix extension: scanned/drawn signatures are always saved as .png
-                                // If the path has .jpg or .jpeg, convert it to .png
-                                if (path.match(/\.(jpg|jpeg)$/i)) {
-                                    path = path.replace(/\.(jpg|jpeg)$/i, '.png');
-                                }
+                                // 3. Preserve original format - no conversion needed
 
                                 // 4. Fix the prefix: ensure it uses /api/uploads/
                                 // This handles cases where the DB has "/uploads/..." or just "filename.png"
@@ -750,24 +746,10 @@ export default function DocumentSignatureSystem({
                                                                 }
                                                             }
 
-                                                            // POSSIBILITY 2: Extension Mismatch (try .png if .jpg, since files are always saved as .png)
-                                                            if (!img.dataset.triedExtSwap) {
-                                                                img.dataset.triedExtSwap = 'true';
-                                                                if (currentSrc.toLowerCase().match(/\.(jpg|jpeg)$/)) {
-                                                                    img.src = currentSrc.replace(/\.(jpg|jpeg)$/i, '.png');
-                                                                    return;
-                                                                }
-                                                            }
-
-                                                            // POSSIBILITY 3: Final attempt with the raw database content
+                                                            // POSSIBILITY 2: Final attempt with the raw database content
                                                             if (!img.dataset.triedRaw && signature.content) {
                                                                 img.dataset.triedRaw = 'true';
-                                                                // Ensure raw content also has correct extension
-                                                                let rawContent = signature.content;
-                                                                if (rawContent.match(/\.(jpg|jpeg)$/i)) {
-                                                                    rawContent = rawContent.replace(/\.(jpg|jpeg)$/i, '.png');
-                                                                }
-                                                                img.src = rawContent;
+                                                                img.src = signature.content;
                                                                 return;
                                                             }
 
@@ -822,13 +804,7 @@ export default function DocumentSignatureSystem({
                                             }
                                         }
 
-                                        // 3. Fix extension: scanned/drawn signatures are always saved as .png
-                                        // If the path has .jpg or .jpeg, convert it to .png
-                                        if (path.match(/\.(jpg|jpeg)$/i)) {
-                                            path = path.replace(/\.(jpg|jpeg)$/i, '.png');
-                                        }
-
-                                        // 4. Fix the prefix: ensure it uses /api/uploads/
+                                        // 3. Fix the prefix: ensure it uses /api/uploads/
                                         // This handles cases where the DB has "/uploads/..." or just "filename.png"
                                         if (path.startsWith('/uploads/')) {
                                             path = path.replace('/uploads/', '/api/uploads/');
@@ -871,19 +847,7 @@ export default function DocumentSignatureSystem({
                                                             // Stop if we've already tried everything
                                                             if (img.dataset.retryStatus === 'failed') return;
 
-                                                            // POSSIBILITY 1: Extension Mismatch (.png vs .jpg)
-                                                            if (!img.dataset.triedExtSwap) {
-                                                                img.dataset.triedExtSwap = 'true';
-                                                                if (currentSrc.toLowerCase().endsWith('.png')) {
-                                                                    img.src = currentSrc.replace(/\.png$/i, '.jpg');
-                                                                    return;
-                                                                } else if (currentSrc.toLowerCase().endsWith('.jpg')) {
-                                                                    img.src = currentSrc.replace(/\.jpg$/i, '.png');
-                                                                    return;
-                                                                }
-                                                            }
-
-                                                            // POSSIBILITY 2: Proxy vs Direct Path (/api/uploads vs /uploads)
+                                                            // POSSIBILITY 1: Proxy vs Direct Path (/api/uploads vs /uploads)
                                                             if (!img.dataset.triedPathSwap) {
                                                                 img.dataset.triedPathSwap = 'true';
                                                                 // If the /api/ route failed, try the direct /uploads/ route
@@ -1051,11 +1015,7 @@ export default function DocumentSignatureSystem({
                                         }
                                     }
                                     
-                                    // Fix extension: scanned/drawn signatures are always saved as .png
-                                    // If the path has .jpg or .jpeg, convert it to .png
-                                    if (path.match(/\.(jpg|jpeg)$/i)) {
-                                        path = path.replace(/\.(jpg|jpeg)$/i, '.png');
-                                    }
+                                    // Preserve original format - no conversion needed
                                     
                                     // Use same logic as profile page for relative paths
                                     if (path.startsWith('/api/')) {
@@ -1068,15 +1028,28 @@ export default function DocumentSignatureSystem({
                                     return `/api/uploads${path.startsWith('/') ? '' : '/'}${path}`;
                                 };
                                 
-                                const signatureImageUrl = activeSignature.signature_type !== 'typed' 
-                                    ? getSavedSignatureImageUrl(activeSignature.file_url || activeSignature.signature_data)
-                                    : null;
+                                // For image signatures, prefer file_url but fallback to signature_data (base64)
+                                // signature_data is more reliable as it's embedded data
+                                let signatureImageUrl = null;
+                                if (activeSignature.signature_type !== 'typed') {
+                                    // If signature_data exists and is a base64 data URL, use it directly (most reliable)
+                                    if (activeSignature.signature_data && activeSignature.signature_data.startsWith('data:image/')) {
+                                        signatureImageUrl = activeSignature.signature_data;
+                                    } else if (activeSignature.file_url) {
+                                        // Otherwise try file_url
+                                        signatureImageUrl = getSavedSignatureImageUrl(activeSignature.file_url);
+                                    } else if (activeSignature.signature_data) {
+                                        // Last resort: try signature_data even if not base64
+                                        signatureImageUrl = getSavedSignatureImageUrl(activeSignature.signature_data);
+                                    }
+                                }
                                 
                                 // Debug: log the URL being used
                                 if (signatureImageUrl && activeSignature.signature_type !== 'typed') {
                                     console.log('[Signature Debug] Original file_url:', activeSignature.file_url);
-                                    console.log('[Signature Debug] Original signature_data:', activeSignature.signature_data);
-                                    console.log('[Signature Debug] Constructed URL:', signatureImageUrl);
+                                    console.log('[Signature Debug] Original signature_data type:', activeSignature.signature_data ? (activeSignature.signature_data.startsWith('data:') ? 'base64' : 'other') : 'null');
+                                    console.log('[Signature Debug] Using:', activeSignature.signature_data && activeSignature.signature_data.startsWith('data:image/') ? 'base64 data URL' : 'file URL');
+                                    console.log('[Signature Debug] Constructed URL:', signatureImageUrl.substring(0, 100) + (signatureImageUrl.length > 100 ? '...' : ''));
                                 }
                                 
                                 return (
@@ -1151,16 +1124,18 @@ export default function DocumentSignatureSystem({
                                                             // Second retry: try /api/uploads/ path
                                                             newSrc = originalSrc.replace('/uploads/', '/api/uploads/');
                                                             console.log('[Signature Image] Trying API route fallback:', newSrc);
-                                                        } else if (retryCount === 2 && originalSrc.match(/\.(jpg|jpeg)$/i)) {
-                                                            // Third retry: try .png extension if URL has .jpg/.jpeg
-                                                            newSrc = originalSrc.replace(/\.(jpg|jpeg)$/i, '.png');
-                                                            console.log('[Signature Image] Trying PNG extension:', newSrc);
-                                                        } else if (retryCount === 2 && !originalSrc.match(/\.(jpg|jpeg)$/i)) {
-                                                            // If no extension issue, try the other path format
-                                                            if (originalSrc.includes('/api/uploads/')) {
-                                                                newSrc = originalSrc.replace('/api/uploads/', '/uploads/');
-                                                            } else if (originalSrc.includes('/uploads/')) {
-                                                                newSrc = originalSrc.replace('/uploads/', '/api/uploads/');
+                                                        } else if (retryCount === 2) {
+                                                            // Final fallback: try using signature_data (base64) if available
+                                                            if (activeSignature.signature_data && activeSignature.signature_data.startsWith('data:image/')) {
+                                                                newSrc = activeSignature.signature_data;
+                                                                console.log('[Signature Image] Trying base64 data URL fallback');
+                                                            } else if (!originalSrc.match(/\.(jpg|jpeg)$/i)) {
+                                                                // If no extension issue, try the other path format
+                                                                if (originalSrc.includes('/api/uploads/')) {
+                                                                    newSrc = originalSrc.replace('/api/uploads/', '/uploads/');
+                                                                } else if (originalSrc.includes('/uploads/')) {
+                                                                    newSrc = originalSrc.replace('/uploads/', '/api/uploads/');
+                                                                }
                                                             }
                                                         }
                                                         
