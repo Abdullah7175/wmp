@@ -632,7 +632,21 @@ export default function DocumentSignatureSystem({
                 <div className={`grid gap-3 ${hasUserSigned ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-2'}`}>
                     {!hasUserSigned && canEditDocument && (
                         <Button
-                            onClick={() => setShowSignatureModal(true)}
+                            onClick={() => {
+                                // Check if user has any saved signatures
+                                if (userSignatures.length === 0) {
+                                    toast({
+                                        title: "No Signature Found",
+                                        description: "Please create your e-signature first. You can create it from your profile settings or create one now.",
+                                        variant: "destructive",
+                                    });
+                                    // Optionally redirect to profile or show signature creation
+                                    // For now, still allow them to create one in the modal
+                                    setShowSignatureModal(true);
+                                } else {
+                                    setShowSignatureModal(true);
+                                }
+                            }}
                             className="flex items-center justify-center gap-2 w-full"
                             data-signature-button
                         >

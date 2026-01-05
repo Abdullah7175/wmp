@@ -46,6 +46,8 @@ export default function FileDetail() {
     const [savingFileInfo, setSavingFileInfo] = useState(false);
     const [isHigherAuthority, setIsHigherAuthority] = useState(false);
     const [isCreator, setIsCreator] = useState(false);
+    const [canAddAttachment, setCanAddAttachment] = useState(false);
+    const [canAddPage, setCanAddPage] = useState(false);
     const [showAttachmentUpload, setShowAttachmentUpload] = useState(false);
     const [uploadingAttachment, setUploadingAttachment] = useState(false);
     const [attachmentName, setAttachmentName] = useState("");
@@ -178,6 +180,8 @@ export default function FileDetail() {
                 console.log('isCreator:', permissions?.isCreator);
                 setIsHigherAuthority(permissions?.isHigherAuthority || false);
                 setIsCreator(permissions?.isCreator || false);
+                setCanAddAttachment(permissions?.canAddAttachment || false);
+                setCanAddPage(permissions?.canAddPage || false);
             }
         } catch (e) {
             console.error('Error loading permissions:', e);
@@ -1405,6 +1409,16 @@ export default function FileDetail() {
                                 <Forward className="w-4 h-4 mr-2" />
                                 Mark / Forward File
                             </Button>
+                            {canAddPage && (
+                                <Button 
+                                    variant="outline" 
+                                    className="w-full justify-start" 
+                                    onClick={() => router.push(`/efilinguser/files/${params.id}/add-page`)}
+                                >
+                                    <FileText className="w-4 h-4 mr-2" />
+                                    Add Note Sheet
+                                </Button>
+                            )}
                         </CardContent>
                     </Card>
 
@@ -1509,7 +1523,7 @@ export default function FileDetail() {
                         <CardHeader>
                             <div className="flex items-center justify-between">
                                 <CardTitle>Attachments</CardTitle>
-                                {isHigherAuthority && (
+                                {canAddAttachment && (
                                     <Button
                                         variant="outline"
                                         size="sm"
