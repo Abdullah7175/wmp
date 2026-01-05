@@ -662,44 +662,31 @@ export default function DocumentSignatureSystem({
                             // Helper function to get the correct image URL
                             const getSignatureImageUrl = (content) => {
                                 if (!content) return null;
-                                // If it's a base64 data URL, return as is
-                                if (content.startsWith('data:image/')) {
-                                    return content;
-                                }
-                                // If it's already a correct API route, return as is
-                                if (content.startsWith('/api/uploads/')) {
-                                    return content;
-                                }
-                                // If it starts with /api/ but not /api/uploads/, return as is (might be other API routes)
-                                if (content.startsWith('/api/')) {
-                                    return content;
-                                }
-                                // If it starts with /uploads/, convert to /api/uploads/
-                                if (content.startsWith('/uploads/')) {
-                                    return content.replace('/uploads/', '/api/uploads/');
-                                }
-                                // If it starts with http/https, extract path and convert to API route
-                                if (content.startsWith('http://') || content.startsWith('https://')) {
+                                
+                                // 1. If it's already a base64/Data URL, it's perfect.
+                                if (content.startsWith('data:image/')) return content;
+
+                                let path = content;
+
+                                // 2. If it's a full URL (http://localhost:3000/...), extract just the path
+                                if (path.startsWith('http')) {
                                     try {
-                                        const url = new URL(content);
-                                        const path = url.pathname;
-                                        // If path already starts with /api/uploads/, return it
-                                        if (path.startsWith('/api/uploads/')) {
-                                            return path;
-                                        }
-                                        // If path starts with /uploads/, convert to /api/uploads/
-                                        if (path.startsWith('/uploads/')) {
-                                            return path.replace('/uploads/', '/api/uploads/');
-                                        }
-                                        // If path doesn't start with /uploads/, assume it's a relative path and prepend /api/uploads/
-                                        return `/api/uploads${path.startsWith('/') ? path : '/' + path}`;
+                                        const url = new URL(path);
+                                        path = url.pathname; 
                                     } catch (e) {
-                                        console.error('Error parsing signature URL:', e);
-                                        return content;
+                                        console.error('URL parse error', e);
                                     }
                                 }
-                                // Otherwise, assume it's a relative path and prepend /api/uploads/
-                                return `/api/uploads${content.startsWith('/') ? content : '/' + content}`;
+
+                                // 3. Fix the prefix: ensure it uses /api/uploads/
+                                // This handles cases where the DB has "/uploads/..." or just "filename.png"
+                                if (path.startsWith('/uploads/')) {
+                                    path = path.replace('/uploads/', '/api/uploads/');
+                                } else if (!path.startsWith('/api/')) {
+                                    path = `/api/uploads${path.startsWith('/') ? '' : '/'}${path}`;
+                                }
+
+                                return path;
                             };
                             
                             // Use the helper function for proper URL conversion
@@ -729,44 +716,44 @@ export default function DocumentSignatureSystem({
                                                         loading="lazy"
                                                         onError={(e) => {
                                                             const img = e.target;
-                                                            const originalSrc = img.src;
-                                                            
-                                                            // If already retried, hide and show error
-                                                            if (img.dataset.retryAttempted === 'true') {
-                                                                img.style.display = 'none';
-                                                                const parent = img.parentElement;
-                                                                if (parent && !parent.querySelector('.signature-error')) {
-                                                                    const errorDiv = document.createElement('div');
-                                                                    errorDiv.className = 'signature-error text-xs text-gray-400 text-center p-2';
-                                                                    errorDiv.textContent = 'Image not found';
-                                                                    parent.appendChild(errorDiv);
+                                                            const currentSrc = img.src;
+
+                                                            // Stop if we've already tried everything
+                                                            if (img.dataset.retryStatus === 'failed') return;
+
+                                                            // POSSIBILITY 1: Extension Mismatch (.png vs .jpg)
+                                                            if (!img.dataset.triedExtSwap) {
+                                                                img.dataset.triedExtSwap = 'true';
+                                                                if (currentSrc.toLowerCase().endsWith('.png')) {
+                                                                    img.src = currentSrc.replace(/\.png$/i, '.jpg');
+                                                                    return;
+                                                                } else if (currentSrc.toLowerCase().endsWith('.jpg')) {
+                                                                    img.src = currentSrc.replace(/\.jpg$/i, '.png');
+                                                                    return;
                                                                 }
-                                                                console.error('Failed to load signature image after retry:', originalSrc);
+                                                            }
+
+                                                            // POSSIBILITY 2: Proxy vs Direct Path (/api/uploads vs /uploads)
+                                                            if (!img.dataset.triedPathSwap) {
+                                                                img.dataset.triedPathSwap = 'true';
+                                                                // If the /api/ route failed, try the direct /uploads/ route
+                                                                if (currentSrc.includes('/api/uploads/')) {
+                                                                    img.src = currentSrc.replace('/api/uploads/', '/uploads/');
+                                                                    return;
+                                                                }
+                                                            }
+
+                                                            // POSSIBILITY 3: Final attempt with the raw database content
+                                                            if (!img.dataset.triedRaw && signature.content) {
+                                                                img.dataset.triedRaw = 'true';
+                                                                img.src = signature.content;
                                                                 return;
                                                             }
-                                                            
-                                                            img.dataset.retryAttempted = 'true';
-                                                            
-                                                            // Try fallback - if it's /api/uploads/, try /uploads/ (in case nginx serves it directly)
-                                                            if (originalSrc.includes('/api/uploads/')) {
-                                                                const directUrl = originalSrc.replace('/api/uploads/', '/uploads/');
-                                                                console.log('[Signature Image] Trying direct path fallback:', directUrl);
-                                                                img.src = directUrl;
-                                                            } else if (originalSrc.includes('/uploads/') && !originalSrc.includes('/api/')) {
-                                                                const apiUrl = originalSrc.replace('/uploads/', '/api/uploads/');
-                                                                console.log('[Signature Image] Trying API route fallback:', apiUrl);
-                                                                img.src = apiUrl;
-                                                            } else if (signature.content && signature.content !== originalSrc) {
-                                                                // Try original content converted using helper function
-                                                                const convertedUrl = getSignatureImageUrl(signature.content);
-                                                                if (convertedUrl && convertedUrl !== originalSrc) {
-                                                                    console.log('[Signature Image] Trying converted original content:', convertedUrl);
-                                                                    img.src = convertedUrl;
-                                                                } else {
-                                                                    console.log('[Signature Image] Trying original content as-is:', signature.content);
-                                                                    img.src = signature.content;
-                                                                }
-                                                            }
+
+                                                            // ALL FAILED: Hide the broken image icon
+                                                            img.dataset.retryStatus = 'failed';
+                                                            img.style.display = 'none';
+                                                            console.error('All signature load attempts failed for:', currentSrc);
                                                         }}
                                                     />
                                                 ) : (
@@ -798,44 +785,31 @@ export default function DocumentSignatureSystem({
                                     // Helper function to get the correct image URL
                                     const getSignatureImageUrl = (content) => {
                                         if (!content) return null;
-                                        // If it's a base64 data URL, return as is
-                                        if (content.startsWith('data:image/')) {
-                                            return content;
-                                        }
-                                        // If it's already a correct API route, return as is
-                                        if (content.startsWith('/api/uploads/')) {
-                                            return content;
-                                        }
-                                        // If it starts with /api/ but not /api/uploads/, return as is (might be other API routes)
-                                        if (content.startsWith('/api/')) {
-                                            return content;
-                                        }
-                                        // If it starts with /uploads/, convert to /api/uploads/
-                                        if (content.startsWith('/uploads/')) {
-                                            return content.replace('/uploads/', '/api/uploads/');
-                                        }
-                                        // If it starts with http/https, extract path and convert to API route
-                                        if (content.startsWith('http://') || content.startsWith('https://')) {
+                                        
+                                        // 1. If it's already a base64/Data URL, it's perfect.
+                                        if (content.startsWith('data:image/')) return content;
+
+                                        let path = content;
+
+                                        // 2. If it's a full URL (http://localhost:3000/...), extract just the path
+                                        if (path.startsWith('http')) {
                                             try {
-                                                const url = new URL(content);
-                                                const path = url.pathname;
-                                                // If path already starts with /api/uploads/, return it
-                                                if (path.startsWith('/api/uploads/')) {
-                                                    return path;
-                                                }
-                                                // If path starts with /uploads/, convert to /api/uploads/
-                                                if (path.startsWith('/uploads/')) {
-                                                    return path.replace('/uploads/', '/api/uploads/');
-                                                }
-                                                // If path doesn't start with /uploads/, assume it's a relative path and prepend /api/uploads/
-                                                return `/api/uploads${path.startsWith('/') ? path : '/' + path}`;
+                                                const url = new URL(path);
+                                                path = url.pathname; 
                                             } catch (e) {
-                                                console.error('Error parsing signature URL:', e);
-                                                return content;
+                                                console.error('URL parse error', e);
                                             }
                                         }
-                                        // Otherwise, assume it's a relative path and prepend /api/uploads/
-                                        return `/api/uploads${content.startsWith('/') ? content : '/' + content}`;
+
+                                        // 3. Fix the prefix: ensure it uses /api/uploads/
+                                        // This handles cases where the DB has "/uploads/..." or just "filename.png"
+                                        if (path.startsWith('/uploads/')) {
+                                            path = path.replace('/uploads/', '/api/uploads/');
+                                        } else if (!path.startsWith('/api/')) {
+                                            path = `/api/uploads${path.startsWith('/') ? '' : '/'}${path}`;
+                                        }
+
+                                        return path;
                                     };
                                     
                                     // Use the helper function for proper URL conversion
@@ -865,44 +839,44 @@ export default function DocumentSignatureSystem({
                                                         loading="lazy"
                                                         onError={(e) => {
                                                             const img = e.target;
-                                                            const originalSrc = img.src;
-                                                            
-                                                            // If already retried, hide and show error
-                                                            if (img.dataset.retryAttempted === 'true') {
-                                                                img.style.display = 'none';
-                                                                const parent = img.parentElement;
-                                                                if (parent && !parent.querySelector('.signature-error')) {
-                                                                    const errorDiv = document.createElement('div');
-                                                                    errorDiv.className = 'signature-error text-xs text-gray-400 text-center p-2';
-                                                                    errorDiv.textContent = 'Image not found';
-                                                                    parent.appendChild(errorDiv);
+                                                            const currentSrc = img.src;
+
+                                                            // Stop if we've already tried everything
+                                                            if (img.dataset.retryStatus === 'failed') return;
+
+                                                            // POSSIBILITY 1: Extension Mismatch (.png vs .jpg)
+                                                            if (!img.dataset.triedExtSwap) {
+                                                                img.dataset.triedExtSwap = 'true';
+                                                                if (currentSrc.toLowerCase().endsWith('.png')) {
+                                                                    img.src = currentSrc.replace(/\.png$/i, '.jpg');
+                                                                    return;
+                                                                } else if (currentSrc.toLowerCase().endsWith('.jpg')) {
+                                                                    img.src = currentSrc.replace(/\.jpg$/i, '.png');
+                                                                    return;
                                                                 }
-                                                                console.error('Failed to load signature image after retry:', originalSrc);
+                                                            }
+
+                                                            // POSSIBILITY 2: Proxy vs Direct Path (/api/uploads vs /uploads)
+                                                            if (!img.dataset.triedPathSwap) {
+                                                                img.dataset.triedPathSwap = 'true';
+                                                                // If the /api/ route failed, try the direct /uploads/ route
+                                                                if (currentSrc.includes('/api/uploads/')) {
+                                                                    img.src = currentSrc.replace('/api/uploads/', '/uploads/');
+                                                                    return;
+                                                                }
+                                                            }
+
+                                                            // POSSIBILITY 3: Final attempt with the raw database content
+                                                            if (!img.dataset.triedRaw && signature.content) {
+                                                                img.dataset.triedRaw = 'true';
+                                                                img.src = signature.content;
                                                                 return;
                                                             }
-                                                            
-                                                            img.dataset.retryAttempted = 'true';
-                                                            
-                                                            // Try fallback - if it's /api/uploads/, try /uploads/ (in case nginx serves it directly)
-                                                            if (originalSrc.includes('/api/uploads/')) {
-                                                                const directUrl = originalSrc.replace('/api/uploads/', '/uploads/');
-                                                                console.log('[Signature Image] Trying direct path fallback:', directUrl);
-                                                                img.src = directUrl;
-                                                            } else if (originalSrc.includes('/uploads/') && !originalSrc.includes('/api/')) {
-                                                                const apiUrl = originalSrc.replace('/uploads/', '/api/uploads/');
-                                                                console.log('[Signature Image] Trying API route fallback:', apiUrl);
-                                                                img.src = apiUrl;
-                                                            } else if (signature.content && signature.content !== originalSrc) {
-                                                                // Try original content converted using helper function
-                                                                const convertedUrl = getSignatureImageUrl(signature.content);
-                                                                if (convertedUrl && convertedUrl !== originalSrc) {
-                                                                    console.log('[Signature Image] Trying converted original content:', convertedUrl);
-                                                                    img.src = convertedUrl;
-                                                                } else {
-                                                                    console.log('[Signature Image] Trying original content as-is:', signature.content);
-                                                                    img.src = signature.content;
-                                                                }
-                                                            }
+
+                                                            // ALL FAILED: Hide the broken image icon
+                                                            img.dataset.retryStatus = 'failed';
+                                                            img.style.display = 'none';
+                                                            console.error('All signature load attempts failed for:', currentSrc);
                                                         }}
                                                     />
                                                 ) : (

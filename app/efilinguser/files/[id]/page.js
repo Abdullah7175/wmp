@@ -500,73 +500,39 @@ export default function FileDetail() {
     };
 
     const renderPage = (page) => {
-        // Parse page.content if it's a string
         let content = page.content || {};
         if (typeof page.content === 'string') {
             try {
                 content = JSON.parse(page.content);
-                console.log('Parsed page content:', content);
-            } catch (e) {
-                console.error('Error parsing page content:', e);
+            } catch {
                 content = {};
             }
         }
-        
-        // Parse file.document_content if it's a string
-        let parsedDocumentContent = file?.document_content;
-        if (typeof file?.document_content === 'string') {
-            try {
-                parsedDocumentContent = JSON.parse(file.document_content);
-                console.log('Parsed document_content:', parsedDocumentContent);
-            } catch (e) {
-                console.error('Error parsing document_content:', e);
-                parsedDocumentContent = {};
-            }
-        }
-        
-        const header = content.header || parsedDocumentContent?.header;
-        const title = content.title || parsedDocumentContent?.title;
-        const subject = content.subject || parsedDocumentContent?.subject;
-        const matter = content.matter || parsedDocumentContent?.matter;
-        const footer = content.footer || parsedDocumentContent?.footer;
-        
-        console.log('Rendering page:', page);
-        console.log('Page content:', content);
-        console.log('Parsed document_content:', parsedDocumentContent);
-        console.log('Header:', header);
-        console.log('Title:', title);
-        console.log('Subject:', subject);
-        console.log('Matter:', matter);
-        console.log('Footer:', footer);
 
-        // Check if page has meaningful content
-        const hasContent = header || title || subject || matter || footer;
-        if (!hasContent) {
-            console.log('Skipping empty page:', page);
-            return null;
-        }
-        
-        // Additional check for empty strings
-        const hasRealContent = (header && header.trim()) || 
-                              (title && title.trim()) || 
-                              (subject && subject.trim()) || 
-                              (matter && matter.trim()) || 
-                              (footer && footer.trim());
+        const header = content.header;
+        const title = content.title;
+        const subject = content.subject;
+        const matter = content.matter;
+        const footer = content.footer;
+
+        const hasRealContent =
+            [header, title, subject, matter, footer]
+                .some(v => typeof v === 'string' && v.trim().length > 0);
+
         if (!hasRealContent) {
-            console.log('Skipping page with empty content:', page);
             return null;
         }
 
         return (
-            <div key={page.id || page.pageNumber} className="bg-white shadow border mx-auto page-content" style={{ width: '794px', minHeight: '1123px', padding: '20px' }}>
-                {/* Compact KWSC Header */}
+            <div
+                key={page.id || page.pageNumber}
+                className="bg-white shadow border mx-auto page-content"
+                style={{ width: '794px', padding: '20px' }}
+            >
+                {/* KWSC Header */}
                 <div className="border-b border-gray-300 pb-3 mb-4">
                     <div className="flex items-center space-x-3">
-                        <img 
-                            src="/logo.png" 
-                            alt="KWSC Logo" 
-                            className="h-8 w-auto"
-                        />
+                        <img src="/logo.png" alt="KWSC Logo" className="h-8 w-auto" />
                         <div>
                             <h1 className="text-lg font-bold text-blue-900">
                                 Karachi Water & Sewerage Corporation
@@ -577,20 +543,48 @@ export default function FileDetail() {
                         </div>
                     </div>
                 </div>
-                
-                {header && (<div className="mb-3 text-center text-xs text-gray-600" dangerouslySetInnerHTML={{ __html: sanitizeHtml(header) }} />)}
-                {title && (<h2 className="text-lg font-bold text-center mb-3" dangerouslySetInnerHTML={{ __html: sanitizeHtml(title) }} />)}
+
+                {header && (
+                    <div
+                        className="mb-3 text-center text-xs text-gray-600"
+                        dangerouslySetInnerHTML={{ __html: sanitizeHtml(header) }}
+                    />
+                )}
+
+                {title && (
+                    <h2
+                        className="text-lg font-bold text-center mb-3"
+                        dangerouslySetInnerHTML={{ __html: sanitizeHtml(title) }}
+                    />
+                )}
+
                 {subject && (
                     <div className="mb-3">
                         <div className="font-semibold text-sm">Subject:</div>
-                        <div className="text-sm" dangerouslySetInnerHTML={{ __html: sanitizeHtml(subject) }} />
+                        <div
+                            className="text-sm"
+                            dangerouslySetInnerHTML={{ __html: sanitizeHtml(subject) }}
+                        />
                     </div>
                 )}
-                {matter && (<div className="prose text-sm" dangerouslySetInnerHTML={{ __html: sanitizeHtml(matter) }} />)}
-                {footer && (<div className="mt-4 text-xs text-gray-600" dangerouslySetInnerHTML={{ __html: sanitizeHtml(footer) }} />)}
+
+                {matter && (
+                    <div
+                        className="prose text-sm"
+                        dangerouslySetInnerHTML={{ __html: sanitizeHtml(matter) }}
+                    />
+                )}
+
+                {footer && (
+                    <div
+                        className="mt-4 text-xs text-gray-600"
+                        dangerouslySetInnerHTML={{ __html: sanitizeHtml(footer) }}
+                    />
+                )}
             </div>
         );
     };
+
 
     const openMarkModal = () => {
         setShowMarkModal(true);
@@ -621,11 +615,22 @@ export default function FileDetail() {
         <>
             <style jsx global>{`
                 @media print {
+                /* Force the first page to have no top margin or break */
+                    .print-title-page:first-of-type {
+                        margin-top: 0 !important;
+                        padding-top: 0 !important;
+                        page-break-before: avoid !important;
+                    }
                     @page {
                         size: A4;
                         margin: 20mm;
                     }
-                    
+                    .no-print {
+                        display: none !important;
+                        height: 0 !important;
+                        margin: 0 !important;
+                        padding: 0 !important;
+                    }
                     body {
                         print-color-adjust: exact;
                         -webkit-print-color-adjust: exact;
@@ -635,8 +640,14 @@ export default function FileDetail() {
                         display: none !important;
                     }
                     
-                    .print-only {
-                        display: block !important;
+                    /* Title page is ALWAYS first page */
+                    .print-title-page {
+                        page-break-after: always !important;
+                    }
+
+                    /* NOTHING should break before first content page */
+                    .print-content-start {
+                        page-break-before: avoid !important;
                     }
                     
                     .page-content {
@@ -648,14 +659,14 @@ export default function FileDetail() {
                         box-shadow: none !important;
                         border: none !important;
                         min-height: auto !important;
-                        height: auto !important;
                         background: white !important;
                         display: block !important;
                         visibility: visible !important;
                     }
-                    
-                    .page-content:not(:last-child) {
-                        page-break-after: always;
+                   
+
+                    .page-content:last-of-type {
+                        page-break-after: avoid !important;
                     }
                     
                     .page-content:last-child {
@@ -683,13 +694,20 @@ export default function FileDetail() {
                         display: none !important;
                         height: 0 !important;
                         min-height: 0 !important;
-                        page-break-before: avoid !important;
                         page-break-after: avoid !important;
                     }
                     
-                    /* Only add page break if section has content */
-                    .print-section:not(:empty) {
-                        page-break-before: always;
+
+                    /* Force a break before the comments section */
+                    .comments-section {
+                        break-before: page;
+                        margin-top: 2rem;
+                    }
+
+                    /* Prevent sections from being split in half awkwardly */
+                    .attachment-item, .comment-item {
+                        page-break-inside: avoid;
+                        break-inside: avoid;
                     }
                     
                     /* Print header on each page */
@@ -828,8 +846,8 @@ export default function FileDetail() {
                     /* File info for first page */
                     .print-file-info {
                         border: 1px solid #ddd;
-                        padding: 15mm;
-                        margin-bottom: 10mm;
+                        padding: 5mm;
+                        margin-bottom: 5mm;
                         page-break-inside: avoid;
                         page-break-after: auto !important;
                     }
@@ -886,7 +904,6 @@ export default function FileDetail() {
                     
                     /* Last print section should not force a page break */
                     .print-section:not(:empty):last-of-type {
-                        page-break-before: auto;
                         page-break-after: avoid !important;
                     }
                     
@@ -998,44 +1015,9 @@ export default function FileDetail() {
                 }
             `}</style>
             
-            {/* Print-only file information header */}
-            <div className="print-only print-file-info" style={{ pageBreakAfter: 'auto' }}>
-                <h2>E-Filing Document</h2>
-                <div className="info-row">
-                    <div className="info-label">File Number:</div>
-                    <div className="info-value">{file?.file_number}</div>
-                </div>
-                <div className="info-row">
-                    <div className="info-label">Subject:</div>
-                    <div className="info-value">{file?.subject}</div>
-                </div>
-                <div className="info-row">
-                    <div className="info-label">Department:</div>
-                    <div className="info-value">{file?.department_name}</div>
-                </div>
-                <div className="info-row">
-                    <div className="info-label">Category:</div>
-                    <div className="info-value">{file?.category_name}</div>
-                </div>
-                <div className="info-row">
-                    <div className="info-label">Priority:</div>
-                    <div className="info-value">{file?.priority}</div>
-                </div>
-                <div className="info-row">
-                    <div className="info-label">Status:</div>
-                    <div className="info-value">{file?.status_name}</div>
-                </div>
-                <div className="info-row">
-                    <div className="info-label">Created Date:</div>
-                    <div className="info-value">{formatDate(file?.created_at)}</div>
-                </div>
-                <div className="info-row">
-                    <div className="info-label">Created By:</div>
-                    <div className="info-value">{file?.created_by_name_with_designation || file?.created_by_name}</div>
-                </div>
-            </div>
+            
         
-        <div className="container mx-auto px-4 py-6 h-[calc(100vh-80px)] flex flex-col">
+        <div className="container mx-auto px-4 py-6 print:p-0 h-[calc(100vh-80px)] flex flex-col">
             <div className="flex items-center justify-between mb-6 no-print flex-shrink-0">
                 <div className="flex items-center space-x-4">
                     <Button variant="ghost" onClick={() => router.back()} className="flex items-center">
@@ -1211,8 +1193,53 @@ export default function FileDetail() {
                             )}
                         </CardContent>
                     </Card>
+                    {/* ===================== TITLE PAGE ===================== */}
+                    <div className="print-only print-title-page page-content">
+                        {/* KWSC Header */}
+                        <div className="border-b border-gray-300">
+                            <div className="flex items-center space-x-3">
+                                <img src="/logo.png" alt="KWSC Logo" className="h-8 w-auto" />
+                                <div>
+                                    <h1 className="text-lg font-bold text-blue-900">
+                                        Karachi Water & Sewerage Corporation
+                                    </h1>
+                                    <p className="text-xs text-blue-700">
+                                        Government of Sindh
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                        <h3 
+                            style={{
+                                fontSize: '16pt',
+                                textAlign: 'justify',
+                                marginBottom: '6mm'
+                            }}>
+                        SUBJECT:</h3>
+                        <h2
+                            style={{
+                                fontSize: '14pt',
+                                textAlign: 'justify',
+                                marginBottom: '10mm'
+                            }}
+                        >
+                            {file?.subject}
+                        </h2>
 
-                    <div className="space-y-6">
+                        <div className="print-file-info">
+                            <div className="info-row"><strong>File Number:</strong> {file?.file_number}</div>
+                            <div className="info-row"><strong>Department:</strong> {file?.department_name}</div>
+                            <div className="info-row"><strong>Category:</strong> {file?.category_name}</div>
+                            <div className="info-row"><strong>Priority:</strong> {file?.priority}</div>
+                            <div className="info-row"><strong>Status:</strong> {file?.status_name}</div>
+                            <div className="info-row"><strong>Created:</strong> {formatDate(file?.created_at)}</div>
+                            <div className="info-row"><strong>Created By:</strong> {file?.created_by_name_with_designation}</div>
+                        </div>
+                    </div>
+
+
+{/* print content  */}
+                    <div className="space-y-6 print-content-start">
                         {(() => {
                             console.log('Pages state:', pages);
                             console.log('File state:', file);
@@ -1259,10 +1286,27 @@ export default function FileDetail() {
                                     // Helper function to get the correct image URL for print
                                     const getSignatureImageUrl = (content) => {
                                         if (!content) return null;
+                                        
+                                        // 1. If it's already a Data URI (base64), use it as is
                                         if (content.startsWith('data:image/')) return content;
+                                        
+                                        // 2. If it's a full URL (like http://localhost:3000/uploads/...)
+                                        // This is the part that was likely causing your error
+                                        if (content.startsWith('http://') || content.startsWith('https://')) {
+                                            // If it points to /uploads/, we need to inject /api/ before /uploads/
+                                            if (content.includes('/uploads/')) {
+                                                return content.replace('/uploads/', '/api/uploads/');
+                                            }
+                                            return content;
+                                        }
+
+                                        // 3. If it starts with /api/, it's already correct
                                         if (content.startsWith('/api/')) return content;
+
+                                        // 4. If it starts with /uploads/, change to /api/uploads/
                                         if (content.startsWith('/uploads/')) return content.replace('/uploads/', '/api/uploads/');
-                                        if (content.startsWith('http://') || content.startsWith('https://')) return content;
+
+                                        // 5. Default fallback for relative paths
                                         return `/api/uploads${content.startsWith('/') ? '' : '/'}${content}`;
                                     };
                                     
@@ -1316,7 +1360,7 @@ export default function FileDetail() {
 
                     {/* Print-only Comments Section */}
                     {comments.length > 0 && (
-                        <div className="print-only print-section">
+                        <div className="print-only print-section comments-section">
                             <h3>Comments ({comments.length})</h3>
                             <div className="print-comments-grid">
                                 {comments.map((c, idx) => (
