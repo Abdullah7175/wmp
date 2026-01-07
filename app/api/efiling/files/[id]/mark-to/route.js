@@ -2186,6 +2186,80 @@ export async function GET(request, { params }) {
             }
         }
         
+        // ========== E-SIGNATURE FILTERING FOR EXTERNAL FLOW ==========
+        // Filter out SE if RE/XEN hasn't e-signed
+        // Filter out Director Medical Services if Admin Officer hasn't e-signed
+        if (!isAdmin && currentUserEfilingId != null) {
+            // Check if current user is RE/XEN
+            const isREorXEN = currentUserRoleCodeUpper === 'RE' || 
+                             currentUserRoleCodeUpper.startsWith('RE_') || 
+                             currentUserRoleCodeUpper === 'XEN' || 
+                             currentUserRoleCodeUpper.startsWith('XEN_') ||
+                             currentUserRoleCodeUpper.includes('RESIDENT_ENGINEER') ||
+                             currentUserRoleCodeUpper.includes('EXECUTIVE_ENGINEER');
+            
+            // Check if current user is Admin Officer
+            const isAdminOfficer = currentUserRoleCodeUpper.includes('ADMINISTRATIVE_OFFICER') || 
+                                  currentUserRoleCodeUpper.includes('ADMINISTRATIVE OFFICER') ||
+                                  currentUserRoleCodeUpper === 'ADMIN_OFFICER' ||
+                                  currentUserRoleCodeUpper.startsWith('ADMIN_OFFICER_');
+            
+            if (isREorXEN || isAdminOfficer) {
+                // Check if user has e-signed
+                const signatureRes = await client.query(`
+                    SELECT COUNT(*) as count
+                    FROM efiling_document_signatures
+                    WHERE file_id = $1 AND user_id = $2 AND is_active = true
+                `, [fileId, session.user.id]);
+                
+                const hasSigned = parseInt(signatureRes.rows[0].count) > 0;
+                
+                if (!hasSigned) {
+                    // User hasn't e-signed - filter out external flow recipients
+                    const recipientsBeforeFilter = allowedRecipients.length;
+                    
+                    allowedRecipients = allowedRecipients.filter(recipient => {
+                        const recipientRoleCode = (recipient.role_code || '').toUpperCase();
+                        
+                        // For RE/XEN: Remove SE (external flow)
+                        if (isREorXEN) {
+                            const isSE = recipientRoleCode === 'SE' || 
+                                        recipientRoleCode.startsWith('SE_') || 
+                                        recipientRoleCode.includes('SUPERINTENDENT_ENGINEER') ||
+                                        recipientRoleCode.includes('SUPERINTENDENT ENGINEER');
+                            
+                            if (isSE) {
+                                return false; // Remove SE - requires e-signature
+                            }
+                        }
+                        
+                        // For Admin Officer: Remove Director Medical Services (external flow)
+                        if (isAdminOfficer) {
+                            const isDirectorMedicalServices = recipientRoleCode === 'DIRECTOR_MEDICAL_SERVICES' || 
+                                                            recipientRoleCode.startsWith('DIRECTOR_MEDICAL_SERVICES_') ||
+                                                            recipientRoleCode.includes('DIRECTOR_MEDICAL_SERVICES');
+                            
+                            if (isDirectorMedicalServices) {
+                                return false; // Remove Director Medical Services - requires e-signature
+                            }
+                        }
+                        
+                        // Keep team members and other allowed recipients
+                        return true;
+                    });
+                    
+                    console.log('[MARK-TO GET] Filtered external flow recipients (e-signature required):', {
+                        before: recipientsBeforeFilter,
+                        after: allowedRecipients.length,
+                        reason: isREorXEN ? 'RE/XEN must e-sign before marking to SE' : 'Admin Officer must e-sign before marking to Director Medical Services'
+                    });
+                } else {
+                    console.log('[MARK-TO GET] User has e-signed - external flow recipients allowed');
+                }
+            }
+        }
+        // ========== END E-SIGNATURE FILTERING FOR EXTERNAL FLOW ==========
+        
         // Filter out current user from allowed recipients - users can't mark to themselves
         allowedRecipients = allowedRecipients.filter(r => r.id !== currentUserEfilingId);
         
