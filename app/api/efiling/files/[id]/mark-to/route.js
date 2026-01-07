@@ -2062,9 +2062,26 @@ export async function GET(request, { params }) {
             });
         } else if (currentUserIsMidLevel && currentUserDepartmentId != null) {
             // Mid-level roles (XEN, RE, EE, Admin officer): Can see all users in their department
-            // Filter to only show users from same department
+            // BUT also keep team members and SE (external flow) regardless of department
             allowedRecipients = allowedRecipients.filter(recipient => {
                 const recipientDepartmentId = recipient.department_id;
+                const recipientRoleCode = (recipient.role_code || '').toUpperCase();
+                
+                // Always keep team members (they're marked with is_team_member flag)
+                if (recipient.is_team_member) {
+                    return true;
+                }
+                
+                // Always keep SE (external flow - will be filtered by e-signature later if needed)
+                const isSE = recipientRoleCode === 'SE' || 
+                            recipientRoleCode.startsWith('SE_') || 
+                            recipientRoleCode.includes('SUPERINTENDENT_ENGINEER') ||
+                            recipientRoleCode.includes('SUPERINTENDENT ENGINEER');
+                if (isSE) {
+                    return true;
+                }
+                
+                // For other users, filter by department
                 return recipientDepartmentId === currentUserDepartmentId;
             });
         }
@@ -2216,9 +2233,15 @@ export async function GET(request, { params }) {
                 
                 if (!hasSigned) {
                     // User hasn't e-signed - filter out external flow recipients
+                    // BUT keep team members (they don't require e-signature)
                     const recipientsBeforeFilter = allowedRecipients.length;
                     
                     allowedRecipients = allowedRecipients.filter(recipient => {
+                        // Always keep team members - they don't require e-signature
+                        if (recipient.is_team_member) {
+                            return true;
+                        }
+                        
                         const recipientRoleCode = (recipient.role_code || '').toUpperCase();
                         
                         // For RE/XEN: Remove SE (external flow)
@@ -2244,7 +2267,7 @@ export async function GET(request, { params }) {
                             }
                         }
                         
-                        // Keep team members and other allowed recipients
+                        // Keep all other allowed recipients (department users, etc.)
                         return true;
                     });
                     
