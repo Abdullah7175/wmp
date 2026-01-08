@@ -724,7 +724,12 @@ export async function POST(req) {
             }, { status: 503 });
         }
         
-        return NextResponse.json({ error: 'Failed to submit work request', details: error.message }, { status: 500 });
+        const { handleDatabaseError } = await import('@/lib/errorHandler');
+        const dbError = handleDatabaseError(error, 'submit work request');
+        return NextResponse.json(
+            { error: dbError.error },
+            { status: dbError.status }
+        );
     } finally {
         if (client && typeof client.release === 'function') {
             try {

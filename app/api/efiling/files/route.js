@@ -208,10 +208,12 @@ export async function GET(request) {
                 return NextResponse.json(fullResult.rows[0]);
             } catch (error) {
                 console.error('Error fetching single file:', error);
-                return NextResponse.json({ 
-                    error: 'Database error while fetching file',
-                    details: error.message 
-                }, { status: 500 });
+                const { handleDatabaseError } = await import('@/lib/errorHandler');
+                const dbError = handleDatabaseError(error, 'fetch file');
+                return NextResponse.json(
+                    { error: dbError.error },
+                    { status: dbError.status }
+                );
             }
         } else {
             // We'll compute total with filters later; also compute overall for logs
@@ -480,29 +482,12 @@ export async function GET(request) {
             });
         }
     } catch (error) {
-        console.error('Database error:', error);
-        console.error('Error details:', {
-            message: error.message,
-            code: error.code,
-            detail: error.detail,
-            hint: error.hint,
-            position: error.position,
-            where: error.where
-        });
-        // Return detailed error in development, generic in production
-        const errorMessage = process.env.NODE_ENV === 'development' 
-            ? `Database error: ${error.message}${error.detail ? ` - ${error.detail}` : ''}${error.hint ? ` (${error.hint})` : ''}`
-            : 'Internal server error';
-        return NextResponse.json({ 
-            error: errorMessage,
-            code: error.code,
-            details: process.env.NODE_ENV === 'development' ? {
-                message: error.message,
-                detail: error.detail,
-                hint: error.hint,
-                position: error.position
-            } : undefined
-        }, { status: 500 });
+        const { handleDatabaseError } = await import('@/lib/errorHandler');
+        const dbError = handleDatabaseError(error, 'fetch files');
+        return NextResponse.json(
+            { error: dbError.error },
+            { status: dbError.status }
+        );
     } finally {
         if (client) await client.release();
     }

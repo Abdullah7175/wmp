@@ -20,6 +20,8 @@ export async function efilingAuthMiddleware(request) {
             res.headers.set('X-Content-Type-Options', 'nosniff');
             res.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
             res.headers.set('Permissions-Policy', 'camera=(), geolocation=(), microphone=()');
+            // SECURITY: Remove X-Powered-By header to hide framework information
+            res.headers.delete('X-Powered-By');
             const scriptSrc = isDev ? "script-src 'self' 'unsafe-inline' 'unsafe-eval'" : "script-src 'self' 'unsafe-inline'";
             const connectSrc = isDev ? "connect-src 'self' ws: http://localhost:3000 ws: http://119.30.113.18:3000" : "connect-src 'self'";
             // Use object-src 'none' for better security (PDFs use iframes, not object tags)

@@ -27,6 +27,9 @@ export const metadata = {
 export default function RootLayout({ children }) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        <meta charSet="UTF-8" />
+      </head>
       <body className={`${poppins.variable} ${geistMono.variable} antialiased`}>
         <Providers>
           {children}

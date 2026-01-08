@@ -3,6 +3,8 @@ const nextConfig = {
   reactStrictMode: true,
   output: 'standalone',
   trailingSlash: false,
+  // SECURITY: Disable X-Powered-By header to hide Next.js version
+  poweredByHeader: false,
   // Empty turbopack config to silence the warning when using webpack config
   turbopack: {},
   async rewrites() {
@@ -98,12 +100,20 @@ const nextConfig = {
             value: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https: http:; font-src 'self' data:; connect-src 'self' https: http:; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests; block-all-mixed-content;"
           },
           {
+            key: 'Content-Type',
+            value: 'text/html; charset=UTF-8'
+          },
+          {
             key: 'Strict-Transport-Security',
             value: 'max-age=31536000; includeSubDomains'
           },
           {
             key: 'Permissions-Policy',
             value: 'camera=(), microphone=(), geolocation=()'
+          },
+          {
+            key: 'X-Powered-By',
+            value: ''
           }
         ]
       }

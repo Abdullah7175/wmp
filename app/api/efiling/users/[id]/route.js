@@ -170,9 +170,11 @@ export async function GET(request, { params }) {
 
     } catch (error) {
         console.error('Error fetching e-filing user:', error);
+        const { handleDatabaseError } = await import('@/lib/errorHandler');
+        const dbError = handleDatabaseError(error, 'fetch e-filing user');
         return NextResponse.json(
-            { error: 'Failed to fetch e-filing user', details: error.message },
-            { status: 500 }
+            { error: dbError.error },
+            { status: dbError.status }
         );
     }
 }
@@ -670,7 +672,7 @@ export async function PUT(request, { params }) {
                 }
                 
                 return NextResponse.json(
-                    { error: errorMessage, details: error.detail },
+                    { error: errorMessage },
                     { status: 400 }
                 );
             }
@@ -679,7 +681,7 @@ export async function PUT(request, { params }) {
             if (error.code === '23503') { // Foreign key violation
                 console.error(`PUT /api/efiling/users/${userId} - Foreign key constraint violation:`, error.detail);
                 return NextResponse.json(
-                    { error: 'Invalid reference. One or more referenced records do not exist.', details: error.detail },
+                    { error: 'Invalid reference. One or more referenced records do not exist.' },
                     { status: 400 }
                 );
             }
@@ -688,7 +690,7 @@ export async function PUT(request, { params }) {
             if (error.code === '23502') { // Not null violation
                 console.error(`PUT /api/efiling/users/${userId} - Not null constraint violation:`, error.detail);
                 return NextResponse.json(
-                    { error: 'Required field is missing', details: error.detail },
+                    { error: 'Required field is missing' },
                     { status: 400 }
                 );
             }
@@ -713,15 +715,26 @@ export async function PUT(request, { params }) {
             error.message.includes('required') ||
             error.message.includes('CNIC')
         )) {
+            // Use safe error message - don't expose full error details
+            const safeMessage = error.message.includes('already exists') 
+                ? 'A record with this information already exists'
+                : error.message.includes('Invalid')
+                ? 'Invalid input provided'
+                : error.message.includes('required')
+                ? 'Required field is missing'
+                : 'Validation failed';
+            
             return NextResponse.json(
-                { error: error.message, details: error.details || error.message },
+                { error: safeMessage },
                 { status: 400 }
             );
         }
         
+        const { handleDatabaseError } = await import('@/lib/errorHandler');
+        const dbError = handleDatabaseError(error, 'update e-filing user');
         return NextResponse.json(
-            { error: 'Failed to update e-filing user', details: error.message },
-            { status: 500 }
+            { error: dbError.error },
+            { status: dbError.status }
         );
     }
 }
@@ -792,9 +805,11 @@ export async function DELETE(request, { params }) {
 
     } catch (error) {
         console.error('Error deleting e-filing user:', error);
+        const { handleDatabaseError } = await import('@/lib/errorHandler');
+        const dbError = handleDatabaseError(error, 'delete e-filing user');
         return NextResponse.json(
-            { error: 'Failed to delete e-filing user', details: error.message },
-            { status: 500 }
+            { error: dbError.error },
+            { status: dbError.status }
         );
     }
 }

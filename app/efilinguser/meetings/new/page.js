@@ -729,7 +729,7 @@ export default function CreateMeetingPage() {
                                         onChange={(e) =>
                                             setExternalForm({ ...externalForm, email: e.target.value })
                                         }
-                                        placeholder="email@example.com"
+                                        placeholder="Enter email address"
                                     />
                                 </div>
                                 <div>

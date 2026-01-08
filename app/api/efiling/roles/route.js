@@ -130,9 +130,11 @@ export async function GET(request) {
 
     } catch (error) {
         console.error('Error fetching roles:', error);
+        const { handleDatabaseError } = await import('@/lib/errorHandler');
+        const dbError = handleDatabaseError(error, 'fetch roles');
         return NextResponse.json(
-            { error: 'Failed to fetch roles', details: error.message },
-            { status: 500 }
+            { error: dbError.error },
+            { status: dbError.status }
         );
     }
 }
@@ -212,9 +214,11 @@ export async function POST(request) {
 
     } catch (error) {
         console.error('Error creating role:', error);
+        const { handleDatabaseError } = await import('@/lib/errorHandler');
+        const dbError = handleDatabaseError(error, 'create role');
         return NextResponse.json(
-            { error: 'Failed to create role', details: error.message },
-            { status: 500 }
+            { error: dbError.error },
+            { status: dbError.status }
         );
     }
 }
@@ -316,9 +320,11 @@ export async function PUT(request) {
 
     } catch (error) {
         console.error('Error updating role:', error);
+        const { handleDatabaseError } = await import('@/lib/errorHandler');
+        const dbError = handleDatabaseError(error, 'update role');
         return NextResponse.json(
-            { error: 'Failed to update role', details: error.message },
-            { status: 500 }
+            { error: dbError.error },
+            { status: dbError.status }
         );
     }
 }
@@ -393,9 +399,11 @@ export async function DELETE(request) {
 
     } catch (error) {
         console.error('Error deleting role:', error);
+        const { handleDatabaseError } = await import('@/lib/errorHandler');
+        const dbError = handleDatabaseError(error, 'delete role');
         return NextResponse.json(
-            { error: 'Failed to delete role', details: error.message },
-            { status: 500 }
+            { error: dbError.error },
+            { status: dbError.status }
         );
     }
 }
