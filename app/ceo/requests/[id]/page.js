@@ -112,7 +112,8 @@ async function getRequestDetails(requestId) {
 }
 
 export default async function RequestViewPage({ params }) {
-  const requestData = await getRequestDetails(params.id);
+  const { id } = await params;
+  const requestData = await getRequestDetails(id);
 
   if (!requestData) {
     notFound();
