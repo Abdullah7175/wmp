@@ -2,7 +2,8 @@ module.exports = {
   apps: [
     {
       name: 'wmp',
-      script: '.next/standalone/server.js',
+      script: 'node',
+      args: '.next/standalone/server.js',
       cwd: './',
       instances: 1,
       exec_mode: 'fork',
