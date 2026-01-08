@@ -3,6 +3,8 @@ import { query } from "@/lib/db";
 import { notFound } from "next/navigation";
 import RequestApprovalForm from "./components/RequestApprovalForm";
 
+export const dynamic = 'force-dynamic';
+
 async function getRequestDetails(requestId) {
   try {
     const request = await query(`
@@ -105,6 +107,8 @@ async function getRequestDetails(requestId) {
       `, [requestId])
     ]);
 
+    const requestRow = request.rows[0];
+    
     return {
       request: requestRow,
       beforeContent: beforeContent.rows || [],

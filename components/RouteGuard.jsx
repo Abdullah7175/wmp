@@ -104,7 +104,15 @@ export default function RouteGuard({ children }) {
     if (pathname.startsWith("/ceo")) {
       const allowed = allowedRoutes.ceo[roleStr] || [];
       const basePath = pathname.split("?")[0];
-      if (!allowed.some((route) => basePath.startsWith(route))) {
+      // Allow exact matches and subpaths (e.g., /ceo/requests/202 should match /ceo/requests)
+      const isAllowed = allowed.some((route) => {
+        // Exact match
+        if (basePath === route) return true;
+        // Subpath match (e.g., /ceo/requests/202 starts with /ceo/requests)
+        if (basePath.startsWith(route + "/")) return true;
+        return false;
+      });
+      if (!isAllowed) {
         router.replace("/unauthorized");
         return;
       }
