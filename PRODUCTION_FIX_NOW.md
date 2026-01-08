@@ -8,17 +8,55 @@
 
 ## Immediate Fix - Run on Production Server
 
-### Option 1: Use Standalone Server (Recommended)
+### Step 1: Rebuild Application (REQUIRED)
 
 ```bash
 cd /opt/wmp16
 
-# Stop PM2
+# Stop PM2 first
 pm2 stop wmp
 pm2 delete wmp
 
-# Verify standalone server exists
+# Clean old build
+rm -rf .next
+
+# Pull latest code (if using git)
+git pull
+
+# Install dependencies (if package.json changed)
+npm install
+
+# Rebuild application (this includes standalone setup)
+npm run build
+
+# Verify standalone server was created
 ls -la .next/standalone/server.js
+
+# Verify static files exist
+ls -la .next/standalone/.next/static/css/ | head -5
+```
+
+### Step 2: Start with Standalone Server
+
+```bash
+# Option A: Use ecosystem.config.js (Recommended)
+pm2 start ecosystem.config.js
+pm2 save
+
+# Option B: Start directly (if config doesn't work)
+pm2 start .next/standalone/server.js --name wmp \
+  --cwd /opt/wmp16 \
+  --env NODE_ENV=production \
+  --env PORT=3000 \
+  --env HOSTNAME=0.0.0.0 \
+  --env NEXTAUTH_URL=https://wmp.kwsc.gos.pk \
+  --env APP_BASE_DIR=/opt/wmp16 \
+  --log-date-format "YYYY-MM-DD HH:mm:ss Z" \
+  --max-memory-restart 3G \
+  --restart-delay 4000 \
+  --max-restarts 10 \
+  --min-uptime 10s
+pm2 save
 
 # Start with standalone server directly
 pm2 start .next/standalone/server.js --name wmp \
@@ -42,7 +80,9 @@ pm2 status
 pm2 logs wmp --lines 20
 ```
 
-### Option 2: Use Regular Next.js Mode (If Standalone Fails)
+### Alternative: Use Regular Next.js Mode (If Standalone Fails)
+
+**Only use this if standalone build fails:**
 
 ```bash
 cd /opt/wmp16
@@ -71,7 +111,15 @@ pm2 save
 pm2 logs wmp --lines 20
 ```
 
-### Option 3: Fix Ecosystem Config (Best Long-term)
+### Note: Ecosystem Config Already Fixed
+
+The `ecosystem.config.js` has been updated to use:
+```javascript
+script: 'node',
+args: '.next/standalone/server.js',
+```
+
+This is already in your codebase after `git pull`. Just rebuild and restart.
 
 Update `ecosystem.config.js` on production server:
 
