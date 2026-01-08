@@ -137,6 +137,33 @@ function isAllowed(pathname, allowedList) {
 }
 
 // Helper function to set origin header for Server Actions
+// SECURITY: Apply security headers to responses
+function applySecurityHeaders(response, pathname) {
+    // Skip API routes and static files - they handle their own headers
+    if (pathname.startsWith('/api/') || pathname.startsWith('/_next/')) {
+        return;
+    }
+    
+    // Apply security headers
+    response.headers.set('X-Frame-Options', 'DENY');
+    response.headers.set('X-Content-Type-Options', 'nosniff');
+    response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+    response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+    response.headers.delete('X-Powered-By');
+    
+    // Content Security Policy
+    const isDev = process.env.NODE_ENV === 'development';
+    const scriptSrc = isDev ? "script-src 'self' 'unsafe-inline' 'unsafe-eval'" : "script-src 'self' 'unsafe-inline'";
+    const connectSrc = isDev ? "connect-src 'self' ws: http://localhost:3000 ws: http://119.30.113.18:3000" : "connect-src 'self'";
+    const csp = `default-src 'self'; ${scriptSrc}; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https: http:; font-src 'self' data:; ${connectSrc}; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests; block-all-mixed-content;`;
+    response.headers.set('Content-Security-Policy', csp);
+    
+    // HSTS (only in production)
+    if (!isDev) {
+        response.headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+    }
+}
+
 function setOriginHeader(req, response) {
     const forwardedHost = req.headers.get('x-forwarded-host') || req.headers.get('host');
     const forwardedProto = req.headers.get('x-forwarded-proto') || (req.nextUrl.protocol.replace(':', ''));
@@ -260,9 +287,13 @@ export async function middleware(req) {
         if (!sessionCookie) {
             // Redirect to main page if no token and trying to access protected routes
             if (pathname !== '/login' && pathname !== '/' && !pathname.startsWith('/public')) {
-                return NextResponse.redirect(new URL('/', req.url));
+                const redirectResponse = NextResponse.redirect(new URL('/', req.url));
+                applySecurityHeaders(redirectResponse, pathname);
+                return redirectResponse;
             }
-            return NextResponse.next();
+            const response = NextResponse.next();
+            applySecurityHeaders(response, pathname);
+            return response;
         }
 
         // In Edge runtime, we can't decode JWT to get user info
@@ -284,10 +315,15 @@ export async function middleware(req) {
         //     }
         // }
 
-        return NextResponse.next();
+        const response = NextResponse.next();
+        // SECURITY: Apply security headers to all pages
+        applySecurityHeaders(response, pathname);
+        return response;
     } catch (error) {
         console.error('Middleware error:', error);
-        return NextResponse.redirect(new URL('/', req.url));
+        const errorResponse = NextResponse.redirect(new URL('/', req.url));
+        applySecurityHeaders(errorResponse, pathname);
+        return errorResponse;
     }
 }
 
