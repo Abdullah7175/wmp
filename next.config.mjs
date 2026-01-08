@@ -79,40 +79,9 @@ const nextConfig = {
           }
         ]
       },
-      {
-        // Default security headers for all other routes
-        source: '/:path*',
-        headers: [
-          {
-            key: 'X-Frame-Options',
-            value: 'DENY'
-          },
-          {
-            key: 'X-Content-Type-Options',
-            value: 'nosniff'
-          },
-          {
-            key: 'Referrer-Policy',
-            value: 'strict-origin-when-cross-origin'
-          },
-          {
-            key: 'Content-Security-Policy',
-            value: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https: http:; font-src 'self' data:; connect-src 'self' https: http:; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests; block-all-mixed-content;"
-          },
-          {
-            key: 'Strict-Transport-Security',
-            value: 'max-age=31536000; includeSubDomains'
-          },
-          {
-            key: 'Permissions-Policy',
-            value: 'camera=(), microphone=(), geolocation=()'
-          },
-          {
-            key: 'X-Powered-By',
-            value: ''
-          }
-        ]
-      }
+      // Note: Security headers for pages are handled in middleware.js
+      // This prevents interference with static file serving (_next/static/*)
+      // Static files are automatically served with correct MIME types by Next.js
     ];
   },
   // Server Actions are stable in Next.js 16, no experimental flag needed
