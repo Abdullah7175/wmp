@@ -97,11 +97,35 @@ export default function RequestApprovalForm({ requestData }) {
               <MapPin className="w-4 h-4 lg:w-5 lg:h-5 text-gray-400 mt-0.5 flex-shrink-0" />
               <div className="min-w-0">
                 <p className="text-xs lg:text-sm font-medium text-gray-900">Location</p>
-                <p className="text-xs lg:text-sm text-gray-600">{request.district} - {request.town}</p>
-                {request.subtown && (
-                  <p className="text-xs lg:text-sm text-gray-600">{request.subtown}</p>
+                {request.division_id ? (
+                  // Division-based request
+                  <>
+                    {request.division_name && (
+                      <p className="text-xs lg:text-sm text-gray-600">Division: {request.division_name}</p>
+                    )}
+                    {request.address && (
+                      <p className="text-xs lg:text-sm text-gray-600">{request.address}</p>
+                    )}
+                  </>
+                ) : (
+                  // Town-based request
+                  <>
+                    {request.district && request.town ? (
+                      <p className="text-xs lg:text-sm text-gray-600">{request.district} - {request.town}</p>
+                    ) : request.town ? (
+                      <p className="text-xs lg:text-sm text-gray-600">{request.town}</p>
+                    ) : null}
+                    {request.subtown && (
+                      <p className="text-xs lg:text-sm text-gray-600">Subtown: {request.subtown}</p>
+                    )}
+                    {request.address && (
+                      <p className="text-xs lg:text-sm text-gray-600">{request.address}</p>
+                    )}
+                  </>
                 )}
-                <p className="text-xs lg:text-sm text-gray-600">{request.address}</p>
+                {!request.address && !request.division_name && !request.town && (
+                  <p className="text-xs lg:text-sm text-gray-500 italic">Location information not available</p>
+                )}
               </div>
             </div>
             

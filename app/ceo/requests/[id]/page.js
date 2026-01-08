@@ -18,13 +18,17 @@ async function getRequestDetails(requestId) {
         wr.file_type,
         wr.executive_engineer_id,
         wr.contractor_id,
+        wr.town_id,
+        wr.division_id,
         ct.type_name as complaint_type,
         cst.subtype_name as complaint_subtype,
         t.town,
         st.subtown,
         d.title as district,
-        u.name as creator_name,
-        u.email as creator_email,
+        div.name as division_name,
+        COALESCE(u.name, ag_creator.name, sm_creator.name) as creator_name,
+        COALESCE(u.email, ag_creator.email, sm_creator.email) as creator_email,
+        wr.creator_type,
         wra.approval_status,
         wra.created_at as approval_request_date,
         wra.ceo_comments,
@@ -38,10 +42,13 @@ async function getRequestDetails(requestId) {
       LEFT JOIN town t ON wr.town_id = t.id
       LEFT JOIN subtown st ON wr.subtown_id = st.id
       LEFT JOIN district d ON t.district_id = d.id
-      LEFT JOIN users u ON wr.creator_id = u.id
+      LEFT JOIN divisions div ON wr.division_id = div.id
+      LEFT JOIN users u ON wr.creator_id = u.id AND wr.creator_type = 'user'
+      LEFT JOIN agents ag_creator ON wr.creator_id = ag_creator.id AND wr.creator_type = 'agent'
+      LEFT JOIN socialmediaperson sm_creator ON wr.creator_id = sm_creator.id AND wr.creator_type = 'socialmedia'
       LEFT JOIN status s ON wr.status_id = s.id
-      LEFT JOIN agents ee ON wr.executive_engineer_id = ee.id
-      LEFT JOIN agents c ON wr.contractor_id = c.id
+      LEFT JOIN agents ee ON wr.executive_engineer_id = ee.id AND ee.role = 1
+      LEFT JOIN agents c ON wr.contractor_id = c.id AND c.role = 2
       WHERE wr.id = $1
     `, [requestId]);
 
@@ -99,7 +106,7 @@ async function getRequestDetails(requestId) {
     ]);
 
     return {
-      request: request.rows[0],
+      request: requestRow,
       beforeContent: beforeContent.rows || [],
       images: images.rows || [],
       videos: videos.rows || [],
