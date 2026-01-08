@@ -22,8 +22,8 @@ export async function efilingAuthMiddleware(request) {
             res.headers.set('Permissions-Policy', 'camera=(), geolocation=(), microphone=()');
             const scriptSrc = isDev ? "script-src 'self' 'unsafe-inline' 'unsafe-eval'" : "script-src 'self' 'unsafe-inline'";
             const connectSrc = isDev ? "connect-src 'self' ws: http://localhost:3000 ws: http://119.30.113.18:3000" : "connect-src 'self'";
-            // Allow object-src 'self' for PDF embedding via <object> tag
-            const csp = `default-src 'self'; ${scriptSrc}; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https: http:; media-src 'self' blob: https: http:; ${connectSrc}; frame-ancestors 'none'; object-src 'self'`;
+            // Use object-src 'none' for better security (PDFs use iframes, not object tags)
+            const csp = `default-src 'self'; ${scriptSrc}; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https: http:; media-src 'self' blob: https: http:; ${connectSrc}; frame-ancestors 'none'; object-src 'none'`;
             res.headers.set('Content-Security-Policy', csp);
             
             // Ensure origin header is set for Server Actions (POST requests)

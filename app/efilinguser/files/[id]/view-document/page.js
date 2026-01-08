@@ -697,28 +697,26 @@ export default function DocumentViewer() {
                                             
                                             return (
                                                 <>
-                                                    {/* Use object tag as primary method, iframe as fallback */}
-                                                    <object
-                                                        data={pdfUrl}
-                                                        type="application/pdf"
+                                                    {/* Use iframe only (more secure, avoids object-src CSP requirement) */}
+                                                    <iframe
+                                                        src={pdfUrl}
                                                         className="w-full h-[70vh] min-h-[500px] border-0"
                                                         title={selectedAttachment.file_name}
                                                         style={{ display: 'block' }}
                                                         onError={(e) => {
-                                                            console.error('Object tag failed to load PDF:', pdfUrl, e);
+                                                            console.error('Iframe failed to load PDF:', pdfUrl, e);
+                                                            // Show error message if iframe fails
+                                                            const container = e.target.parentElement;
+                                                            if (container) {
+                                                                container.innerHTML = `
+                                                                    <div class="p-8 text-center text-red-600">
+                                                                        <p class="mb-2">Failed to load PDF preview</p>
+                                                                        <p class="text-sm text-gray-500">Please use "Open in New Tab" or "Download" buttons below</p>
+                                                                    </div>
+                                                                `;
+                                                            }
                                                         }}
-                                                    >
-                                                        {/* Fallback to iframe if object tag doesn't work */}
-                                                        <iframe
-                                                            src={pdfUrl}
-                                                            className="w-full h-[70vh] min-h-[500px] border-0"
-                                                            title={selectedAttachment.file_name}
-                                                            style={{ display: 'block' }}
-                                                            onError={(e) => {
-                                                                console.error('Iframe failed to load PDF:', pdfUrl, e);
-                                                            }}
-                                                        />
-                                                    </object>
+                                                    />
                                                 </>
                                             );
                                         })()}
