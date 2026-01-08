@@ -2,8 +2,8 @@ module.exports = {
   apps: [
     {
       name: 'wmp',
-      script: 'npm',
-      args: 'start',
+      script: 'node',
+      args: '-r dotenv/config .next/standalone/server.js',
       cwd: '/opt/wmp16',
       instances: 1,
       exec_mode: 'fork',
