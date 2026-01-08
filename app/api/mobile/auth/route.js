@@ -36,6 +36,7 @@ export const dynamic = 'force-dynamic';
  *   }
  */
 export async function POST(req) {
+  let client;
   try {
     // Validate mobile app API key
     const apiKeyError = validateMobileApiToken(req);
@@ -52,7 +53,7 @@ export async function POST(req) {
       );
     }
 
-    const client = await connectToDatabase();
+    client = await connectToDatabase();
 
     // Check in all user tables (agents, socialmediaperson, users)
     const userTypes = [
@@ -133,19 +134,68 @@ export async function POST(req) {
       });
     }
 
+    // Build user response object
+    const userResponse = {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      userType: userType,
+      image: user.image || null
+    };
+
+    // For agents and socialmediaperson, add location and department fields
+    if (userType === 'agents' || userType === 'socialmediaperson') {
+      // Get complaint_type_id, town_id, division_id from user record
+      const complaintTypeId = user.complaint_type_id || null;
+      const townId = user.town_id || null;
+      const divisionId = user.division_id || null;
+
+      // Determine if division-based
+      let isDivisionBased = false;
+      if (divisionId) {
+        // If division_id exists, it's division-based
+        isDivisionBased = true;
+      } else if (complaintTypeId) {
+        // Check complaint_type to see if it's division-based
+        try {
+          const complaintTypeRes = await client.query(`
+            SELECT 
+              ct.division_id,
+              ct.is_division_based,
+              ed.department_type
+            FROM complaint_types ct
+            LEFT JOIN efiling_departments ed ON ct.efiling_department_id = ed.id
+            WHERE ct.id = $1
+          `, [complaintTypeId]);
+
+          if (complaintTypeRes.rows.length > 0) {
+            const ct = complaintTypeRes.rows[0];
+            isDivisionBased = Boolean(
+              ct.is_division_based ||
+              ct.division_id ||
+              ct.department_type === 'division'
+            );
+          }
+        } catch (err) {
+          console.warn('Error checking complaint type for division-based flag:', err);
+          // Default to false if we can't determine
+        }
+      }
+
+      // Add location and department fields to user response
+      userResponse.complaint_type_id = complaintTypeId;
+      userResponse.town_id = townId;
+      userResponse.division_id = divisionId;
+      userResponse.is_division_based = isDivisionBased;
+    }
+
     // Return success response
     return NextResponse.json({
       success: true,
       message: 'Login successful',
       token: token,
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        userType: userType,
-        image: user.image || null
-      },
+      user: userResponse,
       expiresIn: 3600 // 1 hour in seconds
     }, { status: 200 });
 
@@ -155,6 +205,15 @@ export async function POST(req) {
       { error: 'Internal server error' },
       { status: 500 }
     );
+  } finally {
+    // Release database client if it was created
+    if (client && typeof client.release === 'function') {
+      try {
+        client.release();
+      } catch (releaseError) {
+        console.error('Error releasing database client:', releaseError);
+      }
+    }
   }
 }
 

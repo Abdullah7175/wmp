@@ -1800,9 +1800,20 @@ export async function GET(request, { params }) {
             }
         }
         
-        // Also add SE users from the same division (for RE and other roles that may not have department_id)
-        // This allows RE to mark to SE even if they're in the same division but different departments
-        if (currentUserDivisionId != null && currentUserEfilingId != null) {
+        // For RE/XEN/Admin Officer: Always add SE from same division (external flow)
+        // This ensures RE/XEN can always see SE even if in different departments
+        const isREorXENorAdmin = currentUserRoleCodeUpper === 'RE' || 
+                                 currentUserRoleCodeUpper.startsWith('RE_') || 
+                                 currentUserRoleCodeUpper === 'XEN' || 
+                                 currentUserRoleCodeUpper.startsWith('XEN_') ||
+                                 currentUserRoleCodeUpper.includes('RESIDENT_ENGINEER') ||
+                                 currentUserRoleCodeUpper.includes('EXECUTIVE_ENGINEER') ||
+                                 currentUserRoleCodeUpper.includes('ADMINISTRATIVE_OFFICER') ||
+                                 currentUserRoleCodeUpper.includes('ADMINISTRATIVE OFFICER') ||
+                                 currentUserRoleCodeUpper === 'ADMIN_OFFICER' ||
+                                 currentUserRoleCodeUpper.startsWith('ADMIN_OFFICER_');
+        
+        if (isREorXENorAdmin && currentUserDivisionId != null && currentUserEfilingId != null) {
             const divisionId = parseInt(currentUserDivisionId, 10);
             const userId = parseInt(currentUserEfilingId, 10);
             if (!isNaN(divisionId) && !isNaN(userId) && divisionId > 0 && userId > 0) {
@@ -2120,8 +2131,36 @@ export async function GET(request, { params }) {
                                                  workflowState.current_state === 'RETURNED_TO_CREATOR';
                 
                 if (!isFileReturnedToCreator) {
-                    // Filter out all recipients - creator cannot mark to anyone
-                    allowedRecipients = [];
+                    // Filter out external recipients (SE and above), but keep team members for internal workflow
+                    // This allows creator to still mark to team members even after marking to SE
+                    const recipientsBeforeFilter = allowedRecipients.length;
+                    allowedRecipients = allowedRecipients.filter(recipient => {
+                        // Always keep team members (internal workflow)
+                        if (recipient.is_team_member) {
+                            return true;
+                        }
+                        
+                        // Filter out external roles (SE, CE, CEO, etc.)
+                        const recipientRoleCode = (recipient.role_code || '').toUpperCase();
+                        const isExternalRole = recipientRoleCode === 'SE' || 
+                                              recipientRoleCode.startsWith('SE_') || 
+                                              recipientRoleCode === 'CE' || 
+                                              recipientRoleCode.startsWith('CE_') ||
+                                              recipientRoleCode === 'CEO' || 
+                                              recipientRoleCode === 'COO' || 
+                                              recipientRoleCode === 'CFO' ||
+                                              recipientRoleCode.includes('SUPERINTENDENT_ENGINEER') ||
+                                              recipientRoleCode.includes('CHIEF_ENGINEER');
+                        
+                        // Remove external roles, keep others (like department users)
+                        return !isExternalRole;
+                    });
+                    
+                    console.log('[MARK-TO GET] Creator restriction applied:', {
+                        before: recipientsBeforeFilter,
+                        after: allowedRecipients.length,
+                        reason: 'File already marked to higher level - keeping only team members and department users'
+                    });
                 }
             }
         }

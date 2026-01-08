@@ -29,8 +29,6 @@ export default function MarkToModal({ showMarkToModal, onClose, fileId, fileNumb
   const [allowedRecipients, setAllowedRecipients] = useState([]);
   const [selectedIds, setSelectedIds] = useState([]);
   const [error, setError] = useState(null);
-  const [workflowState, setWorkflowState] = useState(null);
-  const [isTeamInternal, setIsTeamInternal] = useState(false);
   const [canMark, setCanMark] = useState(true);
   const [isAssignedToSomeoneElse, setIsAssignedToSomeoneElse] = useState(false);
   const [assignedToName, setAssignedToName] = useState(null);
@@ -62,19 +60,7 @@ export default function MarkToModal({ showMarkToModal, onClose, fileId, fileNumb
         setIsAssignedToSomeoneElse(data.is_assigned_to_someone_else === true);
         setAssignedToName(data.assigned_to_name || null);
         
-        // Fetch workflow state to show TAT status
-        try {
-            const permRes = await fetch(`/api/efiling/files/${fileId}/permissions`);
-            if (permRes.ok) {
-                const permData = await permRes.json();
-                if (permData.permissions) {
-                    setWorkflowState(permData.permissions.workflow_state);
-                    setIsTeamInternal(permData.permissions.is_within_team);
-                }
-            }
-        } catch (err) {
-            console.warn('Failed to fetch workflow state:', err);
-        }
+        // Note: Workflow state fetching removed - no longer displaying status in modal
       } catch (err) {
         if (!active) return;
         console.error("Failed to load mark-to recipients:", err);
@@ -235,29 +221,6 @@ export default function MarkToModal({ showMarkToModal, onClose, fileId, fileNumb
                         </div>
                     )}
                     
-                    {/* Workflow State Info */}
-                    {workflowState && (
-                        <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                            <div className="flex items-center gap-2 text-sm">
-                                <Clock className="w-4 h-4 text-blue-600" />
-                                <span className="font-medium text-blue-900">
-                                    Workflow Status: {workflowState === 'TEAM_INTERNAL' ? 'Team Internal' : 
-                                                     workflowState === 'EXTERNAL' ? 'External (TAT Active)' : 
-                                                     'Returned to Creator'}
-                                </span>
-                                {isTeamInternal && (
-                                    <Badge variant="outline" className="ml-2 text-xs">
-                                        No TAT
-                                    </Badge>
-                                )}
-                            </div>
-                            {isTeamInternal && (
-                                <p className="text-xs text-blue-700 mt-1">
-                                    File is within team workflow. TAT timer will start when marked to SE or higher.
-                                </p>
-                            )}
-                        </div>
-                    )}
                     
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                         {/* Left side - User selection */}
@@ -266,11 +229,6 @@ export default function MarkToModal({ showMarkToModal, onClose, fileId, fileNumb
                                 <Label className="text-sm font-medium">
                                     Allowed Recipients {fetching && <span className="text-xs text-gray-500">(loading...)</span>}
                                 </Label>
-                                {isTeamInternal && (
-                                    <p className="text-xs text-gray-500 mt-1">
-                                        Team members can mark files between themselves without TAT
-                                    </p>
-                                )}
                                 <div className="mt-2 relative">
                                     <Input
                                         placeholder="Search by name, role, department, or location"
@@ -299,9 +257,8 @@ export default function MarkToModal({ showMarkToModal, onClose, fileId, fileNumb
                                         const scopeLabel = SCOPE_LABELS[recipient.allowed_level_scope?.toLowerCase?.()] || recipient.allowed_level_scope;
                                         const isTeamMember = recipient.is_team_member;
                                         
-                                        // Check if marking to this recipient will start TAT
-                                        const willStartTAT = !isTeamInternal && 
-                                                           ['SE', 'CE', 'CFO', 'COO', 'CEO'].includes((recipient.role_code || '').toUpperCase());
+                                        // Check if marking to this recipient will start TAT (external roles)
+                                        const willStartTAT = ['SE', 'CE', 'CFO', 'COO', 'CEO'].includes((recipient.role_code || '').toUpperCase());
 
                                         return (
                                             <button
