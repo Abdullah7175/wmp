@@ -27,11 +27,30 @@ export async function GET(request, { params }) {
     let isAdmin;
     let userRole;
     
-    // Check if this is a mobile app request (JWT token in X-User-Token header)
-    const mobileToken = getMobileUserToken(request);
+    // Check if this is a mobile app request (JWT token in X-User-Token header OR ?token= query param)
+    // Note: React Native Image/Video components don't support headers, so we also accept token as query param
+    let mobileToken = getMobileUserToken(request);
+    
+    // Fallback: Check query parameter for mobile token (React Native Image/Video can't send headers)
+    if (!mobileToken) {
+      const { searchParams } = new URL(request.url);
+      const tokenParam = searchParams.get('token');
+      if (tokenParam) {
+        try {
+          const { verify } = await import('jsonwebtoken');
+          const decoded = verify(tokenParam, process.env.JWT_SECRET);
+          if (decoded.source === 'mobile_app' && decoded.userId) {
+            mobileToken = decoded;
+            console.log('[Uploads API] Authenticated via query parameter token');
+          }
+        } catch (tokenError) {
+          console.error('[Uploads API] Invalid token in query parameter:', tokenError.message);
+        }
+      }
+    }
     
     if (mobileToken) {
-      // Mobile app authentication via JWT token
+      // Mobile app authentication via JWT token (header or query param)
       userId = parseInt(mobileToken.userId);
       // For mobile users, check their role from the token or database
       // Mobile tokens typically don't include role, so we'll fetch it if needed for permission checks
