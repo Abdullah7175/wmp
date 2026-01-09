@@ -6,6 +6,7 @@ import { getMobileUserToken } from '@/lib/mobileAuthHelper';
 export const dynamic = 'force-dynamic';
 
 export async function GET(req) {
+  let client;
   try {
     // Validate API key
     const apiKeyError = validateMobileApiToken(req);
@@ -22,7 +23,7 @@ export async function GET(req) {
       );
     }
 
-    const client = await connectToDatabase();
+    client = await connectToDatabase();
 
     // Map userType from token to table name
     let query, table;
@@ -122,5 +123,13 @@ export async function GET(req) {
       { error: 'Internal server error' },
       { status: 500 }
     );
+  } finally {
+    if (client && typeof client.release === 'function') {
+      try {
+        await client.release();
+      } catch (releaseError) {
+        console.error('Error releasing database client:', releaseError);
+      }
+    }
   }
 }

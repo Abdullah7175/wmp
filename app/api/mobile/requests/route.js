@@ -6,6 +6,7 @@ import { getMobileUserToken } from '@/lib/mobileAuthHelper';
 export const dynamic = 'force-dynamic';
 
 export async function GET(request) {
+  let client;
   try {
     // Validate API key
     const apiKeyError = validateMobileApiToken(request);
@@ -35,7 +36,7 @@ export async function GET(request) {
     if (creatorType === 'agents') creatorType = 'agent';
     if (creatorType === 'socialmediaperson') creatorType = 'socialmedia';
 
-    const client = await connectToDatabase();
+    client = await connectToDatabase();
 
     if (id) {
       // Get single request
@@ -193,6 +194,14 @@ export async function GET(request) {
       { error: 'Failed to fetch requests' },
       { status: 500 }
     );
+  } finally {
+    if (client && typeof client.release === 'function') {
+      try {
+        await client.release();
+      } catch (releaseError) {
+        console.error('Error releasing database client:', releaseError);
+      }
+    }
   }
 }
 
@@ -535,7 +544,7 @@ export async function POST(req) {
   } finally {
     if (client && typeof client.release === 'function') {
       try {
-        client.release();
+        await client.release();
       } catch (releaseError) {
         console.error('Error releasing database client:', releaseError);
       }
