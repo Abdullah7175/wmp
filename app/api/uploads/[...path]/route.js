@@ -4,6 +4,7 @@ import { existsSync } from 'fs';
 import { auth } from '@/auth';
 import { connectToDatabase } from '@/lib/db';
 import { checkFileAccess } from '@/lib/authMiddleware';
+import { getMobileUserToken } from '@/lib/mobileAuthHelper';
 
 /**
  * SECURE FILE DOWNLOAD USING X-ACCEL-REDIRECT
@@ -21,24 +22,44 @@ import { checkFileAccess } from '@/lib/authMiddleware';
 export async function GET(request, { params }) {
   let client;
   try {
-    // SECURITY: Require authentication
-    let session;
-    try {
-      session = await auth();
-    } catch (authError) {
-      console.error('[Uploads API] Auth error:', authError);
-      return NextResponse.json({ error: 'Unauthorized - Auth failed' }, { status: 401 });
+    // SECURITY: Require authentication (support both NextAuth session and Mobile JWT token)
+    let userId;
+    let isAdmin;
+    let userRole;
+    
+    // Check if this is a mobile app request (JWT token in X-User-Token header)
+    const mobileToken = getMobileUserToken(request);
+    
+    if (mobileToken) {
+      // Mobile app authentication via JWT token
+      userId = parseInt(mobileToken.userId);
+      // For mobile users, check their role from the token or database
+      // Mobile tokens typically don't include role, so we'll fetch it if needed for permission checks
+      userRole = mobileToken.role || null;
+      // For mobile, we'll be more permissive - allow access to own files
+      // Permission checks will happen in the file access validation below
+      isAdmin = false; // Mobile users are typically not admins, adjust if needed
+      console.log(`[Uploads API] Authenticated mobile user: ${userId}`);
+    } else {
+      // Web app authentication via NextAuth session
+      let session;
+      try {
+        session = await auth();
+      } catch (authError) {
+        console.error('[Uploads API] Auth error:', authError);
+        return NextResponse.json({ error: 'Unauthorized - Auth failed' }, { status: 401 });
+      }
+      
+      if (!session?.user) {
+        console.error('[Uploads API] No session or user (web) and no mobile token');
+        return NextResponse.json({ error: 'Unauthorized - No session or token' }, { status: 401 });
+      }
+      
+      userId = parseInt(session.user.id);
+      userRole = session.user.role;
+      isAdmin = [1, 2].includes(parseInt(session.user.role));
+      console.log(`[Uploads API] Authenticated web user: ${userId} (admin: ${isAdmin})`);
     }
-    
-    if (!session?.user) {
-      console.error('[Uploads API] No session or user');
-      return NextResponse.json({ error: 'Unauthorized - No session' }, { status: 401 });
-    }
-    
-    const userId = parseInt(session.user.id);
-    const isAdmin = [1, 2].includes(parseInt(session.user.role));
-    
-    console.log(`[Uploads API] Authenticated user: ${userId} (admin: ${isAdmin})`);
 
     const { path: filePath } = await params;
     
