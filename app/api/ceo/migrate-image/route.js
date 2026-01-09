@@ -68,7 +68,7 @@ export async function POST(request) {
         await fs.copyFile(oldPath, newPath);
         
         // Update database with new path
-        const newImagePath = `/uploads/ceo/${newFilename}`;
+        const newImagePath = `/api/uploads/ceo/${newFilename}`;
         await query(`
           UPDATE users 
           SET image = $1, updated_date = CURRENT_TIMESTAMP

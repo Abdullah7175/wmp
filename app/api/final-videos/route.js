@@ -280,7 +280,7 @@ export async function POST(req) {
             const { rows } = await client.query(query, [
             workRequestId,
             description,
-            `/uploads/final-videos/${filename}`,
+            `/api/uploads/final-videos/${filename}`,
             geoTag,
             creatorId,
             creatorType,
@@ -401,7 +401,7 @@ export async function PUT(req) {
                     }
                 }
 
-                newLink = `/uploads/final-videos/${uniqueFilename}`;
+                newLink = `/api/uploads/final-videos/${uniqueFilename}`;
 
                 // Create geo_tag from latitude and longitude
                 const geoTag = `SRID=4326;POINT(${longitude || 0} ${latitude || 0})`;

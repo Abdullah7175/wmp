@@ -131,8 +131,8 @@ export async function POST(request) {
       const buffer = await img.arrayBuffer();
       await writeFile(filePath, Buffer.from(buffer));
       
-      // Create relative URL
-      const link = `/uploads/before-content/image/${uniqueName}`;
+      // Create relative URL - use /api/uploads/ for secure authenticated access
+      const link = `/api/uploads/before-content/image/${uniqueName}`;
       const geoTag = `POINT(${longitude} ${latitude})`;
       const creatorName = session.user.name || 'Unknown';
 

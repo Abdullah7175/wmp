@@ -162,12 +162,22 @@ export default function BeforeContentPage() {
       ) : (
         <>
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {filteredContent.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((item) => (
-            <Card key={item.id} className="overflow-hidden">
+            {filteredContent.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((item) => {
+                // Convert /uploads/ to /api/uploads/ for secure access
+                const getMediaUrl = (url) => {
+                    if (!url) return '';
+                    if (url.startsWith('/uploads/')) {
+                        return url.replace('/uploads/', '/api/uploads/');
+                    }
+                    return url;
+                };
+                const mediaUrl = getMediaUrl(item.link);
+                return (
+                <Card key={item.id} className="overflow-hidden">
               <div className="relative">
                 {item.content_type === 'video' ? (
                   <video
-                    src={item.link}
+                    src={mediaUrl}
                     className="w-full h-48 object-cover"
                     controls
                     onError={(e) => {
@@ -178,7 +188,7 @@ export default function BeforeContentPage() {
                   />
                 ) : (
                   <img
-                    src={item.link}
+                    src={mediaUrl}
                     alt={item.description || 'Before content'}
                     className="w-full h-48 object-cover"
                     onError={(e) => {
@@ -224,7 +234,7 @@ export default function BeforeContentPage() {
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => window.open(item.link, '_blank')}
+                        onClick={() => window.open(mediaUrl, '_blank')}
                         className="h-6 px-2"
                       >
                         <Download className="w-3 h-3" />
@@ -255,7 +265,8 @@ export default function BeforeContentPage() {
                 </div>
               </CardContent>
             </Card>
-            ))}
+                );
+            })}
           </div>
           
           {/* Pagination */}

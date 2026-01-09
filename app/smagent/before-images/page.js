@@ -193,11 +193,21 @@ export default function BeforeImagesPage() {
       ) : (
         <>
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {currentImages.map((image) => (
+            {currentImages.map((image) => {
+                // Convert /uploads/ to /api/uploads/ for secure access
+                const getImageUrl = (url) => {
+                    if (!url) return '';
+                    if (url.startsWith('/uploads/')) {
+                        return url.replace('/uploads/', '/api/uploads/');
+                    }
+                    return url;
+                };
+                const imageUrl = getImageUrl(image.link);
+                return (
             <Card key={image.id} className="overflow-hidden">
               <div className="relative">
                 <img
-                  src={image.link}
+                  src={imageUrl}
                   alt={image.description || 'Before image'}
                   className="w-full h-48 object-cover"
                   onError={(e) => {
@@ -237,7 +247,7 @@ export default function BeforeImagesPage() {
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => window.open(image.link, '_blank')}
+                        onClick={() => window.open(imageUrl, '_blank')}
                         className="h-6 px-2"
                       >
                         <Download className="w-3 h-3" />
@@ -266,7 +276,8 @@ export default function BeforeImagesPage() {
                 </div>
               </CardContent>
             </Card>
-            ))}
+                );
+            })}
           </div>
 
           {/* Pagination Controls */}

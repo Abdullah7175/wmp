@@ -107,7 +107,7 @@ export async function PUT(request) {
       const buffer = Buffer.from(bytes);
       fs.writeFileSync(filePath, buffer);
       
-      imagePath = `/uploads/coo/${fileName}`;
+      imagePath = `/api/uploads/coo/${fileName}`;
     }
 
     // Update user profile

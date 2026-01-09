@@ -37,7 +37,7 @@ async function saveUploadedFile(file) {
     
     await fs.writeFile(filePath, Buffer.from(buffer));
     
-    return `/uploads/users/${uniqueName}`;
+    return `/api/uploads/users/${uniqueName}`;
   } catch (error) {
     console.error('Error saving file:', error);
     throw new Error('Failed to save file');

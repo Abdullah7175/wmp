@@ -154,7 +154,7 @@ const Page = ({ params }) => {
                         onTimeUpdate={updateProgress}
                         onEnded={handleVideoEnd}
                     >
-                        <source src={videoData.link} type="video/mp4" />
+                        <source src={videoData.link?.startsWith('/uploads/') ? videoData.link.replace('/uploads/', '/api/uploads/') : videoData.link} type="video/mp4" />
                         Your browser does not support the video tag.
                     </video>
 

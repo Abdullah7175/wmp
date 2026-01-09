@@ -305,7 +305,7 @@ export async function POST(req) {
                 const { rows } = await client.query(query, [
                     workRequestId,
                     description,
-                    `/uploads/images/${filename}`,
+                    `/api/uploads/images/${filename}`,
                     geoTag,
                     creatorId || null,
                     creatorType || null,
@@ -452,7 +452,7 @@ export async function PUT(req) {
                 }
                 
                 await fs.writeFile(filePath, buffer);
-                newLink = `/uploads/images/${fileName}`;
+                newLink = `/api/uploads/images/${fileName}`;
             }
 
             // Update image in database

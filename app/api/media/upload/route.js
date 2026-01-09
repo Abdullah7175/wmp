@@ -72,8 +72,8 @@ export async function POST(req) {
             return NextResponse.json({ error: 'File was written but verification failed' }, { status: 500 });
         }
 
-        // Return the public URL
-        const link = `/uploads/${type}/${contentType}/${filename}`;
+        // Return the public URL - use /api/uploads/ for secure authenticated access
+        const link = `/api/uploads/${type}/${contentType}/${filename}`;
 
         return NextResponse.json({ 
             success: true,

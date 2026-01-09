@@ -20,7 +20,7 @@ async function saveUploadedFile(file) {
   const uniqueName = `${uuidv4()}${path.extname(file.name)}`;
   const filePath = path.join(uploadDir, uniqueName);
   await fs.writeFile(filePath, Buffer.from(buffer));
-  return `/uploads/agents/${uniqueName}`;
+  return `/api/uploads/agents/${uniqueName}`;
 }
 
 export async function GET(request) {

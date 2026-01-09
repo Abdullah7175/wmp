@@ -56,7 +56,7 @@ export async function POST(request) {
       const filePath = path.join(uploadsDir, filename);
       const buffer = await imageFile.arrayBuffer();
       await fs.writeFile(filePath, Buffer.from(buffer));
-      imagePath = `/uploads/users/${filename}`;
+      imagePath = `/api/uploads/users/${filename}`;
     }
 
     // Create CEO user

@@ -262,18 +262,28 @@ export default function DocumentViewer() {
                                                 <div className="mt-4">
                                                     <div className="text-sm font-semibold text-blue-800 mb-3">Before Content ({beforeContent.length} items):</div>
                                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                                        {beforeContent.map((item) => (
+                                                        {beforeContent.map((item) => {
+                                                            // Convert /uploads/ to /api/uploads/ for secure access
+                                                            const getMediaUrl = (url) => {
+                                                                if (!url) return '';
+                                                                if (url.startsWith('/uploads/')) {
+                                                                    return url.replace('/uploads/', '/api/uploads/');
+                                                                }
+                                                                return url;
+                                                            };
+                                                            const mediaUrl = getMediaUrl(item.link);
+                                                            return (
                                                             <div key={item.id} className="border rounded-lg p-3 bg-white">
                                                                 <div className="relative">
                                                                     {item.content_type === 'video' ? (
                                                                         <video
-                                                                            src={item.link}
+                                                                            src={mediaUrl}
                                                                             className="w-full h-24 object-cover rounded"
                                                                             controls
                                                                         />
                                                                     ) : (
                                                                         <img
-                                                                            src={item.link}
+                                                                            src={mediaUrl}
                                                                             alt={item.description || 'Before content'}
                                                                             className="w-full h-24 object-cover rounded"
                                                                         />
@@ -293,7 +303,8 @@ export default function DocumentViewer() {
                                                                     Uploaded by: {item.creator_name || 'Unknown'}
                                                                 </div>
                                                             </div>
-                                                        ))}
+                                                        );
+                                                    })}
                                                     </div>
                                                 </div>
                                             )}
@@ -439,18 +450,28 @@ export default function DocumentViewer() {
 									<CardHeader><CardTitle className="text-lg">Before Content ({beforeContent.length})</CardTitle></CardHeader>
 									<CardContent>
 										<div className="space-y-3">
-											{beforeContent.map((item) => (
+											{beforeContent.map((item) => {
+												// Convert /uploads/ to /api/uploads/ for secure access
+												const getMediaUrl2 = (url) => {
+													if (!url) return '';
+													if (url.startsWith('/uploads/')) {
+														return url.replace('/uploads/', '/api/uploads/');
+													}
+													return url;
+												};
+												const mediaUrl2 = getMediaUrl2(item.link);
+												return (
 												<div key={item.id} className="border rounded-lg p-3">
 													<div className="relative">
 														{item.content_type === 'video' ? (
 															<video
-																src={item.link}
+																src={mediaUrl2}
 																className="w-full h-32 object-cover rounded"
 																controls
 															/>
 														) : (
 															<img
-																src={item.link}
+																src={mediaUrl2}
 																alt={item.description || 'Before content'}
 																className="w-full h-32 object-cover rounded"
 															/>
@@ -467,7 +488,8 @@ export default function DocumentViewer() {
 														</p>
 													)}
 												</div>
-											))}
+												);
+											})}
 										</div>
 									</CardContent>
 								</Card>

@@ -305,8 +305,8 @@ export async function POST(request) {
       const buffer = await file.arrayBuffer();
       await writeFile(filePath, Buffer.from(buffer));
       
-      // Create relative URL
-      const relativeUrl = `/uploads/before-content/${contentTypeValue}/${uniqueName}`;
+      // Create relative URL - use /api/uploads/ for secure authenticated access
+      const relativeUrl = `/api/uploads/before-content/${contentTypeValue}/${uniqueName}`;
       uploadedFiles.push({
         link: relativeUrl,
         description: descriptions[i] || '',

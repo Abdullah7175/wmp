@@ -212,7 +212,7 @@ export async function PUT(request, { params }) {
       
       // Update image path in database
       updates.push(`image = $${paramCount++}`);
-      values.push(`/uploads/ceo/${fileName}`);
+      values.push(`/api/uploads/ceo/${fileName}`);
     }
 
     if (updates.length === 0) {

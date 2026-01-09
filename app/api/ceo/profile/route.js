@@ -122,7 +122,7 @@ export async function PUT(request) {
       const buffer = await imageFile.arrayBuffer();
       await fs.writeFile(filePath, Buffer.from(buffer));
       
-      imagePath = `/uploads/ceo/${filename}`;
+      imagePath = `/api/uploads/ceo/${filename}`;
     }
 
     // Update user profile

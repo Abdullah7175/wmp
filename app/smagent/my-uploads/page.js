@@ -161,19 +161,25 @@ export default function MyUploadsPage() {
   };
 
   const renderFileCard = (file, type) => {
-    // Handle different file path formats
+    // Handle different file path formats - convert to /api/uploads/ for secure access
     let fileUrl;
     if (file.link) {
-      // If link starts with /uploads/, use it directly
-      fileUrl = file.link.startsWith('/uploads/') ? file.link : `/uploads/${file.link}`;
+      // Convert /uploads/ to /api/uploads/ for secure authenticated access
+      if (file.link.startsWith('/uploads/')) {
+        fileUrl = file.link.replace('/uploads/', '/api/uploads/');
+      } else if (file.link.startsWith('/api/uploads/')) {
+        fileUrl = file.link;
+      } else {
+        fileUrl = `/api/uploads/${file.link}`;
+      }
     } else if (file.file_path) {
-      fileUrl = `/uploads/${file.file_path}`;
+      fileUrl = `/api/uploads/${file.file_path.replace(/^\/uploads\//, '')}`;
     } else if (file.file_name) {
       // Determine the correct subdirectory based on type
       let subdir = 'images';
       if (type === 'videos') subdir = 'videos';
       if (type === 'finalVideos') subdir = 'final-videos';
-      fileUrl = `/uploads/${subdir}/${file.file_name}`;
+      fileUrl = `/api/uploads/${subdir}/${file.file_name}`;
     } else {
       fileUrl = '#';
     }

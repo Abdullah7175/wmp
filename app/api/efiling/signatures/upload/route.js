@@ -115,8 +115,8 @@ export async function POST(request) {
             }
             console.log(`Signature file uploaded successfully: ${filePath} (format: ${imageFormat})`);
 
-            // Return the public URL - Next.js serves files from public/ directly at /uploads/
-            publicUrl = `/uploads/signatures/${userFolderName}/${filename}`;
+            // Return the public URL - use /api/uploads/ for secure authenticated access
+            publicUrl = `/api/uploads/signatures/${userFolderName}/${filename}`;
             
             // Store mimeType for database
             fileType = mimeType;

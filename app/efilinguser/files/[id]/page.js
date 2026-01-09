@@ -1463,15 +1463,23 @@ export default function FileDetail() {
                             <CardContent>
                                 <div className="space-y-3">
                                     {beforeContent.map((item) => {
-                                        // Convert absolute URLs to relative URLs for same-origin loading
+                                        // Convert /uploads/ to /api/uploads/ for secure access
                                         const getImageUrl = (url) => {
                                             if (!url) return '';
-                                            // If it's already a relative URL, return as is
-                                            if (url.startsWith('/')) return url;
-                                            // If it's an absolute URL, extract the path
+                                            // Convert /uploads/ to /api/uploads/ for authenticated access
+                                            if (url.startsWith('/uploads/')) {
+                                                return url.replace('/uploads/', '/api/uploads/');
+                                            }
+                                            // If it's already /api/uploads/, return as is
+                                            if (url.startsWith('/api/')) return url;
+                                            // If it's an absolute URL, extract the path and convert
                                             try {
                                                 const urlObj = new URL(url);
-                                                return urlObj.pathname;
+                                                const pathname = urlObj.pathname;
+                                                if (pathname.startsWith('/uploads/')) {
+                                                    return pathname.replace('/uploads/', '/api/uploads/');
+                                                }
+                                                return pathname;
                                             } catch {
                                                 return url;
                                             }

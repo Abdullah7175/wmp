@@ -156,7 +156,7 @@ export async function POST(req) {
                 const { rows } = await client.query(query, [
                     workRequestId,
                     description,
-                    `/uploads/videos/${filename}`,
+                    `/api/uploads/videos/${filename}`,
                     geoTag,
                     creatorId || null,
                     creatorType || null,

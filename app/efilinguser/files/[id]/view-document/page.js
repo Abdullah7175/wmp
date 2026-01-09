@@ -469,18 +469,38 @@ export default function DocumentViewer() {
                                     <CardHeader><CardTitle className="text-lg">Before Content ({beforeContent.length})</CardTitle></CardHeader>
                                     <CardContent>
                                         <div className="space-y-3">
-                                            {beforeContent.map((item) => (
+                                            {beforeContent.map((item) => {
+                                                // Convert /uploads/ to /api/uploads/ for secure access
+                                                const getMediaUrl = (url) => {
+                                                    if (!url) return '';
+                                                    if (url.startsWith('/uploads/')) {
+                                                        return url.replace('/uploads/', '/api/uploads/');
+                                                    }
+                                                    if (url.startsWith('/api/')) return url;
+                                                    try {
+                                                        const urlObj = new URL(url);
+                                                        const pathname = urlObj.pathname;
+                                                        if (pathname.startsWith('/uploads/')) {
+                                                            return pathname.replace('/uploads/', '/api/uploads/');
+                                                        }
+                                                        return pathname;
+                                                    } catch {
+                                                        return url;
+                                                    }
+                                                };
+                                                const mediaUrl = getMediaUrl(item.link);
+                                                return (
                                                 <div key={item.id} className="border rounded-lg p-3">
                                                     <div className="relative">
                                                         {item.content_type === 'video' ? (
                                                             <video
-                                                                src={item.link}
+                                                                src={mediaUrl}
                                                                 className="w-full h-32 object-cover rounded"
                                                                 controls
                                                             />
                                                         ) : (
                                                             <img
-                                                                src={item.link}
+                                                                src={mediaUrl}
                                                                 alt={item.description || 'Before content'}
                                                                 className="w-full h-32 object-cover rounded"
                                                             />
@@ -497,7 +517,8 @@ export default function DocumentViewer() {
                                                         </p>
                                                     )}
                                                 </div>
-                                            ))}
+                                                );
+                                            })}
                                         </div>
                                     </CardContent>
                                 </Card>
