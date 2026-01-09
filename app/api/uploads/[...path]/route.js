@@ -216,22 +216,21 @@ export async function GET(request, { params }) {
     // SECURE: Use X-Accel-Redirect to let Nginx serve the file
     // This is much more efficient than streaming through Node.js
     // and works even if Node.js restarts during download
+    // Note: Headers like X-Frame-Options should be set in Nginx location block, not here
+    // to avoid conflicts with server-level headers
     const headers = {
       'Content-Type': contentType,
       'X-Accel-Redirect': internalPath, // Nginx will serve this internally
-      'X-Content-Type-Options': 'nosniff',
-      'Cache-Control': 'public, max-age=2592000', // Cache for 30 days
+      // X-Frame-Options will be set by Nginx based on file type in location block
+      // Don't set it here to avoid conflicts with server-level headers
     };
     
-    // SECURITY: Set frame options based on file type
+    // Set Content-Disposition for proper file handling
     if (extension === 'pdf') {
-      headers['X-Frame-Options'] = 'SAMEORIGIN';
       headers['Content-Disposition'] = `inline; filename="${filePath[filePath.length - 1]}"`;
     } else if (['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(extension)) {
-      headers['X-Frame-Options'] = 'SAMEORIGIN';
       headers['Content-Disposition'] = `inline; filename="${filePath[filePath.length - 1]}"`;
     } else {
-      headers['X-Frame-Options'] = 'DENY';
       headers['Content-Disposition'] = `attachment; filename="${filePath[filePath.length - 1]}"`;
     }
     
