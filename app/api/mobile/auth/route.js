@@ -154,7 +154,7 @@ export async function POST(req) {
       // Determine if division-based
       let isDivisionBased = false;
       if (divisionId) {
-        // If division_id exists, it's division-based
+        // If division_id exists on user, it's division-based
         isDivisionBased = true;
       } else if (complaintTypeId) {
         // Check complaint_type to see if it's division-based
@@ -162,8 +162,16 @@ export async function POST(req) {
           const complaintTypeRes = await client.query(`
             SELECT 
               ct.division_id,
-              ct.is_division_based,
-              ed.department_type
+              ed.department_type,
+              CASE 
+                WHEN EXISTS (
+                  SELECT 1 FROM complaint_type_divisions ctd 
+                  WHERE ctd.complaint_type_id = ct.id
+                ) THEN true
+                WHEN ct.division_id IS NOT NULL THEN true
+                WHEN ed.department_type = 'division' THEN true
+                ELSE false
+              END as is_division_based
             FROM complaint_types ct
             LEFT JOIN efiling_departments ed ON ct.efiling_department_id = ed.id
             WHERE ct.id = $1
@@ -178,8 +186,9 @@ export async function POST(req) {
             );
           }
         } catch (err) {
-          console.warn('Error checking complaint type for division-based flag:', err);
+          console.error('Error checking complaint type for division-based flag:', err);
           // Default to false if we can't determine
+          isDivisionBased = false;
         }
       }
 

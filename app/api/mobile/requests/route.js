@@ -259,6 +259,8 @@ export async function POST(req) {
       const complaintTypeQuery = `
         SELECT 
           ct.*,
+          ct.division_id,
+          ed.department_type as efiling_department_type,
           CASE 
             WHEN EXISTS (
               SELECT 1 FROM complaint_type_divisions ctd 
@@ -267,9 +269,7 @@ export async function POST(req) {
             WHEN ct.division_id IS NOT NULL THEN true
             WHEN ct.efiling_department_id IS NOT NULL AND ed.department_type = 'division' THEN true
             ELSE false
-          END as is_division_based,
-          ct.division_id,
-          ed.department_type as efiling_department_type
+          END as is_division_based
         FROM complaint_types ct
         LEFT JOIN efiling_departments ed ON ct.efiling_department_id = ed.id
         WHERE ct.id = $1
