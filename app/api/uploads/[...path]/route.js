@@ -1,10 +1,25 @@
 import { NextResponse } from 'next/server';
-import { readFile } from 'fs/promises';
-import { join, resolve, normalize } from 'path';
+import { join, resolve } from 'path';
 import { existsSync } from 'fs';
 import { auth } from '@/auth';
+import { connectToDatabase } from '@/lib/db';
+import { checkFileAccess } from '@/lib/authMiddleware';
 
+/**
+ * SECURE FILE DOWNLOAD USING X-ACCEL-REDIRECT
+ * 
+ * This route uses Nginx's X-Accel-Redirect feature to serve files securely:
+ * 1. Node.js authenticates and checks permissions
+ * 2. Nginx serves the file directly (fast, efficient)
+ * 3. Files under /protected/uploads/ are NOT accessible directly (internal only)
+ * 
+ * Benefits:
+ * - Fast file serving (no Node.js streaming overhead)
+ * - Secure (files not publicly accessible)
+ * - Works even if Node.js restarts during download
+ */
 export async function GET(request, { params }) {
+  let client;
   try {
     // SECURITY: Require authentication
     let session;
@@ -12,19 +27,18 @@ export async function GET(request, { params }) {
       session = await auth();
     } catch (authError) {
       console.error('[Uploads API] Auth error:', authError);
-      // For images, we might want to allow unauthenticated access in some cases
-      // But for now, we'll log and return 401
       return NextResponse.json({ error: 'Unauthorized - Auth failed' }, { status: 401 });
     }
     
     if (!session?.user) {
-      console.error('[Uploads API] No session or user. Session:', session);
-      console.error('[Uploads API] Request URL:', request.url);
-      console.error('[Uploads API] Request headers:', Object.fromEntries(request.headers.entries()));
+      console.error('[Uploads API] No session or user');
       return NextResponse.json({ error: 'Unauthorized - No session' }, { status: 401 });
     }
     
-    console.log('[Uploads API] Authenticated user:', session.user.id);
+    const userId = parseInt(session.user.id);
+    const isAdmin = [1, 2].includes(parseInt(session.user.role));
+    
+    console.log(`[Uploads API] Authenticated user: ${userId} (admin: ${isAdmin})`);
 
     const { path: filePath } = await params;
     
@@ -41,6 +55,49 @@ export async function GET(request, { params }) {
       return segment;
     });
 
+    // Check if this is an efiling attachment and verify permissions
+    const filePathStr = normalizedPath.join('/');
+    const isEFilingAttachment = filePathStr.startsWith('efiling/attachments/');
+    
+    if (isEFilingAttachment && !isAdmin) {
+      // Extract attachment ID from filename (format: {attachmentId}.{ext})
+      const fileName = normalizedPath[normalizedPath.length - 1];
+      const attachmentId = fileName.split('.')[0]; // Get ID part before extension
+      
+      // Connect to database to check permissions
+      client = await connectToDatabase();
+      
+      // Get attachment record to find associated file_id
+      const attachmentResult = await client.query(
+        `SELECT file_id, uploaded_by, is_active 
+         FROM efiling_file_attachments 
+         WHERE id = $1 AND is_active = true`,
+        [attachmentId]
+      );
+      
+      if (attachmentResult.rows.length === 0) {
+        console.error(`[Uploads API] Attachment not found: ${attachmentId}`);
+        await client.release();
+        return NextResponse.json({ error: 'File not found' }, { status: 404 });
+      }
+      
+      const attachment = attachmentResult.rows[0];
+      const fileId = attachment.file_id;
+      
+      // Check if user has access to the parent file
+      const hasAccess = await checkFileAccess(client, fileId, userId, isAdmin);
+      
+      if (!hasAccess) {
+        console.error(`[Uploads API] User ${userId} denied access to attachment ${attachmentId} (file_id: ${fileId})`);
+        await client.release();
+        return NextResponse.json({ error: 'Forbidden - You do not have access to this file' }, { status: 403 });
+      }
+      
+      console.log(`[Uploads API] User ${userId} granted access to attachment ${attachmentId} (file_id: ${fileId})`);
+      await client.release();
+      client = null;
+    }
+
     // Handle standalone mode - get correct base directory
     let baseDir = process.cwd();
     
@@ -53,7 +110,6 @@ export async function GET(request, { params }) {
       const cwd = process.cwd();
       if (cwd.includes('.next/standalone') || cwd.includes('.next\\standalone')) {
         // In standalone mode, go up to project root
-        // .next/standalone -> project root (two levels up)
         baseDir = resolve(join(cwd, '..', '..'));
         console.log(`[Uploads API] Detected standalone mode, baseDir: ${baseDir}`);
       }
@@ -75,41 +131,19 @@ export async function GET(request, { params }) {
       }
     }
 
-    // Construct the full file path
+    // Construct the full file path for verification
     const uploadsDir = resolve(join(baseDir, 'public', 'uploads'));
     const fullPath = resolve(join(uploadsDir, ...normalizedPath));
 
     // SECURITY: Ensure resolved path stays within uploads directory
     if (!fullPath.startsWith(uploadsDir)) {
-      console.error(`Path traversal attempt detected. Resolved path: ${fullPath}, Uploads dir: ${uploadsDir}`);
+      console.error(`[Uploads API] Path traversal attempt detected. Resolved path: ${fullPath}, Uploads dir: ${uploadsDir}`);
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
     
     // Check if file exists
     if (!existsSync(fullPath)) {
       console.error(`[Uploads API] File not found: ${fullPath}`);
-      console.error(`[Uploads API] Requested path segments: ${filePath.join('/')}`);
-      console.error(`[Uploads API] Base directory: ${baseDir}`);
-      console.error(`[Uploads API] Process CWD: ${process.cwd()}`);
-      console.error(`[Uploads API] Uploads directory: ${uploadsDir}`);
-      console.error(`[Uploads API] Normalized path segments: ${normalizedPath.join(', ')}`);
-      console.error(`[Uploads API] Full resolved path: ${fullPath}`);
-      
-      // Also check if uploads directory exists
-      if (!existsSync(uploadsDir)) {
-        console.error(`[Uploads API] Uploads directory does not exist: ${uploadsDir}`);
-      } else {
-        // List what's actually in the uploads directory for debugging
-        try {
-          const fs = require('fs');
-          const uploadsContents = fs.readdirSync(uploadsDir);
-          console.error(`[Uploads API] Contents of uploads directory: ${uploadsContents.join(', ')}`);
-        } catch (e) {
-          console.error(`[Uploads API] Could not read uploads directory: ${e.message}`);
-        }
-      }
-      
-      // Return a proper 404 response without JSON for media files
       return new NextResponse('File not found', { 
         status: 404,
         headers: {
@@ -117,12 +151,6 @@ export async function GET(request, { params }) {
         }
       });
     }
-    
-    // Log successful file resolution for debugging (can help diagnose path issues)
-    console.log(`[Uploads API] Successfully resolved file: ${fullPath} from request: ${filePath.join('/')}`);
-
-    // Read the file
-    const fileBuffer = await readFile(fullPath);
     
     // Determine content type based on file extension
     const extension = filePath[filePath.length - 1].split('.').pop()?.toLowerCase();
@@ -179,32 +207,37 @@ export async function GET(request, { params }) {
         contentType = 'application/octet-stream';
     }
 
-    // Return the file with appropriate headers
+    // Build the internal path for Nginx X-Accel-Redirect
+    // This path must match the Nginx "location /protected/uploads/" block
+    const internalPath = `/protected/uploads/${normalizedPath.join('/')}`;
+    
+    console.log(`[Uploads API] Serving file via X-Accel-Redirect: ${internalPath} (Content-Type: ${contentType})`);
+
+    // SECURE: Use X-Accel-Redirect to let Nginx serve the file
+    // This is much more efficient than streaming through Node.js
+    // and works even if Node.js restarts during download
     const headers = {
       'Content-Type': contentType,
-      'Content-Length': fileBuffer.length.toString(),
-      'Cache-Control': 'public, max-age=31536000', // Cache for 1 year
+      'X-Accel-Redirect': internalPath, // Nginx will serve this internally
+      'X-Content-Type-Options': 'nosniff',
+      'Cache-Control': 'public, max-age=2592000', // Cache for 30 days
     };
     
-    // SECURITY: Allow PDFs to be displayed in iframes (same-origin only)
-    // This is safe because the file is served from the same origin and requires authentication
+    // SECURITY: Set frame options based on file type
     if (extension === 'pdf') {
       headers['X-Frame-Options'] = 'SAMEORIGIN';
-      // Also set Content-Disposition to inline for PDFs so they can be displayed
       headers['Content-Disposition'] = `inline; filename="${filePath[filePath.length - 1]}"`;
     } else if (['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(extension)) {
-      // For images, allow same-origin embedding and ensure proper content type
       headers['X-Frame-Options'] = 'SAMEORIGIN';
       headers['Content-Disposition'] = `inline; filename="${filePath[filePath.length - 1]}"`;
-      // Ensure CORS headers for images if needed
-      headers['Access-Control-Allow-Origin'] = '*';
-      headers['Access-Control-Allow-Methods'] = 'GET';
     } else {
-      // For other file types, deny iframe embedding
       headers['X-Frame-Options'] = 'DENY';
+      headers['Content-Disposition'] = `attachment; filename="${filePath[filePath.length - 1]}"`;
     }
     
-    return new NextResponse(fileBuffer, {
+    // Return empty body - Nginx will serve the actual file
+    // The X-Accel-Redirect header tells Nginx which file to serve
+    return new NextResponse(null, {
       status: 200,
       headers,
     });
@@ -212,10 +245,17 @@ export async function GET(request, { params }) {
   } catch (error) {
     console.error('[Uploads API] Error serving file:', error);
     console.error('[Uploads API] Error stack:', error.stack);
-    console.error('[Uploads API] Request path segments:', filePath?.join('/') || 'unknown');
     return NextResponse.json({ 
       error: 'Failed to serve file',
       details: process.env.NODE_ENV === 'development' ? error.message : undefined
     }, { status: 500 });
+  } finally {
+    if (client && typeof client.release === 'function') {
+      try {
+        await client.release();
+      } catch (releaseError) {
+        console.error('[Uploads API] Error releasing database client:', releaseError);
+      }
+    }
   }
 }
