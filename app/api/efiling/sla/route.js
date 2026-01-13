@@ -19,7 +19,7 @@ export async function GET(request) {
         const activeOnly = searchParams.get('active_only') !== 'false';
 
         let query = `
-            SELECT sm.id, sm.from_role_code, sm.to_role_code, sm.level_scope, sm.sla_hours, 
+            SELECT sm.id, sm.from_role_code, sm.to_role_code, sm.from_role_id, sm.to_role_id, sm.level_scope, sm.sla_hours, 
                    sm.description, sm.is_active, sm.department_id, sm.created_at, sm.updated_at,
                    d.name as department_name, d.code as department_code
             FROM efiling_sla_matrix sm
@@ -92,12 +92,12 @@ export async function POST(request) {
         // }
 
         const body = await request.json();
-        const { from_role_code, to_role_code, level_scope = 'district', sla_hours = 24, description, department_id, is_active = true } = body;
+        const { from_role_code, to_role_code,from_role_id, to_role_id, level_scope = 'district', sla_hours = 24, description, department_id, is_active = true } = body;
 
-        if (!from_role_code || !to_role_code) {
-            return NextResponse.json({ 
-                error: 'from_role_code and to_role_code are required' 
-            }, { status: 400 });
+        if (!from_role_code || !to_role_code || !from_role_id || !to_role_id) {
+                    return NextResponse.json({ 
+                        error: 'Role codes and Role IDs are required' 
+                    }, { status: 400 });
         }
 
         if (typeof sla_hours !== 'number' || sla_hours < 0) {
@@ -115,20 +115,23 @@ export async function POST(request) {
         client = await connectToDatabase();
         
         const result = await client.query(`
-            INSERT INTO efiling_sla_matrix (
-                from_role_code, to_role_code, level_scope, sla_hours, 
-                description, department_id, is_active, created_at, updated_at
-            )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
-            RETURNING *
-        `, [
-            from_role_code.toUpperCase(), 
-            to_role_code.toUpperCase(), 
-            level_scope, 
-            sla_hours, 
-            description || null, 
-            department_id || null,
-            is_active
+                    INSERT INTO efiling_sla_matrix (
+                        from_role_code, to_role_code, from_role_id, to_role_id,
+                        level_scope, sla_hours, description, department_id, 
+                        is_active, created_at, updated_at
+                    )
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW())
+                    RETURNING *
+                `, [
+                    from_role_code.toUpperCase(), 
+                    to_role_code.toUpperCase(), 
+                    from_role_id, 
+                    to_role_id,
+                    level_scope, 
+                    sla_hours, 
+                    description || null, 
+                    department_id || null,
+                    is_active
         ]);
 
         return NextResponse.json({

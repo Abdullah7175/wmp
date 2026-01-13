@@ -7,7 +7,7 @@ export async function POST(request) {
     const session = await auth();
     
     // Check if user is COO (role 6) and userType is 'user'
-    if (!session?.user || parseInt(session.user.role) !== 6 || session.user.userType !== 'user') {
+    if (!session?.user || parseInt(session.user.role) !== 4 || session.user.userType !== 'user') {
       return NextResponse.json(
         { success: false, message: "Unauthorized. COO access required." },
         { status: 403 }

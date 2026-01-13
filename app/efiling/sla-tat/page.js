@@ -189,6 +189,19 @@ export default function SLAMatrixPage() {
             });
             return;
         }
+        // --- NEW LOGIC: Look up IDs based on Codes ---
+        const fromRole = roles.find(r => r.code === formData.from_role_code);
+        const toRole = roles.find(r => r.code === formData.to_role_code);
+
+        if (!fromRole || !toRole) {
+            toast({
+                title: "Error",
+                description: "Selected role codes are invalid or not found.",
+                variant: "destructive"
+            });
+            return;
+        }
+        // ---------------------------------------------
 
         try {
             const url = editingEntry 
@@ -199,6 +212,9 @@ export default function SLAMatrixPage() {
             const requestBody = {
                 from_role_code: formData.from_role_code,
                 to_role_code: formData.to_role_code,
+                // Add the new ID columns here
+                from_role_id: fromRole.id, 
+                to_role_id: toRole.id,
                 level_scope: formData.level_scope,
                 sla_hours: parseFloat(formData.sla_hours),
                 description: formData.description || null,

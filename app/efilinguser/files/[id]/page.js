@@ -52,6 +52,7 @@ export default function FileDetail() {
     const [uploadingAttachment, setUploadingAttachment] = useState(false);
     const [attachmentName, setAttachmentName] = useState("");
     const [selectedFiles, setSelectedFiles] = useState([]);
+    const [timeLeft, setTimeLeft] = useState("");
 
     const fetchUserRole = async () => {
         try {
@@ -85,6 +86,36 @@ export default function FileDetail() {
             fetchBeforeContent();
         }
     }, [file?.work_request_id]);
+
+    useEffect(() => {
+    if (!file?.sla_deadline || file?.sla_status === 'PAUSED') {
+        setTimeLeft(file?.sla_status === 'PAUSED' ? "Paused" : "N/A");
+        return;
+    }
+
+    const timer = setInterval(() => {
+        const deadline = new Date(file.sla_deadline).getTime();
+        const now = new Date().getTime();
+        const distance = deadline - now;
+
+        if (distance < 0) {
+            // Logic for Breached (Negative time)
+            const absDistance = Math.abs(distance);
+            const h = Math.floor(absDistance / (1000 * 60 * 60));
+            const m = Math.floor((absDistance % (1000 * 60 * 60)) / (1000 * 60));
+            const s = Math.floor((absDistance % (1000 * 60)) / 1000);
+            setTimeLeft(`-${h}h ${m}m ${s}s`);
+        } else {
+            // Logic for Remaining time
+            const h = Math.floor(distance / (1000 * 60 * 60));
+            const m = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+            const s = Math.floor((distance % (1000 * 60)) / 1000);
+            setTimeLeft(`${h}h ${m}m ${s}s`);
+        }
+    }, 1000);
+
+    return () => clearInterval(timer);
+    }, [file?.sla_deadline, file?.sla_status]);
 
     const fetchWorkRequests = async () => {
         try {
@@ -1160,10 +1191,7 @@ export default function FileDetail() {
                                                 file.sla_status === 'PAUSED' ? 'text-yellow-600' : 
                                                 'text-green-600'
                                             }`}>
-                                                {file.sla_status === 'PAUSED' ? 'Paused' : 
-                                                 file.hours_remaining !== null ? 
-                                                    `${file.hours_remaining > 0 ? '+' : ''}${file.hours_remaining}h` : 
-                                                    'N/A'}
+                                                {timeLeft}
                                             </p>
                                         </div>
                                     </div>

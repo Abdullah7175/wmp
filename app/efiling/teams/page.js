@@ -28,7 +28,7 @@ const MANAGER_ROLE_CODES = [
     // Medical and audit roles
     'DIRECTOR_MEDICAL_SERVICES', 'DIRECTOR MEDICAL SERVICES', 'DMS',
     'MEDICAL_SCRUTINY_COMMITTEE', 'MEDICAL SCRUTINY COMMITTEE', 'MSC',
-    'CHIEF_INTERNAL_AUDITOR', 'CHIEF INTERNAL AUDITOR'
+    'CHIEF_INTERNAL_AUDITOR', 'CHIEF INTERNAL AUDITOR','XEN_VPR'
 ];
 
 const MANAGER_ROLE_NAMES = [
@@ -412,30 +412,36 @@ export default function TeamsManagement() {
                                 const mapping = teamRoleMapping[formData.team_role] || { roleCodes: [], roleNames: [] };
                                 
                                 // Filter users: same department, allowed roles, not the manager, and not a manager role
+                                // Inside the DialogContent, find where filteredUsers is defined:
                                 const filteredUsers = allUsers.filter(user => {
-                                    // Must be from same department
+                                    // 1. Get the Selected Manager's Department ID
+                                    const selectedManager = managers.find(m => m.id === parseInt(formData.manager_id));
+                                    const managerDepartmentId = selectedManager?.department_id;
+
+                                    // 2. Must be from the SAME department as the selected MANAGER
                                     if (user.department_id !== managerDepartmentId) {
                                         return false;
                                     }
                                     
-                                    // Must not be the manager
+                                    // 3. Must not be the manager himself
                                     if (user.id === parseInt(formData.manager_id)) {
                                         return false;
                                     }
                                     
-                                    // Must NOT be a manager role (exclude managers from team members)
+                                    // 4. Must NOT be a manager role (to prevent adding a Boss as a Subordinate)
                                     if (isManager(user)) {
                                         return false;
                                     }
                                     
-                                    // Must have the selected team role
+                                    // 5. Check if user's role matches the selected 'Team Role' (AEE, AO, etc.)
+                                    const userRoleCode = (user.role_code || '').toUpperCase();
+                                    const userRoleName = (user.role_name || '').toUpperCase();
+                                    
                                     const matchesRoleCode = mapping.roleCodes.some(roleCode => 
-                                        userRoleCode.includes(roleCode.toUpperCase()) ||
-                                        userRoleCode === roleCode.toUpperCase()
+                                        userRoleCode === roleCode.toUpperCase() || userRoleCode.includes(roleCode.toUpperCase())
                                     );
                                     const matchesRoleName = mapping.roleNames.some(roleName => 
-                                        userRoleName.includes(roleName) ||
-                                        userRoleName === roleName
+                                        userRoleName === roleName.toUpperCase() || userRoleName.includes(roleName.toUpperCase())
                                     );
                                     
                                     return matchesRoleCode || matchesRoleName;
@@ -543,7 +549,6 @@ export default function TeamsManagement() {
                     ) : (
                         <div className="space-y-6">
                             {filteredTeams.map((team) => {
-                                const roleType = getManagerRoleType(team.manager.role_code);
                                 return (
                                     <Card key={team.manager.id}>
                                         <CardHeader>
@@ -595,8 +600,7 @@ export default function TeamsManagement() {
                                                                     {member.role_name} ({member.role_code})
                                                                 </Badge>
                                                             </TableCell>
-                                                            <TableCell>{member.department_name || 'N/A'}</TableCell>
-                                                            <TableCell>
+                                                                {member.department_name || team.manager.department_name || 'N/A'}                                                            <TableCell>
                                                                 <Badge className="bg-blue-600">
                                                                     {member.team_role}
                                                                 </Badge>

@@ -21,8 +21,8 @@ export async function PUT(request, { params }) {
 
         const body = await request.json();
         const updates = {};
-        const allowedFields = ['from_role_code', 'to_role_code', 'level_scope', 'sla_hours', 'description', 'department_id', 'is_active'];
-        
+        const allowedFields = ['from_role_code', 'to_role_code', 'from_role_id', 'to_role_id', 'level_scope', 'sla_hours', 'description', 'department_id', 'is_active'];  
+              
         for (const field of allowedFields) {
             if (body[field] !== undefined) {
                 if (field === 'sla_hours' && (typeof body[field] !== 'number' || body[field] < 0)) {

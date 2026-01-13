@@ -16,7 +16,6 @@ import {
     updateWorkflowState,
     canMarkFileForward,
     markReturnToCreator,
-    startTAT
 } from '@/lib/efilingWorkflowStateManager';
 import { sendWhatsAppMessage } from '@/lib/whatsappService';
 
@@ -895,9 +894,9 @@ export async function POST(request, { params }) {
             const processedMovements = [];
             let lastProcessedUserId = null;
             let lastTargetUser = null;
-            let shouldStartTAT = false;
             let newState = workflowState?.current_state || 'TEAM_INTERNAL';
-            
+            let finalSlaDeadline = null;
+
             for (const userId of validatedUserIds) {
                 const targetRecipient = allowedRecipientMap.get(userId);
                 if (!targetRecipient) {
@@ -912,13 +911,40 @@ export async function POST(request, { params }) {
                 LEFT JOIN efiling_roles r ON eu.efiling_role_id = r.id
                 WHERE eu.id = $1 AND eu.is_active = true
                 `, [userId]);
-                
+                console.log("target",target);
                 if (target.rows.length === 0) {
                     throw new Error('Target user not found or inactive');
                 }
                 
                 let targetUser = target.rows[0];
+                console.log("target user:",targetUser);
                 const toRoleCode = (targetUser.role_code || '').toUpperCase();
+                const fromRoleCode = (currentUser.role_code || '').toUpperCase();
+                const fromRoleId = currentUser.efiling_role_id;
+                const toRoleId = targetUser.efiling_role_id;
+                console.log("from",fromRoleId,"to",toRoleId);
+                if (!fromRoleId || !toRoleId) {
+                    throw new Error('Role ID not defined for SLA calculation');
+                }
+
+                // ========== START SLA CALCULATION (RECALCULATE EVERY MARK) ==========
+               
+                if (targetUser.role_code !== 'CEO') {
+                    const slaResult = await client.query(
+                        `SELECT sla_hours FROM efiling_sla_matrix WHERE from_role_id = $1 AND to_role_id = $2 AND is_active = true LIMIT 1`,
+                        [fromRoleId, toRoleId]
+                    );
+
+                    if (slaResult.rows.length > 0) {
+                        const hours = parseInt(slaResult.rows[0].sla_hours);
+                        // Use getTime() to add milliseconds to avoid timezone/DST hour shifts
+                        finalSlaDeadline = new Date(Date.now() + (hours * 60 * 60 * 1000));
+                    }
+                }
+                await client.query(
+                `UPDATE efiling_files SET sla_deadline = $1 WHERE id = $2`,
+                [finalSlaDeadline, fileId]
+            );
                 
                 // ========== HIGHER AUTHORITY RULES VALIDATION ==========
                 // Helper function to get role hierarchy level (lower number = lower level)
@@ -1081,7 +1107,6 @@ export async function POST(request, { params }) {
             
                 // Track workflow state for this user (we'll use the last user's state)
                 let userNewState = workflowState?.current_state || 'TEAM_INTERNAL';
-                let userShouldStartTAT = false;
                 
                 if (isReturnToCreator) {
                     userNewState = 'RETURNED_TO_CREATOR';
@@ -1092,20 +1117,14 @@ export async function POST(request, { params }) {
                 } else if (isMovingToExternal) {
                     // External flow: Marking to SE or higher - TAT starts
                     userNewState = 'EXTERNAL';
-                    userShouldStartTAT = true;
-                    // Only start TAT once
-                    if (processedMovements.length === 0) {
-                        await startTAT(client, fileId);
-                    }
+                   
                 } else if (isTeamInternalForUser) {
                     // Internal flow: Team members - No TAT
                     userNewState = 'TEAM_INTERNAL';
-                    userShouldStartTAT = false;
                 }
                 
                 // Update for tracking (use last user's state)
                 newState = userNewState;
-                shouldStartTAT = userShouldStartTAT || shouldStartTAT; // If any user triggers TAT, set it
 
                 // Validate geographic match (bypass for certain roles, skip for team internal, skip for organizational scopes)
                 if (!canBypassGeo && !isTeamInternalForUser) {
@@ -1304,11 +1323,9 @@ export async function POST(request, { params }) {
             const lastUserRoleCode = (lastTargetUser.role_code || '').toUpperCase();
             const isMovingToExternalFinal = externalRoles.includes(lastUserRoleCode);
             const isTeamInternalFinal = !isMovingToExternalFinal && await isWithinTeamWorkflow(client, fileId, currentUser.id, lastProcessedUserId);
+         
             
-            // Calculate SLA deadline from SLA matrix (only for external workflow and if SLA deadline column exists)
-            let slaDeadline = hasSlaDeadline ? (fileRow.sla_deadline || null) : null;
-            
-            if (hasSlaDeadline && shouldStartTAT && !isTeamInternalFinal) {
+            if (hasSlaDeadline && !isTeamInternalFinal ) {
                 try {
                     // Get role codes for SLA lookup
                     const lastTargetRes = await client.query(`
@@ -1331,46 +1348,7 @@ export async function POST(request, { params }) {
                         const targetUserDept = targetUserDeptRes.rows[0]?.department_id || fileRow.department_id;
                         // Determine level scope: if both have division_id, use 'division', else 'district'
                         const levelScope = (fileRow.division_id && targetUserDeptRes.rows[0]?.division_id) ? 'division' : 'district';
-                        
-                        const slaHours = await getSLA(client, currentUserRoleCode, lastTargetRoleCode, targetUserDept, levelScope);
-                        
-                        console.log('[MARK-TO] SLA calculation:', {
-                            fromRole: currentUserRoleCode,
-                            toRole: lastTargetRoleCode,
-                            departmentId: targetUserDept,
-                            levelScope: levelScope,
-                            slaHours: slaHours
-                        });
-                        
-                        const deadline = new Date();
-                        deadline.setHours(deadline.getHours() + slaHours);
-                        slaDeadline = deadline.toISOString();
-                        
-                        console.log('[MARK-TO] SLA deadline set:', {
-                            slaHours,
-                            deadline: slaDeadline,
-                            deadlineLocal: new Date(slaDeadline).toLocaleString()
-                        });
-                        
-                        // Log TAT deadline set event
-                        try {
-                            await client.query(`
-                                INSERT INTO efiling_tat_logs 
-                                (file_id, user_id, event_type, sla_deadline, time_remaining_hours, message, notification_sent, notification_method, created_at)
-                                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
-                            `, [
-                                fileId,
-                                newAssignee,
-                                'DEADLINE_SET',
-                                slaDeadline,
-                                slaHours,
-                                `TAT deadline set: ${slaHours} hours from now`,
-                                false,
-                                null
-                            ]);
-                        } catch (logError) {
-                            console.warn('[MARK-TO] Error logging TAT deadline set:', logError.message);
-                        }
+
                     }
                 } catch (slaError) {
                     console.warn('[MARK-TO] Error computing SLA deadline:', slaError.message);
@@ -1380,7 +1358,7 @@ export async function POST(request, { params }) {
             
             // Update file assignment - match assign route pattern (no casts needed)
             console.log('[MARK-TO] Step 9: Executing UPDATE on efiling_files...');
-            const updateQuery = hasSlaDeadline && slaDeadline
+            const updateQuery = hasSlaDeadline && finalSlaDeadline
                 ? `UPDATE efiling_files
                    SET assigned_to = $1, updated_at = NOW(), sla_deadline = $2
                    WHERE id = $3`
@@ -1388,8 +1366,8 @@ export async function POST(request, { params }) {
                    SET assigned_to = $1, updated_at = NOW()
                    WHERE id = $2`;
             
-            const updateParams = hasSlaDeadline && slaDeadline
-                ? [newAssignee, slaDeadline, fileId]
+            const updateParams = hasSlaDeadline && finalSlaDeadline
+                ? [newAssignee, finalSlaDeadline, fileId]
                 : [newAssignee, fileId];
             
             console.log('[MARK-TO] Step 10: UPDATE parameters:', {
@@ -1402,7 +1380,7 @@ export async function POST(request, { params }) {
             console.log('[MARK-TO] Step 11: UPDATE successful!');
             
             // Update workflow state
-            await updateWorkflowState(client, fileId, newState, newAssignee, isTeamInternalFinal, shouldStartTAT);
+            await updateWorkflowState(client, fileId, newState, newAssignee, isTeamInternalFinal);
             
             // Special handling: If marked to SE/CE, also assign to their assistants (for simultaneous visibility)
             if ((lastUserRoleCode === 'SE' || lastUserRoleCode === 'CE') && !isTeamInternalFinal) {
@@ -1580,7 +1558,6 @@ export async function POST(request, { params }) {
                 movements: processedMovements,
                 workflow_state: newState,
                 is_team_internal: isTeamInternalFinal,
-                tat_started: shouldStartTAT,
                 assigned_to: newAssignee,
                 allowed_recipients: allowedRecipients
             });
@@ -1687,7 +1664,7 @@ export async function GET(request, { params }) {
                 return 6; // CFO = level 6
             }
             return 999; // Unknown = high level
-        };
+        }; 
         
         // Get allowed recipients using geographic routing
         let allowedRecipients = await getAllowedRecipients(client, {
@@ -1800,20 +1777,9 @@ export async function GET(request, { params }) {
             }
         }
         
-        // For RE/XEN/Admin Officer: Always add SE from same division (external flow)
-        // This ensures RE/XEN can always see SE even if in different departments
-        const isREorXENorAdmin = currentUserRoleCodeUpper === 'RE' || 
-                                 currentUserRoleCodeUpper.startsWith('RE_') || 
-                                 currentUserRoleCodeUpper === 'XEN' || 
-                                 currentUserRoleCodeUpper.startsWith('XEN_') ||
-                                 currentUserRoleCodeUpper.includes('RESIDENT_ENGINEER') ||
-                                 currentUserRoleCodeUpper.includes('EXECUTIVE_ENGINEER') ||
-                                 currentUserRoleCodeUpper.includes('ADMINISTRATIVE_OFFICER') ||
-                                 currentUserRoleCodeUpper.includes('ADMINISTRATIVE OFFICER') ||
-                                 currentUserRoleCodeUpper === 'ADMIN_OFFICER' ||
-                                 currentUserRoleCodeUpper.startsWith('ADMIN_OFFICER_');
-        
-        if (isREorXENorAdmin && currentUserDivisionId != null && currentUserEfilingId != null) {
+        // Also add SE users from the same division (for RE and other roles that may not have department_id)
+        // This allows RE to mark to SE even if they're in the same division but different departments
+        if (currentUserDivisionId != null && currentUserEfilingId != null) {
             const divisionId = parseInt(currentUserDivisionId, 10);
             const userId = parseInt(currentUserEfilingId, 10);
             if (!isNaN(divisionId) && !isNaN(userId) && divisionId > 0 && userId > 0) {
@@ -2131,36 +2097,8 @@ export async function GET(request, { params }) {
                                                  workflowState.current_state === 'RETURNED_TO_CREATOR';
                 
                 if (!isFileReturnedToCreator) {
-                    // Filter out external recipients (SE and above), but keep team members for internal workflow
-                    // This allows creator to still mark to team members even after marking to SE
-                    const recipientsBeforeFilter = allowedRecipients.length;
-                    allowedRecipients = allowedRecipients.filter(recipient => {
-                        // Always keep team members (internal workflow)
-                        if (recipient.is_team_member) {
-                            return true;
-                        }
-                        
-                        // Filter out external roles (SE, CE, CEO, etc.)
-                        const recipientRoleCode = (recipient.role_code || '').toUpperCase();
-                        const isExternalRole = recipientRoleCode === 'SE' || 
-                                              recipientRoleCode.startsWith('SE_') || 
-                                              recipientRoleCode === 'CE' || 
-                                              recipientRoleCode.startsWith('CE_') ||
-                                              recipientRoleCode === 'CEO' || 
-                                              recipientRoleCode === 'COO' || 
-                                              recipientRoleCode === 'CFO' ||
-                                              recipientRoleCode.includes('SUPERINTENDENT_ENGINEER') ||
-                                              recipientRoleCode.includes('CHIEF_ENGINEER');
-                        
-                        // Remove external roles, keep others (like department users)
-                        return !isExternalRole;
-                    });
-                    
-                    console.log('[MARK-TO GET] Creator restriction applied:', {
-                        before: recipientsBeforeFilter,
-                        after: allowedRecipients.length,
-                        reason: 'File already marked to higher level - keeping only team members and department users'
-                    });
+                    // Filter out all recipients - creator cannot mark to anyone
+                    allowedRecipients = [];
                 }
             }
         }

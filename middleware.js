@@ -114,9 +114,9 @@ const cooAllowed = [
 function getDashboardForUser(session) {
   if (!session || !session.user) return "/login";
   // Route CEO to CEO portal
-  if (session.user?.role === 5 && session.user?.userType === "user") return "/ceo";
+  if (session.user?.role === 24 && session.user?.userType === "user") return "/ceo";
   // Route COO to COO portal
-  if (session.user?.role === 6 && session.user?.userType === "user") return "/coo";
+  if (session.user?.role === 26 && session.user?.userType === "user") return "/coo";
   // Route admins/managers directly to e-filing admin
   if (session.user?.role === 1 || session.user?.role === 2) return "/efiling";
   if (session.user?.userType === "agent") return "/agent";
