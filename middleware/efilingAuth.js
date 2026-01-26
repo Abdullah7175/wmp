@@ -1,9 +1,23 @@
 import { NextResponse } from 'next/server';
 // Note: getToken from next-auth/jwt uses Node.js crypto which isn't available in Edge runtime
 // We'll check for session cookies directly instead
+import { isInternalNetwork } from './validateNetwork';
 
 export async function efilingAuthMiddleware(request) {
     const pathname = request.nextUrl.pathname;
+    if (
+        pathname === '/elogin' ||
+        pathname.startsWith('/efiling') ||
+        pathname.startsWith('/efilinguser')
+    ) {
+        const allowed = isInternalNetwork(request);
+
+        if (!allowed) {
+            return NextResponse.redirect(
+                new URL('/login', request.url)
+            );
+        }
+    }
     const isDev = process.env.NODE_ENV === 'development';
     const withSecurityHeaders = (res) => {
         try {
