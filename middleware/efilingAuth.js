@@ -37,7 +37,10 @@ export async function efilingAuthMiddleware(request) {
             // SECURITY: Remove X-Powered-By header to hide framework information
             res.headers.delete('X-Powered-By');
             const scriptSrc = isDev ? "script-src 'self' 'unsafe-inline' 'unsafe-eval'" : "script-src 'self' 'unsafe-inline'";
-            const connectSrc = isDev ? "connect-src 'self' ws: http://localhost:3000 ws: http://119.30.113.18:3000" : "connect-src 'self'";
+            const origin = request.headers.get('x-forwarded-proto') && request.headers.get('x-forwarded-host')
+                ? `${request.headers.get('x-forwarded-proto')}://${request.headers.get('x-forwarded-host')}`
+                : request.nextUrl.origin;
+            const connectSrc = `connect-src 'self' ws: ${origin} ${origin}`;
             // Use object-src 'none' for better security (PDFs use iframes, not object tags)
             const csp = `default-src 'self'; ${scriptSrc}; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https: http:; media-src 'self' blob: https: http:; ${connectSrc}; frame-ancestors 'none'; object-src 'none'`;
             res.headers.set('Content-Security-Policy', csp);
