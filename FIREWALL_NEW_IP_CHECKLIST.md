@@ -1,6 +1,38 @@
-# Checklist: App Behind Firewall / New Public IP
+# Checklist: App Behind Firewall / New Public IP   
 
 After moving the server behind a firewall or changing the public IP, use this checklist so the app works when accessed via the **new public IP** or domain (e.g. **wmp.kwsc.gos.pk**).
+
+**Your setup:** Server internal IP `192.168.50.1` → DMZ on firewall → public IP `119.30.113.19` → domain `wmp.kwsc.gos.pk`.
+
+---
+
+## 0. Fix "EADDRNOTAVAIL" – server must listen on 0.0.0.0
+
+If the app fails to start with:
+
+```text
+Error: listen EADDRNOTAVAIL: address not available 119.30.113.18:3000
+```
+
+the process is still trying to **bind** to the **old** public IP, which is no longer on this machine.
+
+**On the server** (in `/opt/wmp16/.env` or wherever the app runs):
+
+1. **Remove or change `HOSTNAME`.** Set it to `0.0.0.0` so the app listens on all interfaces (required when behind DMZ/firewall):
+
+   ```bash
+   HOSTNAME=0.0.0.0
+   ```
+
+2. **Do not set** `HOSTNAME=119.30.113.18` or any IP that is not assigned to this server. The Next.js standalone server uses `HOSTNAME` for the bind address; with `0.0.0.0`, it will accept connections that arrive via the firewall to `192.168.50.1`.
+
+3. Restart the app after editing `.env`:
+
+   ```bash
+   pm2 restart wmp
+   ```
+
+---
 
 ## 1. NEXTAUTH_URL must match how users open the app
 
@@ -57,16 +89,23 @@ If you use **wmp.kwsc.gos.pk**, point it to the **new** public IP:
 
 - **A record** for `wmp.kwsc.gos.pk` → new server IP (not the old 119.30.113.18).
 
-## 5. E‑filing internal access (optional)
+## 5. E‑filing allowed IPs (EFILING_ALLOWED_IPS)
 
-If e‑filing routes (`/elogin`, `/efiling`, `/efilinguser`) are restricted by IP, add the new IP (or office ranges) to the allowed list:
+E‑filing routes (`/elogin`, `/efiling`, `/efilinguser`) only allow requests whose **client IP** (from `X-Forwarded-For` or the socket) is in `EFILING_ALLOWED_IPS`.
+
+- **DMZ setup:** Traffic is: User → public `119.30.113.19` → firewall → server `192.168.50.1`. The app sees the **client IP** as whatever the firewall/proxy sends (often the public IP or the user’s IP in `X-Forwarded-For`). It does **not** see `192.168.50.1` as the “client” for those users; that’s the server’s own IP.
+- So:
+  - **`192.168.50.1`** – only allows requests that appear to come from the server itself (e.g. localhost or same-machine calls). It does **not** allow normal users coming via the firewall.
+  - To allow **users coming via the public IP or domain**, include the IP the app actually sees. Typically that is the **new public IP** and/or your office/internal ranges. Example:
 
 ```bash
-# In .env on the server
-EFILING_ALLOWED_IPS=NEW_PUBLIC_IP,10.0.0.0/8,...
+# In .env on the server – allow public IP and internal range (no spaces after =)
+EFILING_ALLOWED_IPS=119.30.113.19,192.168.50.,127.0.0.1
 ```
 
-Use the IP(s) from which users will access the app (e.g. new public IP or internal subnet).
+(Allowed list is prefix-based: e.g. `192.168.50.` matches any `192.168.50.x`.)
+
+- If you’re unsure which IP the app sees, check the log line `Client IP: …` in `pm2 logs wmp` when you open `/elogin` from the browser; add that IP (or its prefix) to `EFILING_ALLOWED_IPS`.
 
 ## 6. HTTPS and cookies
 

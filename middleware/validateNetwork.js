@@ -8,8 +8,10 @@ export function isInternalNetwork(request) {
 
         if (!ip) return false;
         console.log('Client IP:', ip);
-
-        const allowedRanges =process.env.EFILING_ALLOWED_IPS?.split(',').map(ip => ip.trim()) || [];
+        //const allowedRanges =process.env.EFILING_ALLOWED_IPS?.split(',').map(ip => ip.trim()) || [];
+        const allowedRanges = (process.env.EFILING_ALLOWED_IPS?.split(',')
+            .map((entry) => entry.trim())
+            .filter(Boolean)) || [];
 
         return allowedRanges.some(prefix => ip.startsWith(prefix));
     } catch (error) {

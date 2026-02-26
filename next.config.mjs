@@ -50,7 +50,7 @@ const nextConfig = {
       },
       {
         protocol: 'http',
-        hostname: '119.30.113.18',
+        hostname: '119.30.113.19',
         port: '3000',
       },
     ],
