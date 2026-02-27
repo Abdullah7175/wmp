@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { join, resolve } from 'path';
-import { existsSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import { auth } from '@/auth';
 import { connectToDatabase } from '@/lib/db';
 import { checkFileAccess } from '@/lib/authMiddleware';
@@ -138,59 +138,44 @@ export async function GET(request, { params }) {
       client = null;
     }
 
-    // Handle standalone mode - get correct base directory
-    let baseDir = process.cwd();
-    
-    // Check for environment variable first (highest priority)
-    if (process.env.APP_BASE_DIR) {
-      baseDir = process.env.APP_BASE_DIR;
-      console.log(`[Uploads API] Using APP_BASE_DIR: ${baseDir}`);
-    } else {
-      // Detect if we're in standalone mode
-      const cwd = process.cwd();
-      if (cwd.includes('.next/standalone') || cwd.includes('.next\\standalone')) {
-        // In standalone mode, go up to project root
-        baseDir = resolve(join(cwd, '..', '..'));
-        console.log(`[Uploads API] Detected standalone mode, baseDir: ${baseDir}`);
-      }
-      
-      // Always verify and try alternative production paths as fallback
-      const testUploadsPath = join(baseDir, 'public', 'uploads');
-      if (!existsSync(testUploadsPath)) {
-        console.log(`[Uploads API] Uploads not found at ${testUploadsPath}, trying alternatives...`);
-        // Try alternative production paths
-        const productionPaths = ['/opt/wmp16', '/opt/wmp', process.cwd()];
-        for (const prodPath of productionPaths) {
-          const testPath = join(prodPath, 'public', 'uploads');
-          if (existsSync(testPath)) {
-            baseDir = prodPath;
-            console.log(`[Uploads API] Found uploads at: ${baseDir}`);
-            break;
-          }
-        }
+    // Try multiple base directories (APP_BASE_DIR, cwd, standalone public, production paths)
+    const cwd = process.cwd();
+    const candidateBaseDirs = [
+      process.env.APP_BASE_DIR,
+      cwd,
+      resolve(join(cwd, '.next', 'standalone')),
+      '/opt/wmp16',
+      '/opt/wmp',
+      resolve(join(cwd, '..', '..')),
+    ].filter(Boolean);
+
+    let fullPath = null;
+    let uploadsDir = null;
+    let baseDirUsed = null;
+
+    for (const baseDir of candidateBaseDirs) {
+      const dir = resolve(join(baseDir, 'public', 'uploads'));
+      const candidatePath = resolve(join(dir, ...normalizedPath));
+      if (!candidatePath.startsWith(dir)) continue;
+      if (existsSync(candidatePath)) {
+        fullPath = candidatePath;
+        uploadsDir = dir;
+        baseDirUsed = baseDir;
+        console.log(`[Uploads API] Found file at: ${fullPath} (baseDir: ${baseDir})`);
+        break;
       }
     }
 
-    // Construct the full file path for verification
-    const uploadsDir = resolve(join(baseDir, 'public', 'uploads'));
-    const fullPath = resolve(join(uploadsDir, ...normalizedPath));
-
-    // SECURITY: Ensure resolved path stays within uploads directory
-    if (!fullPath.startsWith(uploadsDir)) {
-      console.error(`[Uploads API] Path traversal attempt detected. Resolved path: ${fullPath}, Uploads dir: ${uploadsDir}`);
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
-    }
-    
-    // Check if file exists
-    if (!existsSync(fullPath)) {
-      console.error(`[Uploads API] File not found: ${fullPath}`);
-      return new NextResponse('File not found', { 
+    if (!fullPath || !existsSync(fullPath)) {
+      const tried = candidateBaseDirs.map((b) => join(b, 'public', 'uploads', ...normalizedPath)).join(', ');
+      console.error(`[Uploads API] File not found. Tried: ${tried}`);
+      return new NextResponse('File not found', {
         status: 404,
-        headers: {
-          'Content-Type': 'text/plain',
-        }
+        headers: { 'Content-Type': 'text/plain' },
       });
     }
+
+    const baseDir = baseDirUsed;
     
     // Determine content type based on file extension
     const extension = filePath[filePath.length - 1].split('.').pop()?.toLowerCase();
@@ -247,38 +232,40 @@ export async function GET(request, { params }) {
         contentType = 'application/octet-stream';
     }
 
-    // Build the internal path for Nginx X-Accel-Redirect
-    // This path must match the Nginx "location /protected/uploads/" block
-    const internalPath = `/protected/uploads/${normalizedPath.join('/')}`;
-    
-    console.log(`[Uploads API] Serving file via X-Accel-Redirect: ${internalPath} (Content-Type: ${contentType})`);
+    const filename = filePath[filePath.length - 1];
+    const contentDisposition =
+      extension === 'pdf' || ['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(extension)
+        ? `inline; filename="${filename}"`
+        : `attachment; filename="${filename}"`;
 
-    // SECURE: Use X-Accel-Redirect to let Nginx serve the file
-    // This is much more efficient than streaming through Node.js
-    // and works even if Node.js restarts during download
-    // Note: Headers like X-Frame-Options should be set in Nginx location block, not here
-    // to avoid conflicts with server-level headers
-    const headers = {
-      'Content-Type': contentType,
-      'X-Accel-Redirect': internalPath, // Nginx will serve this internally
-      // X-Frame-Options will be set by Nginx based on file type in location block
-      // Don't set it here to avoid conflicts with server-level headers
-    };
-    
-    // Set Content-Disposition for proper file handling
-    if (extension === 'pdf') {
-      headers['Content-Disposition'] = `inline; filename="${filePath[filePath.length - 1]}"`;
-    } else if (['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(extension)) {
-      headers['Content-Disposition'] = `inline; filename="${filePath[filePath.length - 1]}"`;
-    } else {
-      headers['Content-Disposition'] = `attachment; filename="${filePath[filePath.length - 1]}"`;
+    // Use X-Accel-Redirect only when Nginx can serve the file (alias points at APP_BASE_DIR or /opt/wmp16/public/uploads)
+    const nginxServedRoot = process.env.APP_BASE_DIR || '/opt/wmp16';
+    const nginxUploadsDir = resolve(join(nginxServedRoot, 'public', 'uploads'));
+    const canNginxServe = fullPath.startsWith(nginxUploadsDir);
+
+    if (canNginxServe) {
+      const internalPath = `/protected/uploads/${normalizedPath.join('/')}`;
+      console.log(`[Uploads API] Serving via X-Accel-Redirect: ${internalPath}`);
+      return new NextResponse(null, {
+        status: 200,
+        headers: {
+          'Content-Type': contentType,
+          'X-Accel-Redirect': internalPath,
+          'Content-Disposition': contentDisposition,
+        },
+      });
     }
-    
-    // Return empty body - Nginx will serve the actual file
-    // The X-Accel-Redirect header tells Nginx which file to serve
-    return new NextResponse(null, {
+
+    // File is under a path Nginx doesn't serve (e.g. .next/standalone/public) — stream from Node
+    console.log(`[Uploads API] Serving by streaming from Node: ${fullPath}`);
+    const body = readFileSync(fullPath);
+    return new NextResponse(body, {
       status: 200,
-      headers,
+      headers: {
+        'Content-Type': contentType,
+        'Content-Disposition': contentDisposition,
+        'Cache-Control': 'public, max-age=2592000',
+      },
     });
 
   } catch (error) {

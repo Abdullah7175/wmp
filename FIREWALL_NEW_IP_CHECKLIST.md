@@ -2,7 +2,37 @@
 
 After moving the server behind a firewall or changing the public IP, use this checklist so the app works when accessed via the **new public IP** or domain (e.g. **wmp.kwsc.gos.pk**).
 
-**Your setup:** Server internal IP `192.168.50.1` → DMZ on firewall → public IP `119.30.113.19` → domain `wmp.kwsc.gos.pk`.
+**Your setup:** Server internal IP `192.168.50.2` (or `.1`) → DMZ on firewall → public IP `119.30.113.19` → domain `wmp.kwsc.gos.pk`.
+
+### If the app only works on localhost / 127.0.0.1 (not 192.168.50.2:3000 or wmp.kwsc.gos.pk)
+
+1. **Node is binding only to 127.0.0.1** — so it must listen on **0.0.0.0**. On the server in `/opt/wmp16/.env` set:
+   ```bash
+   HOSTNAME=0.0.0.0
+   ```
+   Restart: `pm2 restart wmp`. Then test from the server: `curl -I http://192.168.50.2:3000` should return HTTP headers.
+
+2. **.env typos** — Fix so the app and Nginx work:
+   - Use **`BEHIND_PROXY=true`** (underscore), not `BEHIND PROXY=true` (space).
+   - Use **`::1`** in `EFILING_ALLOWED_IPS` (no space), not `:: 1`.
+
+3. **Nginx** — Fix config and reload:
+   - Change **`expires ly`** to **`expires 1y`** (typo).
+   - Remove any stray **`=`** on its own line.
+   - Run: `sudo nginx -t && sudo systemctl reload nginx`.
+
+4. **PM2: `-H` and `-p` do nothing** — The Next.js **standalone** server (used by `npm start`) does **not** read `-H` or `-p` from the command line; it only uses **HOSTNAME** and **PORT** from the **environment**. So:
+   ```bash
+   pm2 start npm --name wmp -- start -- -H 0.0.0.0 -p 3000   # -H and -p are IGNORED
+   ```
+   Use one of these instead:
+   - **Recommended:** `pm2 start ecosystem.config.js` (ecosystem sets `HOSTNAME=0.0.0.0` and `PORT=3000`), or
+   - Put **HOSTNAME=0.0.0.0** and **PORT=3000** in **/opt/wmp16/.env**, then: `pm2 start npm --name wmp -- start`.
+   After changing, run: `pm2 delete wmp` (if it exists), then start again with one of the commands above.
+
+5. **Firewall** — From outside, 443 must reach this server. On the **firewall**, forward **TCP 443** (and 80) to the server’s internal IP (e.g. **192.168.50.2**). If the firewall doesn’t forward, https://wmp.kwsc.gos.pk and 119.30.113.19 will not reach Nginx.
+
+See **`docs/SERVER_ENV_EXAMPLE.txt`** and **`docs/nginx-wmp.conf.example`** for a full server `.env` and Nginx config. For **firewall check commands** (firewalld, iptables, ufw, rich rules, direct rules), see **`docs/FIREWALL_CHECK_COMMANDS.md`**.
 
 ---
 
@@ -11,22 +41,42 @@ After moving the server behind a firewall or changing the public IP, use this ch
 If the app fails to start with:
 
 ```text
-Error: listen EADDRNOTAVAIL: address not available 119.30.113.18:3000
+Error: listen EADDRNOTAVAIL: address not available 119.30.113.19:3000
+```
+(or with `119.30.113.18`), the process is trying to **bind** to a public IP. That IP is **not on this machine** — it lives on the firewall. This server only has `192.168.50.2` (and 127.0.0.1). Fix both below.
+
+### A. Fix `/etc/hosts` (hostname must not resolve to the public IP on this server)
+
+If the server’s hostname is `wmp.kwsc.gos.pk`, the system (or Node) may resolve it via **DNS** to `119.30.113.19`. The app then tries to bind to that IP and fails.
+
+**On the server**, edit `/etc/hosts` so the hostname resolves to an IP that **exists on this box** (e.g. `127.0.0.1` or `192.168.50.2`), not the public IP:
+
+```text
+127.0.0.1   localhost localhost.localdomain
+::1         localhost localhost.localdomain
+127.0.0.1   wmp.kwsc.gos.pk www.wmp.kwsc.gos.pk
 ```
 
-the process is still trying to **bind** to the **old** public IP, which is no longer on this machine.
+- **Remove** any line that has only `119.30.113.19` with no hostname, or that has `wmp.kwsc.gos.pk` with **no IP** in front (invalid line).
+- The line must be: **IP first**, then hostnames. So: `127.0.0.1 wmp.kwsc.gos.pk www.wmp.kwsc.gos.pk`.
 
-**On the server** (in `/opt/wmp16/.env` or wherever the app runs):
+Save and exit. This makes the hostname resolve locally so nothing on this server tries to bind to 119.30.113.19.
 
-1. **Remove or change `HOSTNAME`.** Set it to `0.0.0.0` so the app listens on all interfaces (required when behind DMZ/firewall):
+### B. Force the app to bind to 0.0.0.0 (env + start)
+
+**On the server** (e.g. `/opt/wmp16/.env` or `/root/.pm2`-related env):
+
+1. Set so the Next.js standalone server listens on all interfaces:
 
    ```bash
    HOSTNAME=0.0.0.0
    ```
 
-2. **Do not set** `HOSTNAME=119.30.113.18` or any IP that is not assigned to this server. The Next.js standalone server uses `HOSTNAME` for the bind address; with `0.0.0.0`, it will accept connections that arrive via the firewall to `192.168.50.1`.
+2. **Do not set** `HOSTNAME` to `119.30.113.18`, `119.30.113.19`, or any IP that is not assigned to this server.
 
-3. Restart the app after editing `.env`:
+3. If you use **PM2** with `ecosystem.config.js`, ensure it doesn’t override with a wrong hostname; the repo’s `ecosystem.config.js` already has `HOSTNAME: '0.0.0.0'`. If PM2 runs `npm start` instead, that script loads `.env` — so fix `.env` as above.
+
+4. Restart the app:
 
    ```bash
    pm2 restart wmp
