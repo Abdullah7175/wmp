@@ -765,6 +765,8 @@ export async function POST(request, { params }) {
         // Validate all user_ids AFTER filtering - ensure they're in the allowed recipients list
         const isAdmin = [1, 2].includes(parseInt(session.user.role));
         const validatedUserIds = [];
+        console.log('allowed list:',allowedRecipients);
+
         
         for (const userIdRaw of user_ids) {
             const toUserId = safeParseInt(userIdRaw);
@@ -781,6 +783,7 @@ export async function POST(request, { params }) {
                     error: `User ID ${toUserId} is not allowed based on your role and department restrictions. Please select users from the allowed list.` 
                 }, { status: 403 });
             }
+            
             
             // Check e-signature requirement (for non-admin)
             if (!isAdmin) {
