@@ -48,6 +48,10 @@ const validationSchema = Yup.object({
     assigned_to: Yup.mixed().nullable(),
     remarks: Yup.string().max(1000, 'Remarks must not exceed 1000 characters'),
     work_request_id: Yup.number().nullable(),
+
+    budget_head_no: Yup.string().max(100, 'Budget Head must not exceed 100 characters'),
+    proposed_estimated_cost: Yup.number().min(0, 'Cost must be positive').nullable(),
+    contractor_premium_percentage: Yup.number().min(0, 'Premium must be positive').max(100, 'Cannot exceed 100%').nullable(),
 });
 
 export default function CreateNewFile() {
@@ -292,6 +296,12 @@ export default function CreateNewFile() {
             assigned_to: null,
             remarks: '',
             work_request_id: '',
+
+            budget_head_no: '',
+            proposed_estimated_cost: '',
+            contractor_premium_percentage: '',
+            sanctioned_amount: '', // Initially empty 
+            revised_estimate_amount: '', // Initially empty
         },
         validationSchema,
         onSubmit: async (values) => {
@@ -309,6 +319,14 @@ export default function CreateNewFile() {
                         work_request_id: values.work_request_id ? parseInt(values.work_request_id) : null,
                         priority: 'high',
                         confidentiality_level: 'normal',
+
+                        costing: {
+                        budget_head_no: values.budget_head_no,
+                        proposed_estimated_cost: parseFloat(values.proposed_estimated_cost) || 0,
+                        contractor_premium_percentage: parseFloat(values.contractor_premium_percentage) || 0,
+                        sanctioned_amount: 0, 
+                        revised_estimate_amount: 0
+                         }
                     }),
                 });
 
@@ -566,6 +584,43 @@ export default function CreateNewFile() {
                                     {formik.touched.file_type_id && formik.errors.file_type_id && (<p className="text-red-500 text-sm mt-1">{formik.errors.file_type_id}</p>)}
                                 </div>
 
+                                {/* --- COSTING FIELDS START --- */}
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 border-t pt-4 mt-4">
+                                    <div className="md:col-span-1">
+                                        <Label htmlFor="budget_head_no">Budget Head / BG No</Label>
+                                        <Input 
+                                            id="budget_head_no" 
+                                            name="budget_head_no" 
+                                            value={formik.values.budget_head_no} 
+                                            onChange={formik.handleChange} 
+                                            placeholder="e.g. 1111-11" 
+                                        />
+                                    </div>
+                                    <div>
+                                        <Label htmlFor="proposed_estimated_cost">Proposed Estimated Cost</Label>
+                                        <Input 
+                                            id="proposed_estimated_cost" 
+                                            type="number"
+                                            name="proposed_estimated_cost" 
+                                            value={formik.values.proposed_estimated_cost} 
+                                            onChange={formik.handleChange} 
+                                            placeholder="0.00" 
+                                        />
+                                    </div>
+                                    <div>
+                                        <Label htmlFor="contractor_premium_percentage">Contractor's Premium (%)</Label>
+                                        <Input 
+                                            id="contractor_premium_percentage" 
+                                            type="number"
+                                            name="contractor_premium_percentage" 
+                                            value={formik.values.contractor_premium_percentage} 
+                                            onChange={formik.handleChange} 
+                                            placeholder="e.g. 5.5" 
+                                        />
+                                    </div>
+                                </div>
+                                {/* --- COSTING FIELDS END --- */}
+
                                 {/* <div>
                                     <Label htmlFor="assigned_to">Initial Assignment (Optional)</Label>
                                     <Select value={formik.values.assigned_to ? formik.values.assigned_to.toString() : 'none'} onValueChange={(value) => formik.setFieldValue('assigned_to', value === 'none' ? null : value)}>
@@ -640,6 +695,11 @@ export default function CreateNewFile() {
                                 <div>
                                     <Label className="text-sm font-medium text-gray-600">Subject</Label>
                                     <p className="text-sm text-gray-900 truncate">{formik.values.subject || 'Not specified'}</p>
+                                </div>
+
+                                <div>
+                                    <Label className="text-sm font-medium text-gray-600">Budget Head</Label>
+                                    <p className="text-sm text-gray-900">{formik.values.budget_head_no || 'Not specified'}</p>
                                 </div>
                         <div>
                             <Label className="text-sm font-medium text-gray-600">Department</Label>

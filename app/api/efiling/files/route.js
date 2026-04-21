@@ -189,6 +189,12 @@ export async function GET(request) {
                            s.name AS status_name,
                            s.code AS status_code,
                            s.color AS status_color,
+                           cost.budget_head_no,
+                           cost.proposed_estimated_cost,
+                           cost.contractor_premium_percentage,
+                           cost.sanctioned_amount,
+                           cost.revised_estimate_amount,
+
                            COALESCE(ab.designation, 'Unassigned') AS assigned_to_name,
                            cr_users.name AS created_by_name,
                            cr_users.name AS creator_user_name
@@ -199,6 +205,7 @@ export async function GET(request) {
                     LEFT JOIN efiling_users ab ON f.assigned_to = ab.id
                     LEFT JOIN efiling_users cr ON f.created_by = cr.id
                     LEFT JOIN users cr_users ON cr.user_id = cr_users.id
+                    LEFT JOIN efiling_files_costing cost ON f.id = cost.file_id
                     WHERE f.id = $1
                 `;
                 
@@ -505,7 +512,12 @@ export async function POST(request) {
             work_request_id,
             assigned_to,
             remarks,
-            file_type_id
+            file_type_id,
+            budget_head_no,
+            proposed_estimated_cost,
+            contractor_premium_percentage,
+            sanctioned_amount,
+            revised_estimate_amount
         } = body;
         
         // Validate required fields
@@ -706,6 +718,9 @@ export async function POST(request) {
         // Workflow templates deprecated - using geographic routing instead
         
         // Create file with geographic fields auto-populated from creator
+        await client.query('BEGIN');
+
+        try {
         const query = `
             INSERT INTO efiling_files (
                 file_number, subject, category_id, department_id, status_id,
@@ -732,6 +747,7 @@ export async function POST(request) {
         let fileDistrictId = null;
         let fileTownId = null;
         let fileDivisionId = null;
+        
         
         // First, use user's personal geographic assignments if available
         if (userDeptType === 'district') {
@@ -784,9 +800,31 @@ export async function POST(request) {
             'high', 'normal', work_request_id || null, createdBy, assigned_to || null, remarks, 
             file_type_id || null, fileDistrictId, fileTownId, fileDivisionId
         ]);
-        
+        const newFileId = result.rows[0].id;
+        // 2. Create the costing entry (Fields 1, 2, and 3 from form; 4 and 5 as 0/null)
+            const costingQuery = `
+                INSERT INTO efiling_files_costing (
+                    file_id, 
+                    budget_head_no, 
+                    proposed_estimated_cost, 
+                    contractor_premium_percentage, 
+                    sanctioned_amount, 
+                    revised_estimate_amount
+                )
+                VALUES ($1, $2, $3, $4, $5, $6)
+            `;
+
+            await client.query(costingQuery, [
+                newFileId,
+                budget_head_no || null,
+                proposed_estimated_cost || 0,
+                contractor_premium_percentage || 0,
+                sanctioned_amount || 0, // Initially 0 or null as per your plan
+                revised_estimate_amount || 0 // Initially 0 or null as per your plan
+            ]);
         console.log('File created successfully:', result.rows[0]);
         
+
         // Create notification if file is assigned to someone
         if (assigned_to && assigned_to !== createdBy) {
             try {
@@ -829,8 +867,15 @@ export async function POST(request) {
             console.error('Error logging action:', logError);
             // Don't fail the request if logging fails
         }
-        
-        return NextResponse.json(result.rows[0], { status: 201 });
+        await client.query('COMMIT');
+            return NextResponse.json(result.rows[0], { status: 201 });
+
+        } catch (innerError) {
+            // Rollback if ANY of the above steps fail
+            await client.query('ROLLBACK');
+            throw innerError; 
+        }
+
     } catch (error) {
         console.error('Database error:', error);
         return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
@@ -839,6 +884,20 @@ export async function POST(request) {
     }
 }
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+// post ends here
 export async function PUT(request) {
     const client = await connectToDatabase();
     

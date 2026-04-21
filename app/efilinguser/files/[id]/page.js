@@ -43,6 +43,13 @@ export default function FileDetail() {
     const [showEditFileInfo, setShowEditFileInfo] = useState(false);
     const [workRequests, setWorkRequests] = useState([]);
     const [selectedWorkRequestId, setSelectedWorkRequestId] = useState(null);
+
+    const [budgetHeadNo, setBudgetHeadNo] = useState("");
+    const [proposedCost, setProposedCost] = useState("");
+    const [contractorPremium, setContractorPremium] = useState("");
+    const [sanctionedAmount, setSanctionedAmount] = useState("");
+    const [revisedAmount, setRevisedAmount] = useState("");
+
     const [savingFileInfo, setSavingFileInfo] = useState(false);
     const [isHigherAuthority, setIsHigherAuthority] = useState(false);
     const [isCreator, setIsCreator] = useState(false);
@@ -131,6 +138,11 @@ export default function FileDetail() {
 
     const handleOpenEditFileInfo = () => {
         setSelectedWorkRequestId(file?.work_request_id?.toString() || 'none');
+        setBudgetHeadNo(file.budget_head_no || "");
+        setProposedCost(file.proposed_estimated_cost || "");
+        setContractorPremium(file.contractor_premium_percentage || "");
+        setSanctionedAmount(file.sanctioned_amount || "");
+        setRevisedAmount(file.revised_estimate_amount || "");
         fetchWorkRequests();
         setShowEditFileInfo(true);
     };
@@ -146,7 +158,12 @@ export default function FileDetail() {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    work_request_id: workRequestId
+                    work_request_id: workRequestId,
+                    budget_head_no: budgetHeadNo,
+                    proposed_estimated_cost: proposedCost === "" ? 0 : parseFloat(proposedCost),
+                    contractor_premium_percentage: contractorPremium === "" ? 0 : parseFloat(contractorPremium),
+                    sanctioned_amount: sanctionedAmount === "" ? 0 : parseFloat(sanctionedAmount),
+                    revised_estimate_amount: revisedAmount === "" ? 0 : parseFloat(revisedAmount)
                 })
             });
 
@@ -1125,6 +1142,7 @@ export default function FileDetail() {
                                     </div>
                                 </div>
                             </div>
+
                             <div>
                                 <label className="text-sm font-medium text-gray-600">Subject</label>
                                 <p className="text-lg">{file.subject}</p>
@@ -1139,6 +1157,59 @@ export default function FileDetail() {
                                     <p>{file.category_name}</p>
                                 </div>
                             </div>
+
+                            <div className="flex items-start space-x-3">
+                                <div className="p-2 bg-green-50 rounded-lg">
+                                    <FileText className="h-4 w-4 text-green-600" />
+                                </div>
+                                <div className="space-y-1 w-full">
+                                    <p className="text-sm font-semibold text-gray-900 border-b pb-1 mb-2">
+                                        Budget Head & Costing
+                                    </p>
+                                    
+                                    <div>
+                                        <p className="text-xs  text-black font-bold uppercase tracking-wider">Budget Head No</p>
+                                        <p className="text-sm text-gray-900">{file.budget_head_no || 'Not specified'}</p>
+                                    </div>
+
+                                    <div>
+                                        <p className="text-xs  text-black font-bold uppercase tracking-wider">Proposed Estimated Cost</p>
+                                        <p className="text-sm text-gray-900">
+                                            {(file.proposed_estimated_cost && parseFloat(file.proposed_estimated_cost) !== 0) 
+                                                ? `Rs. ${parseFloat(file.proposed_estimated_cost).toLocaleString()}` 
+                                                : 'Not specified'}
+                                        </p>
+                                    </div>
+
+                                    <div>
+                                        <p className="text-xs  text-black font-bold uppercase tracking-wider">Contractor Premium</p>
+                                        <p className="text-sm text-gray-900">
+                                            {(file.contractor_premium_percentage && parseFloat(file.contractor_premium_percentage) !== 0) 
+                                                ? `${file.contractor_premium_percentage}%` 
+                                                : 'Not specified'}
+                                        </p>
+                                    </div>
+
+                                    <div>
+                                        <p className="text-xs  text-black font-bold uppercase tracking-wider">Sanctioned/Approved Amount</p>
+                                        <p className="text-sm text-gray-900 font-medium">
+                                            {(file.sanctioned_amount && parseFloat(file.sanctioned_amount) !== 0) 
+                                                ? `Rs. ${parseFloat(file.sanctioned_amount).toLocaleString()}` 
+                                                : 'Not specified yet for approval'}
+                                        </p>
+                                    </div>
+
+                                    <div>
+                                        <p className="text-xs text-black font-bold uppercase tracking-wider">Revised Estimate Amount</p>
+                                        <p className="text-sm text-gray-900">
+                                            {(file.revised_estimate_amount && parseFloat(file.revised_estimate_amount) !== 0) 
+                                                ? `Rs. ${parseFloat(file.revised_estimate_amount).toLocaleString()}` 
+                                                : 'None'}
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                     <label className="text-sm font-medium text-gray-600">Priority</label>
@@ -2018,6 +2089,57 @@ export default function FileDetail() {
                             <p className="text-sm text-gray-500 mt-1">
                                 Link this file to a specific video archiving request for reference
                             </p>
+                        </div>
+
+
+                        <div className="border-t pt-4">
+                            <h4 className="text-sm font-semibold mb-4">Costing & Budget Information</h4>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <Label>Budget Head No</Label>
+                                    <Input 
+                                        value={budgetHeadNo}
+                                        onChange={(e) => setBudgetHeadNo(e.target.value)}
+                                        placeholder="e.g. B-01-01"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Proposed Estimated Cost</Label>
+                                    <Input 
+                                        type="number"
+                                        value={proposedCost}
+                                        onChange={(e) => setProposedCost(e.target.value)}
+                                        placeholder="0.00"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Contractor Premium (%)</Label>
+                                    <Input 
+                                        type="number"
+                                        value={contractorPremium}
+                                        onChange={(e) => setContractorPremium(e.target.value)}
+                                        placeholder="0.00"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Sanctioned Amount</Label>
+                                    <Input 
+                                        type="number"
+                                        value={sanctionedAmount}
+                                        onChange={(e) => setSanctionedAmount(e.target.value)}
+                                        placeholder="0.00"
+                                    />
+                                </div>
+                                <div className="space-y-2 md:col-span-2">
+                                    <Label>Revised Estimate Amount</Label>
+                                    <Input 
+                                        type="number"
+                                        value={revisedAmount}
+                                        onChange={(e) => setRevisedAmount(e.target.value)}
+                                        placeholder="0.00"
+                                    />
+                                </div>
+                            </div>
                         </div>
 
                         <div className="flex justify-end space-x-2 pt-4 border-t">
