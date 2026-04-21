@@ -49,7 +49,7 @@ const validationSchema = Yup.object({
     remarks: Yup.string().max(1000, 'Remarks must not exceed 1000 characters'),
     work_request_id: Yup.number().nullable(),
 
-    budget_head_no: Yup.string().max(100, 'Budget Head must not exceed 100 characters'),
+    budget_head_no: Yup.string().required('Buget Code Number is required').max(100, 'Budget Head must not exceed 100 characters'),
     proposed_estimated_cost: Yup.number().min(0, 'Cost must be positive').nullable(),
     contractor_premium_percentage: Yup.number().min(0, 'Premium must be positive').max(100, 'Cannot exceed 100%').nullable(),
 });
@@ -595,6 +595,7 @@ export default function CreateNewFile() {
                                             onChange={formik.handleChange} 
                                             placeholder="e.g. 1111-11" 
                                         />
+                                        <p className="text-red-500 text-sm mt-1">{formik.errors.budget_head_no}</p>
                                     </div>
                                     <div>
                                         <Label htmlFor="proposed_estimated_cost">Proposed Estimated Cost</Label>
