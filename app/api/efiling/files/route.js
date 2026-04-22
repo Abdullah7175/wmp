@@ -191,7 +191,7 @@ export async function GET(request) {
                            s.color AS status_color,
                            cost.budget_head_no,
                            cost.proposed_estimated_cost,
-                           cost.contractor_premium_percentage,
+                           cost.contractor_premium,
                            cost.sanctioned_amount,
                            cost.revised_estimate_amount,
 
@@ -515,7 +515,7 @@ export async function POST(request) {
             file_type_id,
             budget_head_no,
             proposed_estimated_cost,
-            contractor_premium_percentage,
+            contractor_premium,
             sanctioned_amount,
             revised_estimate_amount
         } = body;
@@ -807,7 +807,7 @@ export async function POST(request) {
                     file_id, 
                     budget_head_no, 
                     proposed_estimated_cost, 
-                    contractor_premium_percentage, 
+                    contractor_premium, 
                     sanctioned_amount, 
                     revised_estimate_amount
                 )
@@ -818,7 +818,7 @@ export async function POST(request) {
                 newFileId,
                 budget_head_no || null,
                 proposed_estimated_cost || 0,
-                contractor_premium_percentage || 0,
+                contractor_premium || 0,
                 sanctioned_amount || 0, // Initially 0 or null as per your plan
                 revised_estimate_amount || 0 // Initially 0 or null as per your plan
             ]);

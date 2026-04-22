@@ -140,7 +140,7 @@ export default function FileDetail() {
         setSelectedWorkRequestId(file?.work_request_id?.toString() || 'none');
         setBudgetHeadNo(file.budget_head_no || "");
         setProposedCost(file.proposed_estimated_cost || "");
-        setContractorPremium(file.contractor_premium_percentage || "");
+        setContractorPremium(file.contractor_premium || "");
         setSanctionedAmount(file.sanctioned_amount || "");
         setRevisedAmount(file.revised_estimate_amount || "");
         fetchWorkRequests();
@@ -161,7 +161,7 @@ export default function FileDetail() {
                     work_request_id: workRequestId,
                     budget_head_no: budgetHeadNo,
                     proposed_estimated_cost: proposedCost === "" ? 0 : parseFloat(proposedCost),
-                    contractor_premium_percentage: contractorPremium === "" ? 0 : parseFloat(contractorPremium),
+                    contractor_premium: contractorPremium === "" ? 0 : parseFloat(contractorPremium),
                     sanctioned_amount: sanctionedAmount === "" ? 0 : parseFloat(sanctionedAmount),
                     revised_estimate_amount: revisedAmount === "" ? 0 : parseFloat(revisedAmount)
                 })
@@ -1184,8 +1184,8 @@ export default function FileDetail() {
                                     <div>
                                         <p className="text-xs  text-black font-bold uppercase tracking-wider">Contractor Premium</p>
                                         <p className="text-sm text-gray-900">
-                                            {(file.contractor_premium_percentage && parseFloat(file.contractor_premium_percentage) !== 0) 
-                                                ? `${file.contractor_premium_percentage}%` 
+                                            {(file.contractor_premium && parseFloat(file.contractor_premium) !== 0) 
+                                                ? `Rs. ${parseFloat(file.contractor_premium).toLocaleString()}` 
                                                 : 'Not specified'}
                                         </p>
                                     </div>

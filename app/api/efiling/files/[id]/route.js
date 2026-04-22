@@ -89,7 +89,7 @@ export async function GET(request, { params }) {
                 -- Costing Fields from the related table
                 fc.budget_head_no,
                 fc.proposed_estimated_cost,
-                fc.contractor_premium_percentage,
+                fc.contractor_premium,
                 fc.sanctioned_amount,
                 fc.revised_estimate_amount,
 
@@ -284,9 +284,9 @@ export async function PUT(request, { params }) {
             costFields.push(`proposed_estimated_cost = $${costParamCount++}`);
             costValues.push(body.proposed_estimated_cost);
         }
-        if (body.contractor_premium_percentage !== undefined) {
-            costFields.push(`contractor_premium_percentage = $${costParamCount++}`);
-            costValues.push(body.contractor_premium_percentage);
+        if (body.contractor_premium !== undefined) {
+            costFields.push(`contractor_premium = $${costParamCount++}`);
+            costValues.push(body.contractor_premium);
         }
         if (body.sanctioned_amount !== undefined) {
             costFields.push(`sanctioned_amount = $${costParamCount++}`);
@@ -300,7 +300,7 @@ export async function PUT(request, { params }) {
         if (costFields.length > 0) {
             // Using UPSERT style to ensure it works even if the costing row was missing
             const costQuery = `
-                INSERT INTO efiling_files_costing (file_id, budget_head_no, proposed_estimated_cost, contractor_premium_percentage, sanctioned_amount, revised_estimate_amount)
+                INSERT INTO efiling_files_costing (file_id, budget_head_no, proposed_estimated_cost, contractor_premium, sanctioned_amount, revised_estimate_amount)
                 VALUES ($${costParamCount}, $1, $2, $3, $4, $5)
                 ON CONFLICT (file_id) DO UPDATE SET ${costFields.join(', ')}
             `;

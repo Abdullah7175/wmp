@@ -51,7 +51,7 @@ const validationSchema = Yup.object({
 
     budget_head_no: Yup.string().required('Buget Code Number is required').max(100, 'Budget Head must not exceed 100 characters'),
     proposed_estimated_cost: Yup.number().min(0, 'Cost must be positive').nullable(),
-    contractor_premium_percentage: Yup.number().min(0, 'Premium must be positive').max(100, 'Cannot exceed 100%').nullable(),
+    contractor_premium: Yup.number().min(0, 'Premium must be positive').nullable(),
 });
 
 export default function CreateNewFile() {
@@ -299,7 +299,7 @@ export default function CreateNewFile() {
 
             budget_head_no: '',
             proposed_estimated_cost: '',
-            contractor_premium_percentage: '',
+            contractor_premium: '',
             sanctioned_amount: '', // Initially empty 
             revised_estimate_amount: '', // Initially empty
         },
@@ -323,7 +323,7 @@ export default function CreateNewFile() {
                         costing: {
                         budget_head_no: values.budget_head_no,
                         proposed_estimated_cost: parseFloat(values.proposed_estimated_cost) || 0,
-                        contractor_premium_percentage: parseFloat(values.contractor_premium_percentage) || 0,
+                        contractor_premium: parseFloat(values.contractor_premium) || 0,
                         sanctioned_amount: 0, 
                         revised_estimate_amount: 0
                          }
@@ -609,14 +609,14 @@ export default function CreateNewFile() {
                                         />
                                     </div>
                                     <div>
-                                        <Label htmlFor="contractor_premium_percentage">Contractor's Premium (%)</Label>
+                                        <Label htmlFor="contractor_premium">Contractor's Premium</Label>
                                         <Input 
-                                            id="contractor_premium_percentage" 
+                                            id="contractor_premium" 
                                             type="number"
-                                            name="contractor_premium_percentage" 
-                                            value={formik.values.contractor_premium_percentage} 
+                                            name="contractor_premium" 
+                                            value={formik.values.contractor_premium} 
                                             onChange={formik.handleChange} 
-                                            placeholder="e.g. 5.5" 
+                                            placeholder="e.g. 10000" 
                                         />
                                     </div>
                                 </div>
