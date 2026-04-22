@@ -62,9 +62,9 @@ import {
 } from "lucide-react";
 import { useEffect, useState, useRef } from 'react';
 
-export default function TipTapEditor({ 
-    value = '', 
-    onChange, 
+export default function TipTapEditor({
+    value = '',
+    onChange,
     placeholder = 'Start typing your document...',
     className = ''
 }) {
@@ -239,7 +239,7 @@ export default function TipTapEditor({
                     const { state } = view;
                     const { selection } = state;
                     const { $from } = selection;
-                    
+
                     if ($from.parent.type.name === 'listItem') {
                         if (event.shiftKey) {
                             // Shift+Tab: Decrease indent
@@ -251,7 +251,7 @@ export default function TipTapEditor({
                         return true;
                     }
                 }
-                
+
                 return false;
             },
         },
@@ -350,7 +350,7 @@ export default function TipTapEditor({
     const capitalizeWords = () => {
         const { from, to } = editor.state.selection;
         const text = editor.state.doc.textBetween(from, to);
-        const capitalized = text.split(' ').map(word => 
+        const capitalized = text.split(' ').map(word =>
             word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
         ).join(' ');
         editor.commands.insertContent(capitalized);
@@ -434,7 +434,7 @@ export default function TipTapEditor({
         input.type = 'file';
         input.accept = 'image/*';
         input.style.display = 'none';
-        
+
         input.onchange = (e) => {
             const file = e.target.files[0];
             if (file) {
@@ -446,10 +446,10 @@ export default function TipTapEditor({
                 reader.readAsDataURL(file);
             }
         };
-        
+
         // Trigger file selection
         input.click();
-        
+
         // Clean up
         input.remove();
     };
@@ -466,10 +466,10 @@ export default function TipTapEditor({
     };
 
     const insertTable = () => {
-        editor.chain().focus().insertTable({ 
-            rows: 3, 
-            cols: 3, 
-            withHeaderRow: true 
+        editor.chain().focus().insertTable({
+            rows: 3,
+            cols: 3,
+            withHeaderRow: true
         }).run();
     };
 
@@ -903,9 +903,9 @@ export default function TipTapEditor({
             </div>
 
             {/* Editor Content */}
-            <EditorContent 
-                editor={editor} 
-                className="min-h-[500px] prose prose-sm sm:prose lg:prose-lg xl:prose-2xl focus:outline-none p-4 border border-gray-200 rounded-md [&_.ProseMirror]:min-h-[500px] [&_.ProseMirror]:outline-none [&_.ProseMirror_ul]:list-disc [&_.ProseMirror_ul]:pl-6 [&_.ProseMirror_ol]:list-decimal [&_.ProseMirror_ol]:pl-6 [&_.ProseMirror_li]:my-1 prose-table:border-collapse prose-table:border prose-table:border-gray-300 prose-th:border prose-th:border-gray-300 prose-th:bg-gray-50 prose-td:border prose-td:border-gray-300" 
+            <EditorContent
+                editor={editor}
+                className="min-h-[500px] prose prose-sm sm:prose lg:prose-lg xl:prose-2xl focus:outline-none p-4 border border-gray-200 rounded-md [&_.ProseMirror]:min-h-[500px] [&_.ProseMirror]:outline-none [&_.ProseMirror_ul]:list-disc [&_.ProseMirror_ul]:pl-6 [&_.ProseMirror_ol]:list-decimal [&_.ProseMirror_ol]:pl-6 [&_.ProseMirror_li]:my-1 prose-table:border-collapse prose-table:border prose-table:border-gray-300 prose-th:border prose-th:border-gray-300 prose-th:bg-gray-50 prose-td:border prose-td:border-gray-300"
             />
         </div>
     );

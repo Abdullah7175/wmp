@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, use } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -18,8 +18,11 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useEfilingUser } from "@/context/EfilingUserContext";
+import "@/app/efiling/components/TipTapEditor.css";
 
-export default function DaakDetailPage({ params }) {
+export default function DaakDetailPage({ params: paramsPromise }) {
+    const params = use(paramsPromise); // 3. Unwrap the promise
+    const id = params.id;
     const router = useRouter();
     const { toast } = useToast();
     const { efilingUserId } = useEfilingUser();
@@ -29,15 +32,15 @@ export default function DaakDetailPage({ params }) {
     const [acknowledgmentText, setAcknowledgmentText] = useState("");
 
     useEffect(() => {
-        if (params?.id) {
+        if (id) {
             fetchDaak();
         }
-    }, [params?.id]);
+    }, [id]);
 
     const fetchDaak = async () => {
         setLoading(true);
         try {
-            const res = await fetch(`/api/efiling/daak/${params.id}`);
+            const res = await fetch(`/api/efiling/daak/${id}`);
             if (res.ok) {
                 const data = await res.json();
                 setDaak(data.daak);
@@ -66,7 +69,7 @@ export default function DaakDetailPage({ params }) {
 
         setAcknowledging(true);
         try {
-            const res = await fetch(`/api/efiling/daak/${params.id}/acknowledge`, {
+            const res = await fetch(`/api/efiling/daak/${id}/acknowledge`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -188,9 +191,10 @@ export default function DaakDetailPage({ params }) {
                     <CardTitle>Content</CardTitle>
                 </CardHeader>
                 <CardContent>
-                    <div className="prose max-w-none whitespace-pre-wrap">
-                        {daak.content}
-                    </div>
+                    <div 
+                        className="daak-display-content"
+                        dangerouslySetInnerHTML={{ __html: daak.content }} 
+                    />
                 </CardContent>
             </Card>
 
