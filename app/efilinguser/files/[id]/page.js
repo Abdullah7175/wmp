@@ -2113,7 +2113,7 @@ export default function FileDetail() {
                                     />
                                 </div>
                                 <div className="space-y-2">
-                                    <Label>Contractor Premium (%)</Label>
+                                    <Label>Contractor Premium </Label>
                                     <Input 
                                         type="number"
                                         value={contractorPremium}
