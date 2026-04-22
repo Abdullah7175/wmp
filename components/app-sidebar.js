@@ -407,6 +407,33 @@ export function AppSidebar() {
                                 </Collapsible>
                             )}
 
+                            {/* Milestone Control Section */}
+                            {role && (
+                                <Collapsible className="group/collapsible">
+                                    <SidebarMenuItem>
+                                        <CollapsibleTrigger asChild>
+                                            <SidebarMenuButton className={`text-base gap-2 py-6`}>
+                                                <Activity className="w-5 h-5" />
+                                                <span>Milestones Control</span>
+                                                <ChevronDown />
+                                            </SidebarMenuButton>
+                                        </CollapsibleTrigger>
+                                        <CollapsibleContent>
+                                            <SidebarMenuSub>
+                                                <SidebarMenuSubItem
+                                                    className={`py-2 text-base ml-2 text-gray-500 underline ${pathname === "/dashboard/milestones" ? "font-bold text-blue-950" : ""
+                                                        }`}
+                                                >
+                                                    <Link href="/dashboard/milestones">
+                                                        <span>Manage Milestones</span>
+                                                    </Link>
+                                                </SidebarMenuSubItem>
+                                            </SidebarMenuSub>
+                                        </CollapsibleContent>
+                                    </SidebarMenuItem>
+                                </Collapsible>
+                            )}
+
                             {/* Render Remaining Items */}
                             {items.slice(1).map((item) => {
                                 if (item.visible.includes(role)) {
