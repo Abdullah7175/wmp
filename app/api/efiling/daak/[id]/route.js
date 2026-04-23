@@ -89,12 +89,14 @@ export async function GET(request, { params }) {
                 dr.*,
                 u.designation,
                 u.employee_id,
+                usr.name as recipient_name,
                 dept.name as department_name,
                 r.name as role_name,
                 da.acknowledged_at,
                 da.acknowledgment_text
              FROM efiling_daak_recipients dr
              LEFT JOIN efiling_users u ON dr.efiling_user_id = u.id
+             LEFT JOIN users usr ON u.user_id = usr.id
              LEFT JOIN efiling_departments dept ON u.department_id = dept.id
              LEFT JOIN efiling_roles r ON u.efiling_role_id = r.id
              LEFT JOIN efiling_daak_acknowledgments da ON da.daak_id = dr.daak_id AND da.recipient_id = dr.efiling_user_id
