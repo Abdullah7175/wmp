@@ -261,7 +261,7 @@ export function AppSidebar() {
                             {role && (
                                 <Collapsible className="group/collapsible">
                                     <SidebarMenuItem>
-                                        <CollapsibleTrigger asChild>
+                                        <CollapsibleTrigger asChild> 
                                             <SidebarMenuButton className={`text-base gap-2 py-6`}>
                                                 <NotebookText className="w-5 h-5" />
                                                 <span>Request Control</span>
@@ -292,6 +292,23 @@ export function AppSidebar() {
                                                 >
                                                     <Link href="/dashboard/videos">
                                                         <span>videos</span>
+                                                    </Link>
+                                                </SidebarMenuSubItem>
+
+                                                <SidebarMenuSubItem
+                                                    className={`py-2 text-base ml-2 text-gray-500 underline ${pathname === "/dashboard/milestone-content" ? "font-bold text-blue-950" : ""
+                                                        }`}
+                                                >
+                                                    <Link href="/dashboard/milestone-content">
+                                                        <span>Milestone Progress</span>
+                                                    </Link>
+                                                </SidebarMenuSubItem>
+                                                <SidebarMenuSubItem
+                                                    className={`py-2 text-base ml-2 text-gray-500 underline ${pathname === "/dashboard/milestone-content/add" ? "font-bold text-blue-950" : ""
+                                                        }`}
+                                                >
+                                                    <Link href="/dashboard/milestone-content/add">
+                                                        <span>Add Milestones</span>
                                                     </Link>
                                                 </SidebarMenuSubItem>
                                                 <SidebarMenuSubItem

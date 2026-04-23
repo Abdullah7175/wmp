@@ -172,6 +172,7 @@ export async function GET(request) {
                     wr.address,
                     wr.zone_id,
                     wr.division_id,
+                    wr.nature_of_work,
                     dv.name AS division_name,
                     ST_Y(wr.geo_tag) as latitude, 
                     ST_X(wr.geo_tag) as longitude, 
