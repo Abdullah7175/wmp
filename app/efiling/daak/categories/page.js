@@ -9,16 +9,6 @@ import { Badge } from "@/components/ui/badge";
 import { Search, Plus, Edit, Trash2, Loader2, AlertCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Pagination } from "@/components/ui/pagination";
-import {
-    AlertDialog,
-    AlertDialogAction,
-    AlertDialogCancel,
-    AlertDialogContent,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogHeader,
-    AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 
 export default function DaakCategoriesPage() {
     const router = useRouter();
@@ -29,7 +19,7 @@ export default function DaakCategoriesPage() {
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [categoryToDelete, setCategoryToDelete] = useState(null);
     const [deleting, setDeleting] = useState(false);
-    
+
     // Pagination state
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage, setItemsPerPage] = useState(10);
@@ -64,9 +54,36 @@ export default function DaakCategoriesPage() {
         }
     };
 
-    const handleDelete = (category) => {
-        setCategoryToDelete(category);
-        setDeleteDialogOpen(true);
+    const handleDelete = async (category) => {
+        // This triggers the native browser popup shown in your second screenshot
+        const confirmed = window.confirm(`Are you sure you want to delete the category "${category.name}"? This action cannot be undone.`);
+
+        if (confirmed) {
+            setCategoryToDelete(category);
+            setDeleting(true);
+            try {
+                const res = await fetch(`/api/efiling/daak/categories?id=${category.id}`, {
+                    method: 'DELETE',
+                });
+
+                if (res.ok) {
+                    toast({ title: "Success", description: "Category deleted successfully" });
+                    fetchCategories();
+                } else {
+                    const error = await res.json();
+                    toast({
+                        title: "Error",
+                        description: error.error || "Failed to delete category",
+                        variant: "destructive",
+                    });
+                }
+            } catch (error) {
+                toast({ title: "Error", description: "An error occurred", variant: "destructive" });
+            } finally {
+                setDeleting(false);
+                setCategoryToDelete(null);
+            }
+        }
     };
 
     const confirmDelete = async () => {
@@ -292,7 +309,7 @@ export default function DaakCategoriesPage() {
                                     </tbody>
                                 </table>
                             </div>
-                            
+
                             {/* Pagination */}
                             {filteredCategories.length > 0 && (
                                 <div className="mt-4">
@@ -310,36 +327,6 @@ export default function DaakCategoriesPage() {
                     )}
                 </CardContent>
             </Card>
-
-            {/* Delete Confirmation Dialog */}
-            <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-                <AlertDialogContent>
-                    <AlertDialogHeader>
-                        <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                            This will permanently delete the category "{categoryToDelete?.name}". 
-                            This action cannot be undone. Categories that are in use cannot be deleted.
-                        </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
-                        <AlertDialogAction
-                            onClick={confirmDelete}
-                            disabled={deleting}
-                            className="bg-red-600 hover:bg-red-700"
-                        >
-                            {deleting ? (
-                                <>
-                                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                                    Deleting...
-                                </>
-                            ) : (
-                                'Delete'
-                            )}
-                        </AlertDialogAction>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
         </div>
     );
 }

@@ -76,11 +76,13 @@ export async function GET(request, { params }) {
             `SELECT 
                 ma.*,
                 u.designation,
+                usr.name as attendee_name,
                 u.employee_id,
                 dept.name as department_name,
                 r.name as role_name
              FROM efiling_meeting_attendees ma
              LEFT JOIN efiling_users u ON ma.attendee_id = u.id
+             LEFT JOIN users usr ON usr.id = u.user_id
              LEFT JOIN efiling_departments dept ON u.department_id = dept.id
              LEFT JOIN efiling_roles r ON u.efiling_role_id = r.id
              WHERE ma.meeting_id = $1

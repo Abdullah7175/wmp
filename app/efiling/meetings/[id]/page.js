@@ -304,7 +304,7 @@ export default function MeetingDetailPage() {
                             <TableBody>
                                 {meeting.internal_attendees.map((attendee) => (
                                     <TableRow key={attendee.id}>
-                                        <TableCell>{attendee.designation || "N/A"}</TableCell>
+                                        <TableCell>{attendee.attendee_name || "N/A"}</TableCell>
                                         <TableCell>{attendee.designation || "N/A"}</TableCell>
                                         <TableCell>{attendee.department_name || "N/A"}</TableCell>
                                         <TableCell>
