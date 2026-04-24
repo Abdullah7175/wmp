@@ -6,12 +6,13 @@ import { useToast } from "@/hooks/use-toast";
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { MapPin, Calendar, User, Phone, Map, Image as ImageIcon, Video, Users, FileText } from 'lucide-react';
+import { MapPin, Calendar, User, Phone, Map, Image as ImageIcon, Video, Users, FileText, CheckCircle2 } from 'lucide-react';
 import Image from 'next/image';
-
+import MilestoneBar from '@/components/MilestoneBar';
 const ViewRequestPage = () => {
     const { id } = useParams();
     const [request, setRequest] = useState(null);
+    const [milestoneData, setMilestoneData] = useState({ definitions: [], completedMilestoneIds: [] }); 
     const [images, setImages] = useState([]);
     const [videos, setVideos] = useState([]);
     const [finalVideos, setFinalVideos] = useState([]);
@@ -29,6 +30,13 @@ const ViewRequestPage = () => {
                 if (requestRes.ok) {
                     const requestData = await requestRes.json();
                     setRequest(requestData);
+                }
+
+                // NEW: Fetch Milestone Data
+                const msRes = await fetch(`/api/requests/${id}/milestones`);
+                if (msRes.ok) {
+                    const msData = await msRes.json();
+                    setMilestoneData(msData);
                 }
 
                 // Fetch images
@@ -162,6 +170,51 @@ const ViewRequestPage = () => {
                     {request.status_name || 'Unknown Status'}
                 </Badge>
             </div>
+
+            {/* NEW: Milestone Progress Bar Section */}
+            <Card className="bg-white shadow-sm border border-gray-100 rounded-xl overflow-hidden">
+                {/* Clean Header with Badge */}
+                <div className="px-6 py-4 border-b border-gray-50 bg-white">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div className="flex items-center gap-3">
+                            <div className="p-2 bg-green-50 rounded-lg">
+                                <CheckCircle2 className="h-5 w-5 text-green-600" />
+                            </div>
+                            <h2 className="text-xl font-bold tracking-tight text-gray-800">
+                                Work Execution Progress
+                            </h2>
+                        </div>
+                        
+                        {request && (
+                            <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 border border-blue-100 rounded-full">
+                                <FileText className="h-3.5 w-3.5 text-blue-600" />
+                                <span className="text-xs font-semibold uppercase tracking-wider text-blue-700">
+                                    {request.nature_of_work}
+                                </span>
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {/* Content Area */}
+                <CardContent className="pt-10 pb-8">
+                    {milestoneData.definitions.length > 0 ? (
+                        <MilestoneBar 
+                            milestones={milestoneData.definitions} 
+                            completedIds={milestoneData.completedMilestoneIds}
+                            status={request ? request.status_name : 'Pending'}
+                        />
+                    ) : (
+                        <div className="flex flex-col items-center justify-center h-48 text-center p-6 bg-gray-50/50 rounded-xl border border-dashed border-gray-200">
+                            <Clock className="h-10 w-10 text-gray-300 mb-3" />
+                            <h4 className="font-semibold text-gray-700">Awaiting Milestone Setup</h4>
+                            <p className="text-sm text-gray-500 mt-1 max-w-sm">
+                                Milestones for '{request?.nature_of_work || 'this nature of work'}' have not been defined yet.
+                            </p>
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
 
             {/* Main Information Grid */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
