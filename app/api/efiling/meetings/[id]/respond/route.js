@@ -100,7 +100,7 @@ export async function POST(request, { params }) {
 
         return NextResponse.json({
             success: true,
-            message: `Meeting invitation ${response_status.toLowerCase()} successfully`
+            message: `Meeting invitation ${response_status === 'ACCEPTED' ? 'acknowledged' : response_status.toLowerCase()} successfully`
         });
     } catch (error) {
         console.error('Error responding to meeting:', error);

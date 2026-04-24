@@ -267,7 +267,7 @@ export default function MeetingDetailPage() {
                     <CardContent>
                         <p className="text-2xl font-bold">{meeting.total_attendees || 0}</p>
                         <p className="text-sm text-gray-500">
-                            {meeting.accepted_count || 0} accepted
+                            {meeting.accepted_count || 0} acknowledged
                         </p>
                     </CardContent>
                 </Card>
@@ -310,14 +310,11 @@ export default function MeetingDetailPage() {
                                         <TableCell>
                                             <Badge
                                                 className={
-                                                    attendee.response_status === "ACCEPTED"
-                                                        ? "bg-green-500"
-                                                        : attendee.response_status === "DECLINED"
-                                                        ? "bg-red-500"
-                                                        : "bg-yellow-500"
+                                                    attendee.response_status === "ACCEPTED" ? "bg-green-500" : "bg-yellow-500"
                                                 }
                                             >
-                                                {attendee.response_status}
+                                                {/* If status is ACCEPTED in DB, show ACKNOWLEDGED on screen */}
+                                                {attendee.response_status === "ACCEPTED" ? "ACKNOWLEDGED" : attendee.response_status}
                                             </Badge>
                                         </TableCell>
                                     </TableRow>
@@ -354,14 +351,11 @@ export default function MeetingDetailPage() {
                                         <TableCell>
                                             <Badge
                                                 className={
-                                                    attendee.response_status === "ACCEPTED"
-                                                        ? "bg-green-500"
-                                                        : attendee.response_status === "DECLINED"
-                                                        ? "bg-red-500"
-                                                        : "bg-yellow-500"
+                                                    attendee.response_status === "ACCEPTED" ? "bg-green-500" : "bg-yellow-500"
                                                 }
                                             >
-                                                {attendee.response_status}
+                                                {/* If status is ACCEPTED in DB, show ACKNOWLEDGED on screen */}
+                                                {attendee.response_status === "ACCEPTED" ? "ACKNOWLEDGED" : attendee.response_status}
                                             </Badge>
                                         </TableCell>
                                     </TableRow>
