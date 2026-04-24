@@ -1,21 +1,22 @@
 import React from 'react';
-import { CheckCircle2, Circle } from 'lucide-react';
+import { CheckCircle2 } from 'lucide-react';
 
 const MilestoneBar = ({ milestones, completedIds, status }) => {
     if (!milestones || milestones.length === 0) return null;
 
-    // Calculate the percentage of the bar that should be green
-    // We find the index of the last completed milestone
+    const totalSteps = milestones.length;
+
+    // Find the index of the last completed milestone to fill the progress bar
     const lastCompletedIndex = milestones.reduce((lastIdx, ms, idx) => {
         return (completedIds.includes(ms.id) || status === 'Completed') ? idx : lastIdx;
     }, -1);
 
-    const progressPercentage = milestones.length > 1 
-        ? (lastCompletedIndex / (milestones.length - 1)) * 100 
+    const progressPercentage = totalSteps > 1 
+        ? (lastCompletedIndex / (totalSteps - 1)) * 100 
         : 0;
 
     return (
-        <div className="w-full py-12 px-2">
+        <div className="w-full py-14 px-2">
             <div className="relative flex items-center justify-between w-full">
                 
                 {/* Background Track (Gray) */}
@@ -30,6 +31,9 @@ const MilestoneBar = ({ milestones, completedIds, status }) => {
                 {milestones.map((ms, index) => {
                     const isCompleted = completedIds.includes(ms.id) || status === 'Completed';
                     const isCurrent = index === lastCompletedIndex + 1;
+                    
+                    // Calculate individual step percentage (e.g., Step 1 of 7 = 14%)
+                    const stepPercentage = Math.round(((index + 1) / totalSteps) * 100);
                     
                     return (
                         <div 
@@ -51,16 +55,23 @@ const MilestoneBar = ({ milestones, completedIds, status }) => {
                                 )}
                             </div>
                             
-                            {/* Label Container - Max width ensures no overlap for 10+ items */}
+                            {/* Label Container */}
                             <div className="absolute top-10 w-full flex flex-col items-center px-1">
                                 <p className={`text-[10px] sm:text-xs font-bold text-center leading-tight transition-colors duration-300 max-w-[80px] break-words ${
                                     isCompleted ? 'text-green-700' : 'text-gray-500'
                                 }`}>
                                     {ms.milestone_name}
                                 </p>
-                                <span className="text-[9px] uppercase tracking-wider text-gray-400 mt-1">
-                                    Step {index + 1}
-                                </span>
+                                
+                                {/* Step Count and Percentage Label */}
+                                <div className="flex flex-col items-center mt-1">
+                                    <span className="text-[9px] uppercase tracking-wider text-gray-400">
+                                        Step {index + 1} of {totalSteps}
+                                    </span>
+                                    <span className={`text-[10px] font-semibold ${isCompleted ? 'text-green-600' : 'text-gray-400'}`}>
+                                        {stepPercentage}%
+                                    </span>
+                                </div>
                             </div>
                         </div>
                     );
