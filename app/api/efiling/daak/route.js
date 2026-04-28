@@ -14,23 +14,23 @@ async function getEfilingUserId(session, client) {
         );
         return adminEfiling.rows[0]?.id || null;
     }
-    
+
     if (session?.user) {
         const efilingUser = await client.query(
             'SELECT id FROM efiling_users WHERE user_id = $1 AND is_active = true',
             [session.user.id]
         );
-        
+
         return efilingUser.rows[0]?.id || null;
     }
-    
+
     return null;
 }
 
 // Helper function to expand recipients (roles, groups, teams, departments to users)
 async function expandRecipients(client, recipientType, recipientId) {
     let users = [];
-    
+
     switch (recipientType) {
         case 'USER':
             if (recipientId) {
@@ -41,7 +41,7 @@ async function expandRecipients(client, recipientType, recipientId) {
                 if (user.rows.length > 0) users.push(user.rows[0].id);
             }
             break;
-            
+
         case 'ROLE':
             if (recipientId) {
                 const roleUsers = await client.query(
@@ -51,7 +51,7 @@ async function expandRecipients(client, recipientType, recipientId) {
                 users = roleUsers.rows.map(r => r.id);
             }
             break;
-            
+
         case 'ROLE_GROUP':
             if (recipientId) {
                 // Get role codes from the group (stored as JSONB array)
@@ -60,10 +60,10 @@ async function expandRecipients(client, recipientType, recipientId) {
                     [recipientId]
                 );
                 if (groupRes.rows.length > 0 && groupRes.rows[0].role_codes) {
-                    const roleCodes = Array.isArray(groupRes.rows[0].role_codes) 
-                        ? groupRes.rows[0].role_codes 
+                    const roleCodes = Array.isArray(groupRes.rows[0].role_codes)
+                        ? groupRes.rows[0].role_codes
                         : JSON.parse(groupRes.rows[0].role_codes);
-                    
+
                     if (roleCodes.length > 0) {
                         // Get roles by codes, then get users with those roles
                         const roleUsers = await client.query(
@@ -78,7 +78,7 @@ async function expandRecipients(client, recipientType, recipientId) {
                 }
             }
             break;
-            
+
         case 'TEAM':
             if (recipientId) {
                 // Get team members (manager and team members)
@@ -93,7 +93,7 @@ async function expandRecipients(client, recipientType, recipientId) {
                 users = teamMembers.rows.map(r => r.id);
             }
             break;
-            
+
         case 'DEPARTMENT':
             if (recipientId) {
                 const deptUsers = await client.query(
@@ -103,7 +103,7 @@ async function expandRecipients(client, recipientType, recipientId) {
                 users = deptUsers.rows.map(r => r.id);
             }
             break;
-            
+
         case 'EVERYONE':
             const allUsers = await client.query(
                 'SELECT id FROM efiling_users WHERE is_active = true'
@@ -111,7 +111,7 @@ async function expandRecipients(client, recipientType, recipientId) {
             users = allUsers.rows.map(r => r.id);
             break;
     }
-    
+
     return users;
 }
 
@@ -131,7 +131,7 @@ export async function GET(request) {
 
         client = await connectToDatabase();
         const efilingUserId = await getEfilingUserId(session, client);
-        
+
         if (!efilingUserId && session?.user && ![1, 2].includes(parseInt(session.user.role))) {
             return NextResponse.json({ error: 'User not found in e-filing system' }, { status: 403 });
         }
@@ -250,13 +250,13 @@ export async function GET(request) {
 
         // Build main query
         const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
-        
+
         // Add LIMIT and OFFSET parameters
         paramCount++;
         const limitParam = paramCount;
         paramCount++;
         const offsetParam = paramCount;
-        
+
         let query = `
             SELECT DISTINCT
                 d.*,
@@ -370,7 +370,7 @@ export async function POST(request) {
 
         client = await connectToDatabase();
         const efilingUserId = await getEfilingUserId(session, client);
-        
+
         if (!efilingUserId && session?.user && ![1, 2].includes(parseInt(session.user.role))) {
             return NextResponse.json({ error: 'User not found in e-filing system' }, { status: 403 });
         }
@@ -401,28 +401,44 @@ export async function POST(request) {
         const daak = daakResult.rows[0];
 
         // Process recipients
+        // Process recipients and prepare database insert
+        const recipientInserts = [];
         const allUserIds = new Set();
-        
+
         for (const recipient of recipients) {
+            // 1. Expand the recipient type into actual User IDs
             const userIds = await expandRecipients(client, recipient.type, recipient.id);
-            userIds.forEach(id => allUserIds.add(id));
+
+            // 2. Map every user found to this specific recipient source
+            userIds.forEach(userId => {
+                allUserIds.add(userId);
+                recipientInserts.push({
+                    daak_id: daak.id,
+                    recipient_type: recipient.type,
+                    recipient_id: recipient.id || null,
+                    efiling_user_id: userId,
+                    status: 'PENDING'
+                });
+            });
         }
 
-        // Insert recipients
-        if (allUserIds.size > 0) {
+        // Insert recipients using the correct columns
+        if (recipientInserts.length > 0) {
             const recipientParams = [];
             const placeholders = [];
             let paramIndex = 1;
-            
-            Array.from(allUserIds).forEach(userId => {
-                placeholders.push(`($${paramIndex}, $${paramIndex + 1}, $${paramIndex + 2})`);
-                recipientParams.push(daak.id, userId, 'PENDING');
-                paramIndex += 3;
+
+            recipientInserts.forEach(ins => {
+                placeholders.push(`($${paramIndex}, $${paramIndex + 1}, $${paramIndex + 2}, $${paramIndex + 3}, $${paramIndex + 4})`);
+                recipientParams.push(ins.daak_id, ins.recipient_type, ins.recipient_id, ins.efiling_user_id, ins.status);
+                paramIndex += 5;
             });
 
             await client.query(
-                `INSERT INTO efiling_daak_recipients (daak_id, efiling_user_id, status)
-                 VALUES ${placeholders.join(', ')}`,
+                `INSERT INTO efiling_daak_recipients 
+                    (daak_id, recipient_type, recipient_id, efiling_user_id, status)
+                    VALUES ${placeholders.join(', ')}
+                    ON CONFLICT (daak_id, efiling_user_id) DO NOTHING`, // Added to prevent errors if a user is in multiple groups
                 recipientParams
             );
         }

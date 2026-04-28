@@ -268,6 +268,7 @@ export async function GET(request) {
 
         return NextResponse.json({
             meetings,
+            currentEfilingUserId: efilingUserId,
             pagination: {
                 page,
                 limit,

@@ -19,6 +19,7 @@ import {
     Send
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import "@/app/efiling/components/TipTapEditor.css";
 
 export default function DaakDetailPage() {
     const router = useRouter();
@@ -194,9 +195,10 @@ export default function DaakDetailPage() {
                     <CardTitle>Content</CardTitle>
                 </CardHeader>
                 <CardContent>
-                    <div className="prose max-w-none whitespace-pre-wrap">
-                        {daak.content}
-                    </div>
+                    <div 
+                        className="daak-display-content"
+                        dangerouslySetInnerHTML={{ __html: daak.content }} 
+                    />
                 </CardContent>
             </Card>
 
@@ -262,7 +264,7 @@ export default function DaakDetailPage() {
                             <TableBody>
                                 {daak.recipients.map((recipient) => (
                                     <TableRow key={recipient.id}>
-                                        <TableCell>{recipient.designation || "N/A"}</TableCell>
+                                        <TableCell>{recipient.recipient_name || "N/A"}</TableCell>
                                         <TableCell>{recipient.designation || "N/A"}</TableCell>
                                         <TableCell>{recipient.department_name || "N/A"}</TableCell>
                                         <TableCell>

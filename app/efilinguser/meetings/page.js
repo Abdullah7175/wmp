@@ -9,13 +9,13 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { 
-    Calendar, 
-    Search, 
-    Plus, 
-    Eye, 
-    CheckCircle, 
-    Clock, 
+import {
+    Calendar,
+    Search,
+    Plus,
+    Eye,
+    CheckCircle,
+    Clock,
     X,
     MapPin,
     Video,
@@ -124,7 +124,7 @@ export default function MeetingsPage() {
     };
 
     const filteredMeetings = meetings.filter((meeting) => {
-        const matchesSearch = 
+        const matchesSearch =
             meeting.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
             meeting.meeting_number?.toLowerCase().includes(searchTerm.toLowerCase());
         return matchesSearch;
@@ -246,20 +246,32 @@ export default function MeetingsPage() {
                                                 </div>
                                             </TableCell>
                                             <TableCell>
-                                                {meeting.user_response ? (
+                                                {meeting.organizer_id === efilingUserId ? (
                                                     <Badge
                                                         className={
-                                                            meeting.user_response.response_status === "ACCEPTED"
+                                                            parseInt(meeting.accepted_count || 0) >= parseInt(meeting.internal_attendee_count || 0) &&
+                                                                parseInt(meeting.internal_attendee_count || 0) > 0
                                                                 ? "bg-green-500"
-                                                                : meeting.user_response.response_status === "DECLINED"
-                                                                ? "bg-red-500"
                                                                 : "bg-yellow-500"
                                                         }
                                                     >
-                                                        {meeting.user_response.response_status}
+                                                        {parseInt(meeting.accepted_count || 0) >= parseInt(meeting.internal_attendee_count || 0) &&
+                                                            parseInt(meeting.internal_attendee_count || 0) > 0
+                                                            ? "ACKNOWLEDGED BY ALL"
+                                                            : "PENDING"}
                                                     </Badge>
                                                 ) : (
-                                                    <Badge className="bg-gray-500">Pending</Badge>
+                                                    <Badge
+                                                        className={
+                                                            meeting.user_response?.response_status === "ACCEPTED"
+                                                                ? "bg-green-500"
+                                                                : "bg-yellow-500"
+                                                        }
+                                                    >
+                                                        {meeting.user_response?.response_status === "ACCEPTED"
+                                                            ? "ACKNOWLEDGED"
+                                                            : meeting.user_response?.response_status || "PENDING"}
+                                                    </Badge>
                                                 )}
                                             </TableCell>
                                             <TableCell>

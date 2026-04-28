@@ -10,12 +10,12 @@ async function getEfilingUserId(session, client) {
         );
         return adminEfiling.rows[0]?.id || null;
     }
-    
+
     const efilingUser = await client.query(
         'SELECT id FROM efiling_users WHERE user_id = $1 AND is_active = true',
         [session.user.id]
     );
-    
+
     return efilingUser.rows[0]?.id || null;
 }
 
@@ -43,7 +43,7 @@ export async function POST(request, { params }) {
         }
 
         const daak = daakCheck.rows[0];
-        
+
         // Only creator or admin can send
         if (daak.created_by !== efilingUserId && ![1, 2].includes(parseInt(session.user.role))) {
             return NextResponse.json({ error: 'Access denied' }, { status: 403 });
@@ -56,20 +56,19 @@ export async function POST(request, { params }) {
             );
         }
 
-        // Update recipient statuses to SENT
+        // 1. Update recipient statuses to SENT for this specific daak
         await client.query(
             `UPDATE efiling_daak_recipients 
-             SET status = 'SENT', received_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
-             WHERE daak_id = $1 AND status = 'PENDING'`,
+            SET status = 'SENT', received_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+            WHERE daak_id = $1 AND status = 'PENDING'`,
             [id]
         );
 
-        // Update daak status
+        // 2. Update the main daak status
         await client.query(
             `UPDATE efiling_daak 
-             SET status = 'SENT', sent_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
-             WHERE id = $1
-             RETURNING *`,
+            SET status = 'SENT', sent_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+            WHERE id = $1`,
             [id]
         );
 
@@ -87,7 +86,7 @@ export async function POST(request, { params }) {
 
         if (daakDetails.rows.length > 0) {
             const { subject, daak_number } = daakDetails.rows[0];
-            
+
             // Insert notifications
             for (const recipient of recipients.rows) {
                 try {

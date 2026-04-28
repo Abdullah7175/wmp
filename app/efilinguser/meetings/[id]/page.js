@@ -9,11 +9,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { 
-    CheckCircle, 
-    Clock, 
-    Users, 
-    Calendar, 
+import {
+    CheckCircle,
+    Clock,
+    Users,
+    Calendar,
     FileText,
     ArrowLeft,
     MapPin,
@@ -72,24 +72,26 @@ export default function MeetingDetailPage() {
         }
     };
 
-    const handleRespond = async () => {
+    const handleRespond = async (statusOverride = null) => {
         if (!efilingUserId || !responseStatus) return;
 
         setResponding(true);
         try {
+            const statusToSend = statusOverride || responseStatus;
+
             const res = await fetch(`/api/efiling/meetings/${params.id}/respond`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    response_status: responseStatus,
-                    notes: responseNotes,
+                    response_status: statusToSend, // Use the correct value here
+                    notes: responseNotes
                 }),
             });
 
             if (res.ok) {
                 toast({
                     title: "Success",
-                    description: `Meeting invitation ${responseStatus.toLowerCase()} successfully`,
+                    description: `Meeting invitation ${statusToSend.toLowerCase()} successfully`,
                 });
                 fetchMeeting();
             } else {
@@ -271,7 +273,7 @@ export default function MeetingDetailPage() {
                     <CardContent>
                         <p className="text-2xl font-bold">{meeting.total_attendees || 0}</p>
                         <p className="text-sm text-gray-500">
-                            {meeting.accepted_count || 0} accepted
+                            {meeting.accepted_count || 0} acknowledged
                         </p>
                     </CardContent>
                 </Card>
@@ -290,44 +292,29 @@ export default function MeetingDetailPage() {
                 </Card>
             </div>
 
-            {meeting.is_attending && !meeting.user_response && meeting.status === "SCHEDULED" && (
-                <Card>
+            {/* Replace the original Select/Textarea block with this simple Acknowledge button */}
+            {meeting.is_attending && (!meeting.user_response || meeting.user_response.response_status === "PENDING") && meeting.status === "SCHEDULED" && (
+                <Card className="border-blue-200 bg-blue-50/30">
                     <CardHeader>
-                        <CardTitle>Respond to Invitation</CardTitle>
+                        <CardTitle className="text-blue-800 text-lg">Meeting Confirmation</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                        <div>
-                            <Label>Response *</Label>
-                            <Select
-                                value={responseStatus}
-                                onValueChange={setResponseStatus}
-                            >
-                                <SelectTrigger>
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="ACCEPTED">Accept</SelectItem>
-                                    <SelectItem value="DECLINED">Decline</SelectItem>
-                                    <SelectItem value="TENTATIVE">Tentative</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div>
-                            <Label>Notes (Optional)</Label>
-                            <Textarea
-                                value={responseNotes}
-                                onChange={(e) => setResponseNotes(e.target.value)}
-                                placeholder="Add any notes..."
-                                rows={4}
-                            />
-                        </div>
+                        <p className="text-sm text-blue-700">
+                            Please acknowledge that you have received this meeting invitation.
+                        </p>
                         <Button
-                            onClick={handleRespond}
+                            onClick={() => {
+                                handleRespond("ACCEPTED");
+                            }}
                             disabled={responding}
-                            className="w-full"
+                            className="w-full bg-blue-600 hover:bg-blue-700"
                         >
-                            <Check className="w-4 h-4 mr-2" />
-                            {responding ? "Responding..." : "Submit Response"}
+                            {responding ? "Processing..." : (
+                                <>
+                                    <CheckCircle className="w-4 h-4 mr-2" />
+                                    Acknowledge
+                                </>
+                            )}
                         </Button>
                     </CardContent>
                 </Card>
@@ -346,12 +333,10 @@ export default function MeetingDetailPage() {
                             className={
                                 meeting.user_response.response_status === "ACCEPTED"
                                     ? "bg-green-500"
-                                    : meeting.user_response.response_status === "DECLINED"
-                                    ? "bg-red-500"
                                     : "bg-yellow-500"
                             }
                         >
-                            {meeting.user_response.response_status}
+                            {meeting.user_response.response_status === "ACCEPTED" ? "ACKNOWLEDGED" : meeting.user_response.response_status}
                         </Badge>
                         {meeting.user_response.notes && (
                             <p className="mt-2">{meeting.user_response.notes}</p>
@@ -383,20 +368,17 @@ export default function MeetingDetailPage() {
                             <TableBody>
                                 {meeting.internal_attendees.map((attendee) => (
                                     <TableRow key={attendee.id}>
-                                        <TableCell>{attendee.designation || "N/A"}</TableCell>
+                                        <TableCell>{attendee.attendee_name || "N/A"}</TableCell>
                                         <TableCell>{attendee.designation || "N/A"}</TableCell>
                                         <TableCell>{attendee.department_name || "N/A"}</TableCell>
                                         <TableCell>
                                             <Badge
                                                 className={
-                                                    attendee.response_status === "ACCEPTED"
-                                                        ? "bg-green-500"
-                                                        : attendee.response_status === "DECLINED"
-                                                        ? "bg-red-500"
-                                                        : "bg-yellow-500"
+                                                    attendee.response_status === "ACCEPTED" ? "bg-green-500" : "bg-yellow-500"
                                                 }
                                             >
-                                                {attendee.response_status}
+                                                {/* If status is ACCEPTED in DB, show ACKNOWLEDGED on screen */}
+                                                {attendee.response_status === "ACCEPTED" ? "ACKNOWLEDGED" : attendee.response_status}
                                             </Badge>
                                         </TableCell>
                                     </TableRow>
@@ -433,14 +415,11 @@ export default function MeetingDetailPage() {
                                         <TableCell>
                                             <Badge
                                                 className={
-                                                    attendee.response_status === "ACCEPTED"
-                                                        ? "bg-green-500"
-                                                        : attendee.response_status === "DECLINED"
-                                                        ? "bg-red-500"
-                                                        : "bg-yellow-500"
+                                                    attendee.response_status === "ACCEPTED" ? "bg-green-500" : "bg-yellow-500"
                                                 }
                                             >
-                                                {attendee.response_status}
+                                                {/* If status is ACCEPTED in DB, show ACKNOWLEDGED on screen */}
+                                                {attendee.response_status === "ACCEPTED" ? "ACKNOWLEDGED" : attendee.response_status}
                                             </Badge>
                                         </TableCell>
                                     </TableRow>

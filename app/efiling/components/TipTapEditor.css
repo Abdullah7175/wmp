@@ -261,3 +261,35 @@
         padding: 4px 6px;
     }
 }
+
+/* Custom class for displaying saved Daak content */
+.daak-display-content p {
+    min-height: 1.2em; /* Ensures empty paragraphs have the height of one line */
+    margin-bottom: 0.5rem; /* Adds consistent spacing between blocks */
+}
+
+/* Forces empty tags to stay open and visible */
+.daak-display-content p:empty::before {
+    content: "\00a0"; /* Invisible non-breaking space */
+}
+
+/* If TipTap saves blank lines as <p><br></p>, this ensures the break is respected */
+.daak-display-content p br {
+    display: block;
+    content: "";
+    margin-top: 1em;
+}
+
+/* Ensure images in the view don't overflow the card */
+.daak-display-content img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 8px;
+    display: block;
+    margin: 10px auto;
+}
+
+/* Support for text alignment (Center/Right/Justify) */
+.daak-display-content .has-text-align-center { text-align: center; }
+.daak-display-content .has-text-align-right { text-align: right; }
+.daak-display-content .has-text-align-justify { text-align: justify; }
