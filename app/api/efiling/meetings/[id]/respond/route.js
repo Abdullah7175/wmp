@@ -10,12 +10,12 @@ async function getEfilingUserId(session, client) {
         );
         return adminEfiling.rows[0]?.id || null;
     }
-    
+
     const efilingUser = await client.query(
         'SELECT id FROM efiling_users WHERE user_id = $1 AND is_active = true',
         [session.user.id]
     );
-    
+
     return efilingUser.rows[0]?.id || null;
 }
 
@@ -35,6 +35,13 @@ export async function POST(request, { params }) {
         if (!response_status || !['ACCEPTED', 'DECLINED', 'TENTATIVE'].includes(response_status)) {
             return NextResponse.json(
                 { error: 'Valid response_status (ACCEPTED, DECLINED, TENTATIVE) is required' },
+                { status: 400 }
+            );
+        }
+
+        if (response_status === 'DECLINED' && (!notes || notes.trim() === '')) {
+            return NextResponse.json(
+                { error: 'A comment is required when declining a meeting.' },
                 { status: 400 }
             );
         }
@@ -67,6 +74,52 @@ export async function POST(request, { params }) {
                 { error: 'You are not an attendee of this meeting' },
                 { status: 403 }
             );
+        }
+
+        // ... after attendeeCheck ...
+
+        // Only perform conflict check if the user is trying to ACCEPT
+        if (response_status === 'ACCEPTED') {
+            // 1. Get the time details of the meeting the user is currently responding to
+            const currentMeetingReq = await client.query(
+                'SELECT meeting_date, start_time, end_time FROM efiling_meetings WHERE id = $1',
+                [id]
+            );
+            const curr = currentMeetingReq.rows[0];
+
+            // 2. Check if this user has already ACCEPTED another meeting that overlaps with this one
+            const existingConflict = await client.query(
+                `SELECT m.title, m.start_time, m.end_time 
+         FROM efiling_meetings m
+         JOIN efiling_meeting_attendees ma ON m.id = ma.meeting_id
+         WHERE ma.attendee_id = $1 
+         AND ma.response_status = 'ACCEPTED'
+         AND m.meeting_date = $2
+         AND ($3::time < m.end_time AND $4::time > m.start_time)
+         AND m.id != $5`,
+                [efilingUserId, curr.meeting_date, curr.start_time, curr.end_time, id]
+            );
+
+            // 3. Also check if the user is the ORGANIZER of a meeting at this time 
+            // (An organizer is automatically "busy" at their own meeting)
+            const organizerConflict = await client.query(
+                `SELECT title, start_time, end_time 
+         FROM efiling_meetings 
+         WHERE organizer_id = $1 
+         AND status != 'CANCELLED'
+         AND meeting_date = $2
+         AND ($3::time < end_time AND $4::time > start_time)
+         AND id != $5`,
+                [efilingUserId, curr.meeting_date, curr.start_time, curr.end_time, id]
+            );
+
+            if (existingConflict.rows.length > 0 || organizerConflict.rows.length > 0) {
+                const conflict = existingConflict.rows[0] || organizerConflict.rows[0];
+                return NextResponse.json(
+                    { error: `You cannot acknowledge this meeting because you are already committed to "${conflict.title}" at this time.` },
+                    { status: 400 }
+                );
+            }
         }
 
         // Update response

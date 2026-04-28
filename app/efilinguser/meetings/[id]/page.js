@@ -34,6 +34,7 @@ export default function MeetingDetailPage() {
     const [meeting, setMeeting] = useState(null);
     const [responseStatus, setResponseStatus] = useState("PENDING");
     const [responseNotes, setResponseNotes] = useState("");
+    const [cancelling, setCancelling] = useState(false);
 
     useEffect(() => {
         if (params?.id) {
@@ -73,17 +74,28 @@ export default function MeetingDetailPage() {
     };
 
     const handleRespond = async (statusOverride = null) => {
-        if (!efilingUserId || !responseStatus) return;
+        if (!efilingUserId) return;
+
+        const statusToSend = statusOverride || responseStatus;
+
+        // Validation: Require notes if declining
+        if (statusToSend === "DECLINED" && !responseNotes.trim()) {
+            toast({
+                title: "Required",
+                description: "Please provide a reason in the comments section before declining.",
+                variant: "destructive",
+            });
+            return;
+        }
 
         setResponding(true);
         try {
-            const statusToSend = statusOverride || responseStatus;
 
             const res = await fetch(`/api/efiling/meetings/${params.id}/respond`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    response_status: statusToSend, // Use the correct value here
+                    response_status: statusToSend,
                     notes: responseNotes
                 }),
             });
@@ -111,6 +123,43 @@ export default function MeetingDetailPage() {
             });
         } finally {
             setResponding(false);
+        }
+    };
+
+    const handleCancel = async () => {
+        if (!confirm("Are you sure you want to cancel this meeting?")) return;
+
+        setCancelling(true);
+        try {
+            const res = await fetch(`/api/efiling/meetings/${params.id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: 'CANCELLED' }),
+            });
+
+            if (res.ok) {
+                toast({
+                    title: "Success",
+                    description: "Meeting has been cancelled",
+                });
+                fetchMeeting(); // Refresh data
+            } else {
+                const error = await res.json();
+                toast({
+                    title: "Error",
+                    description: error.error || "Failed to cancel meeting",
+                    variant: "destructive",
+                });
+            }
+        } catch (error) {
+            console.error("Error cancelling meeting:", error);
+            toast({
+                title: "Error",
+                description: "An unexpected error occurred",
+                variant: "destructive",
+            });
+        } finally {
+            setCancelling(false);
         }
     };
 
@@ -149,15 +198,29 @@ export default function MeetingDetailPage() {
 
     return (
         <div className="container mx-auto p-6 space-y-6">
-            <div className="flex items-center gap-4">
-                <Button variant="ghost" onClick={() => router.back()}>
-                    <ArrowLeft className="w-4 h-4 mr-2" />
-                    Back
-                </Button>
-                <div>
-                    <h1 className="text-3xl font-bold">{meeting.title}</h1>
-                    <p className="text-gray-600 mt-1">Meeting Number: {meeting.meeting_number}</p>
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="flex items-center gap-4">
+                    <Button variant="ghost" onClick={() => router.back()}>
+                        <ArrowLeft className="w-4 h-4 mr-2" />
+                        Back
+                    </Button>
+                    <div>
+                        <h1 className="text-3xl font-bold">{meeting.title}</h1>
+                        <p className="text-gray-600 mt-1">Meeting Number: {meeting.meeting_number}</p>
+                    </div>
                 </div>
+
+                {/* Cancel Button - Only shows for Organizer if meeting is Scheduled */}
+                {meeting.organizer_id === efilingUserId && meeting.status === "SCHEDULED" && (
+                    <Button
+                        variant="destructive"
+                        onClick={handleCancel}
+                        disabled={cancelling}
+                    >
+                        <X className="w-4 h-4 mr-2" />
+                        {cancelling ? "Cancelling..." : "Cancel Meeting"}
+                    </Button>
+                )}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -292,30 +355,59 @@ export default function MeetingDetailPage() {
                 </Card>
             </div>
 
-            {/* Replace the original Select/Textarea block with this simple Acknowledge button */}
+            {/* Meeting Confirmation Section */}
             {meeting.is_attending && (!meeting.user_response || meeting.user_response.response_status === "PENDING") && meeting.status === "SCHEDULED" && (
                 <Card className="border-blue-200 bg-blue-50/30">
                     <CardHeader>
                         <CardTitle className="text-blue-800 text-lg">Meeting Confirmation</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-4">
+                        <div className="space-y-2">
+                            <Label>
+                                Comments {responseStatus === "DECLINED" && <span className="text-red-500">*</span>}
+                            </Label>
+                            <Textarea
+                                placeholder={responseStatus === "DECLINED" ? "Please provide a reason for declining..." : "Add a comment (optional)..."}
+                                value={responseNotes}
+                                onChange={(e) => setResponseNotes(e.target.value)}
+                                className="bg-white"
+                            />
+                        </div>
+
                         <p className="text-sm text-blue-700">
-                            Please acknowledge that you have received this meeting invitation.
+                            Please confirm your availability for this meeting invitation.
                         </p>
-                        <Button
-                            onClick={() => {
-                                handleRespond("ACCEPTED");
-                            }}
-                            disabled={responding}
-                            className="w-full bg-blue-600 hover:bg-blue-700"
-                        >
-                            {responding ? "Processing..." : (
-                                <>
-                                    <CheckCircle className="w-4 h-4 mr-2" />
-                                    Acknowledge
-                                </>
-                            )}
-                        </Button>
+
+                        <div className="flex flex-col sm:flex-row gap-3">
+                            {/* Acknowledge (Accept) Button */}
+                            <Button
+                                onClick={() => handleRespond("ACCEPTED")}
+                                disabled={responding}
+                                className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+                            >
+                                {responding ? "Processing..." : (
+                                    <>
+                                        <CheckCircle className="w-4 h-4 mr-2" />
+                                        Acknowledge
+                                    </>
+                                )}
+                            </Button>
+
+                            {/* Decline Button */}
+                            <Button
+                                variant="destructive"
+                                onClick={() => handleRespond("DECLINED")}
+                                disabled={responding}
+                                className="flex-1"
+                            >
+                                {responding ? "Processing..." : (
+                                    <>
+                                        <X className="w-4 h-4 mr-2" />
+                                        Decline
+                                    </>
+                                )}
+                            </Button>
+                        </div>
                     </CardContent>
                 </Card>
             )}
@@ -333,10 +425,14 @@ export default function MeetingDetailPage() {
                             className={
                                 meeting.user_response.response_status === "ACCEPTED"
                                     ? "bg-green-500"
-                                    : "bg-yellow-500"
+                                    : meeting.user_response.response_status === "DECLINED"
+                                        ? "bg-red-500"
+                                        : "bg-yellow-500"
                             }
                         >
-                            {meeting.user_response.response_status === "ACCEPTED" ? "ACKNOWLEDGED" : meeting.user_response.response_status}
+                            {meeting.user_response.response_status === "ACCEPTED"
+                                ? "ACKNOWLEDGED"
+                                : meeting.user_response.response_status}
                         </Badge>
                         {meeting.user_response.notes && (
                             <p className="mt-2">{meeting.user_response.notes}</p>
@@ -374,11 +470,16 @@ export default function MeetingDetailPage() {
                                         <TableCell>
                                             <Badge
                                                 className={
-                                                    attendee.response_status === "ACCEPTED" ? "bg-green-500" : "bg-yellow-500"
+                                                    attendee.response_status === "ACCEPTED"
+                                                        ? "bg-green-500"
+                                                        : attendee.response_status === "DECLINED"
+                                                            ? "bg-red-500"
+                                                            : "bg-yellow-500"
                                                 }
                                             >
-                                                {/* If status is ACCEPTED in DB, show ACKNOWLEDGED on screen */}
-                                                {attendee.response_status === "ACCEPTED" ? "ACKNOWLEDGED" : attendee.response_status}
+                                                {attendee.response_status === "ACCEPTED"
+                                                    ? "ACKNOWLEDGED"
+                                                    : attendee.response_status}
                                             </Badge>
                                         </TableCell>
                                     </TableRow>

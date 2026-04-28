@@ -265,12 +265,14 @@ export default function MeetingsPage() {
                                                         className={
                                                             meeting.user_response?.response_status === "ACCEPTED"
                                                                 ? "bg-green-500"
-                                                                : "bg-yellow-500"
+                                                                : meeting.user_response?.response_status === "DECLINED"
+                                                                    ? "bg-red-500"
+                                                                    : "bg-yellow-500"
                                                         }
                                                     >
                                                         {meeting.user_response?.response_status === "ACCEPTED"
                                                             ? "ACKNOWLEDGED"
-                                                            : meeting.user_response?.response_status || "PENDING"}
+                                                            : meeting.user_response?.response_status}
                                                     </Badge>
                                                 )}
                                             </TableCell>

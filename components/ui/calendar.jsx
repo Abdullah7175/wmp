@@ -64,9 +64,18 @@ export function Calendar({
     };
 
     const handleDateClick = (day) => {
+        // 1. Create the date object locally
         const date = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day);
+
         if (!isDisabled(date)) {
-            onChange?.(date.toISOString().split('T')[0]);
+            // 2. Manually format the string to YYYY-MM-DD using local values
+            const y = date.getFullYear();
+            const m = String(date.getMonth() + 1).padStart(2, '0');
+            const d = String(date.getDate()).padStart(2, '0');
+            const localDateString = `${y}-${m}-${d}`;
+
+            // 3. Pass the clean local string to the parent
+            onChange?.(localDateString);
         }
     };
 
@@ -129,8 +138,12 @@ export function Calendar({
 
             <div className="grid grid-cols-7 gap-1">
                 {days.map((day, index) => {
+                    // Create a base unique prefix for this specific month/year
+                    const datePrefix = `${currentMonth.getFullYear()}-${currentMonth.getMonth()}`;
+
                     if (day === null) {
-                        return <div key={index} className="aspect-square" />;
+                        // Use index combined with prefix for empty cells
+                        return <div key={`empty-${datePrefix}-${index}`} className="aspect-square" />;
                     }
 
                     const date = new Date(
@@ -138,13 +151,15 @@ export function Calendar({
                         currentMonth.getMonth(),
                         day
                     );
+
                     const disabled = isDisabled(date);
                     const selected = isSelected(date);
                     const todayDate = isToday(date);
 
                     return (
                         <button
-                            key={day}
+                            // CHANGE THIS: Use a full date string as the key
+                            key={`day-${datePrefix}-${day}`}
                             onClick={() => handleDateClick(day)}
                             disabled={disabled}
                             className={cn(

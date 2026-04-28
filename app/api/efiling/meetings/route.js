@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/db';
+import { sendMeetingEmail } from "@/lib/mailer";
 import { auth } from '@/auth';
 
 export const dynamic = 'force-dynamic';
@@ -12,23 +13,23 @@ async function getEfilingUserId(session, client) {
         );
         return adminEfiling.rows[0]?.id || null;
     }
-    
+
     if (session?.user) {
         const efilingUser = await client.query(
             'SELECT id FROM efiling_users WHERE user_id = $1 AND is_active = true',
             [session.user.id]
         );
-        
+
         return efilingUser.rows[0]?.id || null;
     }
-    
+
     return null;
 }
 
 // Helper to expand attendees (roles, groups, teams to users)
 async function expandAttendees(client, attendeeType, sourceId) {
     let users = [];
-    
+
     switch (attendeeType) {
         case 'USER':
             if (sourceId) {
@@ -39,7 +40,7 @@ async function expandAttendees(client, attendeeType, sourceId) {
                 if (user.rows.length > 0) users.push(user.rows[0].id);
             }
             break;
-            
+
         case 'ROLE':
             if (sourceId) {
                 const roleUsers = await client.query(
@@ -49,7 +50,7 @@ async function expandAttendees(client, attendeeType, sourceId) {
                 users = roleUsers.rows.map(r => r.id);
             }
             break;
-            
+
         case 'ROLE_GROUP':
             if (sourceId) {
                 const groupRoles = await client.query(
@@ -70,7 +71,7 @@ async function expandAttendees(client, attendeeType, sourceId) {
                 }
             }
             break;
-            
+
         case 'TEAM':
             if (sourceId) {
                 const teamMembers = await client.query(
@@ -85,7 +86,7 @@ async function expandAttendees(client, attendeeType, sourceId) {
             }
             break;
     }
-    
+
     return users;
 }
 
@@ -105,7 +106,7 @@ export async function GET(request) {
 
         client = await connectToDatabase();
         const efilingUserId = await getEfilingUserId(session, client);
-        
+
         if (!efilingUserId && session?.user && ![1, 2].includes(parseInt(session.user.role))) {
             return NextResponse.json({ error: 'User not found in e-filing system' }, { status: 403 });
         }
@@ -213,7 +214,7 @@ export async function GET(request) {
         let countQuery = `
             SELECT COUNT(DISTINCT m.id) as count
         `;
-        
+
         if (attendingMeetings === 'true' && efilingUserId) {
             countQuery += `
                 FROM efiling_meetings m
@@ -336,9 +337,30 @@ export async function POST(request) {
 
         client = await connectToDatabase();
         const efilingUserId = await getEfilingUserId(session, client);
-        
+
         if (!efilingUserId && session?.user && ![1, 2].includes(parseInt(session.user.role))) {
             return NextResponse.json({ error: 'User not found in e-filing system' }, { status: 403 });
+        }
+
+
+        // 1. Check if the user is busy (either as Organizer OR as an Accepted Attendee)
+        const timeConflict = await client.query(
+            `SELECT m.title, m.meeting_date, m.start_time, m.end_time 
+            FROM efiling_meetings m
+            LEFT JOIN efiling_meeting_attendees ma ON m.id = ma.meeting_id
+            WHERE (m.organizer_id = $1 OR (ma.attendee_id = $1 AND ma.response_status = 'ACCEPTED'))
+            AND m.status != 'CANCELLED'
+            AND m.meeting_date = $2
+            AND ($3::time < m.end_time AND $4::time > m.start_time)`,
+            [efilingUserId, meeting_date, start_time, end_time]
+        );
+
+        if (timeConflict.rows.length > 0) {
+            const conflict = timeConflict.rows[0];
+            return NextResponse.json(
+                { error: `You already have a meeting scheduled or accepted during the time ${conflict.start_time} - ${conflict.end_time} on ${meeting_date}` },
+                { status: 400 }
+            );
         }
 
         // Calculate duration
@@ -381,10 +403,24 @@ export async function POST(request) {
 
         // Process internal attendees
         const allUserIds = new Set();
-        
+
         for (const attendee of attendees) {
             const userIds = await expandAttendees(client, attendee.type, attendee.id);
             userIds.forEach(id => allUserIds.add(id));
+        }
+
+        // --- NEW: Fetch Internal Attendee Names and Roles for Email ---
+        let internalAttendeeDetails = [];
+        if (allUserIds.size > 0) {
+            const internalUsersResult = await client.query(
+                `SELECT usr.name, r.name 
+                 FROM efiling_users u
+                 LEFT JOIN efiling_roles r ON u.efiling_role_id = r.id
+                 LEFT JOIN users usr ON u.user_id = usr.id
+                 WHERE u.id = ANY($1::int[])`,
+                [Array.from(allUserIds)]
+            );
+            internalAttendeeDetails = internalUsersResult.rows;
         }
 
         // Insert internal attendees
@@ -446,6 +482,71 @@ export async function POST(request) {
                 );
             } catch (notifError) {
                 console.error('Error creating notification:', notifError);
+            }
+        }
+
+        // --- UPDATED: SEND EMAILS TO EXTERNAL ATTENDEES ---
+        if (external_attendees && external_attendees.length > 0) {
+
+            // Format internal: "Name: Role"
+            const formattedInternal = internalAttendeeDetails.map(
+                u => `<li><strong>${u.name}</strong>: ${u.name || 'N/A'}</li>`
+            ).join("");
+
+            // Format external: "Name"
+            const formattedExternal = external_attendees.map(
+                ext => `<li><strong>${ext.name}</strong> (${ext.organization}: ${ext.designation})</li>`
+            ).join("");
+
+            const attendeesHtml = `
+                <ul style="list-style: none; padding-left: 0;">
+                    ${formattedInternal}
+                    ${formattedExternal}
+                </ul>
+            `;
+
+            for (const guest of external_attendees) {
+                const htmlContent = `
+            <div style="font-family: Arial, sans-serif; border: 1px solid #eee; padding: 20px; line-height: 1.6;">
+                <h2 style="color: #1a365d; padding-bottom: 10px;">Meeting Invitation: ${title}</h2>
+                <p>Hello <strong>${guest.name}</strong>,</p>
+                <p>You have been invited to a meeting through the KW&SC E-Filing System.</p>
+                
+                <div style="background: #f9f9f9; border-radius: 5px;">
+                    <p><strong>Meeting Description:</strong> 
+                    ${description}</p>
+
+                    <p><strong>Agenda:</strong> 
+                    ${agenda}</p>
+                </div>
+                
+                <div style="background: #f9f9f9; border-radius: 5px;">
+                    <p><strong>Date:</strong> ${meeting_date}</p>
+                    <p><strong>Time:</strong> ${start_time} - ${end_time}</p>
+                    <p><strong>Location:</strong> ${venue_address || (meeting_type === 'VIRTUAL' ? 'Online' : 'Main Office')}</p>
+                </div>
+
+                <h3 style="color: #2c5282;">Attendees:</h3>
+                ${attendeesHtml}
+                
+                <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;"/>
+                <p style="font-size: 12px; color: #666;">This is an automated message from the KW&SC E-Filing System.</p>
+            </div>
+        `;
+
+                await sendMeetingEmail({
+                    to: guest.email,
+                    subject: `Meeting Invitation: ${title}`,
+                    html: htmlContent
+                });
+
+                // Update the database to show invitation was sent
+                await client.query(
+                    `UPDATE efiling_meeting_external_attendees 
+                     SET invitation_sent = true, invitation_sent_at = NOW() 
+                     WHERE meeting_id = $1 AND email = $2`,
+                    [meeting.id, guest.email]
+                );
             }
         }
 

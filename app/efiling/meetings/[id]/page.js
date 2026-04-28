@@ -2,29 +2,36 @@
 
 import { useState, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { 
-    Users, 
-    Calendar, 
+import {
+    Users,
+    Calendar,
     FileText,
     ArrowLeft,
     MapPin,
     Video,
     Edit,
-    Trash2
+    Trash2,
+    X
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 export default function MeetingDetailPage() {
+    const { data: session } = useSession();
     const router = useRouter();
     const params = useParams();
     const { toast } = useToast();
     const [loading, setLoading] = useState(true);
     const [deleting, setDeleting] = useState(false);
     const [meeting, setMeeting] = useState(null);
+    const [cancelling, setCancelling] = useState(false);
+
+    const efilingUserId = session?.user?.efilingId || session?.user?.id;
+    console.log(efilingUserId)
 
     useEffect(() => {
         if (params?.id) {
@@ -94,6 +101,43 @@ export default function MeetingDetailPage() {
         }
     };
 
+    const handleCancel = async () => {
+        if (!confirm("Are you sure you want to cancel this meeting?")) return;
+
+        setCancelling(true);
+        try {
+            const res = await fetch(`/api/efiling/meetings/${params.id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: 'CANCELLED' }),
+            });
+
+            if (res.ok) {
+                toast({
+                    title: "Success",
+                    description: "Meeting has been cancelled",
+                });
+                fetchMeeting(); // Refresh data
+            } else {
+                const error = await res.json();
+                toast({
+                    title: "Error",
+                    description: error.error || "Failed to cancel meeting",
+                    variant: "destructive",
+                });
+            }
+        } catch (error) {
+            console.error("Error cancelling meeting:", error);
+            toast({
+                title: "Error",
+                description: "An unexpected error occurred",
+                variant: "destructive",
+            });
+        } finally {
+            setCancelling(false);
+        }
+    };
+
     const getStatusBadge = (status) => {
         switch (status) {
             case "SCHEDULED":
@@ -141,10 +185,17 @@ export default function MeetingDetailPage() {
                     </div>
                 </div>
                 <div className="flex gap-2">
-                    <Button variant="outline" onClick={() => router.push(`/efiling/meetings/${params.id}/edit`)}>
-                        <Edit className="w-4 h-4 mr-2" />
-                        Edit
-                    </Button>
+                    {/* Now efilingUserId is defined via session */}
+                    {meeting.organizer_id == efilingUserId && meeting.status === "SCHEDULED" && (
+                        <Button
+                            variant="destructive"
+                            onClick={handleCancel}
+                            disabled={cancelling}
+                        >
+                            <X className="w-4 h-4 mr-2" />
+                            {cancelling ? "Cancelling..." : "Cancel Meeting"}
+                        </Button>
+                    )}
                     {meeting.status === "SCHEDULED" && (
                         <Button variant="destructive" onClick={handleDelete} disabled={deleting}>
                             <Trash2 className="w-4 h-4 mr-2" />
@@ -310,11 +361,16 @@ export default function MeetingDetailPage() {
                                         <TableCell>
                                             <Badge
                                                 className={
-                                                    attendee.response_status === "ACCEPTED" ? "bg-green-500" : "bg-yellow-500"
+                                                    attendee.response_status === "ACCEPTED"
+                                                        ? "bg-green-500"
+                                                        : attendee.response_status === "DECLINED"
+                                                            ? "bg-red-500"
+                                                            : "bg-yellow-500"
                                                 }
                                             >
-                                                {/* If status is ACCEPTED in DB, show ACKNOWLEDGED on screen */}
-                                                {attendee.response_status === "ACCEPTED" ? "ACKNOWLEDGED" : attendee.response_status}
+                                                {attendee.response_status === "ACCEPTED"
+                                                    ? "ACKNOWLEDGED"
+                                                    : attendee.response_status}
                                             </Badge>
                                         </TableCell>
                                     </TableRow>
@@ -351,11 +407,16 @@ export default function MeetingDetailPage() {
                                         <TableCell>
                                             <Badge
                                                 className={
-                                                    attendee.response_status === "ACCEPTED" ? "bg-green-500" : "bg-yellow-500"
+                                                    attendee.response_status === "ACCEPTED"
+                                                        ? "bg-green-500"
+                                                        : attendee.response_status === "DECLINED"
+                                                            ? "bg-red-500"
+                                                            : "bg-yellow-500"
                                                 }
                                             >
-                                                {/* If status is ACCEPTED in DB, show ACKNOWLEDGED on screen */}
-                                                {attendee.response_status === "ACCEPTED" ? "ACKNOWLEDGED" : attendee.response_status}
+                                                {attendee.response_status === "ACCEPTED"
+                                                    ? "ACKNOWLEDGED"
+                                                    : attendee.response_status}
                                             </Badge>
                                         </TableCell>
                                     </TableRow>

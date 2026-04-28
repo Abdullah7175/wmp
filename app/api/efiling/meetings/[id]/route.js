@@ -318,3 +318,56 @@ export async function DELETE(request, { params }) {
     }
 }
 
+// PATCH - Update meeting status (e.g., CANCEL)
+export async function PATCH(request, { params }) {
+    let client;
+    try {
+        const session = await auth();
+        if (!session?.user?.id) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
+        const { id } = await params;
+        const body = await request.json();
+        const { status } = body;
+
+        if (!status || status !== 'CANCELLED') {
+            return NextResponse.json({ error: 'Invalid status update' }, { status: 400 });
+        }
+
+        client = await connectToDatabase();
+        const efilingUserId = await getEfilingUserId(session, client);
+
+        // Verify that the user is the organizer or an admin
+        const meetingCheck = await client.query(
+            'SELECT organizer_id, status FROM efiling_meetings WHERE id = $1',
+            [id]
+        );
+
+        if (meetingCheck.rows.length === 0) {
+            return NextResponse.json({ error: 'Meeting not found' }, { status: 404 });
+        }
+
+        const meeting = meetingCheck.rows[0];
+        
+        if (meeting.organizer_id !== efilingUserId && ![1, 2].includes(parseInt(session.user.role))) {
+            return NextResponse.json({ error: 'Access denied' }, { status: 403 });
+        }
+
+        // Update the status to CANCELLED
+        await client.query(
+            'UPDATE efiling_meetings SET status = $1, updated_at = NOW() WHERE id = $2',
+            [status, id]
+        );
+
+        return NextResponse.json({ success: true, message: 'Meeting cancelled successfully' });
+    } catch (error) {
+        console.error('Error cancelling meeting:', error);
+        return NextResponse.json(
+            { error: 'Failed to cancel meeting', details: error.message },
+            { status: 500 }
+        );
+    } finally {
+        if (client) client.release();
+    }
+}
