@@ -54,7 +54,8 @@ const AddMilestoneForm = () => {
     const selectedRequest = workRequests.find(r => r.id.toString() === requestId);
     if (selectedRequest?.nature_of_work) {
       try {
-        const response = await fetch(`/api/milestones?nature_of_work=${selectedRequest.nature_of_work}`);
+        const params = new URLSearchParams({ nature_of_work: selectedRequest.nature_of_work });
+        const response = await fetch(`/api/milestones?${params.toString()}`);
         if (response.ok) {
           const data = await response.json();
           setAvailableMilestones(Array.isArray(data) ? data : (data.data || []));
