@@ -13,8 +13,15 @@ function ipMatchesRule(ip, rule) {
 
     rule = rule.trim();
 
+    // Normalize IPv6 addresses (remove spaces)
+    rule = rule.replace(/:\s+/g, ':');
+    ip = ip.replace(/:\s+/g, ':');
+
+    // --- IPv6 exact match ---
+    if (ip === rule) return true;
+
     // --- CIDR notation (e.g. 192.168.50.0/24) ---
-    if (rule.includes('/')) {
+    if (rule.includes('/') && !rule.startsWith('[')) {
         const [subnet, bits] = rule.split('/').map(s => s.trim());
         const maskBits = parseInt(bits, 10);
         if (isNaN(maskBits) || maskBits < 0 || maskBits > 32) {
@@ -24,7 +31,7 @@ function ipMatchesRule(ip, rule) {
         const ipLong = ipToLong(ip);
         const subnetLong = ipToLong(subnet);
         if (ipLong === null || subnetLong === null) {
-            console.warn(`Invalid IP in CIDR rule: ${rule}`);
+            // CIDR may be IPv6, just skip
             return false;
         }
         const mask = maskBits === 0 ? 0 : (~0 << (32 - maskBits)) >>> 0;
@@ -32,8 +39,8 @@ function ipMatchesRule(ip, rule) {
     }
 
     // --- Hyphen range (e.g. 192.168.50.1-192.168.50.254) ---
-    if (rule.includes('-') && !rule.startsWith('-')) {
-        // Split carefully to handle ranges
+    if (rule.includes('-') && !rule.startsWith('-') && !rule.includes(':')) {
+        // Split carefully to handle ranges (but not IPv6 addresses)
         const parts = rule.split('-').filter(p => p.trim());
         if (parts.length === 2) {
             const startIp = parts[0].trim();
@@ -42,7 +49,6 @@ function ipMatchesRule(ip, rule) {
             const startLong = ipToLong(startIp);
             const endLong = ipToLong(endIp);
             if (ipLong === null || startLong === null || endLong === null) {
-                console.warn(`Invalid IP in range rule: ${rule}`);
                 return false;
             }
             return ipLong >= startLong && ipLong <= endLong;
@@ -55,8 +61,8 @@ function ipMatchesRule(ip, rule) {
         return regex.test(ip);
     }
 
-    // --- Exact match or prefix match ---
-    return ip === rule || ip.startsWith(rule);
+    // --- Prefix match ---
+    return ip.startsWith(rule);
 }
 
 export function isInternalNetwork(request) {
