@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { getMediaUrl } from "@/lib/mediaUtils";
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useRouter } from 'next/navigation';
@@ -141,13 +142,13 @@ const EditBeforeContentForm = ({ contentId }) => {
               <div className="border rounded-lg p-4">
                 {contentData.content_type === 'video' ? (
                   <video
-                    src={contentData.link}
+                    src={getMediaUrl(contentData.link, 'video')}
                     className="w-full h-48 object-cover rounded"
                     controls
                   />
                 ) : (
                   <img
-                    src={contentData.link}
+                    src={getMediaUrl(contentData.link, 'image')}
                     alt={contentData.description || 'Before content'}
                     className="w-full h-48 object-cover rounded"
                   />

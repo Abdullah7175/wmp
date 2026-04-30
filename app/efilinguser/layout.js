@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useSession, signOut } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import { Bell, FileText, LogOut, Users } from "lucide-react";
 
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
@@ -15,6 +15,7 @@ import { EfilingRouteGuard } from "@/components/EfilingRouteGuard";
 import { EFileSidebar } from "./EFileSidebar.jsx";
 import { EFileSidebarExternal } from "./EFileSidebarExternal.jsx";
 import { isExternalUser } from "@/lib/efilingRoleHelpers";
+import { performLogout } from "@/lib/logoutUtils";
 
 export default function EFileLayout({ children }) {
   return (
@@ -33,7 +34,7 @@ function EFileLayoutShell({ children }) {
   const { setUser } = useUserContext();
   const { data: session } = useSession();
   const { profile, loading, error, efilingUserId, isGlobal, roleCode } = useEfilingUser();
-  
+
   // Check if user is external (ADLFA or CON)
   const isExternal = isExternalUser(roleCode);
 
@@ -136,7 +137,7 @@ function EFileLayoutShell({ children }) {
   const handleNotificationClick = async (notif) => {
     try {
       await fetch(`/api/efiling/notifications/${notif.id}/read`, { method: "PUT" });
-    } catch {}
+    } catch { }
     setNotifications((prev) => prev.filter((n) => n.id !== notif.id));
     if (notif.file_id) {
       router.push(`/efilinguser/files/${notif.file_id}`);
@@ -144,11 +145,7 @@ function EFileLayoutShell({ children }) {
   };
 
   const handleLogout = async () => {
-    await signOut({ redirect: false });
-    localStorage.removeItem("jwtToken");
-    document.cookie = "jwtToken=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC;";
-    if (setUser) setUser(null);
-    router.push("/elogin");
+    await performLogout("/elogin", false, router);
   };
 
   if (loading) {

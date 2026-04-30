@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { MapPin, Calendar, User, Phone, Map, Image as ImageIcon, Video, Users, FileText, CheckCircle2, Clock } from 'lucide-react';
 import Image from 'next/image';
+import { getMediaUrl } from "@/lib/mediaUtils";
 import MilestoneBar from '@/components/MilestoneBar';
 const ViewRequestPage = () => {
     const { id } = useParams();
@@ -453,7 +454,7 @@ const ViewRequestPage = () => {
                                 {images.map((image, index) => (
                                     <div key={image.id || index} className="relative">
                                         <img
-                                            src={image.link}
+                                            src={getMediaUrl(image.link, 'image')}
                                             alt={`Work request image ${index + 1}`}
                                             className="rounded-lg object-cover w-full h-32"
                                             onError={(e) => {
@@ -506,7 +507,7 @@ const ViewRequestPage = () => {
                                                     </p>
                                                 )}
                                                 <video
-                                                    src={video.link}
+                                                    src={getMediaUrl(video.link, 'video')}
                                                     className="w-full mt-2 rounded"
                                                     controls
                                                     style={{maxHeight: '200px'}}
@@ -539,7 +540,7 @@ const ViewRequestPage = () => {
                                                     </p>
                                                 )}
                                                 <video
-                                                    src={video.link}
+                                                    src={getMediaUrl(video.link, 'final-video')}
                                                     className="w-full mt-2 rounded"
                                                     controls
                                                     style={{maxHeight: '200px'}}

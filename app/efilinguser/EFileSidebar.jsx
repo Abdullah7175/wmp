@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import { useSidebar } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
+import { performLogout } from "@/lib/logoutUtils";
 import React from "react";
 
 const links = [
@@ -113,21 +114,7 @@ export function EFileSidebar() {
     };
 
     const handleLogout = async () => {
-        try {
-            // Call logout API
-            await fetch('/api/users/logout', { method: 'GET' });
-            
-            // Clear any local storage or session data
-            localStorage.removeItem('user');
-            sessionStorage.clear();
-            
-            // Redirect to main page
-            router.push('/');
-        } catch (error) {
-            console.error('Logout error:', error);
-            // Still redirect even if logout API fails
-            router.push('/');
-        }
+        await performLogout('/elogin', false, router);
     };
 
     return (

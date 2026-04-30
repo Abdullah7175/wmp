@@ -15,6 +15,7 @@ import {
   MessageSquare,
   AlertCircle
 } from "lucide-react";
+import { getMediaUrl } from "@/lib/mediaUtils";
 
 export default function RequestApprovalForm({ requestData }) {
   const router = useRouter();
@@ -170,13 +171,13 @@ export default function RequestApprovalForm({ requestData }) {
               <div key={content.id} className="border rounded-lg p-3 lg:p-4">
                 {content.content_type === 'video' ? (
                   <video
-                    src={content.link}
+                    src={getMediaUrl(content.link, 'video')}
                     className="w-full h-32 lg:h-48 object-cover rounded-md mb-2 lg:mb-3"
                     controls
                   />
                 ) : (
                   <img
-                    src={content.link}
+                    src={getMediaUrl(content.link, 'image')}
                     alt="Before content"
                   className="w-full h-32 lg:h-48 object-cover rounded-md mb-2 lg:mb-3"
                 />
@@ -208,7 +209,7 @@ export default function RequestApprovalForm({ requestData }) {
             {images.map((image) => (
               <div key={image.id} className="border rounded-lg p-3 lg:p-4">
                 <img
-                  src={image.link}
+                  src={getMediaUrl(image.link, 'image')}
                   alt="Work image"
                   className="w-full h-32 lg:h-48 object-cover rounded-md mb-2 lg:mb-3"
                 />
@@ -239,7 +240,7 @@ export default function RequestApprovalForm({ requestData }) {
             {videos.map((video) => (
               <div key={video.id} className="border rounded-lg p-3 lg:p-4">
                 <video
-                  src={video.link}
+                  src={getMediaUrl(video.link, 'video')}
                   controls
                   className="w-full h-32 lg:h-48 object-cover rounded-md mb-2 lg:mb-3"
                 />
@@ -270,7 +271,7 @@ export default function RequestApprovalForm({ requestData }) {
             {finalVideos.map((video) => (
               <div key={video.id} className="border rounded-lg p-3 lg:p-4">
                 <video
-                  src={video.link}
+                  src={getMediaUrl(video.link, 'final-video')}
                   controls
                   className="w-full h-32 lg:h-48 object-cover rounded-md mb-2 lg:mb-3"
                 />
