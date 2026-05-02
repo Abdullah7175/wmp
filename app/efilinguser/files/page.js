@@ -53,7 +53,7 @@ export default function FilesPage() {
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage, setItemsPerPage] = useState(10);
     const [markModalFile, setMarkModalFile] = useState(null);
-    
+
     // New filter states
     const [fileIdFilter, setFileIdFilter] = useState('');
     const [townFilter, setTownFilter] = useState('all');
@@ -62,7 +62,7 @@ export default function FilesPage() {
     const [subjectFilter, setSubjectFilter] = useState('');
     const [dateFrom, setDateFrom] = useState('');
     const [dateTo, setDateTo] = useState('');
-    
+
     // Filter options
     const [filterOptions, setFilterOptions] = useState({
         towns: [],
@@ -92,7 +92,7 @@ export default function FilesPage() {
             // Build query parameters
             const params = new URLSearchParams();
             params.append('limit', '500'); // Increased limit for better filtering
-            
+
             // External users (ADLFA/CON) should only see files assigned/marked to them
             if (isExternal) {
                 // For external users, fetch files assigned to them (which includes marked files)
@@ -102,7 +102,7 @@ export default function FilesPage() {
             } else {
                 params.append('assigned_to', efilingUserId);
             }
-            
+
             // Apply filters
             if (fileIdFilter) params.append('file_id', fileIdFilter);
             if (townFilter !== 'all') params.append('town_id', townFilter);
@@ -112,11 +112,11 @@ export default function FilesPage() {
             if (dateFrom) params.append('date_from', dateFrom);
             if (dateTo) params.append('date_to', dateTo);
             if (statusFilter !== 'all') params.append('status_id', statusFilter);
-            
+
             const response = await fetch(`/api/efiling/files?${params.toString()}`);
             const json = response.ok ? await response.json() : { files: [] };
             const fileList = Array.isArray(json.files) ? json.files : [];
-            
+
             if (activeTab === 'mine') {
                 setMyFiles(fileList);
             } else {
@@ -143,7 +143,7 @@ export default function FilesPage() {
             setLoading(false);
         }
     };
-    
+
     const fetchFilterOptions = async () => {
         try {
             const response = await fetch('/api/efiling/files/filter-options');
@@ -506,6 +506,22 @@ export default function FilesPage() {
     );
 }
 
+const calculateFileAging = (createdAt) => {
+        const created = new Date(createdAt);
+        const now = new Date();
+        const diffTime = Math.abs(now - created);
+        const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+        if (diffDays === 0) return "Today";
+        if (diffDays < 30) return `${diffDays} day${diffDays > 1 ? 's' : ''}`;
+
+        const diffMonths = Math.floor(diffDays / 30);
+        if (diffMonths < 12) return `${diffMonths} month${diffMonths > 1 ? 's' : ''}`;
+
+        const diffYears = Math.floor(diffDays / 365);
+        return `${diffYears} year${diffYears > 1 ? 's' : ''}`;
+    };
+
 function renderFilesTable(
     rows,
     currentPage,
@@ -554,6 +570,7 @@ function renderFilesTable(
                                     <TableHead>Status</TableHead>
                                     <TableHead>TAT</TableHead>
                                     <TableHead>Created</TableHead>
+                                    <TableHead>File Aging</TableHead>
                                     <TableHead>Actions</TableHead>
                                 </TableRow>
                             </TableHeader>
@@ -607,6 +624,11 @@ function renderFilesTable(
                                                     <Calendar className="w-4 h-4 text-gray-500" />
                                                     <span className="text-sm">{new Date(file.created_at).toLocaleDateString()}</span>
                                                 </div>
+                                            </TableCell>
+                                            <TableCell>
+                                                <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">
+                                                    {calculateFileAging(file.created_at)}
+                                                </Badge>
                                             </TableCell>
                                             <TableCell>
                                                 <div className="flex items-center space-x-2">

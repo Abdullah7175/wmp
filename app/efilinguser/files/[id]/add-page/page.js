@@ -448,9 +448,6 @@ export default function AddPageEditor() {
                                                 <h1 className="text-2xl font-bold text-blue-900">
                                                     Karachi Water & Sewerage Corporation
                                                 </h1>
-                                                <p className="text-sm text-blue-700 mt-1">
-                                                    Government of Sindh
-                                                </p>
                                             </div>
                                         </div>
                                     </div>

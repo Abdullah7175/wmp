@@ -35,7 +35,7 @@ export default function DocumentEditor() {
     const router = useRouter();
     const params = useParams();
     const { toast } = useToast();
-    
+
     const [file, setFile] = useState(null);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -45,7 +45,7 @@ export default function DocumentEditor() {
     const [selectedTemplate, setSelectedTemplate] = useState(1);
     const [userRole, setUserRole] = useState('');
     const [canEditDocument, setCanEditDocument] = useState(false);
-    
+
     // Helper function to convert HTML to plain text
     const htmlToText = (html) => {
         if (!html) return '';
@@ -54,7 +54,7 @@ export default function DocumentEditor() {
         temp.innerHTML = html;
         return temp.textContent || temp.innerText || '';
     };
-    
+
     const [documentContent, setDocumentContent] = useState({
         title: '',
         subject: '',
@@ -140,12 +140,12 @@ export default function DocumentEditor() {
             if (response.ok) {
                 const fileData = await response.json();
                 setFile(fileData);
-                
+
                 // Fetch document content and pages
                 const docResponse = await fetch(`/api/efiling/files/${params.id}/document`);
                 if (docResponse.ok) {
                     const docData = await docResponse.json();
-                    
+
                     // Load pages if they exist
                     if (docData.pages && docData.pages.length > 0) {
                         const loadedPages = docData.pages.map(page => ({
@@ -160,25 +160,25 @@ export default function DocumentEditor() {
                         console.log('Loaded pages:', loadedPages);
                     } else if (docData.document_content) {
                         // Fallback to single page with document content
-                    setDocumentContent(prev => ({
-                        ...prev,
+                        setDocumentContent(prev => ({
+                            ...prev,
                             ...docData.document_content
-                    }));
+                        }));
                     }
                 }
-                
+
                 // Check if current user is the file creator
                 if (session?.user?.id) {
                     const userMappingRes = await fetch(`/api/efiling/users/profile?userId=${session.user.id}`);
                     if (userMappingRes.ok) {
                         const userMapping = await userMappingRes.json();
                         const efilingUserId = userMapping.efiling_user_id;
-                        
+
                         // Update canEditDocument based on whether user is the file creator
                         const isFileCreator = fileData.created_by === efilingUserId;
                         const isAdmin = session.user.role === 1;
                         setCanEditDocument(isAdmin || isFileCreator);
-                        
+
                         console.log('Edit access check:', {
                             userId: session.user.id,
                             efilingUserId: efilingUserId,
@@ -258,7 +258,7 @@ export default function DocumentEditor() {
     const addNewPage = () => {
         const newPageId = Math.max(...pages.map(p => p.id)) + 1;
         const newPageNumber = Math.max(...pages.map(p => p.pageNumber)) + 1;
-        
+
         const newPage = {
             id: newPageId,
             pageNumber: newPageNumber,
@@ -274,10 +274,10 @@ export default function DocumentEditor() {
             },
             type: 'ATTACHMENT'
         };
-        
+
         setPages(prev => [...prev, newPage]);
         setCurrentPageId(newPageId);
-        
+
         toast({
             title: "New Page Added",
             description: `Page ${newPageNumber} has been added to the document`,
@@ -293,16 +293,16 @@ export default function DocumentEditor() {
             });
             return;
         }
-        
+
         const pageToDelete = pages.find(p => p.id === pageId);
         setPages(prev => prev.filter(p => p.id !== pageId));
-        
+
         // If we're deleting the current page, switch to the first remaining page
         if (currentPageId === pageId) {
             const remainingPages = pages.filter(p => p.id !== pageId);
             setCurrentPageId(remainingPages[0].id);
         }
-        
+
         toast({
             title: "Page Deleted",
             description: `${pageToDelete.title} has been removed from the document`,
@@ -310,7 +310,7 @@ export default function DocumentEditor() {
     };
 
     const updatePageTitle = (pageId, newTitle) => {
-        setPages(prev => prev.map(p => 
+        setPages(prev => prev.map(p =>
             p.id === pageId ? { ...p, title: newTitle } : p
         ));
     };
@@ -320,19 +320,19 @@ export default function DocumentEditor() {
     };
 
     const updateCurrentPageContent = (content) => {
-        setPages(prev => prev.map(p => 
+        setPages(prev => prev.map(p =>
             p.id === currentPageId ? { ...p, content: { ...p.content, ...content } } : p
         ));
     };
 
     const selectTemplate = (templateId) => {
         setSelectedTemplate(templateId);
-        
+
         const currentPage = getCurrentPage();
-        
+
         // Apply template-specific content to current page
         let templateContent = {};
-        
+
         switch (templateId) {
             case 1: // Official Letter
                 templateContent = {
@@ -392,10 +392,10 @@ export default function DocumentEditor() {
             default:
                 return;
         }
-        
+
         // Update current page content
         updateCurrentPageContent(templateContent);
-        
+
         toast({
             title: "Template Applied",
             description: "Document template has been applied to current page",
@@ -416,10 +416,10 @@ export default function DocumentEditor() {
 
         // Check if the active element is one of our document fields
         const isDocumentField = activeElement.id && (
-            activeElement.id === 'header' || 
-            activeElement.id === 'title' || 
-            activeElement.id === 'subject' || 
-            activeElement.id === 'date' || 
+            activeElement.id === 'header' ||
+            activeElement.id === 'title' ||
+            activeElement.id === 'subject' ||
+            activeElement.id === 'date' ||
             activeElement.id === 'footer' ||
             activeElement.id === 'customHeader' ||
             activeElement.id === 'customRegards' ||
@@ -443,7 +443,7 @@ export default function DocumentEditor() {
 
             if (selectedText) {
                 let formattedText = selectedText;
-                
+
                 switch (command) {
                     case 'bold':
                         formattedText = `<strong>${selectedText}</strong>`;
@@ -592,7 +592,7 @@ export default function DocumentEditor() {
                 // Update the document content state
                 const fieldName = activeElement.id;
                 const newValue = activeElement.innerHTML;
-                
+
                 setDocumentContent(prev => ({
                     ...prev,
                     [fieldName]: newValue
@@ -638,7 +638,7 @@ export default function DocumentEditor() {
         <div className="min-h-screen bg-gray-50">
             {/* Add CSS styles for contentEditable placeholder */}
             <style jsx>{contentEditableStyles}</style>
-            
+
             {/* Toolbar */}
             <div className="bg-white border-b border-gray-200 sticky top-0 z-50">
                 <div className="flex items-center justify-between p-4">
@@ -654,7 +654,7 @@ export default function DocumentEditor() {
                         <div>
                             <h1 className="text-xl font-bold text-gray-900">Document Editor (Admin)</h1>
                             <p className="text-sm text-gray-600">File: {file.file_number}</p>
-                            
+
                             {/* Editor Type Toggle */}
                             <div className="flex items-center space-x-2 mt-2">
                                 <Button
@@ -676,7 +676,7 @@ export default function DocumentEditor() {
                             </div>
                         </div>
                     </div>
-                    
+
                     <div className="flex items-center space-x-2">
                         <Button
                             onClick={handleSave}
@@ -695,7 +695,7 @@ export default function DocumentEditor() {
                                 </div>
                             )}
                         </Button>
-                        
+
                         <Button
                             onClick={handleMarkTo}
                             variant="outline"
@@ -704,7 +704,7 @@ export default function DocumentEditor() {
                             <Send className="w-4 h-4 mr-2" />
                             Mark To
                         </Button>
-                        
+
                         <Button
                             onClick={() => {
                                 // Open the signature modal from DocumentSignatureSystem
@@ -725,7 +725,7 @@ export default function DocumentEditor() {
                 {/* Page Tabs */}
                 <div className="border-t border-gray-200 p-2">
                     <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-2 flex-wrap">
+                        <div className="flex items-center space-x-2 flex-wrap">
                             <Label className="text-sm font-medium">Pages:</Label>
                             {pages.map((page) => (
                                 <div key={page.id} className="flex items-center space-x-1">
@@ -760,55 +760,55 @@ export default function DocumentEditor() {
                                 </Button>
                             )}
                         </div>
-                        
+
                         <div className="flex items-center space-x-2">
-                        <Label className="text-sm font-medium">Templates:</Label>
-                        <Button
-                            variant={selectedTemplate === 1 ? "default" : "outline"}
-                            size="sm"
-                            onClick={() => selectTemplate(1)}
-                            title="Official Letter Template"
-                        >
-                            📋 Letter
-                        </Button>
-                        <Button
-                            variant={selectedTemplate === 2 ? "default" : "outline"}
-                            size="sm"
-                            onClick={() => selectTemplate(2)}
-                            title="Internal Memo Template"
-                        >
-                            📝 Memo
-                        </Button>
-                        <Button
-                            variant={selectedTemplate === 3 ? "default" : "outline"}
-                            size="sm"
-                            onClick={() => selectTemplate(3)}
-                            title="Project Proposal Template"
-                        >
-                            📋 Proposal
-                        </Button>
-                        <Button
-                            variant={selectedTemplate === 4 ? "default" : "outline"}
-                            size="sm"
-                            onClick={() => selectTemplate(4)}
-                            title="Work Order Template"
-                        >
-                            📋 Work Order
-                        </Button>
-                        <Button
-                            variant={selectedTemplate === 5 ? "default" : "outline"}
-                            size="sm"
-                            onClick={() => selectTemplate(5)}
-                            title="Custom Document Template"
-                        >
-                            📋 Custom
-                        </Button>
+                            <Label className="text-sm font-medium">Templates:</Label>
+                            <Button
+                                variant={selectedTemplate === 1 ? "default" : "outline"}
+                                size="sm"
+                                onClick={() => selectTemplate(1)}
+                                title="Official Letter Template"
+                            >
+                                📋 Letter
+                            </Button>
+                            <Button
+                                variant={selectedTemplate === 2 ? "default" : "outline"}
+                                size="sm"
+                                onClick={() => selectTemplate(2)}
+                                title="Internal Memo Template"
+                            >
+                                📝 Memo
+                            </Button>
+                            <Button
+                                variant={selectedTemplate === 3 ? "default" : "outline"}
+                                size="sm"
+                                onClick={() => selectTemplate(3)}
+                                title="Project Proposal Template"
+                            >
+                                📋 Proposal
+                            </Button>
+                            <Button
+                                variant={selectedTemplate === 4 ? "default" : "outline"}
+                                size="sm"
+                                onClick={() => selectTemplate(4)}
+                                title="Work Order Template"
+                            >
+                                📋 Work Order
+                            </Button>
+                            <Button
+                                variant={selectedTemplate === 5 ? "default" : "outline"}
+                                size="sm"
+                                onClick={() => selectTemplate(5)}
+                                title="Custom Document Template"
+                            >
+                                📋 Custom
+                            </Button>
                         </div>
                     </div>
                 </div>
 
                 {/* Formatting Toolbar */}
-                
+
             </div>
 
             {/* Main Content */}
@@ -819,28 +819,51 @@ export default function DocumentEditor() {
                         {editorType === 'structured' ? (
                             // Structured Editor
                             <Card className="min-h-[800px]">
-                                <CardHeader>
+                                <CardHeader className="flex-shrink-0">
                                     <CardTitle className="flex items-center justify-between">
                                         <span>Document Content - {getCurrentPage().title}</span>
-                                        <div className="flex items-center space-x-2">
-                                            <Input
-                                                value={getCurrentPage().title}
-                                                onChange={(e) => updatePageTitle(currentPageId, e.target.value)}
-                                                className="w-48"
-                                                disabled={!canEditDocument}
-                                            />
-                                        <Select value={selectedTemplate.toString()} onValueChange={(value) => selectTemplate(parseInt(value))}>
-                                            <SelectTrigger className="w-48">
-                                                <SelectValue placeholder="Select Template" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {documentTemplates.map((template) => (
-                                                    <SelectItem key={template.id} value={template.id.toString()}>
-                                                        {template.name}
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
+                                        <div className="flex items-center space-x-4"> {/* Increased spacing */}
+
+                                            {/* Label and Input for Page Title */}
+                                            <div className="flex flex-col space-y-1">
+                                                <Label htmlFor="page-title-input" className="text-xs font-semibold text-gray-600">
+                                                    Page Title:
+                                                </Label>
+                                                <Input
+                                                    id="page-title-input"
+                                                    value={getCurrentPage().title}
+                                                    onChange={(e) => updatePageTitle(currentPageId, e.target.value)}
+                                                    className="w-48"
+                                                    disabled={!canEditDocument || !permissionChecked || isFileAtHigherLevel}
+                                                />
+                                            </div>
+
+                                            {/* Label and Select for Templates */}
+                                            {canEditDocument && templates.length > 0 && (
+                                                <div className="flex flex-col space-y-1">
+                                                    <Label htmlFor="template-select" className="text-xs font-semibold text-gray-600">
+                                                        Select Template:
+                                                    </Label>
+                                                    <Select
+                                                        id="template-select"
+                                                        value={selectedTemplateId || "__none"}
+                                                        onValueChange={handleTemplateSelect}
+                                                        disabled={loadingTemplates}
+                                                    >
+                                                        <SelectTrigger className="w-48">
+                                                            <SelectValue placeholder={loadingTemplates ? "Loading..." : "No Template"} />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            <SelectItem value="__none">No Template</SelectItem>
+                                                            {templates.map(template => (
+                                                                <SelectItem key={template.id} value={String(template.id)}>
+                                                                    {template.name} {template.template_type && `(${template.template_type})`}
+                                                                </SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
+                                            )}
                                         </div>
                                     </CardTitle>
                                 </CardHeader>
@@ -849,18 +872,15 @@ export default function DocumentEditor() {
                                         {/* Fixed KWSC Header */}
                                         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
                                             <div className="flex items-center justify-center space-x-4">
-                                                <img 
-                                                    src="/logo.png" 
-                                                    alt="KWSC Logo" 
+                                                <img
+                                                    src="/logo.png"
+                                                    alt="KWSC Logo"
                                                     className="h-16 w-auto"
                                                 />
                                                 <div className="text-center">
                                                     <h1 className="text-2xl font-bold text-blue-900">
                                                         Karachi Water & Sewerage Corporation
                                                     </h1>
-                                                    <p className="text-sm text-blue-700 mt-1">
-                                                        Government of Sindh
-                                                    </p>
                                                 </div>
                                             </div>
                                         </div>
@@ -917,8 +937,8 @@ export default function DocumentEditor() {
                                         </div>
                                         <div>
                                             <Label htmlFor="regards">Regards</Label>
-                                            <Select 
-                                                value={(getCurrentPage().content.regards) || ''} 
+                                            <Select
+                                                value={(getCurrentPage().content.regards) || ''}
                                                 onValueChange={(value) => updateCurrentPageContent({ regards: value })}
                                                 disabled={!canEditDocument}
                                             >
@@ -985,18 +1005,15 @@ export default function DocumentEditor() {
                                         {/* Fixed KWSC Header */}
                                         <div className="text-center mb-8 border-b border-gray-300 pb-4">
                                             <div className="flex items-center justify-center space-x-4 mb-4">
-                                                <img 
-                                                    src="/logo.png" 
-                                                    alt="KWSC Logo" 
+                                                <img
+                                                    src="/logo.png"
+                                                    alt="KWSC Logo"
                                                     className="h-12 w-auto"
                                                 />
                                                 <div className="text-center">
                                                     <h1 className="text-xl font-bold text-blue-900">
                                                         Karachi Water & Sewerage Corporation
                                                     </h1>
-                                                    <p className="text-sm text-blue-700">
-                                                        Government of Sindh
-                                                    </p>
                                                 </div>
                                             </div>
                                         </div>

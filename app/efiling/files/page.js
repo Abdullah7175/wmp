@@ -8,16 +8,16 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { 
-    Plus, 
-    Search, 
-    Filter, 
-    FileText, 
-    Edit, 
-    Eye, 
-    Send, 
-    CheckCircle, 
-    Clock, 
+import {
+    Plus,
+    Search,
+    Filter,
+    FileText,
+    Edit,
+    Eye,
+    Send,
+    CheckCircle,
+    Clock,
     AlertCircle,
     Building2,
     User,
@@ -48,7 +48,7 @@ export default function FilesPage() {
     const [departments, setDepartments] = useState([]);
     const [statuses, setStatuses] = useState([]);
     const isAdmin = (session?.user?.role === 1 || session?.user?.role === 2);
-    
+
     // New filter states
     const [districtFilter, setDistrictFilter] = useState('all');
     const [townFilter, setTownFilter] = useState('all');
@@ -60,7 +60,7 @@ export default function FilesPage() {
     const [fileIdFilter, setFileIdFilter] = useState('');
     const [dateFrom, setDateFrom] = useState('');
     const [dateTo, setDateTo] = useState('');
-    
+
     // Filter options
     const [filterOptions, setFilterOptions] = useState({
         districts: [],
@@ -70,7 +70,7 @@ export default function FilesPage() {
         categories: [],
         fileTypes: []
     });
-    
+
     // Pagination state
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage, setItemsPerPage] = useState(5);
@@ -98,7 +98,7 @@ export default function FilesPage() {
             // Build query parameters
             const params = new URLSearchParams();
             params.append('limit', '500');
-            
+
             // Apply filters
             if (fileIdFilter) params.append('file_id', fileIdFilter);
             if (departmentFilter !== 'all') params.append('department_id', departmentFilter);
@@ -113,7 +113,7 @@ export default function FilesPage() {
             if (dateFrom) params.append('date_from', dateFrom);
             if (dateTo) params.append('date_to', dateTo);
             if (statusFilter !== 'all') params.append('status_id', statusFilter);
-            
+
             const response = await fetch(`/api/efiling/files?${params.toString()}`);
             if (response.ok) {
                 const data = await response.json();
@@ -132,7 +132,7 @@ export default function FilesPage() {
             setLoading(false);
         }
     };
-    
+
     const fetchFilterOptions = async () => {
         try {
             const response = await fetch('/api/efiling/files/filter-options');
@@ -232,6 +232,22 @@ export default function FilesPage() {
         );
     };
 
+    const calculateFileAge = (createdAt) => {
+        const createdDate = new Date(createdAt);
+        const now = new Date();
+        const diffTime = Math.abs(now - createdDate);
+        const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+        if (diffDays === 0) return "Today";
+        if (diffDays < 30) return `${diffDays} day${diffDays > 1 ? 's' : ''}`;
+
+        const diffMonths = Math.floor(diffDays / 30);
+        if (diffMonths < 12) return `${diffMonths} month${diffMonths > 1 ? 's' : ''}`;
+
+        const diffYears = Math.floor(diffMonths / 12);
+        return `${diffYears} year${diffYears > 1 ? 's' : ''}`;
+    };
+
     const handleCreateFile = () => {
         router.push('/efiling/files/new');
     };
@@ -309,20 +325,20 @@ export default function FilesPage() {
                                 className="pl-10"
                             />
                         </div>
-                        
+
                         <Input
                             type="number"
                             placeholder="File ID"
                             value={fileIdFilter}
                             onChange={(e) => setFileIdFilter(e.target.value)}
                         />
-                        
+
                         <Input
                             placeholder="Search by subject..."
                             value={subjectFilter}
                             onChange={(e) => setSubjectFilter(e.target.value)}
                         />
-                        
+
                         <Select value={statusFilter} onValueChange={setStatusFilter}>
                             <SelectTrigger>
                                 <SelectValue placeholder="All Statuses" />
@@ -350,7 +366,7 @@ export default function FilesPage() {
                                 ))}
                             </SelectContent>
                         </Select>
-                        
+
                         <Select value={districtFilter} onValueChange={setDistrictFilter}>
                             <SelectTrigger>
                                 <SelectValue placeholder="All Districts" />
@@ -364,7 +380,7 @@ export default function FilesPage() {
                                 ))}
                             </SelectContent>
                         </Select>
-                        
+
                         <Select value={townFilter} onValueChange={setTownFilter}>
                             <SelectTrigger>
                                 <SelectValue placeholder="All Towns" />
@@ -378,7 +394,7 @@ export default function FilesPage() {
                                 ))}
                             </SelectContent>
                         </Select>
-                        
+
                         <Select value={divisionFilter} onValueChange={setDivisionFilter}>
                             <SelectTrigger>
                                 <SelectValue placeholder="All Divisions" />
@@ -392,7 +408,7 @@ export default function FilesPage() {
                                 ))}
                             </SelectContent>
                         </Select>
-                        
+
                         <Select value={zoneFilter} onValueChange={setZoneFilter}>
                             <SelectTrigger>
                                 <SelectValue placeholder="All Zones" />
@@ -406,7 +422,7 @@ export default function FilesPage() {
                                 ))}
                             </SelectContent>
                         </Select>
-                        
+
                         <Select value={categoryFilter} onValueChange={setCategoryFilter}>
                             <SelectTrigger>
                                 <SelectValue placeholder="All Categories" />
@@ -420,7 +436,7 @@ export default function FilesPage() {
                                 ))}
                             </SelectContent>
                         </Select>
-                        
+
                         <Select value={fileTypeFilter} onValueChange={setFileTypeFilter}>
                             <SelectTrigger>
                                 <SelectValue placeholder="All File Types" />
@@ -434,21 +450,21 @@ export default function FilesPage() {
                                 ))}
                             </SelectContent>
                         </Select>
-                        
+
                         <Input
                             type="date"
                             placeholder="Date From"
                             value={dateFrom}
                             onChange={(e) => setDateFrom(e.target.value)}
                         />
-                        
+
                         <Input
                             type="date"
                             placeholder="Date To"
                             value={dateTo}
                             onChange={(e) => setDateTo(e.target.value)}
                         />
-                        
+
                         <div className="flex items-center justify-end">
                             <Badge variant="secondary" className="bg-gray-100 text-gray-800">
                                 {filteredFiles.length} Files
@@ -517,6 +533,7 @@ export default function FilesPage() {
                                         <TableHead>Status</TableHead>
                                         <TableHead>TAT</TableHead>
                                         <TableHead>Created</TableHead>
+                                        <TableHead>File Aging</TableHead>
                                         <TableHead>Actions</TableHead>
                                     </TableRow>
                                 </TableHeader>
@@ -553,6 +570,14 @@ export default function FilesPage() {
                                                     <Calendar className="w-4 h-4 text-gray-500" />
                                                     <span className="text-sm">
                                                         {new Date(file.created_at).toLocaleDateString()}
+                                                    </span>
+                                                </div>
+                                            </TableCell>
+                                            <TableCell>
+                                                <div className="flex items-center space-x-2">
+                                                    <Clock className="w-4 h-4 text-orange-500" />
+                                                    <span className="text-sm font-medium">
+                                                        {calculateFileAge(file.created_at)}
                                                     </span>
                                                 </div>
                                             </TableCell>
@@ -619,7 +644,7 @@ export default function FilesPage() {
                             </Table>
                         </div>
                     )}
-                    
+
                     {/* Pagination */}
                     {filteredFiles.length > 0 && (
                         <div className="mt-4">

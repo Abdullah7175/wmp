@@ -12,9 +12,9 @@ import { Pen, MessageSquare, User, Calendar, X, Edit, Trash2, Shield, Settings, 
 import SignatureCanvas from "react-signature-canvas";
 import { useSession } from "next-auth/react";
 
-export default function DocumentSignatureSystem({ 
-    fileId, 
-    onSignatureAdded, 
+export default function DocumentSignatureSystem({
+    fileId,
+    onSignatureAdded,
     onCommentAdded,
     userRole,
     canEditDocument,
@@ -38,7 +38,7 @@ export default function DocumentSignatureSystem({
     const [pendingAction, setPendingAction] = useState(null);
     const [pendingSignatureData, setPendingSignatureData] = useState(null);
     const [actualUserRole, setActualUserRole] = useState(userRole || '');
-    
+
     // New signature creation states
     const [signatureText, setSignatureText] = useState("");
     const [signatureFont, setSignatureFont] = useState("Arial");
@@ -47,7 +47,7 @@ export default function DocumentSignatureSystem({
     const [activeSignatureTab, setActiveSignatureTab] = useState("draw");
     const [editingSignatureId, setEditingSignatureId] = useState(null);
     const [activeSignature, setActiveSignature] = useState(null);
-    
+
     const sigCanvasRef = useRef(null);
     const documentRef = useRef(null);
     const fileInputRef = useRef(null);
@@ -256,7 +256,7 @@ export default function DocumentSignatureSystem({
     // Handle using saved signature
     const handleUseSavedSignature = () => {
         if (!activeSignature) return;
-        
+
         const signatureData = {
             type: activeSignature.signature_type === 'drawn' || activeSignature.signature_type === 'scanned' ? 'image' : 'text',
             content: activeSignature.file_url || activeSignature.signature_data || activeSignature.signature_text,
@@ -265,7 +265,7 @@ export default function DocumentSignatureSystem({
             color: activeSignature.signature_color || signatureColor,
             signatureId: activeSignature.id
         };
-        
+
         setPendingAction('addSignature');
         setPendingSignatureData(signatureData);
         setShowAuthModal(true);
@@ -322,15 +322,16 @@ export default function DocumentSignatureSystem({
             tempCanvas.height = sourceCanvas.height;
             const tempCtx = tempCanvas.getContext('2d');
             tempCtx.putImageData(sourceImageData, 0, 0);
-            
+
             // Apply color filter
             const colorMap = {
                 'black': { r: 0, g: 0, b: 0 },
                 'blue': { r: 0, g: 0, b: 255 },
-                'red': { r: 255, g: 0, b: 0 }
+                'red': { r: 255, g: 0, b: 0 },
+                'green': { r: 34, g: 197, b: 94 }
             };
             const targetColor = colorMap[signatureColor] || colorMap['black'];
-            
+
             const imgData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
             const data = imgData.data;
             for (let i = 0; i < data.length; i += 4) {
@@ -341,9 +342,9 @@ export default function DocumentSignatureSystem({
                 }
             }
             tempCtx.putImageData(imgData, 0, 0);
-            
+
             const dataURL = tempCanvas.toDataURL("image/png");
-            
+
             // Save to file storage first
             const uploadResponse = await fetch('/api/efiling/signatures/upload', {
                 method: 'POST',
@@ -403,7 +404,7 @@ export default function DocumentSignatureSystem({
             });
             return;
         }
-        
+
         if (!efilingUserId) {
             toast({
                 title: "Unable to save",
@@ -412,7 +413,7 @@ export default function DocumentSignatureSystem({
             });
             return;
         }
-        
+
         // Save typed signature to database
         try {
             const uploadResponse = await fetch('/api/efiling/signatures/upload', {
@@ -530,7 +531,7 @@ export default function DocumentSignatureSystem({
                 event.target.value = ''; // Clear the input
                 return;
             }
-            
+
             if (file.type.startsWith('image/')) {
                 const reader = new FileReader();
                 reader.onload = (e) => {
@@ -571,8 +572,8 @@ export default function DocumentSignatureSystem({
             });
 
             if (response.ok) {
-                setComments(prev => prev.map(comment => 
-                    comment.id === commentId 
+                setComments(prev => prev.map(comment =>
+                    comment.id === commentId
                         ? { ...comment, text: editCommentText, edited: true, edited_at: new Date().toISOString() }
                         : comment
                 ));
@@ -676,7 +677,7 @@ export default function DocumentSignatureSystem({
                             // Helper function to get the correct image URL
                             const getSignatureImageUrl = (content) => {
                                 if (!content) return null;
-                                
+
                                 // 1. If it's already a base64/Data URL, it's perfect.
                                 if (content.startsWith('data:image/')) return content;
 
@@ -686,7 +687,7 @@ export default function DocumentSignatureSystem({
                                 if (path.startsWith('http')) {
                                     try {
                                         const url = new URL(path);
-                                        path = url.pathname; 
+                                        path = url.pathname;
                                     } catch (e) {
                                         console.error('URL parse error', e);
                                     }
@@ -704,78 +705,80 @@ export default function DocumentSignatureSystem({
 
                                 return path;
                             };
-                            
+
                             // Use the helper function for proper URL conversion
                             const imageUrl = signature.type === 'image' || (signature.type && signature.type.toLowerCase().includes('image'))
                                 ? getSignatureImageUrl(signature.content)
                                 : null;
-                            
+
                             return (
                                 <div key={signature.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                                     <div className="flex items-center gap-3">
                                         <div className="w-12 h-8 border rounded bg-white flex items-center justify-center">
                                             {signature.type === 'text' ? (
-                                                <span 
+                                                <span
                                                     className="text-sm font-bold"
-                                                    style={{ 
+                                                    style={{
                                                         fontFamily: signature.font || signatureFont,
-                                                        color: signature.color === 'black' ? '#000' : signature.color === 'blue' ? '#2563eb' : signature.color === 'red' ? '#dc2626' : '#000'
+                                                        color: signature.color === 'blue' ? '#2563eb' :
+                                                            signature.color === 'red' ? '#dc2626' :
+                                                                signature.color === 'green' ? '#16a34a' : '#000000'
                                                     }}
                                                 >
                                                     {signature.content}
                                                 </span>
-                                                ) : imageUrl ? (
-                                                    <img
-                                                        src={imageUrl}
-                                                        alt="Signature"
-                                                        className="w-10 h-6 object-contain"
-                                                        loading="lazy"
-                                                        onLoad={(e) => {
-                                                            // Image loaded successfully, mark it
-                                                            const img = e.target;
-                                                            img.dataset.loaded = 'true';
-                                                        }}
-                                                        onError={(e) => {
-                                                            const img = e.target;
-                                                            const currentSrc = img.src;
+                                            ) : imageUrl ? (
+                                                <img
+                                                    src={imageUrl}
+                                                    alt="Signature"
+                                                    className="w-10 h-6 object-contain"
+                                                    loading="lazy"
+                                                    onLoad={(e) => {
+                                                        // Image loaded successfully, mark it
+                                                        const img = e.target;
+                                                        img.dataset.loaded = 'true';
+                                                    }}
+                                                    onError={(e) => {
+                                                        const img = e.target;
+                                                        const currentSrc = img.src;
 
-                                                            // Check if image actually loaded (sometimes onError fires even on success)
-                                                            if (img.dataset.loaded === 'true') {
-                                                                return; // Image actually loaded, ignore error
-                                                            }
+                                                        // Check if image actually loaded (sometimes onError fires even on success)
+                                                        if (img.dataset.loaded === 'true') {
+                                                            return; // Image actually loaded, ignore error
+                                                        }
 
-                                                            // Stop if we've already tried everything
-                                                            if (img.dataset.retryStatus === 'failed') return;
+                                                        // Stop if we've already tried everything
+                                                        if (img.dataset.retryStatus === 'failed') return;
 
-                                                            // POSSIBILITY 1: Try path swap first (more common issue)
-                                                            if (!img.dataset.triedPathSwap) {
-                                                                img.dataset.triedPathSwap = 'true';
-                                                                // If the /api/ route failed, try the direct /uploads/ route
-                                                                if (currentSrc.includes('/api/uploads/')) {
-                                                                    img.src = currentSrc.replace('/api/uploads/', '/uploads/');
-                                                                    return;
-                                                                } else if (currentSrc.includes('/uploads/') && !currentSrc.includes('/api/')) {
-                                                                    img.src = currentSrc.replace('/uploads/', '/api/uploads/');
-                                                                    return;
-                                                                }
-                                                            }
-
-                                                            // POSSIBILITY 2: Final attempt with the raw database content
-                                                            if (!img.dataset.triedRaw && signature.content) {
-                                                                img.dataset.triedRaw = 'true';
-                                                                img.src = signature.content;
+                                                        // POSSIBILITY 1: Try path swap first (more common issue)
+                                                        if (!img.dataset.triedPathSwap) {
+                                                            img.dataset.triedPathSwap = 'true';
+                                                            // If the /api/ route failed, try the direct /uploads/ route
+                                                            if (currentSrc.includes('/api/uploads/')) {
+                                                                img.src = currentSrc.replace('/api/uploads/', '/uploads/');
+                                                                return;
+                                                            } else if (currentSrc.includes('/uploads/') && !currentSrc.includes('/api/')) {
+                                                                img.src = currentSrc.replace('/uploads/', '/api/uploads/');
                                                                 return;
                                                             }
+                                                        }
 
-                                                            // ALL FAILED: Hide the broken image icon
-                                                            img.dataset.retryStatus = 'failed';
-                                                            img.style.display = 'none';
-                                                            console.error('All signature load attempts failed for:', currentSrc);
-                                                        }}
-                                                    />
-                                                ) : (
-                                                    <span className="text-xs text-gray-400">No image</span>
-                                                )}
+                                                        // POSSIBILITY 2: Final attempt with the raw database content
+                                                        if (!img.dataset.triedRaw && signature.content) {
+                                                            img.dataset.triedRaw = 'true';
+                                                            img.src = signature.content;
+                                                            return;
+                                                        }
+
+                                                        // ALL FAILED: Hide the broken image icon
+                                                        img.dataset.retryStatus = 'failed';
+                                                        img.style.display = 'none';
+                                                        console.error('All signature load attempts failed for:', currentSrc);
+                                                    }}
+                                                />
+                                            ) : (
+                                                <span className="text-xs text-gray-400">No image</span>
+                                            )}
                                         </div>
                                         <div>
                                             <div className="font-medium">{signature.user_name}</div>
@@ -802,7 +805,7 @@ export default function DocumentSignatureSystem({
                                     // Helper function to get the correct image URL
                                     const getSignatureImageUrl = (content) => {
                                         if (!content) return null;
-                                        
+
                                         // 1. If it's already a base64/Data URL, it's perfect.
                                         if (content.startsWith('data:image/')) return content;
 
@@ -812,7 +815,7 @@ export default function DocumentSignatureSystem({
                                         if (path.startsWith('http')) {
                                             try {
                                                 const url = new URL(path);
-                                                path = url.pathname; 
+                                                path = url.pathname;
                                             } catch (e) {
                                                 console.error('URL parse error', e);
                                             }
@@ -828,65 +831,67 @@ export default function DocumentSignatureSystem({
 
                                         return path;
                                     };
-                                    
+
                                     // Use the helper function for proper URL conversion
                                     const imageUrl = signature.type === 'image' || (signature.type && signature.type.toLowerCase().includes('image'))
                                         ? getSignatureImageUrl(signature.content)
                                         : null;
-                                    
+
                                     return (
                                         <div key={signature.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                                             <div className="flex items-center gap-3">
                                                 <div className="w-12 h-8 border rounded bg-white flex items-center justify-center">
                                                     {signature.type === 'text' ? (
-                                                        <span 
+                                                        <span
                                                             className="text-sm font-bold"
-                                                            style={{ 
+                                                            style={{
                                                                 fontFamily: signature.font || signatureFont,
-                                                                color: signature.color === 'black' ? '#000' : signature.color === 'blue' ? '#2563eb' : signature.color === 'red' ? '#dc2626' : '#000'
+                                                                color: signature.color === 'blue' ? '#2563eb' :
+                                                                    signature.color === 'red' ? '#dc2626' :
+                                                                        signature.color === 'green' ? '#16a34a' : '#000000'
                                                             }}
                                                         >
                                                             {signature.content}
                                                         </span>
-                                                ) : imageUrl ? (
-                                                    <img
-                                                        src={imageUrl}
-                                                        alt="Signature"
-                                                        className="w-10 h-6 object-contain"
-                                                        loading="lazy"
-                                                        onError={(e) => {
-                                                            const img = e.target;
-                                                            const currentSrc = img.src;
+                                                    ) : imageUrl ? (
+                                                        <img
+                                                            src={imageUrl}
+                                                            alt="Signature"
+                                                            className="w-10 h-6 object-contain"
+                                                            loading="lazy"
+                                                            onError={(e) => {
+                                                                const img = e.target;
+                                                                const currentSrc = img.src;
 
-                                                            // Stop if we've already tried everything
-                                                            if (img.dataset.retryStatus === 'failed') return;
+                                                                // Stop if we've already tried everything
+                                                                if (img.dataset.retryStatus === 'failed') return;
 
-                                                            // POSSIBILITY 1: Proxy vs Direct Path (/api/uploads vs /uploads)
-                                                            if (!img.dataset.triedPathSwap) {
-                                                                img.dataset.triedPathSwap = 'true';
-                                                                // If the /api/ route failed, try the direct /uploads/ route
-                                                                if (currentSrc.includes('/api/uploads/')) {
-                                                                    img.src = currentSrc.replace('/api/uploads/', '/uploads/');
+                                                                // POSSIBILITY 1: Proxy vs Direct Path (/api/uploads vs /uploads)
+                                                                if (!img.dataset.triedPathSwap) {
+                                                                    img.dataset.triedPathSwap = 'true';
+                                                                    // If the /api/ route failed, try the direct /uploads/ route
+                                                                    if (currentSrc.includes('/api/uploads/')) {
+                                                                        img.src = currentSrc.replace('/api/uploads/', '/uploads/');
+                                                                        return;
+                                                                    }
+                                                                }
+
+                                                                // POSSIBILITY 3: Final attempt with the raw database content
+                                                                if (!img.dataset.triedRaw && signature.content) {
+                                                                    img.dataset.triedRaw = 'true';
+                                                                    img.src = signature.content;
                                                                     return;
                                                                 }
-                                                            }
 
-                                                            // POSSIBILITY 3: Final attempt with the raw database content
-                                                            if (!img.dataset.triedRaw && signature.content) {
-                                                                img.dataset.triedRaw = 'true';
-                                                                img.src = signature.content;
-                                                                return;
-                                                            }
-
-                                                            // ALL FAILED: Hide the broken image icon
-                                                            img.dataset.retryStatus = 'failed';
-                                                            img.style.display = 'none';
-                                                            console.error('All signature load attempts failed for:', currentSrc);
-                                                        }}
-                                                    />
-                                                ) : (
-                                                    <span className="text-xs text-gray-400">No image</span>
-                                                )}
+                                                                // ALL FAILED: Hide the broken image icon
+                                                                img.dataset.retryStatus = 'failed';
+                                                                img.style.display = 'none';
+                                                                console.error('All signature load attempts failed for:', currentSrc);
+                                                            }}
+                                                        />
+                                                    ) : (
+                                                        <span className="text-xs text-gray-400">No image</span>
+                                                    )}
                                                 </div>
                                                 <div>
                                                     <div className="font-medium">{signature.user_name}</div>
@@ -941,14 +946,14 @@ export default function DocumentSignatureSystem({
                                                         placeholder="Edit your comment..."
                                                     />
                                                     <div className="flex gap-2">
-                                                        <Button 
-                                                            size="sm" 
+                                                        <Button
+                                                            size="sm"
                                                             onClick={() => handleEditComment(comment.id)}
                                                         >
                                                             Save
                                                         </Button>
-                                                        <Button 
-                                                            size="sm" 
+                                                        <Button
+                                                            size="sm"
                                                             variant="outline"
                                                             onClick={() => {
                                                                 setEditingCommentId(null);
@@ -1016,9 +1021,9 @@ export default function DocumentSignatureSystem({
                                     if (content.startsWith('data:image/')) {
                                         return content;
                                     }
-                                    
+
                                     let path = content;
-                                    
+
                                     // If it's already a full URL with /api/uploads/, extract path
                                     if (path.startsWith('http://') || path.startsWith('https://')) {
                                         try {
@@ -1028,9 +1033,9 @@ export default function DocumentSignatureSystem({
                                             console.error('URL parse error', e);
                                         }
                                     }
-                                    
+
                                     // Preserve original format - no conversion needed
-                                    
+
                                     // Use same logic as profile page for relative paths
                                     if (path.startsWith('/api/')) {
                                         return path; // Already correct
@@ -1041,7 +1046,7 @@ export default function DocumentSignatureSystem({
                                     // Otherwise, assume it's a relative path and prepend /api/uploads/
                                     return `/api/uploads${path.startsWith('/') ? '' : '/'}${path}`;
                                 };
-                                
+
                                 // For image signatures, prefer file_url but fallback to signature_data (base64)
                                 // signature_data is more reliable as it's embedded data
                                 let signatureImageUrl = null;
@@ -1057,7 +1062,7 @@ export default function DocumentSignatureSystem({
                                         signatureImageUrl = getSavedSignatureImageUrl(activeSignature.signature_data);
                                     }
                                 }
-                                
+
                                 // Debug: log the URL being used
                                 if (signatureImageUrl && activeSignature.signature_type !== 'typed') {
                                     console.log('[Signature Debug] Original file_url:', activeSignature.file_url);
@@ -1065,327 +1070,329 @@ export default function DocumentSignatureSystem({
                                     console.log('[Signature Debug] Using:', activeSignature.signature_data && activeSignature.signature_data.startsWith('data:image/') ? 'base64 data URL' : 'file URL');
                                     console.log('[Signature Debug] Constructed URL:', signatureImageUrl.substring(0, 100) + (signatureImageUrl.length > 100 ? '...' : ''));
                                 }
-                                
+
                                 return (
-                                <div className="border rounded-lg p-4 bg-gray-50">
-                                    <Label className="text-sm font-medium mb-2 block">Your Saved Signature</Label>
-                                    <div className="flex items-center gap-4">
-                                        <div className="border rounded bg-white p-2 flex items-center justify-center" style={{ minWidth: '200px', minHeight: '80px' }}>
-                                            {activeSignature.signature_type === 'typed' ? (
-                                                <span 
-                                                    className="text-2xl font-bold"
-                                                    style={{ 
-                                                        fontFamily: activeSignature.signature_font || signatureFont,
-                                                        color: activeSignature.signature_color || signatureColor
-                                                    }}
-                                                >
-                                                    {activeSignature.signature_text || signatureText}
-                                                </span>
-                                            ) : signatureImageUrl ? (
-                                                <img
-                                                    src={signatureImageUrl}
-                                                    alt="Signature"
-                                                    className="max-h-16 max-w-48 object-contain"
-                                                    onLoad={(e) => {
-                                                        // Image loaded successfully, mark it and remove any error messages
-                                                        const img = e.target;
-                                                        img.dataset.loaded = 'true';
-                                                        img.style.display = ''; // Make sure image is visible
-                                                        // Remove any error messages
-                                                        const parent = img.parentElement;
-                                                        if (parent) {
-                                                            const errorDiv = parent.querySelector('.signature-error');
-                                                            if (errorDiv) {
-                                                                errorDiv.remove();
-                                                            }
-                                                        }
-                                                    }}
-                                                    onError={async (e) => {
-                                                        const img = e.target;
-                                                        const originalSrc = img.src;
-                                                        
-                                                        // Check if image actually loaded (sometimes onError fires even on success)
-                                                        if (img.dataset.loaded === 'true') {
-                                                            return; // Image actually loaded, ignore error
-                                                        }
-                                                        
-                                                        // Count retry attempts
-                                                        const retryCount = parseInt(img.dataset.retryCount || '0');
-                                                        
-                                                        // If we've tried all fallbacks, show error
-                                                        if (retryCount >= 3) {
-                                                            img.style.display = 'none';
+                                    <div className="border rounded-lg p-4 bg-gray-50">
+                                        <Label className="text-sm font-medium mb-2 block">Your Saved Signature</Label>
+                                        <div className="flex items-center gap-4">
+                                            <div className="border rounded bg-white p-2 flex items-center justify-center" style={{ minWidth: '200px', minHeight: '80px' }}>
+                                                {activeSignature.signature_type === 'typed' ? (
+                                                    <span
+                                                        className="text-2xl font-bold"
+                                                        style={{
+                                                            fontFamily: activeSignature.signature_font || signatureFont,
+                                                            color: activeSignature.signature_color || signatureColor
+                                                        }}
+                                                    >
+                                                        {activeSignature.signature_text || signatureText}
+                                                    </span>
+                                                ) : signatureImageUrl ? (
+                                                    <img
+                                                        src={signatureImageUrl}
+                                                        alt="Signature"
+                                                        className="max-h-16 max-w-48 object-contain"
+                                                        onLoad={(e) => {
+                                                            // Image loaded successfully, mark it and remove any error messages
+                                                            const img = e.target;
+                                                            img.dataset.loaded = 'true';
+                                                            img.style.display = ''; // Make sure image is visible
+                                                            // Remove any error messages
                                                             const parent = img.parentElement;
-                                                            if (parent && !parent.querySelector('.signature-error')) {
-                                                                const errorDiv = document.createElement('div');
-                                                                errorDiv.className = 'signature-error text-xs text-gray-400 text-center';
-                                                                errorDiv.textContent = 'Image not found';
-                                                                parent.appendChild(errorDiv);
-                                                            }
-                                                            return;
-                                                        }
-                                                        
-                                                        img.dataset.retryCount = String(retryCount + 1);
-                                                        
-                                                        // Try fallback strategies
-                                                        let newSrc = null;
-                                                        
-                                                        if (retryCount === 0 && originalSrc.includes('/api/uploads/')) {
-                                                            // First retry: try direct /uploads/ path
-                                                            newSrc = originalSrc.replace('/api/uploads/', '/uploads/');
-                                                            console.log('[Signature Image] Trying direct path fallback:', newSrc);
-                                                        } else if (retryCount === 1 && originalSrc.includes('/uploads/') && !originalSrc.includes('/api/')) {
-                                                            // Second retry: try /api/uploads/ path
-                                                            newSrc = originalSrc.replace('/uploads/', '/api/uploads/');
-                                                            console.log('[Signature Image] Trying API route fallback:', newSrc);
-                                                        } else if (retryCount === 2) {
-                                                            // Final fallback: try using signature_data (base64) if available
-                                                            if (activeSignature.signature_data && activeSignature.signature_data.startsWith('data:image/')) {
-                                                                newSrc = activeSignature.signature_data;
-                                                                console.log('[Signature Image] Trying base64 data URL fallback');
-                                                            } else if (!originalSrc.match(/\.(jpg|jpeg)$/i)) {
-                                                                // If no extension issue, try the other path format
-                                                                if (originalSrc.includes('/api/uploads/')) {
-                                                                    newSrc = originalSrc.replace('/api/uploads/', '/uploads/');
-                                                                } else if (originalSrc.includes('/uploads/')) {
-                                                                    newSrc = originalSrc.replace('/uploads/', '/api/uploads/');
+                                                            if (parent) {
+                                                                const errorDiv = parent.querySelector('.signature-error');
+                                                                if (errorDiv) {
+                                                                    errorDiv.remove();
                                                                 }
                                                             }
-                                                        }
-                                                        
-                                                        if (newSrc) {
-                                                            img.src = newSrc;
-                                                        } else {
-                                                            // No more fallbacks, show error
-                                                            img.style.display = 'none';
-                                                            const parent = img.parentElement;
-                                                            if (parent && !parent.querySelector('.signature-error')) {
-                                                                const errorDiv = document.createElement('div');
-                                                                errorDiv.className = 'signature-error text-xs text-gray-400 text-center';
-                                                                errorDiv.textContent = 'Image not found';
-                                                                parent.appendChild(errorDiv);
+                                                        }}
+                                                        onError={async (e) => {
+                                                            const img = e.target;
+                                                            const originalSrc = img.src;
+
+                                                            // Check if image actually loaded (sometimes onError fires even on success)
+                                                            if (img.dataset.loaded === 'true') {
+                                                                return; // Image actually loaded, ignore error
                                                             }
-                                                        }
-                                                    }}
-                                                />
-                                            ) : (
-                                                <span className="text-xs text-gray-400">No image available</span>
-                                            )}
-                                        </div>
-                                        <div className="flex-1">
-                                            <p className="text-sm text-gray-600 mb-2">
-                                                Use your saved signature to sign this document. You'll only need to verify your identity.
-                                            </p>
-                                            <div className="flex gap-2">
-                                                <Button 
-                                                    onClick={handleUseSavedSignature}
-                                                    className="bg-blue-600 hover:bg-blue-700"
-                                                >
-                                                    Use This Signature
-                                                </Button>
-                                                <Button 
-                                                    variant="outline"
-                                                    onClick={() => setActiveSignature(null)}
-                                                >
-                                                    Create New Signature
-                                                </Button>
+
+                                                            // Count retry attempts
+                                                            const retryCount = parseInt(img.dataset.retryCount || '0');
+
+                                                            // If we've tried all fallbacks, show error
+                                                            if (retryCount >= 3) {
+                                                                img.style.display = 'none';
+                                                                const parent = img.parentElement;
+                                                                if (parent && !parent.querySelector('.signature-error')) {
+                                                                    const errorDiv = document.createElement('div');
+                                                                    errorDiv.className = 'signature-error text-xs text-gray-400 text-center';
+                                                                    errorDiv.textContent = 'Image not found';
+                                                                    parent.appendChild(errorDiv);
+                                                                }
+                                                                return;
+                                                            }
+
+                                                            img.dataset.retryCount = String(retryCount + 1);
+
+                                                            // Try fallback strategies
+                                                            let newSrc = null;
+
+                                                            if (retryCount === 0 && originalSrc.includes('/api/uploads/')) {
+                                                                // First retry: try direct /uploads/ path
+                                                                newSrc = originalSrc.replace('/api/uploads/', '/uploads/');
+                                                                console.log('[Signature Image] Trying direct path fallback:', newSrc);
+                                                            } else if (retryCount === 1 && originalSrc.includes('/uploads/') && !originalSrc.includes('/api/')) {
+                                                                // Second retry: try /api/uploads/ path
+                                                                newSrc = originalSrc.replace('/uploads/', '/api/uploads/');
+                                                                console.log('[Signature Image] Trying API route fallback:', newSrc);
+                                                            } else if (retryCount === 2) {
+                                                                // Final fallback: try using signature_data (base64) if available
+                                                                if (activeSignature.signature_data && activeSignature.signature_data.startsWith('data:image/')) {
+                                                                    newSrc = activeSignature.signature_data;
+                                                                    console.log('[Signature Image] Trying base64 data URL fallback');
+                                                                } else if (!originalSrc.match(/\.(jpg|jpeg)$/i)) {
+                                                                    // If no extension issue, try the other path format
+                                                                    if (originalSrc.includes('/api/uploads/')) {
+                                                                        newSrc = originalSrc.replace('/api/uploads/', '/uploads/');
+                                                                    } else if (originalSrc.includes('/uploads/')) {
+                                                                        newSrc = originalSrc.replace('/uploads/', '/api/uploads/');
+                                                                    }
+                                                                }
+                                                            }
+
+                                                            if (newSrc) {
+                                                                img.src = newSrc;
+                                                            } else {
+                                                                // No more fallbacks, show error
+                                                                img.style.display = 'none';
+                                                                const parent = img.parentElement;
+                                                                if (parent && !parent.querySelector('.signature-error')) {
+                                                                    const errorDiv = document.createElement('div');
+                                                                    errorDiv.className = 'signature-error text-xs text-gray-400 text-center';
+                                                                    errorDiv.textContent = 'Image not found';
+                                                                    parent.appendChild(errorDiv);
+                                                                }
+                                                            }
+                                                        }}
+                                                    />
+                                                ) : (
+                                                    <span className="text-xs text-gray-400">No image available</span>
+                                                )}
+                                            </div>
+                                            <div className="flex-1">
+                                                <p className="text-sm text-gray-600 mb-2">
+                                                    Use your saved signature to sign this document. You'll only need to verify your identity.
+                                                </p>
+                                                <div className="flex gap-2">
+                                                    <Button
+                                                        onClick={handleUseSavedSignature}
+                                                        className="bg-blue-600 hover:bg-blue-700"
+                                                    >
+                                                        Use This Signature
+                                                    </Button>
+                                                    <Button
+                                                        variant="outline"
+                                                        onClick={() => setActiveSignature(null)}
+                                                    >
+                                                        Create New Signature
+                                                    </Button>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
-                                </div>
                                 );
                             })()}
-                            
+
                             {!activeSignature && (
                                 <>
-                            {/* Signature Type Tabs */}
-                            <div className="flex space-x-2 border-b">
-                                <Button
-                                    variant={activeSignatureTab === "draw" ? "default" : "ghost"}
-                                    onClick={() => setActiveSignatureTab("draw")}
-                                    className="flex items-center gap-2"
-                                >
-                                    <Pen className="w-4 h-4" />
-                                    Draw Signature
-                                </Button>
-                                <Button
-                                    variant={activeSignatureTab === "type" ? "default" : "ghost"}
-                                    onClick={() => setActiveSignatureTab("type")}
-                                    className="flex items-center gap-2"
-                                >
-                                    <User className="w-4 h-4" />
-                                    Type Signature
-                                </Button>
-                                <Button
-                                    variant={activeSignatureTab === "scan" ? "default" : "ghost"}
-                                    onClick={() => setActiveSignatureTab("scan")}
-                                    className="flex items-center gap-2"
-                                >
-                                    <Shield className="w-4 h-4" />
-                                    Upload Scanned
-                                </Button>
-                            </div>
-
-                            {/* Draw Signature Tab */}
-                            {activeSignatureTab === "draw" && (
-                                <div className="space-y-4">
-                                    <div>
-                                        <Label>Signature Color</Label>
-                                        <div className="flex gap-2 mt-2">
-                                            {['black', 'blue', 'red'].map((color) => (
-                                                <Button
-                                                    key={color}
-                                                    type="button"
-                                                    variant={signatureColor === color ? "default" : "outline"}
-                                                    onClick={() => {
-                                                        setSignatureColor(color);
-                                                        if (sigCanvasRef.current) {
-                                                            sigCanvasRef.current.penColor = color;
-                                                        }
-                                                    }}
-                                                    className="capitalize"
-                                                    style={signatureColor === color ? {
-                                                        backgroundColor: color === 'black' ? '#000' : color === 'blue' ? '#2563eb' : '#dc2626',
-                                                        color: 'white'
-                                                    } : {}}
-                                                >
-                                                    {color}
-                                                </Button>
-                                            ))}
-                                        </div>
-                                    </div>
-                                    <div className="border-2 border-dashed border-gray-300 rounded-lg p-4">
-                                        <Label>Draw Your Signature</Label>
-                                        <SignatureCanvas
-                                            ref={sigCanvasRef}
-                                            penColor={signatureColor}
-                                            canvasProps={{
-                                                width: 400,
-                                                height: 150,
-                                                className: "border rounded mx-auto mt-2"
-                                            }}
-                                        />
-                                        <div className="flex gap-2 justify-center mt-2">
-                                            <Button 
-                                                variant="outline" 
-                                                size="sm"
-                                                onClick={() => sigCanvasRef.current?.clear()}
-                                            >
-                                                Clear
-                                            </Button>
-                                        </div>
-                                    </div>
-                                    <div className="flex justify-end">
-                                        <Button 
-                                            onClick={handleDrawnSignature} 
-                                            className="bg-blue-600 hover:bg-blue-700"
+                                    {/* Signature Type Tabs */}
+                                    <div className="flex space-x-2 border-b">
+                                        <Button
+                                            variant={activeSignatureTab === "draw" ? "default" : "ghost"}
+                                            onClick={() => setActiveSignatureTab("draw")}
+                                            className="flex items-center gap-2"
                                         >
-                                            Save Drawn Signature
+                                            <Pen className="w-4 h-4" />
+                                            Draw Signature
+                                        </Button>
+                                        <Button
+                                            variant={activeSignatureTab === "type" ? "default" : "ghost"}
+                                            onClick={() => setActiveSignatureTab("type")}
+                                            className="flex items-center gap-2"
+                                        >
+                                            <User className="w-4 h-4" />
+                                            Type Signature
+                                        </Button>
+                                        <Button
+                                            variant={activeSignatureTab === "scan" ? "default" : "ghost"}
+                                            onClick={() => setActiveSignatureTab("scan")}
+                                            className="flex items-center gap-2"
+                                        >
+                                            <Shield className="w-4 h-4" />
+                                            Upload Scanned
                                         </Button>
                                     </div>
-                                </div>
-                            )}
 
-                            {/* Type Signature Tab */}
-                            {activeSignatureTab === "type" && (
-                                <div className="space-y-4">
-                                    <div>
-                                        <Label htmlFor="signatureText">Signature Text</Label>
-                                        <Input
-                                            id="signatureText"
-                                            value={signatureText}
-                                            onChange={(e) => setSignatureText(e.target.value)}
-                                            placeholder="Enter your signature text"
-                                            className="mt-1"
-                                        />
-                                    </div>
-                                    <div>
-                                        <Label htmlFor="signatureFont">Signature Font</Label>
-                                        <select
-                                            id="signatureFont"
-                                            value={signatureFont}
-                                            onChange={(e) => setSignatureFont(e.target.value)}
-                                            className="w-full p-2 border rounded-md mt-1"
-                                        >
-                                            {signatureFonts.map((font) => (
-                                                <option key={font.value} value={font.value}>
-                                                    {font.label}
-                                                </option>
-                                            ))}
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <Label>Signature Color</Label>
-                                        <div className="flex gap-2 mt-2">
-                                            {['black', 'blue', 'red'].map((color) => (
+                                    {/* Draw Signature Tab */}
+                                    {activeSignatureTab === "draw" && (
+                                        <div className="space-y-4">
+                                            <div>
+                                                <Label>Signature Color</Label>
+                                                <div className="flex gap-2 mt-2">
+                                                    {['black', 'blue', 'red', 'green'].map((color) => (
+                                                        <Button
+                                                            key={color}
+                                                            type="button"
+                                                            variant={signatureColor === color ? "default" : "outline"}
+                                                            onClick={() => {
+                                                                setSignatureColor(color);
+                                                                if (sigCanvasRef.current) {
+                                                                    sigCanvasRef.current.penColor = color;
+                                                                }
+                                                            }}
+                                                            className="capitalize"
+                                                            style={signatureColor === color ? {
+                                                                backgroundColor: color === 'black' ? '#000' : color === 'blue' ? '#2563eb' : color === 'red' ? '#dc2626' : '#16a34a',
+                                                                color: 'white'
+                                                            } : {}}
+                                                        >
+                                                            {color}
+                                                        </Button>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                            <div className="border-2 border-dashed border-gray-300 rounded-lg p-4">
+                                                <Label>Draw Your Signature</Label>
+                                                <SignatureCanvas
+                                                    ref={sigCanvasRef}
+                                                    penColor={signatureColor}
+                                                    canvasProps={{
+                                                        width: 400,
+                                                        height: 150,
+                                                        className: "border rounded mx-auto mt-2"
+                                                    }}
+                                                />
+                                                <div className="flex gap-2 justify-center mt-2">
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() => sigCanvasRef.current?.clear()}
+                                                    >
+                                                        Clear
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                            <div className="flex justify-end">
                                                 <Button
-                                                    key={color}
-                                                    type="button"
-                                                    variant={signatureColor === color ? "default" : "outline"}
-                                                    onClick={() => setSignatureColor(color)}
-                                                    className="capitalize"
-                                                    style={signatureColor === color ? {
-                                                        backgroundColor: color === 'black' ? '#000' : color === 'blue' ? '#2563eb' : '#dc2626',
-                                                        color: 'white'
-                                                    } : {}}
+                                                    onClick={handleDrawnSignature}
+                                                    className="bg-blue-600 hover:bg-blue-700"
                                                 >
-                                                    {color}
+                                                    Save Drawn Signature
                                                 </Button>
-                                            ))}
-                                        </div>
-                                    </div>
-                                    {signatureText && (
-                                        <div className="text-center p-4 border rounded-lg">
-                                            <Label>Preview:</Label>
-                                            <div
-                                                className="text-3xl font-bold mt-2"
-                                                style={{ 
-                                                    fontFamily: signatureFont,
-                                                    color: signatureColor === 'black' ? '#000' : signatureColor === 'blue' ? '#2563eb' : '#dc2626'
-                                                }}
-                                            >
-                                                {signatureText}
                                             </div>
                                         </div>
                                     )}
-                                    <div className="flex justify-end">
-                                        <Button onClick={handleTypedSignature} disabled={!signatureText.trim()}>
-                                            Save Typed Signature
-                                        </Button>
-                                    </div>
-                                </div>
-                            )}
 
-                            {/* Upload Scanned Signature Tab */}
-                            {activeSignatureTab === "scan" && (
-                                <div className="space-y-4">
-                                    <div>
-                                        <Label htmlFor="scannedSignature">Upload Scanned Signature</Label>
-                                        <Input
-                                            id="scannedSignature"
-                                            type="file"
-                                            accept="image/*"
-                                            onChange={handleFileUpload}
-                                            className="mt-1"
-                                        />
-                                    </div>
-                                    {scannedSignatureFile && (
-                                        <div className="text-center">
-                                            <Label>Preview:</Label>
-                                            <img
-                                                src={scannedSignatureFile}
-                                                alt="Scanned signature"
-                                                className="mx-auto mt-2 border rounded max-w-xs"
-                                            />
+                                    {/* Type Signature Tab */}
+                                    {activeSignatureTab === "type" && (
+                                        <div className="space-y-4">
+                                            <div>
+                                                <Label htmlFor="signatureText">Signature Text</Label>
+                                                <Input
+                                                    id="signatureText"
+                                                    value={signatureText}
+                                                    onChange={(e) => setSignatureText(e.target.value)}
+                                                    placeholder="Enter your signature text"
+                                                    className="mt-1"
+                                                />
+                                            </div>
+                                            <div>
+                                                <Label htmlFor="signatureFont">Signature Font</Label>
+                                                <select
+                                                    id="signatureFont"
+                                                    value={signatureFont}
+                                                    onChange={(e) => setSignatureFont(e.target.value)}
+                                                    className="w-full p-2 border rounded-md mt-1"
+                                                >
+                                                    {signatureFonts.map((font) => (
+                                                        <option key={font.value} value={font.value}>
+                                                            {font.label}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <Label>Signature Color</Label>
+                                                <div className="flex gap-2 mt-2">
+                                                    {['black', 'blue', 'red', 'green'].map((color) => (
+                                                        <Button
+                                                            key={color}
+                                                            type="button"
+                                                            variant={signatureColor === color ? "default" : "outline"}
+                                                            onClick={() => setSignatureColor(color)}
+                                                            className="capitalize"
+                                                            style={signatureColor === color ? {
+                                                                backgroundColor: color === 'black' ? '#000' : color === 'blue' ? '#2563eb' : color === 'red' ? '#dc2626' : '#16a34a',
+                                                                color: 'white'
+                                                            } : {}}
+                                                        >
+                                                            {color}
+                                                        </Button>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                            {signatureText && (
+                                                <div className="text-center p-4 border rounded-lg">
+                                                    <Label>Preview:</Label>
+                                                    <div
+                                                        className="text-3xl font-bold mt-2"
+                                                        style={{
+                                                            fontFamily: signatureFont,
+                                                            color: signatureColor === 'black' ? '#000' :
+                                                                signatureColor === 'blue' ? '#2563eb' :
+                                                                    signatureColor === 'red' ? '#dc2626' : '#16a34a'
+                                                        }}
+                                                    >
+                                                        {signatureText}
+                                                    </div>
+                                                </div>
+                                            )}
+                                            <div className="flex justify-end">
+                                                <Button onClick={handleTypedSignature} disabled={!signatureText.trim()}>
+                                                    Save Typed Signature
+                                                </Button>
+                                            </div>
                                         </div>
                                     )}
-                                    <div className="flex justify-end">
-                                        <Button onClick={handleScannedSignature} disabled={!scannedSignatureFile}>
-                                            Save Scanned Signature
-                                        </Button>
-                                    </div>
-                                </div>
-                            )}
+
+                                    {/* Upload Scanned Signature Tab */}
+                                    {activeSignatureTab === "scan" && (
+                                        <div className="space-y-4">
+                                            <div>
+                                                <Label htmlFor="scannedSignature">Upload Scanned Signature</Label>
+                                                <Input
+                                                    id="scannedSignature"
+                                                    type="file"
+                                                    accept="image/*"
+                                                    onChange={handleFileUpload}
+                                                    className="mt-1"
+                                                />
+                                            </div>
+                                            {scannedSignatureFile && (
+                                                <div className="text-center">
+                                                    <Label>Preview:</Label>
+                                                    <img
+                                                        src={scannedSignatureFile}
+                                                        alt="Scanned signature"
+                                                        className="mx-auto mt-2 border rounded max-w-xs"
+                                                    />
+                                                </div>
+                                            )}
+                                            <div className="flex justify-end">
+                                                <Button onClick={handleScannedSignature} disabled={!scannedSignatureFile}>
+                                                    Save Scanned Signature
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    )}
                                 </>
                             )}
                         </CardContent>
@@ -1454,7 +1461,7 @@ export default function DocumentSignatureSystem({
                             <div className="text-sm text-gray-600 mb-4">
                                 You can have up to 3 signatures (one for each type). Only one signature can be active at a time.
                             </div>
-                            
+
                             {userSignatures.length === 0 ? (
                                 <div className="text-center py-8 text-gray-500">
                                     No signatures created yet. Create your first signature using &quot;Add E-Signature&quot; button.
@@ -1518,8 +1525,8 @@ export default function DocumentSignatureSystem({
                                             </div>
                                             {sig.file_url && (
                                                 <div className="mt-3 p-2 bg-gray-50 rounded border">
-                                                    <img 
-                                                        src={sig.file_url} 
+                                                    <img
+                                                        src={sig.file_url}
                                                         alt={`${sig.signature_type} signature`}
                                                         className="max-h-16 max-w-32 object-contain"
                                                     />

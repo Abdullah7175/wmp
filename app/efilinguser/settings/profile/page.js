@@ -40,27 +40,27 @@ export default function ProfileSettings() {
         new: false,
         confirm: false
     });
-    
+
     // E-Signature management states
     const [userSignature, setUserSignature] = useState(null);
     const [showSignatureModal, setShowSignatureModal] = useState(false);
     const [showAuthModal, setShowAuthModal] = useState(false);
-    
+
     // Google email registration states
     const [showEmailRegistration, setShowEmailRegistration] = useState(false);
     const [registrationEmail, setRegistrationEmail] = useState("");
     const [googleAuthCode, setGoogleAuthCode] = useState("");
-    
+
     // Signature creation states
     const [signatureText, setSignatureText] = useState("");
     const [signatureFont, setSignatureFont] = useState("Arial");
     const [signatureColor, setSignatureColor] = useState("black");
     const [scannedSignatureFile, setScannedSignatureFile] = useState(null);
     const [activeSignatureTab, setActiveSignatureTab] = useState("draw");
-    
+
     const sigCanvasRef = useRef(null);
     const [canvasReady, setCanvasReady] = useState(false);
-    
+
     const signatureFonts = [
         { value: "Arial", label: "Arial" },
         { value: "Times New Roman", label: "Times New Roman" },
@@ -79,7 +79,7 @@ export default function ProfileSettings() {
             fetchUserSignature();
         }
     }, [session?.user?.id, efilingUserId]);
-    
+
 
     // Initialize canvas when signature modal opens and draw tab is active
     useEffect(() => {
@@ -107,7 +107,7 @@ export default function ProfileSettings() {
                 const data = await response.json();
                 // Handle both response formats: { success: true, user: {...} } or direct user object
                 const userData = data.success ? data.user : data;
-                
+
                 setProfile({
                     name: userData?.name || '',
                     email: userData?.email || '',
@@ -126,7 +126,7 @@ export default function ProfileSettings() {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        
+
         if (!efilingUserId) {
             toast({
                 title: "Error",
@@ -135,7 +135,7 @@ export default function ProfileSettings() {
             });
             return;
         }
-        
+
         setLoading(true);
 
         try {
@@ -179,7 +179,7 @@ export default function ProfileSettings() {
 
     const handlePasswordUpdate = async (e) => {
         e.preventDefault();
-        
+
         if (passwordData.new_password !== passwordData.confirm_password) {
             toast({
                 title: "Error",
@@ -261,7 +261,7 @@ export default function ProfileSettings() {
             [field]: !prev[field]
         }));
     };
-    
+
     const fetchUserSignature = async () => {
         if (!efilingUserId) return;
         try {
@@ -275,12 +275,12 @@ export default function ProfileSettings() {
             console.error('Error fetching user signature:', error);
         }
     };
-    
-    
+
+
     const registerGoogleEmail = async () => {
         try {
             setAuthLoading(true);
-            
+
             const response = await fetch('/api/efiling/google-auth', {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
@@ -293,12 +293,12 @@ export default function ProfileSettings() {
             if (response.ok) {
                 setShowEmailRegistration(false);
                 setRegistrationEmail("");
-                
+
                 toast({
                     title: "Email Registered",
                     description: "Your Google email has been registered successfully.",
                 });
-                
+
                 setGoogleAuthCode(registrationEmail);
                 await verifyAuthentication();
             } else {
@@ -315,14 +315,14 @@ export default function ProfileSettings() {
             setAuthLoading(false);
         }
     };
-    
+
     const handleChangeSignature = () => {
         setShowAuthModal(true);
     };
-    
+
     const handleDrawnSignature = async () => {
         if (!sigCanvasRef.current || !efilingUserId) return;
-        
+
         try {
             const canvas = sigCanvasRef.current.getCanvas();
             const ctx = canvas.getContext('2d');
@@ -344,14 +344,15 @@ export default function ProfileSettings() {
             tempCanvas.height = canvas.height;
             const tempCtx = tempCanvas.getContext('2d');
             tempCtx.putImageData(imageData, 0, 0);
-            
+
             const colorMap = {
                 'black': { r: 0, g: 0, b: 0 },
                 'blue': { r: 0, g: 0, b: 255 },
-                'red': { r: 255, g: 0, b: 0 }
+                'red': { r: 255, g: 0, b: 0 },
+                'green': { r: 34, g: 197, b: 94 }
             };
             const targetColor = colorMap[signatureColor] || colorMap['black'];
-            
+
             const imgData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
             const data = imgData.data;
             for (let i = 0; i < data.length; i += 4) {
@@ -362,9 +363,9 @@ export default function ProfileSettings() {
                 }
             }
             tempCtx.putImageData(imgData, 0, 0);
-            
+
             const dataURL = tempCanvas.toDataURL("image/png");
-            
+
             const uploadResponse = await fetch('/api/efiling/signatures/upload', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -396,10 +397,10 @@ export default function ProfileSettings() {
             });
         }
     };
-    
+
     const handleTypedSignature = async () => {
         if (!signatureText.trim() || !efilingUserId) return;
-        
+
         try {
             const uploadResponse = await fetch('/api/efiling/signatures/upload', {
                 method: 'POST',
@@ -433,7 +434,7 @@ export default function ProfileSettings() {
             });
         }
     };
-    
+
     const handleFileUpload = (event) => {
         const file = event.target.files[0];
         if (file && file.type.startsWith('image/')) {
@@ -450,10 +451,10 @@ export default function ProfileSettings() {
             });
         }
     };
-    
+
     const handleScannedSignature = async () => {
         if (!scannedSignatureFile || !efilingUserId) return;
-        
+
         try {
             const uploadResponse = await fetch('/api/efiling/signatures/upload', {
                 method: 'POST',
@@ -739,7 +740,7 @@ export default function ProfileSettings() {
                         </form>
                     </CardContent>
                 </Card>
-                
+
                 {/* E-Signature Management */}
                 <Card className="lg:col-span-2">
                     <CardHeader>
@@ -756,9 +757,9 @@ export default function ProfileSettings() {
                                     <div className="flex items-center gap-4">
                                         <div className="border rounded bg-white p-2 flex items-center justify-center" style={{ minWidth: '200px', minHeight: '80px' }}>
                                             {userSignature.signature_type === 'typed' ? (
-                                                <span 
+                                                <span
                                                     className="text-2xl font-bold"
-                                                    style={{ 
+                                                    style={{
                                                         fontFamily: userSignature.signature_font || signatureFont,
                                                         color: userSignature.signature_color === 'black' ? '#000' : userSignature.signature_color === 'blue' ? '#2563eb' : '#dc2626'
                                                     }}
@@ -768,12 +769,12 @@ export default function ProfileSettings() {
                                             ) : (
                                                 <img
                                                     src={
-                                                        userSignature.file_url 
-                                                            ? (userSignature.file_url.startsWith('/api/') 
-                                                                ? userSignature.file_url 
+                                                        userSignature.file_url
+                                                            ? (userSignature.file_url.startsWith('/api/')
+                                                                ? userSignature.file_url
                                                                 : userSignature.file_url.startsWith('/uploads/')
-                                                                ? userSignature.file_url.replace('/uploads/', '/api/uploads/')
-                                                                : `/api/uploads${userSignature.file_url}`)
+                                                                    ? userSignature.file_url.replace('/uploads/', '/api/uploads/')
+                                                                    : `/api/uploads${userSignature.file_url}`)
                                                             : userSignature.signature_data
                                                     }
                                                     alt="Signature"
@@ -813,7 +814,7 @@ export default function ProfileSettings() {
                     </CardContent>
                 </Card>
             </div>
-            
+
             {/* Authentication Modal */}
             <OTPVerificationModal
                 show={showAuthModal}
@@ -826,7 +827,7 @@ export default function ProfileSettings() {
                 }}
                 efilingUserId={efilingUserId}
             />
-            
+
             {/* Signature Creation Modal */}
             {showSignatureModal && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -889,7 +890,7 @@ export default function ProfileSettings() {
                                     <div>
                                         <Label>Signature Color</Label>
                                         <div className="flex gap-2 mt-2">
-                                            {['black', 'blue', 'red'].map((color) => (
+                                            {['black', 'blue', 'red', 'green'].map((color) => (
                                                 <Button
                                                     key={color}
                                                     type="button"
@@ -902,7 +903,7 @@ export default function ProfileSettings() {
                                                     }}
                                                     className="capitalize"
                                                     style={signatureColor === color ? {
-                                                        backgroundColor: color === 'black' ? '#000' : color === 'blue' ? '#2563eb' : '#dc2626',
+                                                        backgroundColor: color === 'black' ? '#000' : color === 'blue' ? '#2563eb' : color === 'red' ? '#dc2626' : '#16a34a',
                                                         color: 'white'
                                                     } : {}}
                                                 >
@@ -930,8 +931,8 @@ export default function ProfileSettings() {
                                             </div>
                                         )}
                                         <div className="flex gap-2 justify-center mt-2">
-                                            <Button 
-                                                variant="outline" 
+                                            <Button
+                                                variant="outline"
                                                 size="sm"
                                                 onClick={() => sigCanvasRef.current?.clear()}
                                             >
@@ -977,7 +978,7 @@ export default function ProfileSettings() {
                                     <div>
                                         <Label>Signature Color</Label>
                                         <div className="flex gap-2 mt-2">
-                                            {['black', 'blue', 'red'].map((color) => (
+                                            {['black', 'blue', 'red', 'green'].map((color) => (
                                                 <Button
                                                     key={color}
                                                     type="button"
@@ -985,7 +986,7 @@ export default function ProfileSettings() {
                                                     onClick={() => setSignatureColor(color)}
                                                     className="capitalize"
                                                     style={signatureColor === color ? {
-                                                        backgroundColor: color === 'black' ? '#000' : color === 'blue' ? '#2563eb' : '#dc2626',
+                                                        backgroundColor: color === 'black' ? '#000' : color === 'blue' ? '#2563eb' : color === 'red' ? '#dc2626' : '#16a34a',
                                                         color: 'white'
                                                     } : {}}
                                                 >
@@ -999,9 +1000,11 @@ export default function ProfileSettings() {
                                             <Label>Preview:</Label>
                                             <div
                                                 className="text-3xl font-bold mt-2"
-                                                style={{ 
+                                                style={{
                                                     fontFamily: signatureFont,
-                                                    color: signatureColor === 'black' ? '#000' : signatureColor === 'blue' ? '#2563eb' : '#dc2626'
+                                                    color: signatureColor === 'black' ? '#000' :
+                                                        signatureColor === 'blue' ? '#2563eb' :
+                                                        signatureColor === 'red' ? '#dc2626' : '#16a34a'
                                                 }}
                                             >
                                                 {signatureText}
@@ -1049,7 +1052,7 @@ export default function ProfileSettings() {
                     </Card>
                 </div>
             )}
-            
+
             {/* Email Registration Modal */}
             {showEmailRegistration && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]">

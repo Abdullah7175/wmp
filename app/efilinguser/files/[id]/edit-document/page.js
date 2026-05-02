@@ -36,7 +36,7 @@ export default function DocumentEditor() {
     const router = useRouter();
     const params = useParams();
     const { toast } = useToast();
-    
+
     const [file, setFile] = useState(null);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -72,7 +72,7 @@ export default function DocumentEditor() {
         temp.innerHTML = html;
         return temp.textContent || temp.innerText || '';
     };
-    
+
     const [documentContent, setDocumentContent] = useState({
         title: '',
         subject: '',
@@ -159,12 +159,12 @@ export default function DocumentEditor() {
             if (response.ok) {
                 const fileData = await response.json();
                 setFile(fileData);
-                
+
                 // Fetch document content and pages
                 const docResponse = await fetch(`/api/efiling/files/${params.id}/document`);
                 if (docResponse.ok) {
                     const docData = await docResponse.json();
-                    
+
                     // Load pages if they exist
                     if (docData.pages && docData.pages.length > 0) {
                         const loadedPages = docData.pages.map(page => ({
@@ -179,26 +179,26 @@ export default function DocumentEditor() {
                         console.log('Loaded pages:', loadedPages);
                     } else if (docData.document_content) {
                         // Fallback to single page with document content
-                    setDocumentContent(prev => ({
-                        ...prev,
+                        setDocumentContent(prev => ({
+                            ...prev,
                             ...docData.document_content
                         }));
                     }
                 }
-                
+
                 // Check permissions including workflow state
                 if (session?.user?.id) {
                     const userMappingRes = await fetch(`/api/efiling/users/profile?userId=${session.user.id}`);
                     if (userMappingRes.ok) {
                         const userMapping = await userMappingRes.json();
                         const efilingUserId = userMapping.efiling_user_id;
-                        
+
                         // Fetch permissions (includes workflow state check)
                         const permRes = await fetch(`/api/efiling/files/${params.id}/permissions`);
                         if (permRes.ok) {
                             const permData = await permRes.json();
                             const permissions = permData.permissions;
-                            
+
                             // Check if user can edit based on workflow state
                             const canEdit = permissions?.canEdit || false;
                             const canAdd = permissions?.canAddPage || false;
@@ -210,13 +210,13 @@ export default function DocumentEditor() {
                             setIsHigherAuthority(isHigherAuth);
                             setWorkflowState(permissions?.workflow_state);
                             setPermissionChecked(true);
-                            
+
                             // Store assigned to information
                             setFileAssignedTo({
                                 name: fileData.assigned_to_name || 'Unassigned',
                                 id: fileData.assigned_to
                             });
-                            
+
                             // Check if file is at higher level (not within team and not returned to creator)
                             const isWithinTeam = permissions?.is_within_team || false;
                             const isReturnedToCreator = permissions?.workflow_state === 'RETURNED_TO_CREATOR';
@@ -232,7 +232,7 @@ export default function DocumentEditor() {
                             const isAssignedToSomeoneElse = fileData.assigned_to !== null && fileData.assigned_to !== efilingUserId;
                             const isAtHigherLevel = isCreator && isAssignedToSomeoneElse && !isWithinTeam && !isReturnedToCreator && (currentState === 'EXTERNAL' || currentState === '' || !canEdit);
                             setIsFileAtHigherLevel(isAtHigherLevel);
-                            
+
                             console.log('Edit access check:', {
                                 userId: session.user.id,
                                 efilingUserId: efilingUserId,
@@ -258,7 +258,7 @@ export default function DocumentEditor() {
                                 id: fileData.assigned_to
                             });
                             setPermissionChecked(true);
-                            
+
                             if (!isFileCreator) {
                                 router.replace(`/efilinguser/files/${params.id}`);
                                 return;
@@ -376,27 +376,27 @@ export default function DocumentEditor() {
     // Helper function to convert plain text to HTML with proper paragraph formatting
     const convertTextToHTML = (text) => {
         if (!text) return '';
-        
+
         // Split by double newlines (paragraph breaks) or single newlines
         // First, normalize line breaks
         const normalized = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-        
+
         // Split by double newlines for paragraphs
         const paragraphs = normalized.split(/\n\n+/);
-        
+
         // Convert each paragraph to HTML
         const htmlParagraphs = paragraphs.map(para => {
             // Trim whitespace
             const trimmed = para.trim();
             if (!trimmed) return '';
-            
+
             // Replace single newlines within paragraph with <br> tags
             const withBreaks = trimmed.replace(/\n/g, '<br>');
-            
+
             // Wrap in paragraph tag
             return `<p>${withBreaks}</p>`;
         }).filter(p => p); // Remove empty paragraphs
-        
+
         return htmlParagraphs.join('');
     };
 
@@ -416,7 +416,7 @@ export default function DocumentEditor() {
                 await fetch(`/api/efiling/templates/${templateId}/use`, { method: 'POST' });
 
                 // Convert main_content to HTML if it's plain text
-                const mainContentHTML = template.main_content 
+                const mainContentHTML = template.main_content
                     ? convertTextToHTML(template.main_content)
                     : '';
 
@@ -473,10 +473,10 @@ export default function DocumentEditor() {
             });
             return;
         }
-        
+
         setShowAddPageModal(true);
     };
-    
+
     const handleSaveNewPage = async () => {
         if (!newPageTitle.trim() && !newPageContent.trim()) {
             toast({
@@ -486,7 +486,7 @@ export default function DocumentEditor() {
             });
             return;
         }
-        
+
         try {
             const res = await fetch(`/api/efiling/files/${params.id}/pages`, {
                 method: 'POST',
@@ -497,18 +497,18 @@ export default function DocumentEditor() {
                     page_type: 'MAIN'
                 })
             });
-            
+
             if (!res.ok) {
                 const error = await res.json();
                 throw new Error(error.error || 'Failed to add page');
             }
-            
+
             const result = await res.json();
             toast({
                 title: "Page added successfully",
                 description: `Page "${result.page.page_title}" has been added.`,
             });
-            
+
             // Reload pages
             const docResponse = await fetch(`/api/efiling/files/${params.id}/document`);
             if (docResponse.ok) {
@@ -525,7 +525,7 @@ export default function DocumentEditor() {
                     setCurrentPageId(loadedPages[loadedPages.length - 1].id);
                 }
             }
-            
+
             setShowAddPageModal(false);
             setNewPageTitle('');
             setNewPageContent('');
@@ -542,7 +542,7 @@ export default function DocumentEditor() {
     const addNewPage = () => {
         const newPageId = Math.max(...pages.map(p => p.id)) + 1;
         const newPageNumber = Math.max(...pages.map(p => p.pageNumber)) + 1;
-        
+
         const newPage = {
             id: newPageId,
             pageNumber: newPageNumber,
@@ -558,10 +558,10 @@ export default function DocumentEditor() {
             },
             type: 'ATTACHMENT'
         };
-        
+
         setPages(prev => [...prev, newPage]);
         setCurrentPageId(newPageId);
-        
+
         toast({
             title: "New Page Added",
             description: `Page ${newPageNumber} has been added to the document`,
@@ -577,16 +577,16 @@ export default function DocumentEditor() {
             });
             return;
         }
-        
+
         const pageToDelete = pages.find(p => p.id === pageId);
         setPages(prev => prev.filter(p => p.id !== pageId));
-        
+
         // If we're deleting the current page, switch to the first remaining page
         if (currentPageId === pageId) {
             const remainingPages = pages.filter(p => p.id !== pageId);
             setCurrentPageId(remainingPages[0].id);
         }
-        
+
         toast({
             title: "Page Deleted",
             description: `${pageToDelete.title} has been removed from the document`,
@@ -594,7 +594,7 @@ export default function DocumentEditor() {
     };
 
     const updatePageTitle = (pageId, newTitle) => {
-        setPages(prev => prev.map(p => 
+        setPages(prev => prev.map(p =>
             p.id === pageId ? { ...p, title: newTitle } : p
         ));
     };
@@ -604,19 +604,19 @@ export default function DocumentEditor() {
     };
 
     const updateCurrentPageContent = (content) => {
-        setPages(prev => prev.map(p => 
+        setPages(prev => prev.map(p =>
             p.id === currentPageId ? { ...p, content: { ...p.content, ...content } } : p
         ));
     };
 
     const selectTemplate = (templateId) => {
         setSelectedTemplate(templateId);
-        
+
         const currentPage = getCurrentPage();
-        
+
         // Apply template-specific content to current page
         let templateContent = {};
-        
+
         switch (templateId) {
             case 1: // Official Letter
                 templateContent = {
@@ -676,10 +676,10 @@ export default function DocumentEditor() {
             default:
                 return;
         }
-        
+
         // Update current page content
         updateCurrentPageContent(templateContent);
-        
+
         toast({
             title: "Template Applied",
             description: "Document template has been applied to current page",
@@ -700,10 +700,10 @@ export default function DocumentEditor() {
 
         // Check if the active element is one of our document fields
         const isDocumentField = activeElement.id && (
-            activeElement.id === 'header' || 
-            activeElement.id === 'title' || 
-            activeElement.id === 'subject' || 
-            activeElement.id === 'date' || 
+            activeElement.id === 'header' ||
+            activeElement.id === 'title' ||
+            activeElement.id === 'subject' ||
+            activeElement.id === 'date' ||
             activeElement.id === 'footer' ||
             activeElement.id === 'customHeader' ||
             activeElement.id === 'customRegards' ||
@@ -727,7 +727,7 @@ export default function DocumentEditor() {
 
             if (selectedText) {
                 let formattedText = selectedText;
-                
+
                 switch (command) {
                     case 'bold':
                         formattedText = `<strong>${selectedText}</strong>`;
@@ -876,7 +876,7 @@ export default function DocumentEditor() {
                 // Update the document content state
                 const fieldName = activeElement.id;
                 const newValue = activeElement.innerHTML;
-                
+
                 setDocumentContent(prev => ({
                     ...prev,
                     [fieldName]: newValue
@@ -927,7 +927,7 @@ export default function DocumentEditor() {
         <div className="min-h-screen bg-gray-50">
             {/* Add CSS styles for contentEditable placeholder */}
             <style jsx>{contentEditableStyles}</style>
-            
+
             {/* Toolbar */}
             <div className="bg-white border-b border-gray-200 sticky top-0 z-50">
                 <div className="flex items-center justify-between p-4">
@@ -943,7 +943,7 @@ export default function DocumentEditor() {
                         <div>
                             <h1 className="text-xl font-bold text-gray-900">Document Editor</h1>
                             <p className="text-sm text-gray-600">File: {file.file_number}</p>
-                            
+
                             {/* Warning Message when file is at higher level */}
                             {isFileAtHigherLevel && (
                                 <div className="mt-2 bg-amber-50 border border-amber-200 rounded-lg p-3">
@@ -960,7 +960,7 @@ export default function DocumentEditor() {
                                     </div>
                                 </div>
                             )}
-                            
+
                             {/* Warning Message when file was marked back by higher authority */}
                             {wasMarkedBackByHigherAuthority && (
                                 <div className="mt-2 bg-blue-50 border border-blue-200 rounded-lg p-3">
@@ -977,7 +977,7 @@ export default function DocumentEditor() {
                                     </div>
                                 </div>
                             )}
-                            
+
                             {/* Legacy warning (keeping for backward compatibility) */}
                             {isFileAtHigherLevel && false && (
                                 <div className="mt-2 bg-amber-50 border border-amber-200 rounded-lg p-3">
@@ -988,14 +988,14 @@ export default function DocumentEditor() {
                                                 File is marked to a higher level
                                             </p>
                                             <p className="text-xs text-amber-700 mt-1">
-                                                This file has been marked to <strong>{fileAssignedTo?.name || 'a higher authority'}</strong>. 
+                                                This file has been marked to <strong>{fileAssignedTo?.name || 'a higher authority'}</strong>.
                                                 You cannot edit the content, add attachments, or add comments until the file is marked back to you.
                                             </p>
                                         </div>
                                     </div>
                                 </div>
                             )}
-                            
+
                             {/* Warning Message when file was marked back by higher authority */}
                             {wasMarkedBackByHigherAuthority && (
                                 <div className="mt-2 bg-blue-50 border border-blue-200 rounded-lg p-3">
@@ -1012,7 +1012,7 @@ export default function DocumentEditor() {
                                     </div>
                                 </div>
                             )}
-                            
+
                             {/* Warning Message for higher authority users */}
                             {/* {isHigherAuthority && !wasMarkedBackByHigherAuthority && (
                                 <div className="mt-2 bg-purple-50 border border-purple-200 rounded-lg p-3">
@@ -1029,7 +1029,7 @@ export default function DocumentEditor() {
                                     </div>
                                 </div>
                             )} */}
-                            
+
                             {/* Editor Type Toggle */}
                             <div className="flex items-center space-x-2 mt-2">
                                 {/* <Button
@@ -1051,7 +1051,7 @@ export default function DocumentEditor() {
                             </div>
                         </div>
                     </div>
-                    
+
                     <div className="flex items-center space-x-2">
                         <Button
                             onClick={handleSave}
@@ -1070,7 +1070,7 @@ export default function DocumentEditor() {
                                 </div>
                             )}
                         </Button>
-                        
+
                         <Button
                             onClick={handleMarkTo}
                             variant="outline"
@@ -1079,7 +1079,7 @@ export default function DocumentEditor() {
                             <Send className="w-4 h-4 mr-2" />
                             Mark To
                         </Button>
-                        
+
                         <Button
                             onClick={async () => {
                                 if (hasUserSigned && !wasMarkedBackByHigherAuthority) {
@@ -1103,7 +1103,7 @@ export default function DocumentEditor() {
                             <Shield className="w-4 h-4 mr-2" />
                             {hasUserSigned && !wasMarkedBackByHigherAuthority ? 'Already Signed' : 'E-Sign'}
                         </Button>
-                        
+
                         {canEditDocument && (
                             <Button
                                 onClick={() => setShowAttachmentModal(true)}
@@ -1114,7 +1114,7 @@ export default function DocumentEditor() {
                                 Attachment
                             </Button>
                         )}
-                        
+
                         <Button
                             onClick={() => {
                                 // Trigger comment modal from DocumentSignatureSystem
@@ -1137,7 +1137,7 @@ export default function DocumentEditor() {
                 {/* Page Tabs */}
                 <div className="border-t border-gray-200 p-2">
                     <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-2 flex-wrap">
+                        <div className="flex items-center space-x-2 flex-wrap">
                             <Label className="text-sm font-medium">Pages:</Label>
                             {pages.map((page) => (
                                 <div key={page.id} className="flex items-center space-x-1">
@@ -1173,7 +1173,7 @@ export default function DocumentEditor() {
                                 </Button>
                             )}
                         </div>
-                        
+
                         {/* <div className="flex items-center space-x-2">
                         <Label className="text-sm font-medium">Templates:</Label>
                         <Button
@@ -1219,7 +1219,7 @@ export default function DocumentEditor() {
                         </div> */}
                     </div>
                 </div>
-                
+
             </div>
 
             {/* Main Content */}
@@ -1230,35 +1230,52 @@ export default function DocumentEditor() {
                         {editorType === 'structured' ? (
                             // Structured Editor
                             <Card className="flex flex-col h-full overflow-hidden">
+                                {/* --- Locate this section around line 735 --- */}
                                 <CardHeader className="flex-shrink-0">
                                     <CardTitle className="flex items-center justify-between">
                                         <span>Document Content - {getCurrentPage().title}</span>
-                                        <div className="flex items-center space-x-2">
-                                            <Input
-                                                value={getCurrentPage().title}
-                                                onChange={(e) => updatePageTitle(currentPageId, e.target.value)}
-                                                className="w-48"
-                                                disabled={!canEditDocument || !permissionChecked || isFileAtHigherLevel}
-                                            />
-                                        {canEditDocument && templates.length > 0 && (
-                                            <Select
-                                                value={selectedTemplateId || "__none"}
-                                                onValueChange={handleTemplateSelect}
-                                                disabled={loadingTemplates}
-                                            >
-                                                <SelectTrigger className="w-48">
-                                                    <SelectValue placeholder={loadingTemplates ? "Loading..." : "Select Template"} />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectItem value="__none">No Template</SelectItem>
-                                                    {templates.map(template => (
-                                                        <SelectItem key={template.id} value={String(template.id)}>
-                                                            {template.name} {template.template_type && `(${template.template_type})`}
-                                                        </SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
-                                        )}
+                                        <div className="flex items-center space-x-4"> {/* Increased spacing */}
+
+                                            {/* Label and Input for Page Title */}
+                                            <div className="flex flex-col space-y-1">
+                                                <Label htmlFor="page-title-input" className="text-xs font-semibold text-gray-600">
+                                                    Page Title:
+                                                </Label>
+                                                <Input
+                                                    id="page-title-input"
+                                                    value={getCurrentPage().title}
+                                                    onChange={(e) => updatePageTitle(currentPageId, e.target.value)}
+                                                    className="w-48"
+                                                    disabled={!canEditDocument || !permissionChecked || isFileAtHigherLevel}
+                                                />
+                                            </div>
+
+                                            {/* Label and Select for Templates */}
+                                            {canEditDocument && templates.length > 0 && (
+                                                <div className="flex flex-col space-y-1">
+                                                    <Label htmlFor="template-select" className="text-xs font-semibold text-gray-600">
+                                                        Select Template:
+                                                    </Label>
+                                                    <Select
+                                                        id="template-select"
+                                                        value={selectedTemplateId || "__none"}
+                                                        onValueChange={handleTemplateSelect}
+                                                        disabled={loadingTemplates}
+                                                    >
+                                                        <SelectTrigger className="w-48">
+                                                            <SelectValue placeholder={loadingTemplates ? "Loading..." : "No Template"} />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            <SelectItem value="__none">No Template</SelectItem>
+                                                            {templates.map(template => (
+                                                                <SelectItem key={template.id} value={String(template.id)}>
+                                                                    {template.name} {template.template_type && `(${template.template_type})`}
+                                                                </SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
+                                            )}
                                         </div>
                                     </CardTitle>
                                 </CardHeader>
@@ -1267,18 +1284,15 @@ export default function DocumentEditor() {
                                         {/* Fixed KWSC Header */}
                                         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
                                             <div className="flex items-center justify-center space-x-4">
-                                                <img 
-                                                    src="/logo.png" 
-                                                    alt="KWSC Logo" 
+                                                <img
+                                                    src="/logo.png"
+                                                    alt="KWSC Logo"
                                                     className="h-16 w-auto"
                                                 />
                                                 <div className="text-center">
                                                     <h1 className="text-2xl font-bold text-blue-900">
                                                         Karachi Water & Sewerage Corporation
                                                     </h1>
-                                                    <p className="text-sm text-blue-700 mt-1">
-                                                        Government of Sindh
-                                                    </p>
                                                 </div>
                                             </div>
                                         </div>
@@ -1334,8 +1348,8 @@ export default function DocumentEditor() {
                                                     {isFileAtHigherLevel
                                                         ? "This file is marked to a higher level. Editing is disabled until the file is marked back to you."
                                                         : wasMarkedBackByHigherAuthority
-                                                        ? "This file was marked back to you. You can add new pages for corrections but cannot edit existing pages. Please add a new page, make corrections, sign again, and mark forward."
-                                                        : "Only the document creator or authorized administrators can edit this content."
+                                                            ? "This file was marked back to you. You can add new pages for corrections but cannot edit existing pages. Please add a new page, make corrections, sign again, and mark forward."
+                                                            : "Only the document creator or authorized administrators can edit this content."
                                                     }
                                                 </p>
                                             )}
@@ -1388,18 +1402,15 @@ export default function DocumentEditor() {
                                         {/* Fixed KWSC Header */}
                                         <div className="text-center mb-8 border-b border-gray-300 pb-4">
                                             <div className="flex items-center justify-center space-x-4 mb-4">
-                                                <img 
-                                                    src="/logo.png" 
-                                                    alt="KWSC Logo" 
+                                                <img
+                                                    src="/logo.png"
+                                                    alt="KWSC Logo"
                                                     className="h-12 w-auto"
                                                 />
                                                 <div className="text-center">
                                                     <h1 className="text-xl font-bold text-blue-900">
                                                         Karachi Water & Sewerage Corporation
                                                     </h1>
-                                                    <p className="text-sm text-blue-700">
-                                                        Government of Sindh
-                                                    </p>
                                                 </div>
                                             </div>
                                         </div>
@@ -1540,7 +1551,7 @@ export default function DocumentEditor() {
                                                         Comments and signatures are disabled
                                                     </p>
                                                     <p className="text-xs text-amber-700 mt-1">
-                                                        You cannot add comments or signatures while the file is marked to a higher level. 
+                                                        You cannot add comments or signatures while the file is marked to a higher level.
                                                         Please wait until the file is marked back to you.
                                                     </p>
                                                 </div>
@@ -1635,7 +1646,7 @@ export default function DocumentEditor() {
                     </div>
                 </div>
             )}
-            
+
             {/* Add Page Modal for SE/CE */}
             {showAddPageModal && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">

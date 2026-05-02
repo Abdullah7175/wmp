@@ -95,33 +95,33 @@ export default function FileDetail() {
     }, [file?.work_request_id]);
 
     useEffect(() => {
-    if (!file?.sla_deadline || file?.sla_status === 'PAUSED') {
-        setTimeLeft(file?.sla_status === 'PAUSED' ? "Paused" : "N/A");
-        return;
-    }
-
-    const timer = setInterval(() => {
-        const deadline = new Date(file.sla_deadline).getTime();
-        const now = new Date().getTime();
-        const distance = deadline - now;
-
-        if (distance < 0) {
-            // Logic for Breached (Negative time)
-            const absDistance = Math.abs(distance);
-            const h = Math.floor(absDistance / (1000 * 60 * 60));
-            const m = Math.floor((absDistance % (1000 * 60 * 60)) / (1000 * 60));
-            const s = Math.floor((absDistance % (1000 * 60)) / 1000);
-            setTimeLeft(`-${h}h ${m}m ${s}s`);
-        } else {
-            // Logic for Remaining time
-            const h = Math.floor(distance / (1000 * 60 * 60));
-            const m = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
-            const s = Math.floor((distance % (1000 * 60)) / 1000);
-            setTimeLeft(`${h}h ${m}m ${s}s`);
+        if (!file?.sla_deadline || file?.sla_status === 'PAUSED') {
+            setTimeLeft(file?.sla_status === 'PAUSED' ? "Paused" : "N/A");
+            return;
         }
-    }, 1000);
 
-    return () => clearInterval(timer);
+        const timer = setInterval(() => {
+            const deadline = new Date(file.sla_deadline).getTime();
+            const now = new Date().getTime();
+            const distance = deadline - now;
+
+            if (distance < 0) {
+                // Logic for Breached (Negative time)
+                const absDistance = Math.abs(distance);
+                const h = Math.floor(absDistance / (1000 * 60 * 60));
+                const m = Math.floor((absDistance % (1000 * 60 * 60)) / (1000 * 60));
+                const s = Math.floor((absDistance % (1000 * 60)) / 1000);
+                setTimeLeft(`-${h}h ${m}m ${s}s`);
+            } else {
+                // Logic for Remaining time
+                const h = Math.floor(distance / (1000 * 60 * 60));
+                const m = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+                const s = Math.floor((distance % (1000 * 60)) / 1000);
+                setTimeLeft(`${h}h ${m}m ${s}s`);
+            }
+        }, 1000);
+
+        return () => clearInterval(timer);
     }, [file?.sla_deadline, file?.sla_status]);
 
     const fetchWorkRequests = async () => {
@@ -149,11 +149,11 @@ export default function FileDetail() {
 
     const handleSaveFileInfo = async () => {
         if (!file) return;
-        
+
         setSavingFileInfo(true);
         try {
             const workRequestId = selectedWorkRequestId === 'none' ? null : parseInt(selectedWorkRequestId);
-            
+
             const res = await fetch(`/api/efiling/files/${file.id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
@@ -171,29 +171,29 @@ export default function FileDetail() {
                 const updatedFile = await res.json();
                 setFile(updatedFile);
                 setShowEditFileInfo(false);
-                toast({ 
-                    title: "Success", 
-                    description: "File information updated successfully" 
+                toast({
+                    title: "Success",
+                    description: "File information updated successfully"
                 });
-                
+
                 // Refresh before content if work request ID changed
                 if (updatedFile.work_request_id) {
                     fetchBeforeContent();
                 }
             } else {
                 const error = await res.json();
-                toast({ 
-                    title: "Error", 
-                    description: error.error || "Failed to update file information", 
-                    variant: "destructive" 
+                toast({
+                    title: "Error",
+                    description: error.error || "Failed to update file information",
+                    variant: "destructive"
                 });
             }
         } catch (error) {
             console.error('Error updating file information:', error);
-            toast({ 
-                title: "Error", 
-                description: "Failed to update file information", 
-                variant: "destructive" 
+            toast({
+                title: "Error",
+                description: "Failed to update file information",
+                variant: "destructive"
             });
         } finally {
             setSavingFileInfo(false);
@@ -253,7 +253,7 @@ export default function FileDetail() {
                 } else {
                     setPages([]);
                 }
-                
+
                 // If no pages but document_content exists, create a single page
                 if ((!doc.pages || doc.pages.length === 0) && doc.document_content) {
                     console.log('Creating fallback page from document_content');
@@ -298,10 +298,10 @@ export default function FileDetail() {
             'image/png'
         ];
         const maxSize = 5 * 1024 * 1024; // 5MB
-        
+
         const validFiles = [];
         const errors = [];
-        
+
         files.forEach(file => {
             if (!allowedTypes.includes(file.type)) {
                 errors.push(`${file.name}: File type not allowed. Only PDF, DOC, DOCX, JPG, JPEG, PNG are allowed.`);
@@ -311,7 +311,7 @@ export default function FileDetail() {
                 validFiles.push(file);
             }
         });
-        
+
         if (errors.length > 0) {
             toast({
                 title: "Invalid Files",
@@ -319,7 +319,7 @@ export default function FileDetail() {
                 variant: "destructive",
             });
         }
-        
+
         setSelectedFiles(validFiles);
     };
 
@@ -385,7 +385,7 @@ export default function FileDetail() {
             setAttachmentName("");
             setSelectedFiles([]);
             setShowAttachmentUpload(false);
-            
+
             // Reload attachments
             fetchExtras();
 
@@ -513,30 +513,30 @@ export default function FileDetail() {
     const handleExportPDF = async () => {
         try {
             toast({ title: "Generating PDF...", description: "Please wait while we prepare your document." });
-            
+
             // Use browser's print to PDF functionality
             // Set a flag to indicate PDF export mode
             const originalTitle = document.title;
             document.title = `EFile_${file?.file_number || 'document'}_${new Date().toISOString().split('T')[0]}`;
-            
+
             // Trigger print dialog with PDF as default
             window.print();
-            
+
             // Restore original title after a short delay
             setTimeout(() => {
                 document.title = originalTitle;
             }, 1000);
-            
-            toast({ 
-                title: "PDF Export", 
-                description: "Please select 'Save as PDF' in the print dialog to export." 
+
+            toast({
+                title: "PDF Export",
+                description: "Please select 'Save as PDF' in the print dialog to export."
             });
         } catch (error) {
             console.error('PDF export error:', error);
-            toast({ 
-                title: "Export Failed", 
-                description: "Failed to export PDF. Please try again.", 
-                variant: "destructive" 
+            toast({
+                title: "Export Failed",
+                description: "Failed to export PDF. Please try again.",
+                variant: "destructive"
             });
         }
     };
@@ -589,9 +589,6 @@ export default function FileDetail() {
                             <h1 className="text-lg font-bold text-blue-900">
                                 Karachi Water & Sewerage Corporation
                             </h1>
-                            <p className="text-xs text-blue-700">
-                                Government of Sindh
-                            </p>
                         </div>
                     </div>
                 </div>
@@ -1016,6 +1013,35 @@ export default function FileDetail() {
                         margin-top: 2mm !important;
                     }
 
+                    /* Color mapping for typed signatures in print */
+                    .print-signature-item .signature-text {
+                        font-weight: bold !important;
+                        display: block !important;
+                        text-align: center !important;
+                    }
+
+                    .print-signature-item .signature-text[data-color="black"] {
+                        color: #000000 !important;
+                    }
+
+                    .print-signature-item .signature-text[data-color="blue"] {
+                        color: #2563eb !important; /* Tailwind blue-600 */
+                    }
+
+                    .print-signature-item .signature-text[data-color="red"] {
+                        color: #dc2626 !important; /* Tailwind red-600 */
+                    }
+
+                    .print-signature-item .signature-text[data-color="green"] {
+                        color: #16a34a !important; /* Tailwind green-600 */
+                    }
+
+                    /* Force the browser to render colors */
+                    * {
+                        -webkit-print-color-adjust: exact !important;
+                        print-color-adjust: exact !important;
+                    }
+
                     .print-attachment-item {
                         margin-bottom: 3mm;
                         padding: 3mm;
@@ -1066,1101 +1092,1097 @@ export default function FileDetail() {
                     display: none;
                 }
             `}</style>
-            
-            
-        
-        <div className="container mx-auto px-4 py-6 print:p-0 h-[calc(100vh-80px)] flex flex-col">
-            <div className="flex items-center justify-between mb-6 no-print flex-shrink-0">
-                <div className="flex items-center space-x-4">
-                    <Button variant="ghost" onClick={() => router.back()} className="flex items-center">
-                        <ArrowLeft className="w-4 h-4 mr-2" />
-                        Back
-                    </Button>
-                    <div>
-                        <h1 className="text-3xl font-bold text-gray-900">File Details</h1>
-                        <p className="text-gray-600">View comprehensive file information</p>
+
+
+
+            <div className="container mx-auto px-4 py-6 print:p-0 h-[calc(100vh-80px)] flex flex-col">
+                <div className="flex items-center justify-between mb-6 no-print flex-shrink-0">
+                    <div className="flex items-center space-x-4">
+                        <Button variant="ghost" onClick={() => router.back()} className="flex items-center">
+                            <ArrowLeft className="w-4 h-4 mr-2" />
+                            Back
+                        </Button>
+                        <div>
+                            <h1 className="text-3xl font-bold text-gray-900">File Details</h1>
+                            <p className="text-gray-600">View comprehensive file information</p>
+                        </div>
                     </div>
-                </div>
-                <div className="flex space-x-2 no-print">
-                    {isCreator && (
-                        <Button onClick={() => router.push(`/efilinguser/files/${file.id}/edit-document`)} className="bg-blue-600 hover:bg-blue-700">
-                            <Edit className="w-4 h-4 mr-2" />
-                            Edit Document
+                    <div className="flex space-x-2 no-print">
+                        {isCreator && (
+                            <Button onClick={() => router.push(`/efilinguser/files/${file.id}/edit-document`)} className="bg-blue-600 hover:bg-blue-700">
+                                <Edit className="w-4 h-4 mr-2" />
+                                Edit Document
+                            </Button>
+                        )}
+                        {isHigherAuthority && (
+                            <Button onClick={() => router.push(`/efilinguser/files/${file.id}/add-page`)} className="bg-blue-600 hover:bg-blue-700">
+                                <Edit className="w-4 h-4 mr-2" />
+                                Add Notesheet
+                            </Button>
+                        )}
+                        <Button onClick={handlePrint} variant="outline" className="bg-green-50 hover:bg-green-100 text-green-700 border-green-300">
+                            <Printer className="w-4 h-4 mr-2" />
+                            Print
                         </Button>
-                    )}
-                    {isHigherAuthority && (
-                        <Button onClick={() => router.push(`/efilinguser/files/${file.id}/add-page`)} className="bg-blue-600 hover:bg-blue-700">
-                            <Edit className="w-4 h-4 mr-2" />
-                            Add Notesheet
+                        <Button onClick={handleExportPDF} variant="outline" className="bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-300">
+                            <FileDown className="w-4 h-4 mr-2" />
+                            Export PDF
                         </Button>
-                    )}
-                    <Button onClick={handlePrint} variant="outline" className="bg-green-50 hover:bg-green-100 text-green-700 border-green-300">
-                        <Printer className="w-4 h-4 mr-2" />
-                        Print
-                    </Button>
-                    <Button onClick={handleExportPDF} variant="outline" className="bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-300">
-                        <FileDown className="w-4 h-4 mr-2" />
-                        Export PDF
-                    </Button>
-                    {/* <Button variant="outline">
+                        {/* <Button variant="outline">
                         <Download className="w-4 h-4 mr-2" />
                         Download
                     </Button> */}
-                </div>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1 overflow-hidden">
-                <div className="lg:col-span-2 space-y-6 overflow-y-auto pr-2">
-                    <Card className="no-print">
-                        <CardHeader>
-                            <div className="flex items-center justify-between">
-                                <CardTitle className="flex items-center">
-                                    <FileText className="w-5 h-5 mr-2" />
-                                    File Information
-                                </CardTitle>
-                                <Button 
-                                    variant="outline" 
-                                    size="sm"
-                                    onClick={handleOpenEditFileInfo}
-                                    className="flex items-center"
-                                >
-                                    <Edit className="w-4 h-4 mr-2" />
-                                    Edit
-                                </Button>
-                            </div>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <label className="text-sm font-medium text-gray-600">File Number</label>
-                                    <p className="text-lg font-semibold">{file.file_number}</p>
-                                </div>
-                                <div>
-                                    <label className="text-sm font-medium text-gray-600">Status</label>
-                                    <div className="mt-1">
-                                        <Badge className={getStatusColor(file.status_name)}>{file.status_name}</Badge>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div>
-                                <label className="text-sm font-medium text-gray-600">Subject</label>
-                                <p className="text-lg">{file.subject}</p>
-                            </div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <label className="text-sm font-medium text-gray-600">Department</label>
-                                    <p className="flex items-center"><Building2 className="w-4 h-4 mr-2 text-gray-500" />{file.department_name}</p>
-                                </div>
-                                <div>
-                                    <label className="text-sm font-medium text-gray-600">Category</label>
-                                    <p>{file.category_name}</p>
-                                </div>
-                            </div>
-
-                            <div className="flex items-start space-x-3">
-                                <div className="p-2 bg-green-50 rounded-lg">
-                                    <FileText className="h-4 w-4 text-green-600" />
-                                </div>
-                                <div className="space-y-1 w-full">
-                                    <p className="text-sm font-semibold text-gray-900 border-b pb-1 mb-2">
-                                        Budget Head & Costing
-                                    </p>
-                                    
-                                    <div>
-                                        <p className="text-xs  text-black font-bold uppercase tracking-wider">Budget Head No</p>
-                                        <p className="text-sm text-gray-900">{file.budget_head_no || 'Not specified'}</p>
-                                    </div>
-
-                                    <div>
-                                        <p className="text-xs  text-black font-bold uppercase tracking-wider">Proposed Estimated Cost</p>
-                                        <p className="text-sm text-gray-900">
-                                            {(file.proposed_estimated_cost && parseFloat(file.proposed_estimated_cost) !== 0) 
-                                                ? `Rs. ${parseFloat(file.proposed_estimated_cost).toLocaleString()}` 
-                                                : 'Not specified'}
-                                        </p>
-                                    </div>
-
-                                    <div>
-                                        <p className="text-xs  text-black font-bold uppercase tracking-wider">Contractor Premium</p>
-                                        <p className="text-sm text-gray-900">
-                                            {(file.contractor_premium && parseFloat(file.contractor_premium) !== 0) 
-                                                ? `Rs. ${parseFloat(file.contractor_premium).toLocaleString()}` 
-                                                : 'Not specified'}
-                                        </p>
-                                    </div>
-
-                                    <div>
-                                        <p className="text-xs  text-black font-bold uppercase tracking-wider">Sanctioned/Approved Amount</p>
-                                        <p className="text-sm text-gray-900 font-medium">
-                                            {(file.sanctioned_amount && parseFloat(file.sanctioned_amount) !== 0) 
-                                                ? `Rs. ${parseFloat(file.sanctioned_amount).toLocaleString()}` 
-                                                : 'Not specified yet for approval'}
-                                        </p>
-                                    </div>
-
-                                    <div>
-                                        <p className="text-xs text-black font-bold uppercase tracking-wider">Revised Estimate Amount</p>
-                                        <p className="text-sm text-gray-900">
-                                            {(file.revised_estimate_amount && parseFloat(file.revised_estimate_amount) !== 0) 
-                                                ? `Rs. ${parseFloat(file.revised_estimate_amount).toLocaleString()}` 
-                                                : 'None'}
-                                        </p>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <label className="text-sm font-medium text-gray-600">Priority</label>
-                                    <div className="mt-1"><Badge className={getPriorityColor(file.priority)}>{file.priority}</Badge></div>
-                                </div>
-                                {/* <div>
-                                    <label className="text-sm font-medium text-gray-600">Confidentiality Level</label>
-                                    <div className="mt-1"><Badge className={getConfidentialityColor(file.confidentiality_level)}>{file.confidentiality_level}</Badge></div>
-                                </div> */}
-                            </div>
-                            
-                            {/* SLA Status Section */}
-                            {file.sla_deadline && (
-                                <div className="border-t pt-4">
-                                    <label className="text-sm font-medium text-gray-600 mb-3 block">SLA Status (TAT)</label>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        <div>
-                                            <label className="text-xs font-medium text-gray-500">Status</label>
-                                            <div className="mt-1">
-                                                {file.sla_status === 'BREACHED' && (
-                                                    <Badge variant="destructive" className="flex items-center">
-                                                        <AlertCircle className="w-3 h-3 mr-1" />
-                                                        Breached
-                                                    </Badge>
-                                                )}
-                                                {file.sla_status === 'ACTIVE' && (
-                                                    <Badge variant="default" className="flex items-center">
-                                                        <Clock className="w-3 h-3 mr-1" />
-                                                        Active
-                                                    </Badge>
-                                                )}
-                                                {file.sla_status === 'PAUSED' && (
-                                                    <Badge variant="secondary" className="flex items-center">
-                                                        <Clock className="w-3 h-3 mr-1" />
-                                                        Paused
-                                                    </Badge>
-                                                )}
-                                                {file.sla_status === 'COMPLETED' && (
-                                                    <Badge variant="outline" className="flex items-center">
-                                                        <Clock className="w-3 h-3 mr-1" />
-                                                        Completed
-                                                    </Badge>
-                                                )}
-                                            </div>
-                                        </div>
-                                        <div>
-                                            <label className="text-xs font-medium text-gray-500">Time Remaining</label>
-                                            <p className={`text-sm font-medium ${
-                                                file.sla_status === 'BREACHED' ? 'text-red-600' : 
-                                                file.sla_status === 'PAUSED' ? 'text-yellow-600' : 
-                                                'text-green-600'
-                                            }`}>
-                                                {timeLeft}
-                                            </p>
-                                        </div>
-                                    </div>
-                                    <div className="mt-2 text-xs text-gray-500">
-                                        <div>Deadline: {formatDate(file.sla_deadline)}</div>
-                                        {file.current_stage_name && (
-                                            <div>Current Stage: {file.current_stage_name}</div>
-                                        )}
-                                        {file.sla_paused && (
-                                            <div className="text-yellow-600">⚠️ SLA paused (pending CEO review)</div>
-                                        )}
-                                    </div>
-                                </div>
-                            )}
-                            <div>
-                                <label className="text-sm font-medium text-gray-600">Video Archiving ID</label>
-                                {file.work_request_id ? (
-                                    <>
-                                        <p className="text-lg font-semibold text-blue-600">#{file.work_request_id}</p>
-                                        <p className="text-sm text-gray-500">Linked to work request for video archiving</p>
-                                    </>
-                                ) : (
-                                    <p className="text-sm text-gray-500 italic">No video request linked</p>
-                                )}
-                            </div>
-                            {file.remarks && (
-                                <div>
-                                    <label className="text-sm font-medium text-gray-600">Remarks</label>
-                                    <p className="text-gray-700 bg-gray-50 p-3 rounded-md">{file.remarks}</p>
-                                </div>
-                            )}
-                        </CardContent>
-                    </Card>
-                    {/* ===================== TITLE PAGE ===================== */}
-                    <div className="print-only print-title-page page-content">
-                        {/* KWSC Header */}
-                        <div className="border-b border-gray-300">
-                            <div className="flex items-center space-x-3">
-                                <img src="/logo.png" alt="KWSC Logo" className="h-8 w-auto" />
-                                <div>
-                                    <h1 className="text-lg font-bold text-blue-900">
-                                        Karachi Water & Sewerage Corporation
-                                    </h1>
-                                    <p className="text-xs text-blue-700">
-                                        Government of Sindh
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-                        <h3 
-                            style={{
-                                fontSize: '16pt',
-                                textAlign: 'justify',
-                                marginBottom: '6mm'
-                            }}>
-                        SUBJECT:</h3>
-                        <h2
-                            style={{
-                                fontSize: '14pt',
-                                textAlign: 'justify',
-                                marginBottom: '10mm'
-                            }}
-                        >
-                            {file?.subject}
-                        </h2>
-
-                        <div className="print-file-info">
-                            <div className="info-row"><strong>File Number:</strong> {file?.file_number}</div>
-                            <div className="info-row"><strong>Department:</strong> {file?.department_name}</div>
-                            <div className="info-row"><strong>Category:</strong> {file?.category_name}</div>
-                            <div className="info-row"><strong>Priority:</strong> {file?.priority}</div>
-                            <div className="info-row"><strong>Status:</strong> {file?.status_name}</div>
-                            <div className="info-row"><strong>Created:</strong> {formatDate(file?.created_at)}</div>
-                            <div className="info-row"><strong>Created By:</strong> {file?.created_by_name_with_designation}</div>
-                        </div>
                     </div>
-
-
-{/* print content  */}
-                    <div className="space-y-6 print-content-start">
-                        {(() => {
-                            console.log('Pages state:', pages);
-                            console.log('File state:', file);
-                            console.log('Pages length:', pages?.length);
-                            console.log('File document_content:', file?.document_content);
-                            
-                            if (pages && pages.length > 0) {
-                                console.log('Rendering pages:', pages);
-                                return pages.map(renderPage).filter(page => page !== null);
-                            } else if (file?.document_content) {
-                                console.log('Rendering fallback from file document_content');
-                                // Parse document_content if it's a string
-                                let parsedContent = file.document_content;
-                                if (typeof file.document_content === 'string') {
-                                    try {
-                                        parsedContent = JSON.parse(file.document_content);
-                                        console.log('Parsed fallback content:', parsedContent);
-                                    } catch (e) {
-                                        console.error('Error parsing fallback content:', e);
-                                        parsedContent = {};
-                                    }
-                                }
-                                return renderPage({ id: 'main', pageNumber: 1, content: parsedContent });
-                            } else {
-                                console.log('No content available');
-                                return (
-                                <Card>
-                                    <CardContent>
-                                        <p className="text-sm text-gray-500">No document content available.</p>
-                                            <p className="text-xs text-gray-400 mt-2">Debug: pages={pages?.length || 0}, file={file ? 'loaded' : 'not loaded'}</p>
-                                    </CardContent>
-                                </Card>
-                                );
-                            }
-                        })()}
-                    </div>
-
-                    {/* Print-only E-Signatures Section */}
-                    {signatures.length > 0 && (
-                        <div className="print-only print-section">
-                            <h3>E-Signatures ({signatures.length})</h3>
-                            <div className="print-signatures-grid">
-                                {signatures.map((s, idx) => {
-                                    // Helper function to get the correct image URL for print
-                                    const getSignatureImageUrl = (content) => {
-                                        if (!content) return null;
-                                        
-                                        // 1. If it's already a Data URI (base64), use it as is
-                                        if (content.startsWith('data:image/')) return content;
-                                        
-                                        // 2. If it's a full URL (like http://localhost:3000/uploads/...)
-                                        // This is the part that was likely causing your error
-                                        if (content.startsWith('http://') || content.startsWith('https://')) {
-                                            // If it points to /uploads/, we need to inject /api/ before /uploads/
-                                            if (content.includes('/uploads/')) {
-                                                return content.replace('/uploads/', '/api/uploads/');
-                                            }
-                                            return content;
-                                        }
-
-                                        // 3. If it starts with /api/, it's already correct
-                                        if (content.startsWith('/api/')) return content;
-
-                                        // 4. If it starts with /uploads/, change to /api/uploads/
-                                        if (content.startsWith('/uploads/')) return content.replace('/uploads/', '/api/uploads/');
-
-                                        // 5. Default fallback for relative paths
-                                        return `/api/uploads${content.startsWith('/') ? '' : '/'}${content}`;
-                                    };
-                                    
-                                    const imageUrl = s.content && s.type?.toLowerCase().includes('image') 
-                                        ? getSignatureImageUrl(s.content) 
-                                        : null;
-                                    
-                                    return (
-                                        <div key={s.id || idx} className="print-signature-item">
-                                            {imageUrl ? (
-                                                // eslint-disable-next-line @next/next/no-img-element
-                                                <img src={imageUrl} alt="signature" />
-                                            ) : s.content ? (
-                                                <div style={{ padding: '3mm', border: '1px solid #ddd', backgroundColor: '#f9f9f9', fontFamily: 'monospace', fontSize: '8pt', marginBottom: '2mm' }}>
-                                                    {s.content}
-                                                </div>
-                                            ) : null}
-                                            <div className="print-signature-details">
-                                                <div><strong>{s.user_name}</strong> <span style={{ color: '#666', fontWeight: 'normal' }}>({s.user_role})</span></div>
-                                                <div>{formatDate(s.timestamp)}</div>
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Print-only Attachments Section */}
-                    {attachments.length > 0 && (
-                        <div className="print-only print-section">
-                            <h3>Attachments ({attachments.length})</h3>
-                            {attachments.map((a, idx) => (
-                                <div key={a.id || idx} className="print-attachment-item">
-                                    {a.file_url && a.file_type?.startsWith('image/') ? (
-                                        // eslint-disable-next-line @next/next/no-img-element
-                                        <img src={a.file_url} alt={a.file_name} />
-                                    ) : (
-                                        <div style={{ padding: '10mm', backgroundColor: '#f0f0f0', textAlign: 'center', border: '1px solid #ccc', marginBottom: '3mm' }}>
-                                            <div style={{ fontSize: '11pt', color: '#666' }}>{a.file_type || 'Document'}</div>
-                                        </div>
-                                    )}
-                                    <div style={{ fontWeight: 'bold', fontSize: '11pt', marginBottom: '2mm' }}>{a.file_name}</div>
-                                    <div style={{ color: '#666', fontSize: '9pt' }}>
-                                        Size: {Math.round((a.file_size || 0) / 1024)} KB | Uploaded: {formatDate(a.uploaded_at)}
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-
-                    {/* Print-only Comments Section */}
-                    {comments.length > 0 && (
-                        <div className="print-only print-section comments-section">
-                            <h3>Comments ({comments.length})</h3>
-                            <div className="print-comments-grid">
-                                {comments.map((c, idx) => (
-                                    <div key={c.id || idx} className="print-comment-item">
-                                        <div className="print-comment-header">{c.user_name}</div>
-                                        <div style={{ color: '#666', fontSize: '7pt', marginBottom: '2mm' }}>{formatDate(c.timestamp)}</div>
-                                        <div className="print-comment-content">{c.text}</div>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    )}
                 </div>
 
-                <div className="space-y-6 no-print overflow-y-auto pr-2">
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>File Metadata</CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-3">
-                            <div>
-                                <label className="text-sm font-medium text-gray-600">Created Date</label>
-                                <p className="flex items-center text-sm"><Clock className="w-4 h-4 mr-2 text-gray-500" />{formatDate(file.created_at)}</p>
-                            </div>
-                            <div>
-                                <label className="text-sm font-medium text-gray-600">Last Modified</label>
-                                <p className="flex items-center text-sm"><Clock className="w-4 h-4 mr-2 text-gray-500" />{formatDate(file.updated_at)}</p>
-                            </div>
-                            <div>
-                                <label className="text-sm font-medium text-gray-600">Created By</label>
-                                <p className="flex items-center text-sm"><User className="w-4 h-4 mr-2 text-gray-500" />{file.created_by_name_with_designation || file.created_by_name || 'Unknown'}</p>
-                            </div>
-                        </CardContent>
-                    </Card>
-
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Quick Actions</CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-2">
-                            <Button variant="outline" className="w-full justify-start" onClick={openMarkModal}>
-                                <Forward className="w-4 h-4 mr-2" />
-                                Mark / Forward File
-                            </Button>
-                            {canAddPage && (
-                                <Button 
-                                    variant="outline" 
-                                    className="w-full justify-start" 
-                                    onClick={() => router.push(`/efilinguser/files/${params.id}/add-page`)}
-                                >
-                                    <FileText className="w-4 h-4 mr-2" />
-                                    Add Note Sheet
-                                </Button>
-                            )}
-                        </CardContent>
-                    </Card>
-
-                    {/* E-Signature Section */}
-                    <Card>
-                        <CardHeader>
-                            <CardTitle className="flex items-center gap-2">
-                                <Shield className="w-5 h-5" />
-                                Document Signatures
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <DocumentSignatureSystem
-                                fileId={params.id}
-                                userRole={userRole}
-                                canEditDocument={true}
-                                hasUserSigned={hasUserSigned}
-                                onSignatureAdded={(signature) => {
-                                    console.log('Signature added:', signature);
-                                    setHasUserSigned(true);
-                                    // Refresh signatures list
-                                    fetchExtras();
-                                    toast({
-                                        title: "Signature Added",
-                                        description: "Your signature has been successfully added to the document.",
-                                    });
-                                }}
-                                onCommentAdded={(comment) => {
-                                    console.log('Comment added:', comment);
-                                    // Refresh comments list
-                                    fetchComments();
-                                }}
-                            />
-                        </CardContent>
-                    </Card>
-
-                    {beforeContent.length > 0 && (
-                        <Card>
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1 overflow-hidden">
+                    <div className="lg:col-span-2 space-y-6 overflow-y-auto pr-2">
+                        <Card className="no-print">
                             <CardHeader>
-                                <CardTitle className="text-lg">Before Content ({beforeContent.length})</CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="space-y-3">
-                                    {beforeContent.map((item) => {
-                                        // Convert /uploads/ to /api/uploads/ for secure access
-                                        const getImageUrl = (url) => {
-                                            if (!url) return '';
-                                            // Convert /uploads/ to /api/uploads/ for authenticated access
-                                            if (url.startsWith('/uploads/')) {
-                                                return url.replace('/uploads/', '/api/uploads/');
-                                            }
-                                            // If it's already /api/uploads/, return as is
-                                            if (url.startsWith('/api/')) return url;
-                                            // If it's an absolute URL, extract the path and convert
-                                            try {
-                                                const urlObj = new URL(url);
-                                                const pathname = urlObj.pathname;
-                                                if (pathname.startsWith('/uploads/')) {
-                                                    return pathname.replace('/uploads/', '/api/uploads/');
-                                                }
-                                                return pathname;
-                                            } catch {
-                                                return url;
-                                            }
-                                        };
-                                        const imageUrl = getImageUrl(item.link);
-                                        
-                                        return (
-                                        <div key={item.id} className="border rounded-lg p-3">
-                                            <div className="relative">
-                                                {item.content_type === 'video' ? (
-                                                    <video
-                                                        src={imageUrl}
-                                                        className="w-full h-32 object-cover rounded"
-                                                        controls
-                                                    />
-                                                ) : (
-                                                    <img
-                                                        src={imageUrl}
-                                                        alt={item.description || 'Before content'}
-                                                        className="w-full h-32 object-cover rounded"
-                                                        onError={(e) => {
-                                                            // Fallback: try the original URL if relative fails
-                                                            if (e.target.src !== item.link) {
-                                                                e.target.src = item.link;
-                                                            }
-                                                        }}
-                                                    />
-                                                )}
-                                                <div className="absolute top-2 left-2">
-                                                    <Badge variant="secondary" className="text-xs">
-                                                        {item.content_type === 'video' ? 'Video' : 'Image'}
-                                                    </Badge>
-                                                </div>
-                                            </div>
-                                            {item.description && (
-                                                <p className="text-xs text-gray-500 mt-2 line-clamp-2">
-                                                    {item.description}
-                                                </p>
-                                            )}
-                                        </div>
-                                        );
-                                    })}
-                                </div>
-                            </CardContent>
-                        </Card>
-                    )}
-
-                    <Card>
-                        <CardHeader>
-                            <div className="flex items-center justify-between">
-                                <CardTitle>Attachments</CardTitle>
-                                {canAddAttachment && (
+                                <div className="flex items-center justify-between">
+                                    <CardTitle className="flex items-center">
+                                        <FileText className="w-5 h-5 mr-2" />
+                                        File Information
+                                    </CardTitle>
                                     <Button
                                         variant="outline"
                                         size="sm"
-                                        onClick={() => setShowAttachmentUpload(true)}
-                                        className="flex items-center gap-2"
+                                        onClick={handleOpenEditFileInfo}
+                                        className="flex items-center"
                                     >
-                                        <Plus className="w-4 h-4" />
-                                        Add Attachment
+                                        <Edit className="w-4 h-4 mr-2" />
+                                        Edit
                                     </Button>
-                                )}
-                            </div>
-                        </CardHeader>
-                        <CardContent>
-                            {attachments.length === 0 ? (
-                                <p className="text-sm text-gray-500">No attachments in this file.</p>
-                            ) : (
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                    {attachments.map(a => (
-                                        <div key={a.id} className="border rounded-lg p-3 hover:shadow-md transition-shadow cursor-pointer group" onClick={() => openAttachmentModal(a)}>
-                                            {a.file_url && a.file_type?.startsWith('image/') ? (
-                                                <div className="relative">
-                                                    <Image 
-                                                        src={a.file_url} 
-                                                        alt={a.file_name} 
-                                                        width={200} 
-                                                        height={150} 
-                                                        className="w-full h-32 object-cover rounded mb-2"
-                                                        unoptimized
-                                                    />
-                                                    <div className="absolute top-2 right-2 bg-black bg-opacity-50 text-white p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">
-                                                        <Maximize2 className="w-4 h-4" />
-                                                    </div>
-                                                </div>
-                                            ) : (
-                                                <div className="w-full h-32 flex items-center justify-center bg-gray-100 rounded mb-2 text-gray-500">
-                                                    <FileText className="w-8 h-8" />
-                                                </div>
-                                            )}
-                                            <div className="space-y-1">
-                                                <div className="font-medium text-sm truncate" title={a.file_name}>{a.file_name}</div>
-                                                <div className="text-xs text-gray-500">
-                                                    {Math.round((a.file_size || 0)/1024)} KB • {formatDate(a.uploaded_at)}
-                                                </div>
-                                                <div className="text-xs text-blue-600 group-hover:text-blue-800">
-                                                    Click to view
-                                                </div>
-                                            </div>
-                                        </div>
-                                    ))}
                                 </div>
-                            )}
-                        </CardContent>
-                    </Card>
-
-                    <Card>
-                        <CardHeader>
-                            <CardTitle className="flex items-center gap-2"><MessageSquare className="w-4 h-4" />Comments ({comments.length})</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="space-y-3">
-                                {comments.length > 0 ? (
-                                    comments.map((c) => (
-                                        <div key={c.id} className="border-l-4 border-blue-500 pl-3">
-                                            <div className="text-sm font-medium text-gray-900">{c.user_name}</div>
-                                            <div className="text-xs text-gray-500">{formatDate(c.timestamp)}</div>
-                                            <div className="text-sm text-gray-700 mt-1">{c.text}</div>
-                                        </div>
-                                    ))
-                                ) : (
-                                    <p className="text-sm text-gray-500">No comments yet</p>
-                                )}
-                            </div>
-                            <div className="mt-4">
-                                <textarea value={newComment} onChange={(e) => setNewComment(e.target.value)} rows={3} placeholder="Add a comment..." className="w-full border rounded-md p-2 text-sm" />
-                                <div className="flex justify-end mt-2">
-                                    <Button size="sm" onClick={postComment} disabled={postingComment || !newComment.trim()}>{postingComment ? 'Posting...' : 'Add Comment'}</Button>
-                                </div>
-                            </div>
-                        </CardContent>
-                    </Card>
-
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Status Timeline</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            {timeline.length === 0 ? (
-                                <p className="text-sm text-gray-500">No timeline events available.</p>
-                            ) : (
-                                <div className="space-y-3">
-                                    {timeline.map((ev, idx) => (
-                                        <div key={idx} className="flex items-start gap-3">
-                                            <div className={`w-2 h-2 mt-2 rounded-full ${ev.type === 'CREATED' ? 'bg-green-500' : ev.type === 'ASSIGNED' ? 'bg-blue-500' : 'bg-purple-500'}`}></div>
-                                            <div className="flex-1">
-                                                <div className="text-sm font-medium">{ev.title}</div>
-                                                <div className="text-xs text-gray-500">{formatDate(ev.timestamp)}</div>
-                                                {ev.meta && (ev.meta.remarks) && (
-                                                    <div className="text-xs text-gray-600 mt-1">
-                                                        {ev.meta.remarks && <div>Remarks: {ev.meta.remarks}</div>}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                        </CardContent>
-                    </Card>
-                </div>
-            </div>
-
-            {showMarkModal && (
-                <MarkToModal
-                    showMarkToModal={showMarkModal}
-                    fileId={params.id}
-                    fileNumber={file?.file_number}
-                    subject={file?.subject}
-                    onClose={() => setShowMarkModal(false)}
-                    onSuccess={handleMarkToSuccess}
-                />
-            )}
-
-            {/* Attachment Preview Modal */}
-            <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-                <DialogContent className="max-w-4xl max-h-[90vh] overflow-auto">
-                    <DialogHeader>
-                        <DialogTitle className="flex items-center justify-between">
-                            <span>{selectedAttachment?.file_name}</span>
-                            <Button variant="ghost" size="sm" onClick={closeAttachmentModal}>
-                                <X className="w-4 h-4" />
-                            </Button>
-                        </DialogTitle>
-                    </DialogHeader>
-                    {selectedAttachment && (
-                        <div className="space-y-4">
-                            {selectedAttachment.file_url && selectedAttachment.file_type?.startsWith('image/') ? (
-                                <div className="text-center">
-                                    <Image 
-                                        src={selectedAttachment.file_url} 
-                                        alt={selectedAttachment.file_name} 
-                                        width={800} 
-                                        height={600} 
-                                        className="max-w-full max-h-[70vh] object-contain mx-auto rounded-lg shadow-lg" 
-                                    />
-                                </div>
-                            ) : selectedAttachment.file_type === 'application/pdf' || selectedAttachment.file_name?.toLowerCase().endsWith('.pdf') ? (
-                                <div className="space-y-4">
-                                    <div className="border rounded-lg overflow-hidden bg-gray-50">
-                                        {(() => {
-                                            // Helper function to get the correct PDF URL
-                                            const getPdfUrl = (fileUrl) => {
-                                                if (!fileUrl) {
-                                                    console.error('PDF file_url is missing');
-                                                    return null;
-                                                }
-                                                // If it's already an API URL, return as is
-                                                if (fileUrl.startsWith('/api/uploads/')) {
-                                                    return fileUrl;
-                                                }
-                                                // If it starts with /uploads/, convert to /api/uploads/
-                                                if (fileUrl.startsWith('/uploads/')) {
-                                                    const converted = fileUrl.replace('/uploads/', '/api/uploads/');
-                                                    console.log('PDF URL converted:', fileUrl, '->', converted);
-                                                    return converted;
-                                                }
-                                                // If it's a full URL with domain, extract the path and convert
-                                                if (fileUrl.startsWith('http://') || fileUrl.startsWith('https://')) {
-                                                    try {
-                                                        const url = new URL(fileUrl);
-                                                        const path = url.pathname;
-                                                        if (path.startsWith('/uploads/')) {
-                                                            return path.replace('/uploads/', '/api/uploads/');
-                                                        }
-                                                        if (path.startsWith('/api/uploads/')) {
-                                                            return path;
-                                                        }
-                                                        // If path doesn't match expected patterns, try to construct
-                                                        return `/api/uploads${path}`;
-                                                    } catch (e) {
-                                                        console.error('Error parsing PDF URL:', e);
-                                                        return fileUrl;
-                                                    }
-                                                }
-                                                // Otherwise, assume it's a relative path
-                                                const converted = `/api/uploads${fileUrl.startsWith('/') ? '' : '/'}${fileUrl}`;
-                                                console.log('PDF URL converted (relative):', fileUrl, '->', converted);
-                                                return converted;
-                                            };
-                                            
-                                            const pdfUrl = getPdfUrl(selectedAttachment.file_url);
-                                            
-                                            if (!pdfUrl) {
-                                                return (
-                                                    <div className="p-8 text-center text-gray-500">
-                                                        <FileText className="w-16 h-16 mx-auto mb-4 text-gray-400" />
-                                                        <p>PDF URL is missing or invalid</p>
-                                                        <p className="text-xs mt-2">File: {selectedAttachment.file_name}</p>
-                                                    </div>
-                                                );
-                                            }
-                                            
-                                            return (
-                                                <>
-                                                    {/* Use iframe as primary method (object tag has CSP issues) */}
-                                                    <iframe
-                                                        src={pdfUrl}
-                                                        className="w-full h-[70vh] min-h-[500px] border-0"
-                                                        title={selectedAttachment.file_name}
-                                                        style={{ display: 'block' }}
-                                                        onError={(e) => {
-                                                            console.error('Iframe failed to load PDF:', pdfUrl, e);
-                                                            // Show error message if iframe fails
-                                                            const container = e.target.parentElement;
-                                                            if (container) {
-                                                                container.innerHTML = `
-                                                                    <div class="p-8 text-center text-red-600">
-                                                                        <p class="mb-2">Failed to load PDF preview</p>
-                                                                        <p class="text-sm text-gray-500">Please use "Open in New Tab" or "Download" buttons below</p>
-                                                                    </div>
-                                                                `;
-                                                            }
-                                                        }}
-                                                    />
-                                                </>
-                                            );
-                                        })()}
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="text-sm font-medium text-gray-600">File Number</label>
+                                        <p className="text-lg font-semibold">{file.file_number}</p>
                                     </div>
-                                    <div className="flex justify-end gap-2">
-                                        {(() => {
-                                            const getPdfUrl = (fileUrl) => {
-                                                if (!fileUrl) return null;
-                                                if (fileUrl.startsWith('/api/uploads/')) return fileUrl;
-                                                if (fileUrl.startsWith('/uploads/')) return fileUrl.replace('/uploads/', '/api/uploads/');
-                                                if (fileUrl.startsWith('http://') || fileUrl.startsWith('https://')) {
-                                                    try {
-                                                        const url = new URL(fileUrl);
-                                                        const path = url.pathname;
-                                                        if (path.startsWith('/uploads/')) return path.replace('/uploads/', '/api/uploads/');
-                                                        if (path.startsWith('/api/uploads/')) return path;
-                                                        return `/api/uploads${path}`;
-                                                    } catch (e) {
-                                                        return fileUrl;
-                                                    }
-                                                }
-                                                return `/api/uploads${fileUrl.startsWith('/') ? '' : '/'}${fileUrl}`;
-                                            };
-                                            const pdfUrl = getPdfUrl(selectedAttachment.file_url);
-                                            return (
-                                                <>
-                                                    <Button 
-                                                        variant="outline"
-                                                        onClick={() => {
-                                                            window.open(pdfUrl, '_blank');
-                                                        }}
-                                                    >
-                                                        <Eye className="w-4 h-4 mr-2" />
-                                                        Open in New Tab
-                                                    </Button>
-                                                    <Button 
-                                                        variant="outline"
-                                                        onClick={() => {
-                                                            const link = document.createElement('a');
-                                                            link.href = pdfUrl;
-                                                            link.download = selectedAttachment.file_name;
-                                                            link.target = '_blank';
-                                                            document.body.appendChild(link);
-                                                            link.click();
-                                                            document.body.removeChild(link);
-                                                        }}
-                                                    >
-                                                        <Download className="w-4 h-4 mr-2" />
-                                                        Download File
-                                                    </Button>
-                                                </>
-                                            );
-                                        })()}
+                                    <div>
+                                        <label className="text-sm font-medium text-gray-600">Status</label>
+                                        <div className="mt-1">
+                                            <Badge className={getStatusColor(file.status_name)}>{file.status_name}</Badge>
+                                        </div>
                                     </div>
                                 </div>
-                            ) : selectedAttachment.file_type === 'application/msword' || 
-                                  selectedAttachment.file_type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
-                                  selectedAttachment.file_name?.toLowerCase().endsWith('.doc') ||
-                                  selectedAttachment.file_name?.toLowerCase().endsWith('.docx') ? (
-                                <div className="space-y-4">
-                                    <div className="border rounded-lg overflow-hidden bg-gray-50 p-4">
-                                        <p className="text-sm text-gray-600 mb-4">
-                                            Word documents cannot be previewed directly in the browser. Please download to view.
+
+                                <div>
+                                    <label className="text-sm font-medium text-gray-600">Subject</label>
+                                    <p className="text-lg">{file.subject}</p>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="text-sm font-medium text-gray-600">Department</label>
+                                        <p className="flex items-center"><Building2 className="w-4 h-4 mr-2 text-gray-500" />{file.department_name}</p>
+                                    </div>
+                                    <div>
+                                        <label className="text-sm font-medium text-gray-600">Category</label>
+                                        <p>{file.category_name}</p>
+                                    </div>
+                                </div>
+
+                                <div className="flex items-start space-x-3">
+                                    <div className="p-2 bg-green-50 rounded-lg">
+                                        <FileText className="h-4 w-4 text-green-600" />
+                                    </div>
+                                    <div className="space-y-1 w-full">
+                                        <p className="text-sm font-semibold text-gray-900 border-b pb-1 mb-2">
+                                            Budget Head & Costing
                                         </p>
-                                        <div className="flex justify-center items-center min-h-[200px] bg-gray-100 rounded">
-                                            <FileText className="w-24 h-24 text-gray-400" />
+
+                                        <div>
+                                            <p className="text-xs  text-black font-bold uppercase tracking-wider">Budget Head No</p>
+                                            <p className="text-sm text-gray-900">{file.budget_head_no || 'Not specified'}</p>
+                                        </div>
+
+                                        <div>
+                                            <p className="text-xs  text-black font-bold uppercase tracking-wider">Proposed Estimated Cost</p>
+                                            <p className="text-sm text-gray-900">
+                                                {(file.proposed_estimated_cost && parseFloat(file.proposed_estimated_cost) !== 0)
+                                                    ? `Rs. ${parseFloat(file.proposed_estimated_cost).toLocaleString()}`
+                                                    : 'Not specified'}
+                                            </p>
+                                        </div>
+
+                                        <div>
+                                            <p className="text-xs  text-black font-bold uppercase tracking-wider">Contractor Premium</p>
+                                            <p className="text-sm text-gray-900">
+                                                {(file.contractor_premium && parseFloat(file.contractor_premium) !== 0)
+                                                    ? `Rs. ${parseFloat(file.contractor_premium).toLocaleString()}`
+                                                    : 'Not specified'}
+                                            </p>
+                                        </div>
+
+                                        <div>
+                                            <p className="text-xs  text-black font-bold uppercase tracking-wider">Sanctioned/Approved Amount</p>
+                                            <p className="text-sm text-gray-900 font-medium">
+                                                {(file.sanctioned_amount && parseFloat(file.sanctioned_amount) !== 0)
+                                                    ? `Rs. ${parseFloat(file.sanctioned_amount).toLocaleString()}`
+                                                    : 'Not specified yet for approval'}
+                                            </p>
+                                        </div>
+
+                                        <div>
+                                            <p className="text-xs text-black font-bold uppercase tracking-wider">Revised Estimate Amount</p>
+                                            <p className="text-sm text-gray-900">
+                                                {(file.revised_estimate_amount && parseFloat(file.revised_estimate_amount) !== 0)
+                                                    ? `Rs. ${parseFloat(file.revised_estimate_amount).toLocaleString()}`
+                                                    : 'None'}
+                                            </p>
                                         </div>
                                     </div>
-                                    <div className="flex justify-end">
-                                        <Button 
-                                            variant="outline"
-                                            onClick={() => {
-                                                const link = document.createElement('a');
-                                                link.href = selectedAttachment.file_url;
-                                                link.download = selectedAttachment.file_name;
-                                                link.target = '_blank';
-                                                document.body.appendChild(link);
-                                                link.click();
-                                                document.body.removeChild(link);
-                                            }}
-                                        >
-                                            <Download className="w-4 h-4 mr-2" />
-                                            Download File
-                                        </Button>
-                                    </div>
                                 </div>
-                            ) : (
-                                <div className="text-center py-8">
-                                    <FileText className="w-16 h-16 mx-auto text-gray-400 mb-4" />
-                                    <p className="text-gray-600 mb-2">{selectedAttachment.file_name}</p>
-                                    <p className="text-sm text-gray-500">
-                                        {Math.round((selectedAttachment.file_size || 0)/1024)} KB • {formatDate(selectedAttachment.uploaded_at)}
-                                    </p>
-                                    <Button 
-                                        className="mt-4" 
-                                        onClick={() => window.open(selectedAttachment.file_url, '_blank')}
-                                    >
-                                        <Download className="w-4 h-4 mr-2" />
-                                        Download File
-                                    </Button>
+
+                                {/* SLA Status Section */}
+                                {file.sla_deadline && (
+                                    <div className="border-t pt-4">
+                                        <label className="text-sm font-medium text-gray-600 mb-3 block">SLA Status (TAT)</label>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="text-xs font-medium text-gray-500">Status</label>
+                                                <div className="mt-1">
+                                                    {file.sla_status === 'BREACHED' && (
+                                                        <Badge variant="destructive" className="flex items-center">
+                                                            <AlertCircle className="w-3 h-3 mr-1" />
+                                                            Breached
+                                                        </Badge>
+                                                    )}
+                                                    {file.sla_status === 'ACTIVE' && (
+                                                        <Badge variant="default" className="flex items-center">
+                                                            <Clock className="w-3 h-3 mr-1" />
+                                                            Active
+                                                        </Badge>
+                                                    )}
+                                                    {file.sla_status === 'PAUSED' && (
+                                                        <Badge variant="secondary" className="flex items-center">
+                                                            <Clock className="w-3 h-3 mr-1" />
+                                                            Paused
+                                                        </Badge>
+                                                    )}
+                                                    {file.sla_status === 'COMPLETED' && (
+                                                        <Badge variant="outline" className="flex items-center">
+                                                            <Clock className="w-3 h-3 mr-1" />
+                                                            Completed
+                                                        </Badge>
+                                                    )}
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <label className="text-xs font-medium text-gray-500">Time Remaining</label>
+                                                <p className={`text-sm font-medium ${file.sla_status === 'BREACHED' ? 'text-red-600' :
+                                                    file.sla_status === 'PAUSED' ? 'text-yellow-600' :
+                                                        'text-green-600'
+                                                    }`}>
+                                                    {timeLeft}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <div className="mt-2 text-xs text-gray-500">
+                                            <div>Deadline: {formatDate(file.sla_deadline)}</div>
+                                            {file.current_stage_name && (
+                                                <div>Current Stage: {file.current_stage_name}</div>
+                                            )}
+                                            {file.sla_paused && (
+                                                <div className="text-yellow-600">⚠️ SLA paused (pending CEO review)</div>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+                                <div>
+                                    <label className="text-sm font-medium text-gray-600">Video Archiving ID</label>
+                                    {file.work_request_id ? (
+                                        <>
+                                            <p className="text-lg font-semibold text-blue-600">#{file.work_request_id}</p>
+                                            <p className="text-sm text-gray-500">Linked to work request for video archiving</p>
+                                        </>
+                                    ) : (
+                                        <p className="text-sm text-gray-500 italic">No video request linked</p>
+                                    )}
                                 </div>
-                            )}
-                            <div className="border-t pt-4">
-                                <div className="grid grid-cols-2 gap-4 text-sm">
+                                {file.remarks && (
                                     <div>
-                                        <span className="font-medium">File Name:</span>
-                                        <p className="text-gray-600">{selectedAttachment.file_name}</p>
+                                        <label className="text-sm font-medium text-gray-600">Remarks</label>
+                                        <p className="text-gray-700 bg-gray-50 p-3 rounded-md">{file.remarks}</p>
                                     </div>
+                                )}
+                            </CardContent>
+                        </Card>
+                        {/* ===================== TITLE PAGE ===================== */}
+                        <div className="print-only print-title-page page-content">
+                            {/* KWSC Header */}
+                            <div className="border-b border-gray-300">
+                                <div className="flex items-center space-x-3">
+                                    <img src="/logo.png" alt="KWSC Logo" className="h-8 w-auto" />
                                     <div>
-                                        <span className="font-medium">File Size:</span>
-                                        <p className="text-gray-600">{Math.round((selectedAttachment.file_size || 0)/1024)} KB</p>
-                                    </div>
-                                    <div>
-                                        <span className="font-medium">File Type:</span>
-                                        <p className="text-gray-600">{selectedAttachment.file_type || 'Unknown'}</p>
-                                    </div>
-                                    <div>
-                                        <span className="font-medium">Uploaded:</span>
-                                        <p className="text-gray-600">{formatDate(selectedAttachment.uploaded_at)}</p>
+                                        <h1 className="text-lg font-bold text-blue-900">
+                                            Karachi Water & Sewerage Corporation
+                                        </h1>
                                     </div>
                                 </div>
                             </div>
-                        </div>
-                    )}
-                </DialogContent>
-            </Dialog>
+                            <h3
+                                style={{
+                                    fontSize: '16pt',
+                                    textAlign: 'justify',
+                                    marginBottom: '6mm'
+                                }}>
+                                SUBJECT:</h3>
+                            <h2
+                                style={{
+                                    fontSize: '14pt',
+                                    textAlign: 'justify',
+                                    marginBottom: '10mm'
+                                }}
+                            >
+                                {file?.subject}
+                            </h2>
 
-            {/* Attachment Upload Dialog */}
-            <Dialog open={showAttachmentUpload} onOpenChange={setShowAttachmentUpload}>
-                <DialogContent className="max-w-md">
-                    <DialogHeader>
-                        <DialogTitle className="flex items-center gap-2">
-                            <Upload className="w-5 h-5" />
-                            Upload Attachments
-                        </DialogTitle>
-                    </DialogHeader>
-                    <div className="space-y-4">
-                        <div>
-                            <Label htmlFor="attachmentName">Attachment Name</Label>
-                            <Input
-                                id="attachmentName"
-                                value={attachmentName}
-                                onChange={(e) => setAttachmentName(e.target.value)}
-                                placeholder="Enter a name for these attachments"
-                                className="mt-1"
-                            />
-                            <p className="text-sm text-gray-500 mt-1">
-                                This name will be used to identify the group of files
-                            </p>
+                            <div className="print-file-info">
+                                <div className="info-row"><strong>File Number:&nbsp;</strong> {file?.file_number}</div>
+                                <div className="info-row"><strong>Department:&nbsp;</strong> {file?.department_name}</div>
+                                <div className="info-row"><strong>Category:&nbsp;</strong> {file?.category_name}</div>
+                                <div className="info-row"><strong>Status:&nbsp;</strong> {file?.status_name}</div>
+                                <div className="info-row"><strong>Created:&nbsp;</strong> {formatDate(file?.created_at)}</div>
+                                <div className="info-row"><strong>Created By:&nbsp;</strong> {file?.created_by_name_with_designation}</div>
+                            </div>
                         </div>
 
-                        <div>
-                            <Label htmlFor="files">Select Files</Label>
-                            <Input
-                                id="files"
-                                type="file"
-                                multiple
-                                accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-                                onChange={handleFileSelect}
-                                className="mt-1"
-                            />
-                            <p className="text-sm text-gray-500 mt-1">
-                                Allowed types: PDF, DOC, DOCX, JPG, JPEG, PNG (Max 5MB each)
-                            </p>
+
+                        {/* print content  */}
+                        <div className="space-y-6 print-content-start">
+                            {(() => {
+                                console.log('Pages state:', pages);
+                                console.log('File state:', file);
+                                console.log('Pages length:', pages?.length);
+                                console.log('File document_content:', file?.document_content);
+
+                                if (pages && pages.length > 0) {
+                                    console.log('Rendering pages:', pages);
+                                    return pages.map(renderPage).filter(page => page !== null);
+                                } else if (file?.document_content) {
+                                    console.log('Rendering fallback from file document_content');
+                                    // Parse document_content if it's a string
+                                    let parsedContent = file.document_content;
+                                    if (typeof file.document_content === 'string') {
+                                        try {
+                                            parsedContent = JSON.parse(file.document_content);
+                                            console.log('Parsed fallback content:', parsedContent);
+                                        } catch (e) {
+                                            console.error('Error parsing fallback content:', e);
+                                            parsedContent = {};
+                                        }
+                                    }
+                                    return renderPage({ id: 'main', pageNumber: 1, content: parsedContent });
+                                } else {
+                                    console.log('No content available');
+                                    return (
+                                        <Card>
+                                            <CardContent>
+                                                <p className="text-sm text-gray-500">No document content available.</p>
+                                                <p className="text-xs text-gray-400 mt-2">Debug: pages={pages?.length || 0}, file={file ? 'loaded' : 'not loaded'}</p>
+                                            </CardContent>
+                                        </Card>
+                                    );
+                                }
+                            })()}
                         </div>
 
-                        {selectedFiles.length > 0 && (
-                            <div>
-                                <Label>Selected Files ({selectedFiles.length})</Label>
-                                <div className="mt-2 space-y-1 max-h-32 overflow-y-auto">
-                                    {selectedFiles.map((file, index) => (
-                                        <div key={index} className="text-sm text-gray-600 flex items-center gap-2">
-                                            <Paperclip className="w-4 h-4" />
-                                            <span className="truncate">{file.name}</span>
-                                            <span className="text-xs text-gray-500">
-                                                ({(file.size / 1024).toFixed(1)} KB)
-                                            </span>
+                        {/* Print-only E-Signatures Section */}
+                        {signatures.length > 0 && (
+                            <div className="print-only print-section">
+                                <h3>E-Signatures ({signatures.length})</h3>
+                                <div className="print-signatures-grid">
+                                    {signatures.map((s, idx) => {
+                                        // Helper function to get the correct image URL for print
+                                        const getSignatureImageUrl = (content) => {
+                                            if (!content) return null;
+
+                                            // 1. If it's already a Data URI (base64), use it as is
+                                            if (content.startsWith('data:image/')) return content;
+
+                                            // 2. If it's a full URL (like http://localhost:3000/uploads/...)
+                                            // This is the part that was likely causing your error
+                                            if (content.startsWith('http://') || content.startsWith('https://')) {
+                                                // If it points to /uploads/, we need to inject /api/ before /uploads/
+                                                if (content.includes('/uploads/')) {
+                                                    return content.replace('/uploads/', '/api/uploads/');
+                                                }
+                                                return content;
+                                            }
+
+                                            // 3. If it starts with /api/, it's already correct
+                                            if (content.startsWith('/api/')) return content;
+
+                                            // 4. If it starts with /uploads/, change to /api/uploads/
+                                            if (content.startsWith('/uploads/')) return content.replace('/uploads/', '/api/uploads/');
+
+                                            // 5. Default fallback for relative paths
+                                            return `/api/uploads${content.startsWith('/') ? '' : '/'}${content}`;
+                                        };
+
+                                        const imageUrl = s.content && s.type?.toLowerCase().includes('image')
+                                            ? getSignatureImageUrl(s.content)
+                                            : null;
+
+                                        return (
+                                            <div key={s.id || idx} className="print-signature-item">
+                                                {imageUrl ? (
+                                                    // eslint-disable-next-line @next/next/no-img-element
+                                                    <img src={imageUrl} alt="signature" />
+                                                ) : s.content ? (
+                                                    <div
+                                                        className="signature-text"
+                                                        data-color={s.signature_color || 'black'} // This attribute matches the CSS selectors
+                                                        style={{
+                                                            padding: '3mm',
+                                                            border: '1px solid #ddd',
+                                                            backgroundColor: '#f9f9f9',
+                                                            // Only hardcode the things that DON'T change by color
+                                                            fontFamily: s.signature_font || 'monospace',
+                                                            fontSize: '12pt', // Increased size for better print readability
+                                                            marginBottom: '2mm',
+                                                            color: s.signature_color === 'blue' ? '#2563eb' : s.signature_color === 'red' ? '#dc2626' : s.signature_color === 'green' ? '#16a34a' : '#000000'                                                        }}
+                                                    >
+                                                        {s.content}
+                                                    </div>
+                                                ) : null}
+                                                <div className="print-signature-details">
+                                                    <div><strong>{s.user_name}</strong> <span style={{ color: '#666', fontWeight: 'normal' }}>({s.user_role})</span></div>
+                                                    <div>{formatDate(s.timestamp)}</div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Print-only Attachments Section */}
+                        {attachments.length > 0 && (
+                            <div className="print-only print-section">
+                                <h3>Attachments ({attachments.length})</h3>
+                                {attachments.map((a, idx) => (
+                                    <div key={a.id || idx} className="print-attachment-item">
+                                        {a.file_url && a.file_type?.startsWith('image/') ? (
+                                            // eslint-disable-next-line @next/next/no-img-element
+                                            <img src={a.file_url} alt={a.file_name} />
+                                        ) : (
+                                            <div style={{ padding: '10mm', backgroundColor: '#f0f0f0', textAlign: 'center', border: '1px solid #ccc', marginBottom: '3mm' }}>
+                                                <div style={{ fontSize: '11pt', color: '#666' }}>{a.file_type || 'Document'}</div>
+                                            </div>
+                                        )}
+                                        <div style={{ fontWeight: 'bold', fontSize: '11pt', marginBottom: '2mm' }}>{a.file_name}</div>
+                                        <div style={{ color: '#666', fontSize: '9pt' }}>
+                                            Size: {Math.round((a.file_size || 0) / 1024)} KB | Uploaded: {formatDate(a.uploaded_at)}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        {/* Print-only Comments Section */}
+                        {comments.length > 0 && (
+                            <div className="print-only print-section comments-section">
+                                <h3>Comments ({comments.length})</h3>
+                                <div className="print-comments-grid">
+                                    {comments.map((c, idx) => (
+                                        <div key={c.id || idx} className="print-comment-item">
+                                            <div className="print-comment-header">{c.user_name}</div>
+                                            <div style={{ color: '#666', fontSize: '7pt', marginBottom: '2mm' }}>{formatDate(c.timestamp)}</div>
+                                            <div className="print-comment-content">{c.text}</div>
                                         </div>
                                     ))}
                                 </div>
                             </div>
                         )}
-
-                        <div className="flex justify-end gap-2 pt-4 border-t">
-                            <Button
-                                variant="outline"
-                                onClick={() => {
-                                    setShowAttachmentUpload(false);
-                                    setAttachmentName("");
-                                    setSelectedFiles([]);
-                                }}
-                                disabled={uploadingAttachment}
-                            >
-                                Cancel
-                            </Button>
-                            <Button
-                                onClick={handleAttachmentUpload}
-                                disabled={uploadingAttachment || !attachmentName.trim() || selectedFiles.length === 0}
-                                className="bg-blue-600 hover:bg-blue-700"
-                            >
-                                {uploadingAttachment ? 'Uploading...' : 'Upload'}
-                            </Button>
-                        </div>
                     </div>
-                </DialogContent>
-            </Dialog>
 
-            {/* Edit File Information Dialog */}
-            <Dialog open={showEditFileInfo} onOpenChange={setShowEditFileInfo}>
-                <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-                    <DialogHeader>
-                        <DialogTitle>Edit File Information</DialogTitle>
-                    </DialogHeader>
-                    <div className="space-y-4">
-                        <div>
-                            <Label htmlFor="work_request_id">Video Archiving Request ID</Label>
-                            <Select 
-                                value={selectedWorkRequestId || 'none'} 
-                                onValueChange={setSelectedWorkRequestId}
-                            >
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Select Video Request ID (Optional)" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="none">No Video Request</SelectItem>
-                                    {workRequests.map((req) => (
-                                        <SelectItem key={req.id} value={req.id.toString()}>
-                                            #{req.id} - {req.address || 'No address'} ({req.complaint_type || 'No type'})
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                            <p className="text-sm text-gray-500 mt-1">
-                                Link this file to a specific video archiving request for reference
-                            </p>
-                        </div>
+                    <div className="space-y-6 no-print overflow-y-auto pr-2">
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>File Metadata</CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-3">
+                                <div>
+                                    <label className="text-sm font-medium text-gray-600">Created Date</label>
+                                    <p className="flex items-center text-sm"><Clock className="w-4 h-4 mr-2 text-gray-500" />{formatDate(file.created_at)}</p>
+                                </div>
+                                <div>
+                                    <label className="text-sm font-medium text-gray-600">Last Modified</label>
+                                    <p className="flex items-center text-sm"><Clock className="w-4 h-4 mr-2 text-gray-500" />{formatDate(file.updated_at)}</p>
+                                </div>
+                                <div>
+                                    <label className="text-sm font-medium text-gray-600">Created By</label>
+                                    <p className="flex items-center text-sm"><User className="w-4 h-4 mr-2 text-gray-500" />{file.created_by_name_with_designation || file.created_by_name || 'Unknown'}</p>
+                                </div>
+                            </CardContent>
+                        </Card>
 
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>Quick Actions</CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-2">
+                                <Button variant="outline" className="w-full justify-start" onClick={openMarkModal}>
+                                    <Forward className="w-4 h-4 mr-2" />
+                                    Mark / Forward File
+                                </Button>
+                                {canAddPage && (
+                                    <Button
+                                        variant="outline"
+                                        className="w-full justify-start"
+                                        onClick={() => router.push(`/efilinguser/files/${params.id}/add-page`)}
+                                    >
+                                        <FileText className="w-4 h-4 mr-2" />
+                                        Add Note Sheet
+                                    </Button>
+                                )}
+                            </CardContent>
+                        </Card>
 
-                        <div className="border-t pt-4">
-                            <h4 className="text-sm font-semibold mb-4">Costing & Budget Information</h4>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div className="space-y-2">
-                                    <Label>Budget Head No</Label>
-                                    <Input 
-                                        value={budgetHeadNo}
-                                        onChange={(e) => setBudgetHeadNo(e.target.value)}
-                                        placeholder="e.g. B-01-01"
-                                    />
+                        {/* E-Signature Section */}
+                        <Card>
+                            <CardHeader>
+                                <CardTitle className="flex items-center gap-2">
+                                    <Shield className="w-5 h-5" />
+                                    Document Signatures
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <DocumentSignatureSystem
+                                    fileId={params.id}
+                                    userRole={userRole}
+                                    canEditDocument={true}
+                                    hasUserSigned={hasUserSigned}
+                                    onSignatureAdded={(signature) => {
+                                        console.log('Signature added:', signature);
+                                        setHasUserSigned(true);
+                                        // Refresh signatures list
+                                        fetchExtras();
+                                        toast({
+                                            title: "Signature Added",
+                                            description: "Your signature has been successfully added to the document.",
+                                        });
+                                    }}
+                                    onCommentAdded={(comment) => {
+                                        console.log('Comment added:', comment);
+                                        // Refresh comments list
+                                        fetchComments();
+                                    }}
+                                />
+                            </CardContent>
+                        </Card>
+
+                        {beforeContent.length > 0 && (
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle className="text-lg">Before Content ({beforeContent.length})</CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                    <div className="space-y-3">
+                                        {beforeContent.map((item) => {
+                                            // Convert /uploads/ to /api/uploads/ for secure access
+                                            const getImageUrl = (url) => {
+                                                if (!url) return '';
+                                                // Convert /uploads/ to /api/uploads/ for authenticated access
+                                                if (url.startsWith('/uploads/')) {
+                                                    return url.replace('/uploads/', '/api/uploads/');
+                                                }
+                                                // If it's already /api/uploads/, return as is
+                                                if (url.startsWith('/api/')) return url;
+                                                // If it's an absolute URL, extract the path and convert
+                                                try {
+                                                    const urlObj = new URL(url);
+                                                    const pathname = urlObj.pathname;
+                                                    if (pathname.startsWith('/uploads/')) {
+                                                        return pathname.replace('/uploads/', '/api/uploads/');
+                                                    }
+                                                    return pathname;
+                                                } catch {
+                                                    return url;
+                                                }
+                                            };
+                                            const imageUrl = getImageUrl(item.link);
+
+                                            return (
+                                                <div key={item.id} className="border rounded-lg p-3">
+                                                    <div className="relative">
+                                                        {item.content_type === 'video' ? (
+                                                            <video
+                                                                src={imageUrl}
+                                                                className="w-full h-32 object-cover rounded"
+                                                                controls
+                                                            />
+                                                        ) : (
+                                                            <img
+                                                                src={imageUrl}
+                                                                alt={item.description || 'Before content'}
+                                                                className="w-full h-32 object-cover rounded"
+                                                                onError={(e) => {
+                                                                    // Fallback: try the original URL if relative fails
+                                                                    if (e.target.src !== item.link) {
+                                                                        e.target.src = item.link;
+                                                                    }
+                                                                }}
+                                                            />
+                                                        )}
+                                                        <div className="absolute top-2 left-2">
+                                                            <Badge variant="secondary" className="text-xs">
+                                                                {item.content_type === 'video' ? 'Video' : 'Image'}
+                                                            </Badge>
+                                                        </div>
+                                                    </div>
+                                                    {item.description && (
+                                                        <p className="text-xs text-gray-500 mt-2 line-clamp-2">
+                                                            {item.description}
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        )}
+
+                        <Card>
+                            <CardHeader>
+                                <div className="flex items-center justify-between">
+                                    <CardTitle>Attachments</CardTitle>
+                                    {canAddAttachment && (
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => setShowAttachmentUpload(true)}
+                                            className="flex items-center gap-2"
+                                        >
+                                            <Plus className="w-4 h-4" />
+                                            Add Attachment
+                                        </Button>
+                                    )}
                                 </div>
-                                <div className="space-y-2">
-                                    <Label>Proposed Estimated Cost</Label>
-                                    <Input 
-                                        type="number"
-                                        value={proposedCost}
-                                        onChange={(e) => setProposedCost(e.target.value)}
-                                        placeholder="0.00"
-                                    />
+                            </CardHeader>
+                            <CardContent>
+                                {attachments.length === 0 ? (
+                                    <p className="text-sm text-gray-500">No attachments in this file.</p>
+                                ) : (
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                        {attachments.map(a => (
+                                            <div key={a.id} className="border rounded-lg p-3 hover:shadow-md transition-shadow cursor-pointer group" onClick={() => openAttachmentModal(a)}>
+                                                {a.file_url && a.file_type?.startsWith('image/') ? (
+                                                    <div className="relative">
+                                                        <Image
+                                                            src={a.file_url}
+                                                            alt={a.file_name}
+                                                            width={200}
+                                                            height={150}
+                                                            className="w-full h-32 object-cover rounded mb-2"
+                                                            unoptimized
+                                                        />
+                                                        <div className="absolute top-2 right-2 bg-black bg-opacity-50 text-white p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">
+                                                            <Maximize2 className="w-4 h-4" />
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <div className="w-full h-32 flex items-center justify-center bg-gray-100 rounded mb-2 text-gray-500">
+                                                        <FileText className="w-8 h-8" />
+                                                    </div>
+                                                )}
+                                                <div className="space-y-1">
+                                                    <div className="font-medium text-sm truncate" title={a.file_name}>{a.file_name}</div>
+                                                    <div className="text-xs text-gray-500">
+                                                        {Math.round((a.file_size || 0) / 1024)} KB • {formatDate(a.uploaded_at)}
+                                                    </div>
+                                                    <div className="text-xs text-blue-600 group-hover:text-blue-800">
+                                                        Click to view
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
+
+                        <Card>
+                            <CardHeader>
+                                <CardTitle className="flex items-center gap-2"><MessageSquare className="w-4 h-4" />Comments ({comments.length})</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="space-y-3">
+                                    {comments.length > 0 ? (
+                                        comments.map((c) => (
+                                            <div key={c.id} className="border-l-4 border-blue-500 pl-3">
+                                                <div className="text-sm font-medium text-gray-900">{c.user_name}</div>
+                                                <div className="text-xs text-gray-500">{formatDate(c.timestamp)}</div>
+                                                <div className="text-sm text-gray-700 mt-1">{c.text}</div>
+                                            </div>
+                                        ))
+                                    ) : (
+                                        <p className="text-sm text-gray-500">No comments yet</p>
+                                    )}
                                 </div>
-                                <div className="space-y-2">
-                                    <Label>Contractor Premium </Label>
-                                    <Input 
-                                        type="number"
-                                        value={contractorPremium}
-                                        onChange={(e) => setContractorPremium(e.target.value)}
-                                        placeholder="0.00"
-                                    />
+                                <div className="mt-4">
+                                    <textarea value={newComment} onChange={(e) => setNewComment(e.target.value)} rows={3} placeholder="Add a comment..." className="w-full border rounded-md p-2 text-sm" />
+                                    <div className="flex justify-end mt-2">
+                                        <Button size="sm" onClick={postComment} disabled={postingComment || !newComment.trim()}>{postingComment ? 'Posting...' : 'Add Comment'}</Button>
+                                    </div>
                                 </div>
-                                <div className="space-y-2">
-                                    <Label>Sanctioned Amount</Label>
-                                    <Input 
-                                        type="number"
-                                        value={sanctionedAmount}
-                                        onChange={(e) => setSanctionedAmount(e.target.value)}
-                                        placeholder="0.00"
-                                    />
-                                </div>
-                                <div className="space-y-2 md:col-span-2">
-                                    <Label>Revised Estimate Amount</Label>
-                                    <Input 
-                                        type="number"
-                                        value={revisedAmount}
-                                        onChange={(e) => setRevisedAmount(e.target.value)}
-                                        placeholder="0.00"
-                                    />
+                            </CardContent>
+                        </Card>
+
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>Status Timeline</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                {timeline.length === 0 ? (
+                                    <p className="text-sm text-gray-500">No timeline events available.</p>
+                                ) : (
+                                    <div className="space-y-3">
+                                        {timeline.map((ev, idx) => (
+                                            <div key={idx} className="flex items-start gap-3">
+                                                <div className={`w-2 h-2 mt-2 rounded-full ${ev.type === 'CREATED' ? 'bg-green-500' : ev.type === 'ASSIGNED' ? 'bg-blue-500' : 'bg-purple-500'}`}></div>
+                                                <div className="flex-1">
+                                                    <div className="text-sm font-medium">{ev.title}</div>
+                                                    <div className="text-xs text-gray-500">{formatDate(ev.timestamp)}</div>
+                                                    {ev.meta && (ev.meta.remarks) && (
+                                                        <div className="text-xs text-gray-600 mt-1">
+                                                            {ev.meta.remarks && <div>Remarks: {ev.meta.remarks}</div>}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
+                    </div>
+                </div>
+
+                {showMarkModal && (
+                    <MarkToModal
+                        showMarkToModal={showMarkModal}
+                        fileId={params.id}
+                        fileNumber={file?.file_number}
+                        subject={file?.subject}
+                        onClose={() => setShowMarkModal(false)}
+                        onSuccess={handleMarkToSuccess}
+                    />
+                )}
+
+                {/* Attachment Preview Modal */}
+                <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+                    <DialogContent className="max-w-4xl max-h-[90vh] overflow-auto">
+                        <DialogHeader>
+                            <DialogTitle className="flex items-center justify-between">
+                                <span>{selectedAttachment?.file_name}</span>
+                                <Button variant="ghost" size="sm" onClick={closeAttachmentModal}>
+                                    <X className="w-4 h-4" />
+                                </Button>
+                            </DialogTitle>
+                        </DialogHeader>
+                        {selectedAttachment && (
+                            <div className="space-y-4">
+                                {selectedAttachment.file_url && selectedAttachment.file_type?.startsWith('image/') ? (
+                                    <div className="text-center">
+                                        <Image
+                                            src={selectedAttachment.file_url}
+                                            alt={selectedAttachment.file_name}
+                                            width={800}
+                                            height={600}
+                                            className="max-w-full max-h-[70vh] object-contain mx-auto rounded-lg shadow-lg"
+                                        />
+                                    </div>
+                                ) : selectedAttachment.file_type === 'application/pdf' || selectedAttachment.file_name?.toLowerCase().endsWith('.pdf') ? (
+                                    <div className="space-y-4">
+                                        <div className="border rounded-lg overflow-hidden bg-gray-50">
+                                            {(() => {
+                                                // Helper function to get the correct PDF URL
+                                                const getPdfUrl = (fileUrl) => {
+                                                    if (!fileUrl) {
+                                                        console.error('PDF file_url is missing');
+                                                        return null;
+                                                    }
+                                                    // If it's already an API URL, return as is
+                                                    if (fileUrl.startsWith('/api/uploads/')) {
+                                                        return fileUrl;
+                                                    }
+                                                    // If it starts with /uploads/, convert to /api/uploads/
+                                                    if (fileUrl.startsWith('/uploads/')) {
+                                                        const converted = fileUrl.replace('/uploads/', '/api/uploads/');
+                                                        console.log('PDF URL converted:', fileUrl, '->', converted);
+                                                        return converted;
+                                                    }
+                                                    // If it's a full URL with domain, extract the path and convert
+                                                    if (fileUrl.startsWith('http://') || fileUrl.startsWith('https://')) {
+                                                        try {
+                                                            const url = new URL(fileUrl);
+                                                            const path = url.pathname;
+                                                            if (path.startsWith('/uploads/')) {
+                                                                return path.replace('/uploads/', '/api/uploads/');
+                                                            }
+                                                            if (path.startsWith('/api/uploads/')) {
+                                                                return path;
+                                                            }
+                                                            // If path doesn't match expected patterns, try to construct
+                                                            return `/api/uploads${path}`;
+                                                        } catch (e) {
+                                                            console.error('Error parsing PDF URL:', e);
+                                                            return fileUrl;
+                                                        }
+                                                    }
+                                                    // Otherwise, assume it's a relative path
+                                                    const converted = `/api/uploads${fileUrl.startsWith('/') ? '' : '/'}${fileUrl}`;
+                                                    console.log('PDF URL converted (relative):', fileUrl, '->', converted);
+                                                    return converted;
+                                                };
+
+                                                const pdfUrl = getPdfUrl(selectedAttachment.file_url);
+
+                                                if (!pdfUrl) {
+                                                    return (
+                                                        <div className="p-8 text-center text-gray-500">
+                                                            <FileText className="w-16 h-16 mx-auto mb-4 text-gray-400" />
+                                                            <p>PDF URL is missing or invalid</p>
+                                                            <p className="text-xs mt-2">File: {selectedAttachment.file_name}</p>
+                                                        </div>
+                                                    );
+                                                }
+
+                                                return (
+                                                    <>
+                                                        {/* Use iframe as primary method (object tag has CSP issues) */}
+                                                        <iframe
+                                                            src={pdfUrl}
+                                                            className="w-full h-[70vh] min-h-[500px] border-0"
+                                                            title={selectedAttachment.file_name}
+                                                            style={{ display: 'block' }}
+                                                            onError={(e) => {
+                                                                console.error('Iframe failed to load PDF:', pdfUrl, e);
+                                                                // Show error message if iframe fails
+                                                                const container = e.target.parentElement;
+                                                                if (container) {
+                                                                    container.innerHTML = `
+                                                                    <div class="p-8 text-center text-red-600">
+                                                                        <p class="mb-2">Failed to load PDF preview</p>
+                                                                        <p class="text-sm text-gray-500">Please use "Open in New Tab" or "Download" buttons below</p>
+                                                                    </div>
+                                                                `;
+                                                                }
+                                                            }}
+                                                        />
+                                                    </>
+                                                );
+                                            })()}
+                                        </div>
+                                        <div className="flex justify-end gap-2">
+                                            {(() => {
+                                                const getPdfUrl = (fileUrl) => {
+                                                    if (!fileUrl) return null;
+                                                    if (fileUrl.startsWith('/api/uploads/')) return fileUrl;
+                                                    if (fileUrl.startsWith('/uploads/')) return fileUrl.replace('/uploads/', '/api/uploads/');
+                                                    if (fileUrl.startsWith('http://') || fileUrl.startsWith('https://')) {
+                                                        try {
+                                                            const url = new URL(fileUrl);
+                                                            const path = url.pathname;
+                                                            if (path.startsWith('/uploads/')) return path.replace('/uploads/', '/api/uploads/');
+                                                            if (path.startsWith('/api/uploads/')) return path;
+                                                            return `/api/uploads${path}`;
+                                                        } catch (e) {
+                                                            return fileUrl;
+                                                        }
+                                                    }
+                                                    return `/api/uploads${fileUrl.startsWith('/') ? '' : '/'}${fileUrl}`;
+                                                };
+                                                const pdfUrl = getPdfUrl(selectedAttachment.file_url);
+                                                return (
+                                                    <>
+                                                        <Button
+                                                            variant="outline"
+                                                            onClick={() => {
+                                                                window.open(pdfUrl, '_blank');
+                                                            }}
+                                                        >
+                                                            <Eye className="w-4 h-4 mr-2" />
+                                                            Open in New Tab
+                                                        </Button>
+                                                        <Button
+                                                            variant="outline"
+                                                            onClick={() => {
+                                                                const link = document.createElement('a');
+                                                                link.href = pdfUrl;
+                                                                link.download = selectedAttachment.file_name;
+                                                                link.target = '_blank';
+                                                                document.body.appendChild(link);
+                                                                link.click();
+                                                                document.body.removeChild(link);
+                                                            }}
+                                                        >
+                                                            <Download className="w-4 h-4 mr-2" />
+                                                            Download File
+                                                        </Button>
+                                                    </>
+                                                );
+                                            })()}
+                                        </div>
+                                    </div>
+                                ) : selectedAttachment.file_type === 'application/msword' ||
+                                    selectedAttachment.file_type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+                                    selectedAttachment.file_name?.toLowerCase().endsWith('.doc') ||
+                                    selectedAttachment.file_name?.toLowerCase().endsWith('.docx') ? (
+                                    <div className="space-y-4">
+                                        <div className="border rounded-lg overflow-hidden bg-gray-50 p-4">
+                                            <p className="text-sm text-gray-600 mb-4">
+                                                Word documents cannot be previewed directly in the browser. Please download to view.
+                                            </p>
+                                            <div className="flex justify-center items-center min-h-[200px] bg-gray-100 rounded">
+                                                <FileText className="w-24 h-24 text-gray-400" />
+                                            </div>
+                                        </div>
+                                        <div className="flex justify-end">
+                                            <Button
+                                                variant="outline"
+                                                onClick={() => {
+                                                    const link = document.createElement('a');
+                                                    link.href = selectedAttachment.file_url;
+                                                    link.download = selectedAttachment.file_name;
+                                                    link.target = '_blank';
+                                                    document.body.appendChild(link);
+                                                    link.click();
+                                                    document.body.removeChild(link);
+                                                }}
+                                            >
+                                                <Download className="w-4 h-4 mr-2" />
+                                                Download File
+                                            </Button>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="text-center py-8">
+                                        <FileText className="w-16 h-16 mx-auto text-gray-400 mb-4" />
+                                        <p className="text-gray-600 mb-2">{selectedAttachment.file_name}</p>
+                                        <p className="text-sm text-gray-500">
+                                            {Math.round((selectedAttachment.file_size || 0) / 1024)} KB • {formatDate(selectedAttachment.uploaded_at)}
+                                        </p>
+                                        <Button
+                                            className="mt-4"
+                                            onClick={() => window.open(selectedAttachment.file_url, '_blank')}
+                                        >
+                                            <Download className="w-4 h-4 mr-2" />
+                                            Download File
+                                        </Button>
+                                    </div>
+                                )}
+                                <div className="border-t pt-4">
+                                    <div className="grid grid-cols-2 gap-4 text-sm">
+                                        <div>
+                                            <span className="font-medium">File Name:</span>
+                                            <p className="text-gray-600">{selectedAttachment.file_name}</p>
+                                        </div>
+                                        <div>
+                                            <span className="font-medium">File Size:</span>
+                                            <p className="text-gray-600">{Math.round((selectedAttachment.file_size || 0) / 1024)} KB</p>
+                                        </div>
+                                        <div>
+                                            <span className="font-medium">File Type:</span>
+                                            <p className="text-gray-600">{selectedAttachment.file_type || 'Unknown'}</p>
+                                        </div>
+                                        <div>
+                                            <span className="font-medium">Uploaded:</span>
+                                            <p className="text-gray-600">{formatDate(selectedAttachment.uploaded_at)}</p>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
+                        )}
+                    </DialogContent>
+                </Dialog>
 
-                        <div className="flex justify-end space-x-2 pt-4 border-t">
-                            <Button 
-                                variant="outline" 
-                                onClick={() => setShowEditFileInfo(false)}
-                                disabled={savingFileInfo}
-                            >
-                                Cancel
-                            </Button>
-                            <Button 
-                                onClick={handleSaveFileInfo}
-                                disabled={savingFileInfo}
-                            >
-                                {savingFileInfo ? 'Saving...' : 'Save Changes'}
-                            </Button>
+                {/* Attachment Upload Dialog */}
+                <Dialog open={showAttachmentUpload} onOpenChange={setShowAttachmentUpload}>
+                    <DialogContent className="max-w-md">
+                        <DialogHeader>
+                            <DialogTitle className="flex items-center gap-2">
+                                <Upload className="w-5 h-5" />
+                                Upload Attachments
+                            </DialogTitle>
+                        </DialogHeader>
+                        <div className="space-y-4">
+                            <div>
+                                <Label htmlFor="attachmentName">Attachment Name</Label>
+                                <Input
+                                    id="attachmentName"
+                                    value={attachmentName}
+                                    onChange={(e) => setAttachmentName(e.target.value)}
+                                    placeholder="Enter a name for these attachments"
+                                    className="mt-1"
+                                />
+                                <p className="text-sm text-gray-500 mt-1">
+                                    This name will be used to identify the group of files
+                                </p>
+                            </div>
+
+                            <div>
+                                <Label htmlFor="files">Select Files</Label>
+                                <Input
+                                    id="files"
+                                    type="file"
+                                    multiple
+                                    accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                                    onChange={handleFileSelect}
+                                    className="mt-1"
+                                />
+                                <p className="text-sm text-gray-500 mt-1">
+                                    Allowed types: PDF, DOC, DOCX, JPG, JPEG, PNG (Max 5MB each)
+                                </p>
+                            </div>
+
+                            {selectedFiles.length > 0 && (
+                                <div>
+                                    <Label>Selected Files ({selectedFiles.length})</Label>
+                                    <div className="mt-2 space-y-1 max-h-32 overflow-y-auto">
+                                        {selectedFiles.map((file, index) => (
+                                            <div key={index} className="text-sm text-gray-600 flex items-center gap-2">
+                                                <Paperclip className="w-4 h-4" />
+                                                <span className="truncate">{file.name}</span>
+                                                <span className="text-xs text-gray-500">
+                                                    ({(file.size / 1024).toFixed(1)} KB)
+                                                </span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            <div className="flex justify-end gap-2 pt-4 border-t">
+                                <Button
+                                    variant="outline"
+                                    onClick={() => {
+                                        setShowAttachmentUpload(false);
+                                        setAttachmentName("");
+                                        setSelectedFiles([]);
+                                    }}
+                                    disabled={uploadingAttachment}
+                                >
+                                    Cancel
+                                </Button>
+                                <Button
+                                    onClick={handleAttachmentUpload}
+                                    disabled={uploadingAttachment || !attachmentName.trim() || selectedFiles.length === 0}
+                                    className="bg-blue-600 hover:bg-blue-700"
+                                >
+                                    {uploadingAttachment ? 'Uploading...' : 'Upload'}
+                                </Button>
+                            </div>
                         </div>
-                    </div>
-                </DialogContent>
-            </Dialog>
-        </div>
+                    </DialogContent>
+                </Dialog>
+
+                {/* Edit File Information Dialog */}
+                <Dialog open={showEditFileInfo} onOpenChange={setShowEditFileInfo}>
+                    <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                        <DialogHeader>
+                            <DialogTitle>Edit File Information</DialogTitle>
+                        </DialogHeader>
+                        <div className="space-y-4">
+                            <div>
+                                <Label htmlFor="work_request_id">Video Archiving Request ID</Label>
+                                <Select
+                                    value={selectedWorkRequestId || 'none'}
+                                    onValueChange={setSelectedWorkRequestId}
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Select Video Request ID (Optional)" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="none">No Video Request</SelectItem>
+                                        {workRequests.map((req) => (
+                                            <SelectItem key={req.id} value={req.id.toString()}>
+                                                #{req.id} - {req.address || 'No address'} ({req.complaint_type || 'No type'})
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                <p className="text-sm text-gray-500 mt-1">
+                                    Link this file to a specific video archiving request for reference
+                                </p>
+                            </div>
+
+
+                            <div className="border-t pt-4">
+                                <h4 className="text-sm font-semibold mb-4">Costing & Budget Information</h4>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                        <Label>Budget Head No</Label>
+                                        <Input
+                                            value={budgetHeadNo}
+                                            onChange={(e) => setBudgetHeadNo(e.target.value)}
+                                            placeholder="e.g. B-01-01"
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label>Proposed Estimated Cost</Label>
+                                        <Input
+                                            type="number"
+                                            value={proposedCost}
+                                            onChange={(e) => setProposedCost(e.target.value)}
+                                            placeholder="0.00"
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label>Contractor Premium </Label>
+                                        <Input
+                                            type="number"
+                                            value={contractorPremium}
+                                            onChange={(e) => setContractorPremium(e.target.value)}
+                                            placeholder="0.00"
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label>Sanctioned Amount</Label>
+                                        <Input
+                                            type="number"
+                                            value={sanctionedAmount}
+                                            onChange={(e) => setSanctionedAmount(e.target.value)}
+                                            placeholder="0.00"
+                                        />
+                                    </div>
+                                    <div className="space-y-2 md:col-span-2">
+                                        <Label>Revised Estimate Amount</Label>
+                                        <Input
+                                            type="number"
+                                            value={revisedAmount}
+                                            onChange={(e) => setRevisedAmount(e.target.value)}
+                                            placeholder="0.00"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="flex justify-end space-x-2 pt-4 border-t">
+                                <Button
+                                    variant="outline"
+                                    onClick={() => setShowEditFileInfo(false)}
+                                    disabled={savingFileInfo}
+                                >
+                                    Cancel
+                                </Button>
+                                <Button
+                                    onClick={handleSaveFileInfo}
+                                    disabled={savingFileInfo}
+                                >
+                                    {savingFileInfo ? 'Saving...' : 'Save Changes'}
+                                </Button>
+                            </div>
+                        </div>
+                    </DialogContent>
+                </Dialog>
+            </div>
         </>
     );
 } 

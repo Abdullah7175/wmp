@@ -19,7 +19,7 @@ export default function FileTypes() {
     const [fileTypes, setFileTypes] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
-    
+
     // Pagination state
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage, setItemsPerPage] = useState(5);
@@ -83,7 +83,8 @@ export default function FileTypes() {
     const filteredFileTypes = fileTypes.filter(fileType =>
         fileType.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         fileType.code?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        fileType.department_name?.toLowerCase().includes(searchTerm.toLowerCase())
+        fileType.department_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        fileType.category_name?.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
     // Calculate pagination
@@ -137,7 +138,7 @@ export default function FileTypes() {
                     <div className="relative">
                         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                         <Input
-                            placeholder="Search by name, code, or department..."
+                            placeholder="Search by name, code, category or department..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                             className="pl-10"
@@ -165,6 +166,7 @@ export default function FileTypes() {
                                         <TableHead>Name</TableHead>
                                         <TableHead>Department</TableHead>
                                         <TableHead>Description</TableHead>
+                                        <TableHead>Category</TableHead>
                                         <TableHead>Status</TableHead>
                                         <TableHead>Actions</TableHead>
                                     </TableRow>
@@ -184,28 +186,33 @@ export default function FileTypes() {
                                                 {fileType.description || '-'}
                                             </TableCell>
                                             <TableCell>
+                                                <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                                                    {fileType.category_name || 'Uncategorized'}
+                                                </Badge>
+                                            </TableCell>
+                                            <TableCell>
                                                 <Badge className={fileType.is_active ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}>
                                                     {fileType.is_active ? 'Active' : 'Inactive'}
                                                 </Badge>
                                             </TableCell>
                                             <TableCell>
                                                 <div className="flex space-x-2">
-                                                    <Button 
-                                                        variant="ghost" 
+                                                    <Button
+                                                        variant="ghost"
                                                         size="sm"
                                                         onClick={() => router.push(`/efiling/file-types/${fileType.id}`)}
                                                     >
                                                         <Eye className="w-4 h-4" />
                                                     </Button>
-                                                    <Button 
-                                                        variant="ghost" 
+                                                    <Button
+                                                        variant="ghost"
                                                         size="sm"
                                                         onClick={() => router.push(`/efiling/file-types/${fileType.id}/edit`)}
                                                     >
                                                         <Edit className="w-4 h-4" />
                                                     </Button>
-                                                    <Button 
-                                                        variant="ghost" 
+                                                    <Button
+                                                        variant="ghost"
                                                         size="sm"
                                                         onClick={() => handleDelete(fileType.id, fileType.name)}
                                                         className="text-red-600 hover:text-red-700"
@@ -220,7 +227,7 @@ export default function FileTypes() {
                             </Table>
                         </div>
                     )}
-                    
+
                     {/* Pagination */}
                     {filteredFileTypes.length > 0 && (
                         <div className="mt-4">
