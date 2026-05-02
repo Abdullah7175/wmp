@@ -490,7 +490,7 @@ export async function POST(request) {
 
             // Format internal: "Name: Role"
             const formattedInternal = internalAttendeeDetails.map(
-                u => `<li><strong>${u.name}</strong>: ${u.name || 'N/A'}</li>`
+                u => `<li><strong>${u.name}</strong> (${u.name || 'N/A'})</li>`
             ).join("");
 
             // Format external: "Name"
