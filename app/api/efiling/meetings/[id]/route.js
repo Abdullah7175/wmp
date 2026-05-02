@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/db';
 import { auth } from '@/auth';
+import { sendMeetingEmail } from "@/lib/mailer";
 
 async function getEfilingUserId(session, client) {
     if ([1, 2].includes(parseInt(session.user.role))) {
@@ -338,29 +339,68 @@ export async function PATCH(request, { params }) {
         client = await connectToDatabase();
         const efilingUserId = await getEfilingUserId(session, client);
 
-        // Verify that the user is the organizer or an admin
-        const meetingCheck = await client.query(
-            'SELECT organizer_id, status FROM efiling_meetings WHERE id = $1',
+        // 1. Fetch meeting details AND email templates in one go
+        const meetingDataResult = await client.query(
+            `SELECT m.*, 
+             (SELECT setting_value FROM efiling_meeting_settings WHERE setting_key = 'email_templates') as templates
+             FROM efiling_meetings m WHERE m.id = $1`,
             [id]
         );
 
-        if (meetingCheck.rows.length === 0) {
+        if (meetingDataResult.rows.length === 0) {
             return NextResponse.json({ error: 'Meeting not found' }, { status: 404 });
         }
 
-        const meeting = meetingCheck.rows[0];
+        const meetingRecord = meetingDataResult.rows[0]; // Renamed from 'meeting' to 'meetingRecord' to avoid conflicts
         
-        if (meeting.organizer_id !== efilingUserId && ![1, 2].includes(parseInt(session.user.role))) {
+        // 2. Verify authorization
+        if (meetingRecord.organizer_id !== efilingUserId && ![1, 2].includes(parseInt(session.user.role))) {
             return NextResponse.json({ error: 'Access denied' }, { status: 403 });
         }
 
-        // Update the status to CANCELLED
+        // 3. Update the status to CANCELLED in the database
         await client.query(
             'UPDATE efiling_meetings SET status = $1, updated_at = NOW() WHERE id = $2',
             [status, id]
         );
 
-        return NextResponse.json({ success: true, message: 'Meeting cancelled successfully' });
+        // 4. Send Cancellation Emails to External Attendees
+        const externalAttendees = await client.query(
+            'SELECT email, name FROM efiling_meeting_external_attendees WHERE meeting_id = $1',
+            [id]
+        );
+
+        if (externalAttendees.rows.length > 0) {
+            // Get the specific cancellation template from the JSON object in DB
+            const cancelTemplate = meetingRecord.templates?.cancellation || 
+                `<div style="font-family: Arial, sans-serif; border: 1px solid #eee; padding: 20px; line-height: 1.6;">
+                    <h2 style="color: #1a365d; padding-bottom: 10px;">Meeting Cancellation: {{title}}</h2>
+                    
+                    <p>Hello {{name}}!
+
+                    <p>This is to inform you that the meeting <strong>"{{title}}"</strong> scheduled for <strong>{{date}} {{start_time}} - {{end_time}}</strong> has been cancelled.</p>
+                
+                    <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;"/>
+                    <p style="font-size: 12px; color: #666;">This is an automated message from the KW&SC E-Filing System.</p>
+                </div>`;
+
+            for (const guest of externalAttendees.rows) {
+                const personalizedHtml = cancelTemplate
+                    .replaceAll('{{title}}', meetingRecord.title)
+                    .replaceAll('{{date}}', new Date(meetingRecord.meeting_date).toLocaleDateString())
+                    .replaceAll('{{name}}', guest.name)
+                    .replaceAll('{{start_time}}', meetingRecord.start_time)
+                    .replaceAll('{{end_time}}', meetingRecord.end_time)
+
+                await sendMeetingEmail({
+                    to: guest.email,
+                    subject: `CANCELLED: ${meetingRecord.title}`,
+                    html: personalizedHtml
+                });
+            }
+        }
+
+        return NextResponse.json({ success: true, message: 'Meeting cancelled and attendees notified' });
     } catch (error) {
         console.error('Error cancelling meeting:', error);
         return NextResponse.json(
