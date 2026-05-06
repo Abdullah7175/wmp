@@ -1,14 +1,14 @@
 "use client"
 import { useState, useEffect } from 'react';
-import { 
-  ChartPie, 
-  Download, 
-  FileText, 
-  BarChart3, 
-  TrendingUp, 
-  Users, 
-  Building2, 
-  MapPin, 
+import {
+  ChartPie,
+  Download,
+  FileText,
+  BarChart3,
+  TrendingUp,
+  Users,
+  Building2,
+  MapPin,
   Calendar,
   Target,
   Clock,
@@ -47,10 +47,53 @@ const ReportsPage = () => {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [reportType, setReportType] = useState("all");
+  const [pdfSelection, setPdfSelection] = useState("town");
+  const [showWorkType, setShowWorkType] = useState(false);
+  const [selectedTowns, setSelectedTowns] = useState([]); // Multi-select
+  const [selectedWorkTypes, setSelectedWorkTypes] = useState([]); // Multi-select
+  const [townOptions, setTownOptions] = useState([]);
+  const [workTypeOptions, setWorkTypeOptions] = useState([]);
+  const [districtOptions, setDistrictOptions] = useState([]);
+  const [divisionOptions, setDivisionOptions] = useState([]);
+  const [deptOptions, setDeptOptions] = useState([]);
+  const [selectedDistricts, setSelectedDistricts] = useState([]);
+  const [selectedDivisions, setSelectedDivisions] = useState([]);
+  const [selectedDepts, setSelectedDepts] = useState([]);
 
   useEffect(() => {
     fetchReportsData();
   }, [dateFrom, dateTo, reportType]);
+
+  // Fetch options on component mount
+  useEffect(() => {
+    const fetchOptions = async () => {
+      try {
+        const [towns, workTypes, districts, depts] = await Promise.all([
+          fetch('/api/towns').then(res => res.json()).catch(() => []),
+          fetch('/api/complaints/subtypes').then(res => res.json()).catch(() => []),
+          fetch('/api/districts').then(res => res.json()).catch(() => []),
+          fetch('/api/complaints/types').then(res => res.json()).catch(() => [])
+        ]);
+
+        setTownOptions(Array.isArray(towns) ? towns : []);
+        setWorkTypeOptions(Array.isArray(workTypes) ? workTypes : []);
+        setDistrictOptions(Array.isArray(districts) ? districts : []);
+
+        // FIX: Check if depts is defined first
+        if (depts) {
+          // If it's the raw array you showed, use it directly. 
+          // If it's wrapped in an object { data: [...] }, use depts.data.
+          const deptData = depts.data ? depts.data : depts;
+          setDeptOptions(Array.isArray(deptData) ? deptData : []);
+        } else {
+          setDeptOptions([]);
+        }
+      } catch (error) {
+        console.error("Failed to fetch options:", error);
+      }
+    };
+    fetchOptions();
+  }, []);
 
   const fetchReportsData = async () => {
     try {
@@ -61,7 +104,7 @@ const ReportsPage = () => {
       if (dateTo) params.push(`date_to=${dateTo}`);
       if (reportType !== "all") params.push(`report_type=${reportType}`);
       if (params.length) url += '?' + params.join('&');
-      
+
       const response = await fetch(url);
       if (response.ok) {
         const data = await response.json();
@@ -77,18 +120,21 @@ const ReportsPage = () => {
     }
   };
 
-  const generatePDFReport = async (reportType) => {
+  const generatePDFReport = async () => {
     try {
       const response = await fetch('/api/dashboard/reports/pdf', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          reportType,
+          reportType: pdfSelection,
           dateFrom,
           dateTo,
-          data: reportsData
+          showWorkType: showWorkType,
+          towns: selectedTowns,
+          districts: selectedDistricts,
+          divisions: selectedDivisions,
+          departments: selectedDepts,
+          workTypes: selectedWorkTypes
         }),
       });
 
@@ -97,17 +143,17 @@ const ReportsPage = () => {
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `${reportType}_report_${new Date().toISOString().split('T')[0]}.pdf`;
+        a.download = `${pdfSelection}_report_${new Date().toISOString().split('T')[0]}.pdf`;
         document.body.appendChild(a);
         a.click();
         window.URL.revokeObjectURL(url);
         document.body.removeChild(a);
       } else {
-        alert('Failed to generate PDF report');
+        const errorJson = await response.json();
+        alert(`Error ${response.status}: ${errorJson.message || 'Internal Server Error'}`);
       }
     } catch (error) {
       console.error('Error generating PDF:', error);
-      alert('Error generating PDF report');
     }
   };
 
@@ -144,7 +190,7 @@ const ReportsPage = () => {
             <div className="text-center">
               <h1 className="text-2xl font-bold text-red-600 mb-4">Error</h1>
               <p className="text-gray-600 mb-4">{error}</p>
-              <button 
+              <button
                 onClick={() => window.location.reload()}
                 className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
               >
@@ -156,6 +202,34 @@ const ReportsPage = () => {
       </div>
     );
   }
+
+  const renderFilterList = (label, options, selected, setter, displayKey) => (
+    <div>
+      <div className="flex justify-between items-center mb-2">
+        <label className="text-xs font-bold uppercase text-gray-500">{label}</label>
+        <button onClick={() => setter([])} className="text-[10px] text-blue-600 hover:underline">Clear All</button>
+      </div>
+      <div className="w-full border rounded-md bg-white h-40 overflow-y-auto p-2 space-y-1">
+        {/* ADD THE Array.isArray CHECK HERE */}
+        {Array.isArray(options) ? options.map((opt) => (
+          <label key={opt.id} className="flex items-center gap-2 p-1.5 hover:bg-gray-50 rounded cursor-pointer transition-colors">
+            <input
+              type="checkbox"
+              className="w-4 h-4 rounded border-gray-300 text-blue-900 focus:ring-blue-900"
+              checked={selected.includes(opt.id.toString())}
+              onChange={(e) => {
+                const val = opt.id.toString();
+                setter(prev => e.target.checked ? [...prev, val] : prev.filter(id => id !== val));
+              }}
+            />
+            <span className="text-sm text-gray-700">{opt[displayKey]}</span>
+          </label>
+        )) : (
+          <p className="text-xs text-gray-400 p-2">No options available</p>
+        )}
+      </div>
+    </div>
+  );
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
@@ -193,24 +267,24 @@ const ReportsPage = () => {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">From Date</label>
-                <input 
-                  type="date" 
-                  value={dateFrom} 
-                  onChange={(e) => setDateFrom(e.target.value)} 
-                  className="border rounded px-3 py-2" 
+                <input
+                  type="date"
+                  value={dateFrom}
+                  onChange={(e) => setDateFrom(e.target.value)}
+                  className="border rounded px-3 py-2"
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">To Date</label>
-                <input 
-                  type="date" 
-                  value={dateTo} 
-                  onChange={(e) => setDateTo(e.target.value)} 
-                  className="border rounded px-3 py-2" 
+                <input
+                  type="date"
+                  value={dateTo}
+                  onChange={(e) => setDateTo(e.target.value)}
+                  className="border rounded px-3 py-2"
                 />
               </div>
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 onClick={() => {
                   setDateFrom("");
                   setDateTo("");
@@ -220,7 +294,7 @@ const ReportsPage = () => {
               >
                 Reset Filters
               </Button>
-              <Button 
+              <Button
                 onClick={fetchReportsData}
                 className="h-10"
               >
@@ -429,30 +503,75 @@ const ReportsPage = () => {
         </div>
 
         {/* PDF Report Generation */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+        <Card className="border-2 border-blue-100 shadow-lg">
+          <CardHeader className="bg-blue-50/50">
+            <CardTitle className="flex items-center gap-2 text-blue-900">
               <Download className="w-5 h-5" />
-              Generate PDF Reports
+              Official Report Generation
             </CardTitle>
-            <CardDescription>Download comprehensive reports in PDF format</CardDescription>
+            <CardDescription>Select a category to download a formatted PDF summary</CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              {reportTypes.slice(1).map((type) => {
-                const Icon = type.icon;
-                return (
-                  <Button
-                    key={type.id}
-                    variant="outline"
-                    onClick={() => generatePDFReport(type.id)}
-                    className="h-20 flex flex-col items-center justify-center space-y-2"
+          <CardContent className="pt-6">
+            <div className="space-y-4">
+              <div className="flex flex-col md:flex-row items-end gap-4">
+                <div className="flex-1 w-full">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Report Type</label>
+                  <select
+                    value={pdfSelection}
+                    onChange={(e) => setPdfSelection(e.target.value)}
+                    className="w-full border rounded-md px-4 py-2.5 bg-white focus:ring-2 focus:ring-blue-500 outline-none"
                   >
-                    <Icon className="w-6 h-6" />
-                    <span className="text-sm">{type.name}</span>
-                  </Button>
-                );
-              })}
+                    <option value="town">Town-wise Distribution</option>
+                    <option value="district">District-wise Distribution</option>
+                    {/* <option value="division">Division-wise Distribution</option> */}
+                    <option value="department">Department-wise Distribution</option>
+                  </select>
+                </div>
+
+                {pdfSelection && (
+                  <div className="flex items-center gap-2 mb-3">
+                    <input
+                      type="checkbox"
+                      id="workTypeDist"
+                      checked={showWorkType}
+                      onChange={(e) => {
+                        setShowWorkType(e.target.checked);
+                        if (!e.target.checked) {
+                          // Reset all filters when unchecked
+                          setSelectedTowns([]);
+                          setSelectedDistricts([]);
+                          // setSelectedDivisions([]);
+                          setSelectedDepts([]);
+                          setSelectedWorkTypes([]);
+                        }
+                      }}
+                      className="w-4 h-4 text-blue-900"
+                    />
+                    <label htmlFor="workTypeDist" className="text-sm font-medium text-gray-700 cursor-pointer">
+                      Show work type distribution
+                    </label>
+                  </div>
+                )}
+
+                <Button onClick={generatePDFReport} className="w-full md:w-auto h-[46px] bg-blue-900 hover:bg-blue-800 text-white px-8">
+                  <FileText className="w-4 h-4 mr-2" /> Generate PDF Report
+                </Button>
+              </div>
+
+              {/* Dynamic Filters Section */}
+              {showWorkType && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-4 bg-gray-50 rounded-lg border border-gray-200 animate-in fade-in duration-300">
+
+                  {/* Dynamic Left Column: Based on Report Selection */}
+                  {pdfSelection === 'town' && renderFilterList("Filter Towns", townOptions, selectedTowns, setSelectedTowns, 'town')}
+                  {pdfSelection === 'district' && renderFilterList("Filter Districts", districtOptions, selectedDistricts, setSelectedDistricts, 'title')}
+                  {/* {pdfSelection === 'division' && renderFilterList("Filter Divisions", divisionOptions, selectedDivisions, setSelectedDivisions, 'name')} */}
+                  {pdfSelection === 'department' && renderFilterList("Filter Departments", deptOptions, selectedDepts, setSelectedDepts, 'type_name')}
+
+                  {/* Fixed Right Column: Work Type (Always shows when checkbox is checked) */}
+                  {renderFilterList("Filter Work Types", workTypeOptions, selectedWorkTypes, setSelectedWorkTypes, 'subtype_name')}
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
