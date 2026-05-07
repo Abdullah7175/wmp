@@ -12,7 +12,16 @@ export default function TownsPage() {
   const [towns, setTowns] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1); 
+  const [filteredTowns, setFilteredTowns] = useState([]);
+  const rowsPerPage = 10; 
   const { toast } = useToast();
+
+
+  
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filteredTowns.length]);
 
   useEffect(() => {
     const fetchTowns = async () => {
@@ -22,10 +31,11 @@ export default function TownsPage() {
         
         if (data.data) {
           setTowns(data.data);
+          setFilteredTowns(data.data);
         } else if (Array.isArray(data)) {
-          setTowns(data);
+          setFilteredTowns(data);
         } else {
-          setTowns([]);
+          setFilteredTowns([]);
         }
         
         setLoading(false);
@@ -75,6 +85,15 @@ export default function TownsPage() {
     }
   };
 
+    const indexOfLastRow = currentPage * rowsPerPage;
+    const indexOfFirstRow = indexOfLastRow - rowsPerPage;
+    const currentRows = filteredTowns.slice(indexOfFirstRow, indexOfLastRow);
+    const totalPages = Math.ceil(filteredTowns.length / rowsPerPage) || 1;
+
+    const goToLastPage = () => setCurrentPage(totalPages);
+    const goToNextPage = () => setCurrentPage((prev) => Math.min(prev + 1, totalPages));
+    const goToPreviousPage = () => setCurrentPage((prev) => Math.max(prev - 1, 1));
+
   if (loading) {
     return <div className="flex items-center justify-center h-96 text-lg">Loading towns...</div>;
   }
@@ -82,6 +101,7 @@ export default function TownsPage() {
   if (error) {
     return <div className="flex items-center justify-center h-96 text-red-600">Error: {error}</div>;
   }
+  
 
   return (
     <div className="container mx-auto px-4 py-10">
@@ -105,14 +125,56 @@ export default function TownsPage() {
       <Card className="p-6">
         <DataTable 
           columns={columns} 
-          data={towns}
+          data={currentRows} // CHANGE THIS from {towns} to {currentRows}
           onDelete={handleDelete}
+          onFilteredDataChange={setFilteredTowns} 
         >
           <div className="flex items-center gap-2">
             <MapPin className="w-5 h-5 text-blue-600" />
-            <span className="font-medium">Towns ({towns.length})</span>
+            <span className="font-medium">Towns ({filteredTowns.length})</span>
           </div>
         </DataTable>
+
+        {/* Pagination Controls */}
+        <div className="flex flex-col sm:flex-row items-center justify-between mt-4 gap-4 border-t pt-4">
+          <div className="text-sm text-gray-600">
+            Showing <span className="font-medium">{currentRows.length}</span> of{" "}
+            <span className="font-medium">{filteredTowns.length}</span> entries
+            {filteredTowns.length !== towns.length && (
+              <span className="text-xs text-gray-400 ml-1">(filtered from {towns.length})</span>
+            )}
+          </div>
+          
+          <div className="flex items-center gap-2">
+            <button
+              onClick={goToPreviousPage}
+              disabled={currentPage === 1}
+              className="px-3 py-1 border rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+            >
+              Previous
+            </button>
+            
+            <span className="text-sm font-medium px-2">
+              Page {currentPage} of {totalPages}
+            </span>
+
+            <button
+              onClick={goToNextPage}
+              disabled={currentPage === totalPages}
+              className="px-3 py-1 border rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+            >
+              Next
+            </button>
+
+            <button
+              onClick={goToLastPage}
+              disabled={currentPage === totalPages}
+              className="px-3 py-1 border rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+            >
+              Last
+            </button>
+          </div>
+        </div>
       </Card>
     </div>
   );

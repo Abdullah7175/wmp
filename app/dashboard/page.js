@@ -57,7 +57,7 @@ const page = () => {
             <div className="flex flex-col lg:flex-row w-full gap-5">
                 <Card className="w-full lg:w-1/3 bg-slate-50 border-2 shadow-md">
                     <div className="flex items-center space-x-4 rounded-md p-6">
-                        <MessageCircleWarning className="text-yellow-700" />
+                        <MessageCircleWarning className="text-blue-700" />
                         <div className="flex-1 space-y-1">
                             <p className="text-md font-medium leading-none">
                                 Total Requests
@@ -71,7 +71,7 @@ const page = () => {
 
                 <Card className="w-full lg:w-1/3 bg-slate-50 border-2 shadow-md">
                     <div className="flex items-center space-x-4 rounded-md p-6">
-                        <Activity className="text-red-700" />
+                        <Activity className="text-yellow-600" />
                         <div className="flex-1 space-y-1">
                             <p className="text-md font-medium leading-none">
                                 Active Requests
@@ -99,7 +99,7 @@ const page = () => {
 
                 <Card className="w-full lg:w-1/3 bg-slate-50 border-2 shadow-md">
                     <div className="flex items-center space-x-4 rounded-md p-6">
-                        <Clock className="text-blue-700" />
+                        <Clock className="text-red-600" />
                         <div className="flex-1 space-y-1">
                             <p className="text-md font-medium leading-none">
                                 Pending Requests

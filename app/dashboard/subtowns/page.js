@@ -11,9 +11,13 @@ import { useSearchParams } from "next/navigation";
 
 function SubTownsPage() {
   const [subtowns, setSubtowns] = useState([]);
+  const [filteredSubtowns, setFilteredSubtowns] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedTown, setSelectedTown] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const rowsPerPage = 10;
+
   const { toast } = useToast();
   const searchParams = useSearchParams();
   const townId = searchParams.get('town_id');
@@ -29,13 +33,9 @@ function SubTownsPage() {
         const response = await fetch(url);
         const data = await response.json();
         
-        if (data.data) {
-          setSubtowns(data.data);
-        } else if (Array.isArray(data)) {
-          setSubtowns(data);
-        } else {
-          setSubtowns([]);
-        }
+        const results = data.data || (Array.isArray(data) ? data : []);
+        setSubtowns(results);
+        setFilteredSubtowns(results);
         
         setLoading(false);
       } catch (e) {
@@ -62,42 +62,43 @@ function SubTownsPage() {
     fetchTownInfo();
   }, [townId]);
 
+  // Reset to page 1 when search results change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filteredSubtowns.length]);
+
   const handleDelete = async (subtownId) => {
     if (!confirm('Are you sure you want to delete this subtown?')) return;
     
     try {
       const response = await fetch('/api/subtowns', {
         method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: subtownId }),
       });
 
       if (response.ok) {
         setSubtowns(prev => prev.filter(subtown => subtown.id !== subtownId));
+        setFilteredSubtowns(prev => prev.filter(subtown => subtown.id !== subtownId));
         toast({
           title: "Subtown deleted successfully",
-          description: "The subtown has been removed from the system.",
           variant: "success"
-        });
-      } else {
-        const errorData = await response.json();
-        toast({
-          title: "Failed to delete subtown",
-          description: errorData.error || "An error occurred while deleting the subtown.",
-          variant: "destructive"
         });
       }
     } catch (error) {
       console.error('Error deleting subtown:', error);
-      toast({
-        title: "Error",
-        description: "Failed to delete subtown",
-        variant: "destructive"
-      });
     }
   };
+
+  // Pagination Logic
+  const indexOfLastRow = currentPage * rowsPerPage;
+  const indexOfFirstRow = indexOfLastRow - rowsPerPage;
+  const currentRows = filteredSubtowns.slice(indexOfFirstRow, indexOfLastRow);
+  const totalPages = Math.ceil(filteredSubtowns.length / rowsPerPage) || 1;
+
+  const goToLastPage = () => setCurrentPage(totalPages);
+  const goToNextPage = () => setCurrentPage((prev) => Math.min(prev + 1, totalPages));
+  const goToPreviousPage = () => setCurrentPage((prev) => Math.max(prev - 1, 1));
 
   if (loading) {
     return <div className="flex items-center justify-center h-96 text-lg">Loading subtowns...</div>;
@@ -140,17 +141,59 @@ function SubTownsPage() {
       <Card className="p-6">
         <DataTable 
           columns={columns} 
-          data={subtowns}
+          data={currentRows}
           onDelete={handleDelete}
+          onFilteredDataChange={setFilteredSubtowns}
         >
           <div className="flex items-center gap-2">
             <MapPin className="w-5 h-5 text-blue-600" />
             <span className="font-medium">
-              Subtowns ({subtowns.length})
+              Subtowns ({filteredSubtowns.length})
               {selectedTown && ` for ${selectedTown.town}`}
             </span>
           </div>
         </DataTable>
+
+        {/* Pagination Controls */}
+        <div className="flex flex-col sm:flex-row items-center justify-between mt-4 gap-4 border-t pt-4">
+          <div className="text-sm text-gray-600">
+            Showing <span className="font-medium">{currentRows.length}</span> of{" "}
+            <span className="font-medium">{filteredSubtowns.length}</span> entries
+            {filteredSubtowns.length !== subtowns.length && (
+              <span className="text-xs text-gray-400 ml-1">(filtered from {subtowns.length})</span>
+            )}
+          </div>
+          
+          <div className="flex items-center gap-2">
+            <button
+              onClick={goToPreviousPage}
+              disabled={currentPage === 1}
+              className="px-3 py-1 border rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+            >
+              Previous
+            </button>
+            
+            <span className="text-sm font-medium px-2">
+              Page {currentPage} of {totalPages}
+            </span>
+
+            <button
+              onClick={goToNextPage}
+              disabled={currentPage === totalPages}
+              className="px-3 py-1 border rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+            >
+              Next
+            </button>
+
+            <button
+              onClick={goToLastPage}
+              disabled={currentPage === totalPages}
+              className="px-3 py-1 border rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+            >
+              Last
+            </button>
+          </div>
+        </div>
       </Card>
     </div>
   );
@@ -164,4 +207,4 @@ function PageWrapper() {
   );
 }
 
-export default PageWrapper; 
+export default PageWrapper;

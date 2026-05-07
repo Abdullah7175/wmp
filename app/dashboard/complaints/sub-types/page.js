@@ -15,6 +15,12 @@ export default function Page() {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
 
+  // Add this pagination state to control the table from here
+  const [pagination, setPagination] = useState({
+    pageIndex: 0,
+    pageSize: 8,
+  });
+
   useEffect(() => {
     const timeout = setTimeout(() => {
       const fetchSubtypes = async () => {
@@ -30,11 +36,8 @@ export default function Page() {
           const response = await fetch(url);
           if (response.ok) {
             const result = await response.json();
-            if (result.data) {
-              setSubtypes(result.data);
-            } else {
-              setSubtypes(result);
-            }
+            const data = result.data || (Array.isArray(result) ? result : []);
+            setSubtypes(data);
           } else {
             setError('Failed to fetch complaint subtypes');
           }
@@ -49,30 +52,26 @@ export default function Page() {
     return () => clearTimeout(timeout);
   }, [search, dateFrom, dateTo]);
 
+  // Reset page to 1 when filters change
+  useEffect(() => {
+    setPagination(prev => ({ ...prev, pageIndex: 0 }));
+  }, [search, dateFrom, dateTo]);
+
   if (loading) {
     return (
-      <div className="container mx-auto px-4 py-10">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-2 text-gray-600">Loading complaint subtypes...</p>
-        </div>
+      <div className="container mx-auto px-4 py-10 text-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+        <p className="mt-2 text-gray-600">Loading complaint subtypes...</p>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="container mx-auto px-4 py-10">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-red-600 mb-4">Error</h1>
-          <p className="text-gray-600 mb-4">{error}</p>
-          <button 
-            onClick={() => window.location.reload()}
-            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-          >
-            Try Again
-          </button>
-        </div>
+      <div className="container mx-auto px-4 py-10 text-center">
+        <h1 className="text-2xl font-bold text-red-600 mb-4">Error</h1>
+        <p className="text-gray-600 mb-4">{error}</p>
+        <Button onClick={() => window.location.reload()}>Try Again</Button>
       </div>
     );
   }
@@ -88,6 +87,8 @@ export default function Page() {
           </Button>
         </Link>
       </div>
+
+      {/* Filters */}
       <div className="flex flex-wrap gap-4 mb-4 items-end">
         <Input
           placeholder="Search by subtype name, complaint type..."
@@ -115,10 +116,14 @@ export default function Page() {
           Reset Filters
         </Button>
       </div>
+
+      {/* The Table */}
       <div className="bg-white rounded-lg shadow">
         <EnhancedDataTable 
           columns={columns} 
-          data={subtypes}
+          data={subtypes} // Give it the full list
+          state={{ pagination }} // Pass the controlled state
+          onPaginationChange={setPagination} // Update state when user clicks next/prev
           pageSize={5}
         />
       </div>

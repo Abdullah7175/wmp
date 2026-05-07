@@ -22,7 +22,8 @@ export default function ComplaintTypesList() {
   const [complaintTypes, setComplaintTypes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-
+  const [currentPage, setCurrentPage] = useState(1);
+  const rowsPerPage = 8;
   useEffect(() => {
     if (status === "authenticated" && parseInt(session.user.role) === 1) {
       fetchComplaintTypes();
@@ -110,6 +111,17 @@ export default function ComplaintTypesList() {
     }
   };
 
+
+  // Calculate pagination indices
+  const indexOfLastRow = currentPage * rowsPerPage;
+  const indexOfFirstRow = indexOfLastRow - rowsPerPage;
+  const currentRows = complaintTypes.slice(indexOfFirstRow, indexOfLastRow);
+  const totalPages = Math.ceil(complaintTypes.length / rowsPerPage) || 1;
+
+  // Navigation functions
+  const goToNextPage = () => setCurrentPage((prev) => Math.min(prev + 1, totalPages));
+  const goToPreviousPage = () => setCurrentPage((prev) => Math.max(prev - 1, 1));
+
   if (loading) return <div className="text-center py-8">Loading Departments...</div>;
   if (error) return <div className="text-center py-8 text-red-600">Error: {error}</div>;
   if (complaintTypes.length === 0) return <div className="text-center py-8 text-gray-500">No Departments found.</div>;
@@ -180,7 +192,7 @@ export default function ComplaintTypesList() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {complaintTypes.map((type) => (
+              {currentRows.map((type) => (
                 <TableRow key={type.id}>
                   <TableCell className="font-medium">{type.type_name}</TableCell>
                   <TableCell>
@@ -232,6 +244,40 @@ export default function ComplaintTypesList() {
               ))}
             </TableBody>
           </Table>
+
+
+          {/* Pagination Controls */}
+          <div className="flex flex-col sm:flex-row items-center justify-between mt-4 gap-4 border-t pt-4">
+            <div className="text-sm text-gray-600">
+              Showing <span className="font-medium">{currentRows.length}</span> of{" "}
+              <span className="font-medium">{complaintTypes.length}</span> Departments
+            </div>
+            
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={goToPreviousPage}
+                disabled={currentPage === 1}
+              >
+                Previous
+              </Button>
+              
+              <div className="text-sm font-medium px-2">
+                Page {currentPage} of {totalPages}
+              </div>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={goToNextPage}
+                disabled={currentPage === totalPages}
+              >
+                Next
+              </Button>
+            </div>
+          </div>
+
         </CardContent>
       </Card>
     </div>

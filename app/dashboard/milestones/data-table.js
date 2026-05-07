@@ -4,7 +4,7 @@ import {
     flexRender,
     getCoreRowModel,
     useReactTable,
-    getFilteredRowModel,
+    getFilteredRowModel,getPaginationRowModel
 } from "@tanstack/react-table"
 
 import {
@@ -17,8 +17,7 @@ import {
 } from "@/components/ui/table"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { Plus } from "lucide-react"
-import Link from "next/link"
+import { Plus, ChevronLeft, ChevronRight, ChevronsRight, ChevronsLeft, Link } from "lucide-react" // 2. Add iconsimport Link from "next/link"
 import { hasPermission } from "@/permissions"
 
 export function DataTable({ columns, data, children }) {
@@ -32,6 +31,13 @@ export function DataTable({ columns, data, children }) {
         getCoreRowModel: getCoreRowModel(),
         onColumnFiltersChange: setColumnFilters,
         getFilteredRowModel: getFilteredRowModel(),
+        getPaginationRowModel: getPaginationRowModel(),
+
+        initialState: {
+            pagination: {
+                pageSize: 8,
+            },
+        },
         state: {
             columnFilters,
         },
@@ -101,6 +107,56 @@ export function DataTable({ columns, data, children }) {
                         )}
                     </TableBody>
                 </Table>
+            </div>
+            <div className="flex items-center justify-between px-2 py-4">
+                <div className="text-sm text-muted-foreground">
+                    Showing {" "}
+                    <strong>
+                        {table.getState().pagination.pageIndex * table.getState().pagination.pageSize + 1}
+                    </strong>{" "}
+                    to{" "}
+                    <strong>
+                        {Math.min(
+                            (table.getState().pagination.pageIndex + 1) * table.getState().pagination.pageSize,
+                            table.getFilteredRowModel().rows.length
+                        )}
+                    </strong>{" "}
+                    of <strong>{table.getFilteredRowModel().rows.length}</strong> entries
+                </div>
+                <div className="flex items-center space-x-2">
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => table.setPageIndex(0)}
+                        disabled={!table.getCanPreviousPage()}
+                    >
+                        First
+                    </Button>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => table.previousPage()}
+                        disabled={!table.getCanPreviousPage()}
+                    >
+                    Previous                    
+                    </Button>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => table.nextPage()}
+                        disabled={!table.getCanNextPage()}
+                    >
+                        Next
+                    </Button>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => table.setPageIndex(table.getPageCount() - 1)}
+                        disabled={!table.getCanNextPage()}
+                    >
+                    Last                    
+                    </Button>
+                </div>
             </div>
         </>
     )

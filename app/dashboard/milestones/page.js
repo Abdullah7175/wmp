@@ -12,11 +12,9 @@ const MilestonesPage = () => {
     useEffect(() => {
         const fetchMilestones = async () => {
             try {
-                // Adjust this endpoint based on your actual API route
                 const response = await fetch('/api/milestones');
                 if (response.ok) {
                     const result = await response.json();
-                    // Use result.data because your API returns { data: [...] }
                     setMilestones(result.data || []); 
                 }
             } catch (error) {
