@@ -59,6 +59,7 @@ const ReportsPage = () => {
   const [selectedDistricts, setSelectedDistricts] = useState([]);
   const [selectedDivisions, setSelectedDivisions] = useState([]);
   const [selectedDepts, setSelectedDepts] = useState([]);
+  const [showTownDetails, setShowTownDetails] = useState(false);
 
   useEffect(() => {
     fetchReportsData();
@@ -130,6 +131,7 @@ const ReportsPage = () => {
           dateFrom,
           dateTo,
           showWorkType: showWorkType,
+          showTownDetails: showTownDetails,
           towns: selectedTowns,
           districts: selectedDistricts,
           divisions: selectedDivisions,
@@ -550,6 +552,19 @@ const ReportsPage = () => {
                     <label htmlFor="workTypeDist" className="text-sm font-medium text-gray-700 cursor-pointer">
                       Show work type distribution
                     </label>
+
+                    {/* New Checkbox for Town Details */}
+                    {pdfSelection === 'district' && (
+                      <label className="flex items-center gap-2 cursor-pointer animate-in fade-in duration-300">
+                        <input
+                          type="checkbox"
+                          checked={showTownDetails}
+                          onChange={(e) => setShowTownDetails(e.target.checked)}
+                          className="w-4 h-4 rounded border-gray-300"
+                        />
+                        <span className="text-sm font-medium text-gray-700">Show Town Details</span>
+                      </label>
+                    )}
                   </div>
                 )}
 
