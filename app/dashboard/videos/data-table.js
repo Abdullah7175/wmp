@@ -6,10 +6,10 @@ import {
     flexRender,
     getCoreRowModel,
     useReactTable,
-    getFilteredRowModel,
+    getFilteredRowModel,getPaginationRowModel
 } from "@tanstack/react-table";
 
-import {
+import { 
     Table,
     TableBody,
     TableCell,
@@ -26,15 +26,20 @@ import Image from "next/image";
 export function DataTable({ columns, data, children }) {
     const [sorting, setSorting] = useState([]);
     const [columnFilters, setColumnFilters] = useState([]);
-
+    
     const table = useReactTable({
         data,
         columns,
         getCoreRowModel: getCoreRowModel(),
         onColumnFiltersChange: setColumnFilters,
         getFilteredRowModel: getFilteredRowModel(),
+        getPaginationRowModel: getPaginationRowModel(), // ADD THIS LINE
+        initialState: {
+            pagination: {
+                pageSize: 5,
+            },
+        },
         state: {
-            sorting,
             columnFilters,
         },
     });

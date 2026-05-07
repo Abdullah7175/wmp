@@ -34,10 +34,10 @@ export function EnhancedDataTable({
 }) {
   const router = useRouter()
   // Use controlled state if provided, otherwise use initialState
-  const paginationState = state?.pagination || initialState?.pagination || {
+  const [pagination, setPagination] = React.useState({
     pageIndex: 0,
     pageSize: pageSize,
-  };
+  });
   const sortingState = state?.sorting || initialState?.sorting || [];
   
   const table = useReactTable({
@@ -48,14 +48,17 @@ export function EnhancedDataTable({
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     meta: meta,
+    // If totalItems is provided, we assume server-side (manual) pagination
     manualPagination: totalItems !== undefined,
     pageCount: totalItems !== undefined ? Math.ceil(totalItems / pageSize) : undefined,
     state: {
-      pagination: paginationState,
-      sorting: sortingState,
+      // FIX: Use provided state or fall back to local state
+      pagination: state?.pagination || pagination,
+      sorting: state?.sorting || [],
     },
+    // FIX: Use provided handler or update local state
+    onPaginationChange: onPaginationChange || setPagination,
     onSortingChange: onSortingChange,
-    onPaginationChange: onPaginationChange,
   })
 
   return (
