@@ -33,11 +33,11 @@ export default async function CeoLayout({ children }) {
   const userRole = session?.user?.role;
   const roleNumber = typeof userRole === 'number' ? userRole : parseInt(userRole);
   
-  if (!session?.user || roleNumber !== 5 || session.user.userType !== 'user') {
+  if (!session?.user || roleNumber !== 8 || session.user.userType !== 'user') {
     console.log('CEO Layout - Access DENIED:', {
       hasUser: !!session?.user,
       roleNumber,
-      expectedRole: 5,
+      expectedRole: 8,
       userType: session?.user?.userType,
       expectedUserType: 'user'
     });

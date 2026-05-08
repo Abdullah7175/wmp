@@ -75,12 +75,12 @@ export default function EFileLoginPage() {
     
   // 1. Check for CEO (ID 24)
     if (roleNumber === 5 && roleCode === "CEO") {
-      return "/ceo";
+      return "/efilinguser";
     }
 
     // 2. Check for COO (Based on your log, this user is coming in as role 4)
     if (roleNumber === 4 && roleCode === "COO") {
-      return "/coo";
+      return "/efilinguser";
     }
     // Admin users (role 1) and global roles always go to efiling admin
     if (isAdmin || isGlobalRole) {

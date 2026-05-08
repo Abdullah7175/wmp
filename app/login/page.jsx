@@ -75,7 +75,7 @@ export default function LoginPage() {
       
       if (session.user.userType === "agent") window.location.href = "/agent";
       else if (session.user.userType === "socialmedia" || session.user.userType === "socialmediaperson") window.location.href = "/smagent";
-      else if (session.user.userType === "user" && parseInt(session.user.role) === 5) window.location.href = "/ceo";
+      else if (session.user.userType === "user" && parseInt(session.user.role) === 8) window.location.href = "/ceo";
       else if (session.user.userType === "user" && parseInt(session.user.role) === 6) window.location.href = "/coo";
       else if (session.user.userType === "user" && parseInt(session.user.role) === 7) window.location.href = "/ce";
       else if (session.user.userType === "user") window.location.href = "/dashboard";
@@ -209,7 +209,7 @@ export default function LoginPage() {
               // Check role-based redirects first (for users with specific roles)
               if (userType === "user") {
                 const role = parseInt(userRole);
-                if (role === 5) {
+                if (role === 8) {
                   window.location.href = "/ceo";
                   return;
                 } else if (role === 6) {

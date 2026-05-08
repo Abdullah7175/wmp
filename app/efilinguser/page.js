@@ -16,7 +16,7 @@ import {
     ArrowRight,
     Filter,
     Search,
-    Plus
+    Plus, LayoutDashboard
 } from 'lucide-react';
 import { logEfilingUserAction, getUserInfoFromSession, EFILING_ACTIONS } from '@/lib/efilingUserActionLogger';
 import { useSession } from 'next-auth/react';
@@ -417,7 +417,29 @@ export default function EFileUserDashboard() {
                 </Card>
             )}
 
-            
+            {/* CEO Quick Link - Only visible to CEO */}
+            {roleCode === 'CEO' && (
+                <Card className="border-blue-200 bg-blue-50 shadow-md mb-6">
+                    <CardHeader className="pb-3">
+                        <CardTitle className="text-blue-800 flex items-center gap-2">
+                            <LayoutDashboard className="h-5 w-5" />
+                            CEO Executive Suite
+                        </CardTitle>
+                        <CardDescription className="text-blue-600">
+                            You are currently in your "Personal Workspace". Switch to the Executive Overview to see organization-wide metrics.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <Button 
+                            onClick={() => router.push('/efilinguser/ceo-overview')}
+                            className="bg-blue-700 hover:bg-blue-800 text-white"
+                        >
+                            Go to CEO Overview Dashboard
+                            <ArrowRight className="ml-2 h-4 w-4" />
+                        </Button>
+                    </CardContent>
+                </Card>
+            )}
 
             {/* Stats Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
