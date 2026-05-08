@@ -8,7 +8,7 @@ export async function POST(request) {
     
     // Only allow CEO (role 5) or Admin (role 1) to reactivate requests
     if (!session?.user || 
-        !(session.user.role === 5 || session.user.role === 1) || 
+        !(session.user.role === 8 || session.user.role === 1) || 
         session.user.userType !== 'user') {
       return NextResponse.json(
         { success: false, message: "Unauthorized. CEO or Admin access required." },
@@ -51,7 +51,7 @@ export async function POST(request) {
         approval_status = 'pending',
         approval_date = NULL,
         rejection_reason = NULL,
-        ceo_comments = CONCAT(COALESCE(ceo_comments, ''), '\n\nRequest reactivated by ${session.user.role === 5 ? 'CEO' : 'Admin'} on ', CURRENT_TIMESTAMP),
+        ceo_comments = CONCAT(COALESCE(ceo_comments, ''), '\n\nRequest reactivated by ${session.user.role === 8 ? 'CEO' : 'Admin'} on ', CURRENT_TIMESTAMP),
         updated_at = CURRENT_TIMESTAMP
       WHERE work_request_id = $1
       RETURNING *
@@ -103,7 +103,7 @@ export async function POST(request) {
       session.user.id,
       'user',
       session.user.role,
-      session.user.name || (session.user.role === 5 ? 'CEO' : 'Admin'),
+      session.user.name || (session.user.role === 8 ? 'CEO' : 'Admin'),
       session.user.email,
       'REACTIVATE',
       'work_request',

@@ -8,7 +8,7 @@ export async function POST(request) {
     const session = await auth();
     
     // Check if user is CEO (role 5) and userType is 'user'
-    if (!session?.user || parseInt(session.user.role) !== 5 || session.user.userType !== 'user') {
+    if (!session?.user || parseInt(session.user.role) !== 8 || session.user.userType !== 'user') {
       return NextResponse.json(
         { success: false, message: "Unauthorized. CEO access required." },
         { status: 403 }
@@ -70,7 +70,7 @@ export async function POST(request) {
     await logUserAction({
       user_id: session.user.id,
       user_type: 'ceo',
-      user_role: 5,
+      user_role: 8,
       user_name: session.user.name || 'CEO',
       user_email: session.user.email,
       action_type: 'ADD_SOFT_APPROVAL',

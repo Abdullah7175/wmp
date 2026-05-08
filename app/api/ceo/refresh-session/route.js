@@ -7,7 +7,7 @@ export async function POST(request) {
     const session = await auth();
     
     // Only allow CEO users (role 5) to access this endpoint
-    if (!session?.user || session.user.userType !== 'user' || parseInt(session.user.role) !== 5) {
+    if (!session?.user || session.user.userType !== 'user' || parseInt(session.user.role) !== 8) {
       return NextResponse.json(
         { success: false, message: "Unauthorized. CEO access required." },
         { status: 401 }
@@ -25,7 +25,7 @@ export async function POST(request) {
         created_date,
         updated_date
       FROM users 
-      WHERE id = $1 AND role = 5
+      WHERE id = $1 AND role = 8
     `, [session.user.id]);
 
     if (!result.rows || result.rows.length === 0) {
@@ -47,7 +47,7 @@ export async function POST(request) {
           email: userData.email,
           contact_number: userData.contact_number,
           image: userData.image,
-          role: 5,
+          role: 8,
           userType: 'user'
         },
         session: {

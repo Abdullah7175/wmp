@@ -8,7 +8,7 @@ export async function GET(request, { params }) {
     const session = await auth();
     
     // Only allow CEO users (role 5) to access this endpoint
-    if (!session?.user || session.user.userType !== 'user' || parseInt(session.user.role) !== 5) {
+    if (!session?.user || session.user.userType !== 'user' || parseInt(session.user.role) !== 8) {
       return NextResponse.json(
         { success: false, message: "Unauthorized. CEO access required." },
         { status: 401 }
@@ -21,7 +21,7 @@ export async function GET(request, { params }) {
     await logUserAction({
       user_id: session.user.id,
       user_type: 'ceo',
-      user_role: 5,
+      user_role: 8,
       user_name: session.user.name || 'CEO',
       user_email: session.user.email,
       action_type: 'VIEW_REQUEST_DETAILS',
