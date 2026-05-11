@@ -11,10 +11,12 @@ import { FileText, Download, Filter, BarChart3, Calendar, Clock, CheckCircle, Al
 import { logEfilingUserAction, EFILING_ACTIONS } from '@/lib/efilingUserActionLogger';
 import { useSession } from 'next-auth/react';
 import { Pagination } from '@/components/ui/pagination';
+import { useEfilingUser } from "@/context/EfilingUserContext";
 
 export default function FileStatusReport() {
     const { data: session } = useSession();
     const { toast } = useToast();
+
     const [loading, setLoading] = useState(false);
     const [files, setFiles] = useState([]);
     const [departments, setDepartments] = useState([]);
@@ -25,24 +27,16 @@ export default function FileStatusReport() {
         status: 'all',
         dateRange: 'all'
     });
-    
+    const { efilingUserId } = useEfilingUser();
     // Pagination state
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage, setItemsPerPage] = useState(5);
 
     useEffect(() => {
-        loadData();
-        // Log file status report access
-        if (session?.user?.id) {
-            logEfilingUserAction({
-                user_id: session.user.id,
-                action_type: EFILING_ACTIONS.REPORT_GENERATED,
-                description: 'Accessed My File Status Report',
-                entity_type: 'report',
-                entity_name: 'My File Status Report'
-            });
+        if (efilingUserId) {
+            loadData();
         }
-    }, [session?.user?.id]);
+    }, [efilingUserId]);
 
     const loadData = async () => {
         try {
@@ -65,28 +59,27 @@ export default function FileStatusReport() {
     };
 
     const loadFiles = async () => {
-        try {
-            // Map Users.id -> efiling_users.id
-            let efilingUserId = session?.user?.id;
-            try {
-                const mapRes = await fetch(`/api/efiling/users/profile?userId=${session?.user?.id}`);
-                if (mapRes.ok) {
-                    const map = await mapRes.json();
-                    if (map?.efiling_user_id) efilingUserId = map.efiling_user_id;
-                }
-            } catch {}
+        if (!efilingUserId) return; // Guard clause
 
+        try {
+            setLoading(true);
+            
+            // 3. Use the efilingUserId directly from context
             const [createdRes, assignedRes] = await Promise.all([
                 fetch(`/api/efiling/files?created_by=${efilingUserId}`),
                 fetch(`/api/efiling/files?assigned_to=${efilingUserId}`)
             ]);
+            
             const created = createdRes.ok ? await createdRes.json() : { files: [] };
             const assigned = assignedRes.ok ? await assignedRes.json() : { files: [] };
+            
             const all = [...(created.files || []), ...(assigned.files || [])];
             const unique = all.filter((f, i, arr) => i === arr.findIndex(x => x.id === f.id));
             setFiles(unique);
         } catch (error) {
             console.error('Error loading files:', error);
+        } finally {
+            setLoading(false);
         }
     };
 
