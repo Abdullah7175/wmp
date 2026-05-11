@@ -78,11 +78,32 @@ export async function GET(request) {
             ORDER BY f.created_at DESC
         `, [fiscalYear]);
 
+        const categoryAnalyticsQuery = await client.query(`
+            SELECT 
+                c.id,
+                c.name as category_name,
+                COUNT(f.id) as total_files,
+                SUM(COALESCE(fc.proposed_estimated_cost, 0)) as total_estimated_cost,
+                -- Aggregate statuses into a JSON object for the frontend
+                jsonb_object_agg(
+                    COALESCE(s.name, 'Unknown'), 
+                    (SELECT COUNT(*) FROM efiling_files f2 WHERE f2.category_id = c.id AND f2.status_id = s.id)
+                ) as status_distribution,
+                ROUND(AVG(EXTRACT(DAY FROM (CURRENT_TIMESTAMP - f.created_at)))::numeric, 1) as avg_aging
+            FROM efiling_file_categories c
+            LEFT JOIN efiling_files f ON c.id = f.category_id AND split_part(f.file_number, '/', 2) = $1
+            LEFT JOIN efiling_files_costing fc ON f.id = fc.file_id
+            LEFT JOIN efiling_file_status s ON f.status_id = s.id
+            GROUP BY c.id, c.name
+            ORDER BY total_estimated_cost DESC
+        `, [fiscalYear]);
+
         return NextResponse.json({
             success: true,
             data: {
                 stats: statsQuery.rows[0],
-                files: filesQuery.rows
+                files: filesQuery.rows,
+                categoryAnalytics: categoryAnalyticsQuery.rows 
             }
         });
 

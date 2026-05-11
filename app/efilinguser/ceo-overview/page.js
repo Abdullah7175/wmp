@@ -18,10 +18,15 @@ export default function CEOOverview() {
     const [allFiles, setAllFiles] = useState([]);
     const [fiscalYear, setFiscalYear] = useState('2025-26');
 
+
     // Table States
     const [currentPage, setCurrentPage] = useState(1);
     const [statusFilter, setStatusFilter] = useState('all');
     const [fileNumFilter, setFileNumFilter] = useState('all');
+
+    const [categoryData, setCategoryData] = useState([]);
+    const [catPage, setCatPage] = useState(1);
+    const catItemsPerPage = 5;
     const itemsPerPage = 8;
 
     const fetchCEOData = useCallback(async () => {
@@ -32,6 +37,7 @@ export default function CEOOverview() {
             if (result.success) {
                 setStats(result.data.stats);
                 setAllFiles(result.data.files);
+                setCategoryData(result.data.categoryAnalytics || []);
             }
         } catch (error) {
             console.error("Failed to fetch stats", error);
@@ -84,7 +90,7 @@ export default function CEOOverview() {
             {/* Main KPI Cards - Tighter gap */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                 <KPICard 
-                    title="Total Files" 
+                    title="Total Files Created" 
                     value={stats?.total_files} 
                     workRelated={stats?.total_work_related}
                     icon={<FileText className="h-4 w-4 text-blue-600" />} 
@@ -124,6 +130,72 @@ export default function CEOOverview() {
                 <MiniStat title="Rejected" value={stats?.rejected} workRelated={stats?.rejected_work_related} loading={loading} icon={<XCircle className="h-4 w-4 text-red-500" />} />
                 <MiniStat title="Completed" value={stats?.completed} workRelated={stats?.completed_work_related} loading={loading} icon={<CheckCircle2 className="h-4 w-4 text-purple-500" />} />
             </div>
+
+            {/* Category Wise Analytics Section */}
+            <Card className="border shadow-sm">
+                <CardHeader className="py-3 px-4 border-b bg-white">
+                    <CardTitle className="text-lg font-bold flex items-center gap-2">
+                        <FileText className="h-4 w-4 text-purple-600" /> Category Wise Expenditure & Volume
+                    </CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
+                    <Table>
+                        <TableHeader>
+                            <TableRow className="bg-gray-50/50">
+                                <TableHead className="text-xs font-bold uppercase">Category</TableHead>
+                                <TableHead className="text-xs font-bold uppercase">Files</TableHead>
+                                <TableHead className="text-xs font-bold uppercase">Est. Total Cost</TableHead>
+                                <TableHead className="text-xs font-bold uppercase">Status Breakdown</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {categoryData.slice((catPage - 1) * catItemsPerPage, catPage * catItemsPerPage).map((cat) => (
+                                <TableRow key={cat.id} className="text-sm">
+                                    <TableCell className="font-semibold">{cat.category_name}</TableCell>
+                                    <TableCell>{cat.total_files}</TableCell>
+                                    <TableCell className="font-bold text-emerald-700">
+                                        Rs. {parseFloat(cat.total_estimated_cost || 0).toLocaleString()}
+                                    </TableCell>
+                                    <TableCell>
+                                        <div className="flex flex-wrap gap-1">
+                                            {Object.entries(cat.status_distribution || {}).map(([status, count]) => (
+                                                count > 0 && (
+                                                    <Badge key={status} variant="secondary" className="text-[10px] px-1 h-5">
+                                                        {status}: {count}
+                                                    </Badge>
+                                                )
+                                            ))}
+                                        </div>
+                                    </TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                    
+                    {/* Simple Pagination for Category Table */}
+                    <div className="flex items-center justify-end p-2 gap-2 border-t bg-gray-50/30">
+                        <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            onClick={() => setCatPage(p => Math.max(1, p - 1))} 
+                            disabled={catPage === 1}
+                        >
+                            <ChevronLeft className="h-4 w-4" />
+                        </Button>
+                        <span className="text-xs font-medium">Page {catPage}</span>
+                        <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            onClick={() => setCatPage(p => p + 1)} 
+                            disabled={catPage * catItemsPerPage >= categoryData.length}
+                        >
+                            <ChevronRight className="h-4 w-4" />
+                        </Button>
+                    </div>
+                </CardContent>
+            </Card>
+
+
             <Card className="border shadow-sm overflow-hidden">
                 <CardHeader className="border-b bg-white py-3 px-4">
                     <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
@@ -196,13 +268,41 @@ export default function CEOOverview() {
                                     <TableRow><TableCell colSpan={9} className="text-center py-10 text-gray-500">No files found</TableCell></TableRow>
                                 ) : (
                                     paginatedFiles.map((file, idx) => {
-                                        // Status badge color logic
+                                        // Status badge color logic with full status coverage
                                         const getStatusStyles = (status) => {
                                             const s = status?.toLowerCase();
-                                            if (s === 'pending') return "bg-red-100 text-red-700 border-red-200";
-                                            if (s === 'in progress') return "bg-yellow-100 text-yellow-700 border-yellow-200";
-                                            if (s === 'completed' || s === 'approved') return "bg-green-100 text-green-700 border-green-200";
-                                            return "bg-gray-100 text-gray-700 border-gray-200";
+                                            
+                                            switch (s) {
+                                                // Red - Critical / Action Required
+                                                case 'pending':
+                                                case 'rejected':
+                                                case 'escalated':
+                                                    return "bg-red-100 text-red-700 border-red-200";
+                                                    
+                                                // Yellow/Amber - In Motion / Warning
+                                                case 'in progress':
+                                                case 'pending approval':
+                                                case 'on hold':
+                                                    return "bg-amber-100 text-amber-700 border-amber-200";
+                                                    
+                                                // Blue - Review / Process
+                                                case 'under review':
+                                                case 'draft':
+                                                    return "bg-blue-100 text-blue-700 border-blue-200";
+                                                    
+                                                // Green - Success / Finalized
+                                                case 'approved':
+                                                case 'completed':
+                                                case 'closed':
+                                                    return "bg-green-100 text-green-700 border-green-200";
+                                                    
+                                                // Gray - Inactive / Neutral
+                                                case 'archived':
+                                                    return "bg-gray-100 text-gray-600 border-gray-200";
+                                                    
+                                                default:
+                                                    return "bg-gray-50 text-gray-500 border-gray-200";
+                                            }
                                         };
 
                                         return (
@@ -284,7 +384,7 @@ function KPICard({ title, value, workRelated, icon, color, loading }) {
                 ) : (
                     <div>
                         <div className="text-2xl font-bold text-gray-900 leading-none">{parseInt(value || 0).toLocaleString()}</div>
-                        <p className="text-[9px] font-medium text-gray-500 mt-1">
+                        <p className="text-[15px] font-medium text-gray-500 mt-1">
                             Work Related: <span className="text-gray-800 font-bold">{workRelated || 0}</span>
                         </p>
                     </div>
@@ -300,12 +400,12 @@ function MiniStat({ title, value, workRelated, loading, icon }) {
         <div className="bg-white p-2.5 rounded-xl border shadow-sm flex items-center gap-2">
             <div className="p-1.5 bg-gray-50 rounded-full h-fit shrink-0">{icon}</div>
             <div className="flex-1 min-w-0">
-                <p className="text-[9px] font-medium text-gray-500 uppercase truncate">{title}</p>
+                <p className="text-[12px] font-medium text-gray-800 uppercase truncate">{title}</p>
                 <p className="text-base font-bold text-gray-900 leading-tight">
                     {loading ? "..." : parseInt(value || 0).toLocaleString()}
                 </p>
                 {!loading && (
-                    <p className="text-[9px] text-gray-500 leading-none mt-0.5">
+                    <p className="text-[12px] text-gray-500 leading-none mt-0.5">
                         Work Related: <span className="font-bold text-gray-700">{workRelated || 0}</span>
                     </p>
                 )}
