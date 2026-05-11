@@ -195,6 +195,7 @@ export default function CEOOverview() {
                 </CardContent>
             </Card>
 
+            {/* Files Tracking */}
 
             <Card className="border shadow-sm overflow-hidden">
                 <CardHeader className="border-b bg-white py-3 px-4">
@@ -255,10 +256,15 @@ export default function CEOOverview() {
                                     <TableHead className="font-bold text-sm py-3">Category</TableHead>
                                     <TableHead className="font-bold text-sm py-3">Dept</TableHead>
                                     <TableHead className="font-bold text-sm py-3">Status</TableHead>
-                                    <TableHead className="font-bold text-sm py-3">Work ID</TableHead>
                                     <TableHead className="font-bold text-sm py-3">SLA</TableHead>
-                                    <TableHead className="font-bold text-sm py-3">Created</TableHead>
+                                    <TableHead className="font-bold text-sm py-3">Created Date</TableHead>
                                     <TableHead className="font-bold text-sm py-3">Aging</TableHead>
+                                    <TableHead className="font-bold text-sm py-3">Created By</TableHead>
+                                    <TableHead className="font-bold text-sm py-3">Currently Assigned to</TableHead>
+                                    <TableHead className="font-bold text-sm py-3">Work ID</TableHead>
+
+
+
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -319,17 +325,22 @@ export default function CEOOverview() {
                                                         {file.status?.toLowerCase()}
                                                     </Badge>
                                                 </TableCell>
-                                                <TableCell className="text-blue-600 font-bold text-sm py-3">{file.work_request_id || '-'}</TableCell>
                                                 <TableCell className="py-3">
                                                     {file.sla_breached ? 
                                                         <Badge variant="destructive" className="text-xs px-2 h-6">Breached</Badge> : 
                                                         <Badge variant="secondary" className="text-xs px-1 h-8">On Track</Badge>
                                                     }
                                                 </TableCell>
+
                                                 <TableCell className="text-sm whitespace-nowrap py-3">
                                                     {new Date(file.created_at).toLocaleDateString()}
                                                 </TableCell>
                                                 <TableCell className="font-semibold text-center text-sm py-3">{file.aging}d</TableCell>
+                                                <TableCell className=" text-center text-sm py-3">{file.created_by_name}</TableCell>
+                                                <TableCell className=" text-center text-sm py-3">{file.assigned_to_name || "Unassigned"} </TableCell>
+
+                                                <TableCell className="text-blue-600 font-bold text-sm py-3">{file.work_request_id || '-'}</TableCell>
+
                                             </TableRow>
                                         );
                                     })

@@ -17,7 +17,6 @@ export async function GET(request) {
 
         client = await connectToDatabase();
 
-        // 1. KPI Query with Work Related breakdown
         const statsQuery = await client.query(` 
             SELECT 
                 COUNT(*) as total_files,
@@ -48,7 +47,6 @@ export async function GET(request) {
             WHERE split_part(f.file_number, '/', 2) = $1
         `, [fiscalYear]);
 
-        // 2. Detailed Files Tracking Query
         const filesQuery = await client.query(`
             SELECT 
                 f.file_number, 
