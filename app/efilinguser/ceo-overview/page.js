@@ -1,17 +1,13 @@
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge';
 import { 
-    ArrowLeft, 
-    FileText, 
-    Clock, 
-    CheckCircle2, 
-    AlertCircle, 
-    FileEdit, 
-    XCircle,
-    Loader2 
+    ArrowLeft, FileText, Clock, CheckCircle2, AlertCircle, 
+    FileEdit, XCircle, Loader2, Search, ChevronLeft, ChevronRight, ChevronsRight 
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
@@ -19,15 +15,23 @@ export default function CEOOverview() {
     const router = useRouter();
     const [loading, setLoading] = useState(true);
     const [stats, setStats] = useState(null);
+    const [allFiles, setAllFiles] = useState([]);
     const [fiscalYear, setFiscalYear] = useState('2025-26');
 
-    const fetchCEOStats = useCallback(async () => {
+    // Table States
+    const [currentPage, setCurrentPage] = useState(1);
+    const [statusFilter, setStatusFilter] = useState('all');
+    const [fileNumFilter, setFileNumFilter] = useState('all');
+    const itemsPerPage = 8;
+
+    const fetchCEOData = useCallback(async () => {
         setLoading(true);
         try {
             const response = await fetch(`/api/efiling/ceo/stats?fiscalYear=${fiscalYear}`);
             const result = await response.json();
             if (result.success) {
-                setStats(result.data);
+                setStats(result.data.stats);
+                setAllFiles(result.data.files);
             }
         } catch (error) {
             console.error("Failed to fetch stats", error);
@@ -37,24 +41,36 @@ export default function CEOOverview() {
     }, [fiscalYear]);
 
     useEffect(() => {
-        fetchCEOStats();
-    }, [fetchCEOStats]);
+        fetchCEOData();
+    }, [fetchCEOData]);
+
+    const filteredFiles = useMemo(() => {
+        return allFiles.filter(file => {
+            const matchesStatus = statusFilter === 'all' || file.status === statusFilter;
+            const matchesFileNum = fileNumFilter === 'all' || file.file_number === fileNumFilter;
+            return matchesStatus && matchesFileNum;
+        });
+    }, [allFiles, statusFilter, fileNumFilter]);
+
+    const totalPages = Math.ceil(filteredFiles.length / itemsPerPage);
+    const paginatedFiles = filteredFiles.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
     return (
-        <div className="container mx-auto p-6 space-y-6 bg-gray-50/50 min-h-screen">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div className="flex items-center gap-4">
+        // Changed container to max-w-full and reduced horizontal padding to p-4
+        <div className="max-w-full mx-auto p-4 space-y-4 bg-gray-50/50 min-h-screen">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
                     <Button variant="outline" size="sm" onClick={() => router.back()}>
-                        <ArrowLeft className="h-4 w-4 mr-2" /> Back
+                        <ArrowLeft className="h-4 w-4 mr-1" /> Back
                     </Button>
-                    <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Executive Dashboard</h1>
+                    <h1 className="text-2xl font-bold text-gray-900 tracking-tight">E-Filing CEO Dashboard</h1>
                 </div>
 
-                <div className="flex items-center gap-3 bg-white p-2 rounded-lg border shadow-sm">
-                    <span className="text-sm font-semibold text-gray-600 ml-2">Fiscal Year:</span>
+                <div className="flex items-center gap-2 bg-white p-1.5 rounded-lg border shadow-sm">
+                    <span className="text-xs font-semibold text-gray-600 ml-2">Fiscal Year:</span>
                     <Select value={fiscalYear} onValueChange={setFiscalYear}>
-                        <SelectTrigger className="w-[140px] border-none shadow-none focus:ring-0">
-                            <SelectValue placeholder="Select Year" />
+                        <SelectTrigger className="h-8 w-[120px] border-none shadow-none focus:ring-0 text-sm">
+                            <SelectValue placeholder="Year" />
                         </SelectTrigger>
                         <SelectContent>
                             <SelectItem value="2024-25">2024-2025</SelectItem>
@@ -65,51 +81,189 @@ export default function CEOOverview() {
                 </div>
             </div>
 
-            {/* KPI Cards Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* Main KPI Cards - Tighter gap */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                 <KPICard 
                     title="Total Files" 
                     value={stats?.total_files} 
-                    icon={<FileText className="h-5 w-5 text-blue-600" />} 
+                    workRelated={stats?.total_work_related}
+                    icon={<FileText className="h-4 w-4 text-blue-600" />} 
                     color="blue"
                     loading={loading}
                 />
                 <KPICard 
                     title="In Progress" 
                     value={stats?.in_progress} 
-                    icon={<Clock className="h-5 w-5 text-amber-500" />} 
+                    workRelated={stats?.in_progress_work_related}
+                    icon={<Clock className="h-4 w-4 text-amber-500" />} 
                     color="amber"
                     loading={loading}
                 />
                 <KPICard 
                     title="Approved" 
                     value={stats?.approved} 
-                    icon={<CheckCircle2 className="h-5 w-5 text-emerald-600" />} 
+                    workRelated={stats?.approved_work_related}
+                    icon={<CheckCircle2 className="h-4 w-4 text-emerald-600" />} 
                     color="emerald"
                     loading={loading}
                 />
                 <KPICard 
                     title="SLA Breached" 
                     value={stats?.overdue} 
-                    icon={<AlertCircle className="h-5 w-5 text-red-600" />} 
+                    workRelated={stats?.overdue_work_related}
+                    icon={<AlertCircle className="h-4 w-4 text-red-600" />} 
                     color="red"
                     loading={loading}
                 />
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <MiniStat title="Drafts" value={stats?.draft} loading={loading} icon={<FileEdit className="h-4 w-4 text-gray-500" />} />
-                <MiniStat title="Pending" value={stats?.pending} loading={loading} icon={<Clock className="h-4 w-4 text-amber-500" />} />
-                <MiniStat title="Rejected" value={stats?.rejected} loading={loading} icon={<XCircle className="h-4 w-4 text-red-500" />} />
-                <MiniStat title="Completed" value={stats?.completed} loading={loading} icon={<CheckCircle2 className="h-4 w-4 text-purple-500" />} />
+            {/* Mini Stats - Smaller text and padding */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <MiniStat title="Drafts" value={stats?.draft} workRelated={stats?.draft_work_related} loading={loading} icon={<FileEdit className="h-4 w-4 text-gray-500" />} />
+                <MiniStat title="Pending" value={stats?.pending} workRelated={stats?.pending_work_related} loading={loading} icon={<Clock className="h-4 w-4 text-amber-500" />} />
+                <MiniStat title="Rejected" value={stats?.rejected} workRelated={stats?.rejected_work_related} loading={loading} icon={<XCircle className="h-4 w-4 text-red-500" />} />
+                <MiniStat title="Completed" value={stats?.completed} workRelated={stats?.completed_work_related} loading={loading} icon={<CheckCircle2 className="h-4 w-4 text-purple-500" />} />
             </div>
-            
-            {/* Charts section can be added below */}
+            <Card className="border shadow-sm overflow-hidden">
+                <CardHeader className="border-b bg-white py-3 px-4">
+                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
+                        <CardTitle className="text-lg font-bold flex items-center gap-2">
+                            <Search className="h-4 w-4 text-gray-500" /> Files Tracking
+                        </CardTitle>
+                        
+                        <div className="flex flex-wrap gap-2">
+                            <Select value={fileNumFilter} onValueChange={(v) => {setFileNumFilter(v); setCurrentPage(1);}}>
+                                <SelectTrigger className="w-[180px] h-8 text-xs">
+                                    <SelectValue placeholder="File #" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All File Numbers</SelectItem>
+                                    {Array.from(new Set(allFiles.map(f => f.file_number))).map(num => (
+                                        <SelectItem key={num} value={num}>{num}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+
+                            <Select value={statusFilter} onValueChange={(v) => {setStatusFilter(v); setCurrentPage(1);}}>
+                                <SelectTrigger className="w-[130px] h-8 text-xs">
+                                    <SelectValue placeholder="Status" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Statuses</SelectItem>
+                                    {Array.from(new Set(allFiles.map(f => f.status))).map(st => (
+                                        <SelectItem key={st} value={st}>{st}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+
+                            {/* Reset Button: Only shows when a filter is active */}
+                            {(fileNumFilter !== 'all' || statusFilter !== 'all') && (
+                                <Button 
+                                    variant="ghost" 
+                                    className="h-8 px-2 text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
+                                    onClick={() => {
+                                        setFileNumFilter('all');
+                                        setStatusFilter('all');
+                                        setCurrentPage(1);
+                                    }}
+                                >
+                                    Reset Filters
+                                </Button>
+                            )}
+                        </div>
+                    </div>
+                </CardHeader>
+                <CardContent className="p-0">
+                    <div className="overflow-x-auto">
+                        <Table>
+                            <TableHeader>
+                                <TableRow className="bg-gray-50">
+                                    <TableHead className="font-bold text-sm py-3">File Number</TableHead>
+                                    <TableHead className="font-bold text-sm py-3">Subject</TableHead>
+                                    <TableHead className="font-bold text-sm py-3">Category</TableHead>
+                                    <TableHead className="font-bold text-sm py-3">Dept</TableHead>
+                                    <TableHead className="font-bold text-sm py-3">Status</TableHead>
+                                    <TableHead className="font-bold text-sm py-3">Work ID</TableHead>
+                                    <TableHead className="font-bold text-sm py-3">SLA</TableHead>
+                                    <TableHead className="font-bold text-sm py-3">Created</TableHead>
+                                    <TableHead className="font-bold text-sm py-3">Aging</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {loading ? (
+                                    <TableRow><TableCell colSpan={9} className="text-center py-10"><Loader2 className="animate-spin mx-auto" /></TableCell></TableRow>
+                                ) : paginatedFiles.length === 0 ? (
+                                    <TableRow><TableCell colSpan={9} className="text-center py-10 text-gray-500">No files found</TableCell></TableRow>
+                                ) : (
+                                    paginatedFiles.map((file, idx) => {
+                                        // Status badge color logic
+                                        const getStatusStyles = (status) => {
+                                            const s = status?.toLowerCase();
+                                            if (s === 'pending') return "bg-red-100 text-red-700 border-red-200";
+                                            if (s === 'in progress') return "bg-yellow-100 text-yellow-700 border-yellow-200";
+                                            if (s === 'completed' || s === 'approved') return "bg-green-100 text-green-700 border-green-200";
+                                            return "bg-gray-100 text-gray-700 border-gray-200";
+                                        };
+
+                                        return (
+                                            <TableRow key={idx} className="hover:bg-gray-50/50">
+                                                <TableCell className="text-sm font-medium whitespace-nowrap py-3">{file.file_number}</TableCell>
+                                                <TableCell className="max-w-[200px] truncate text-sm py-3" title={file.subject}>{file.subject}</TableCell>
+                                                <TableCell className="text-sm py-3">{file.category}</TableCell>
+                                                <TableCell className="text-sm py-3">{file.department}</TableCell>
+                                                <TableCell className="py-3">
+                                                    <Badge 
+                                                        variant="outline" 
+                                                        className={`text-xs px-1 h-8 capitalize font-semibold ${getStatusStyles(file.status)}`}
+                                                    >
+                                                        {file.status?.toLowerCase()}
+                                                    </Badge>
+                                                </TableCell>
+                                                <TableCell className="text-blue-600 font-bold text-sm py-3">{file.work_request_id || '-'}</TableCell>
+                                                <TableCell className="py-3">
+                                                    {file.sla_breached ? 
+                                                        <Badge variant="destructive" className="text-xs px-2 h-6">Breached</Badge> : 
+                                                        <Badge variant="secondary" className="text-xs px-1 h-8">On Track</Badge>
+                                                    }
+                                                </TableCell>
+                                                <TableCell className="text-sm whitespace-nowrap py-3">
+                                                    {new Date(file.created_at).toLocaleDateString()}
+                                                </TableCell>
+                                                <TableCell className="font-semibold text-center text-sm py-3">{file.aging}d</TableCell>
+                                            </TableRow>
+                                        );
+                                    })
+                                )}
+                            </TableBody>
+                        </Table>
+                    </div>
+
+                    <div className="flex items-center justify-between px-4 py-3 border-t bg-gray-50/50">
+                        <div className="text-sm text-gray-500">
+                            Showing <span className="font-medium">{paginatedFiles.length}</span> of <span className="font-medium">{filteredFiles.length}</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                            <Button variant="outline" className="h-8 text-sm px-3" onClick={() => setCurrentPage(1)} disabled={currentPage === 1}>
+                                First
+                            </Button>
+                            <Button variant="outline" className="h-8 text-sm px-3" onClick={() => setCurrentPage(p => p - 1)} disabled={currentPage === 1}>
+                                Prev
+                            </Button>
+                            <div className="text-sm font-medium px-3">
+                                {currentPage}/{totalPages || 1}
+                            </div>
+                            <Button variant="outline" className="h-8 text-sm px-3" onClick={() => setCurrentPage(p => p + 1)} disabled={currentPage >= totalPages}>
+                                Next
+                            </Button>
+                        </div>
+                    </div>
+                </CardContent>
+            </Card>
         </div>
     );
 }
 
-function KPICard({ title, value, icon, color, loading }) {
+function KPICard({ title, value, workRelated, icon, color, loading }) {
     const colors = {
         blue: "bg-blue-50 border-blue-100",
         amber: "bg-amber-50 border-amber-100",
@@ -119,30 +273,42 @@ function KPICard({ title, value, icon, color, loading }) {
 
     return (
         <Card className={`border shadow-sm ${colors[color]}`}>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-semibold text-gray-700 uppercase tracking-wider">{title}</CardTitle>
-                <div className="p-2 bg-white rounded-md shadow-sm border">{icon}</div>
+            {/* Reduced padding in CardHeader and CardContent */}
+            <CardHeader className="flex flex-row items-center justify-between pb-1 pt-3 px-3">
+                <CardTitle className="text-[10px] font-bold text-gray-700 uppercase tracking-wider">{title}</CardTitle>
+                <div className="p-1.5 bg-white rounded-md shadow-sm border">{icon}</div>
             </CardHeader>
-            <CardContent>
+            <CardContent className="px-3 pb-3">
                 {loading ? (
-                    <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
+                    <Loader2 className="h-5 w-5 animate-spin text-gray-400" />
                 ) : (
-                    <div className="text-3xl font-bold text-gray-900">{parseInt(value || 0).toLocaleString()}</div>
+                    <div>
+                        <div className="text-2xl font-bold text-gray-900 leading-none">{parseInt(value || 0).toLocaleString()}</div>
+                        <p className="text-[9px] font-medium text-gray-500 mt-1">
+                            Work Related: <span className="text-gray-800 font-bold">{workRelated || 0}</span>
+                        </p>
+                    </div>
                 )}
             </CardContent>
         </Card>
     );
 }
 
-function MiniStat({ title, value, loading, icon }) {
+function MiniStat({ title, value, workRelated, loading, icon }) {
     return (
-        <div className="bg-white p-4 rounded-xl border shadow-sm flex items-center gap-3">
-            <div className="p-2 bg-gray-50 rounded-full">{icon}</div>
-            <div>
-                <p className="text-xs font-medium text-gray-500 uppercase">{title}</p>
-                <p className="text-lg font-bold text-gray-900">
+        // Reduced padding and gaps
+        <div className="bg-white p-2.5 rounded-xl border shadow-sm flex items-center gap-2">
+            <div className="p-1.5 bg-gray-50 rounded-full h-fit shrink-0">{icon}</div>
+            <div className="flex-1 min-w-0">
+                <p className="text-[9px] font-medium text-gray-500 uppercase truncate">{title}</p>
+                <p className="text-base font-bold text-gray-900 leading-tight">
                     {loading ? "..." : parseInt(value || 0).toLocaleString()}
                 </p>
+                {!loading && (
+                    <p className="text-[9px] text-gray-500 leading-none mt-0.5">
+                        Work Related: <span className="font-bold text-gray-700">{workRelated || 0}</span>
+                    </p>
+                )}
             </div>
         </div>
     );

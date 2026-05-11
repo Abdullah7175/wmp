@@ -8,38 +8,82 @@ export async function GET(request) {
     let client;
     try {
         const session = await auth();
-        
-        // RBAC: Strict check for CEO role (Role ID: 5)
-        // Adjust the ID if your CEO role ID is different in the efiling_roles table
+        // Assuming role 5 is CEO as per your snippet
         if (!session || parseInt(session.user.role) !== 5) {
             return NextResponse.json({ error: 'Unauthorized: CEO access only' }, { status: 403 });
         }
-
         const { searchParams } = new URL(request.url);
         const fiscalYear = searchParams.get('fiscalYear') || '2025-26';
 
         client = await connectToDatabase();
 
-        // Query to get total and status breakdown filtered by Fiscal Year
-        // We use split_part to get the middle section of "WA_EM/2025-26/0001"
-        const statsQuery = await client.query(`
+        // 1. KPI Query with Work Related breakdown
+        const statsQuery = await client.query(` 
             SELECT 
                 COUNT(*) as total_files,
+                COUNT(CASE WHEN f.work_request_id IS NOT NULL THEN 1 END) as total_work_related,
+                
                 COUNT(CASE WHEN s.code = 'DRAFT' THEN 1 END) as draft,
-                COUNT(CASE WHEN s.code = 'PENDING' OR s.code = 'PENDING_APPROVAL' THEN 1 END) as pending,
+                COUNT(CASE WHEN s.code = 'DRAFT' AND f.work_request_id IS NOT NULL THEN 1 END) as draft_work_related,
+
+                COUNT(CASE WHEN s.code IN ('PENDING', 'PENDING_APPROVAL') THEN 1 END) as pending,
+                COUNT(CASE WHEN s.code IN ('PENDING', 'PENDING_APPROVAL') AND f.work_request_id IS NOT NULL THEN 1 END) as pending_work_related,
+
                 COUNT(CASE WHEN s.code = 'IN_PROGRESS' THEN 1 END) as in_progress,
+                COUNT(CASE WHEN s.code = 'IN_PROGRESS' AND f.work_request_id IS NOT NULL THEN 1 END) as in_progress_work_related,
+
                 COUNT(CASE WHEN s.code = 'APPROVED' THEN 1 END) as approved,
+                COUNT(CASE WHEN s.code = 'APPROVED' AND f.work_request_id IS NOT NULL THEN 1 END) as approved_work_related,
+
                 COUNT(CASE WHEN s.code = 'REJECTED' THEN 1 END) as rejected,
+                COUNT(CASE WHEN s.code = 'REJECTED' AND f.work_request_id IS NOT NULL THEN 1 END) as rejected_work_related,
+
                 COUNT(CASE WHEN s.code = 'COMPLETED' THEN 1 END) as completed,
-                COUNT(CASE WHEN f.sla_breached = true THEN 1 END) as overdue
+                COUNT(CASE WHEN s.code = 'COMPLETED' AND f.work_request_id IS NOT NULL THEN 1 END) as completed_work_related,
+
+                COUNT(CASE WHEN f.sla_breached = true THEN 1 END) as overdue,
+                COUNT(CASE WHEN f.sla_breached = true AND f.work_request_id IS NOT NULL THEN 1 END) as overdue_work_related
             FROM efiling_files f
             LEFT JOIN efiling_file_status s ON f.status_id = s.id
             WHERE split_part(f.file_number, '/', 2) = $1
         `, [fiscalYear]);
 
+        // 2. Detailed Files Tracking Query
+        const filesQuery = await client.query(`
+            SELECT 
+                f.file_number, 
+                f.subject, 
+                c.name as category, 
+                d.name as department, 
+                s.name as status, 
+                f.work_request_id, 
+                u_creator.name as created_by_name,
+                ft.name as file_type,
+                u_assignee.name as assigned_to_name,
+                f.sla_breached,
+                f.created_at,
+                EXTRACT(DAY FROM (CURRENT_TIMESTAMP - f.created_at)) as aging
+            FROM efiling_files f
+            LEFT JOIN efiling_file_categories c ON f.category_id = c.id
+            LEFT JOIN efiling_departments d ON f.department_id = d.id
+            LEFT JOIN efiling_file_status s ON f.status_id = s.id
+            LEFT JOIN efiling_file_types ft ON f.file_type_id = ft.id
+            -- Join to get Creator Name
+            LEFT JOIN efiling_users eu_creator ON f.created_by = eu_creator.id
+            LEFT JOIN users u_creator ON eu_creator.user_id = u_creator.id
+            -- Join to get Assignee Name
+            LEFT JOIN efiling_users eu_assignee ON f.assigned_to = eu_assignee.id
+            LEFT JOIN users u_assignee ON eu_assignee.user_id = u_assignee.id
+            WHERE split_part(f.file_number, '/', 2) = $1
+            ORDER BY f.created_at DESC
+        `, [fiscalYear]);
+
         return NextResponse.json({
             success: true,
-            data: statsQuery.rows[0]
+            data: {
+                stats: statsQuery.rows[0],
+                files: filesQuery.rows
+            }
         });
 
     } catch (error) {
