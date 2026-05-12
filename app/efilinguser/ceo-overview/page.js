@@ -335,7 +335,23 @@ export default function CEOOverview() {
                                                 <TableCell className="text-sm whitespace-nowrap py-3">
                                                     {new Date(file.created_at).toLocaleDateString()}
                                                 </TableCell>
-                                                <TableCell className="font-semibold text-center text-sm py-3">{file.aging}d</TableCell>
+                                                <TableCell className="font-semibold text-center text-sm py-3 whitespace-nowrap">
+                                                    {(() => {
+                                                        const totalDays = parseInt(file.aging);
+                                                        if (totalDays === 0) return "Today";
+                                                        
+                                                        const years = Math.floor(totalDays / 365);
+                                                        const months = Math.floor((totalDays % 365) / 30);
+                                                        const days = totalDays % 30;
+
+                                                        let parts = [];
+                                                        if (years > 0) parts.push(`${years} y`);
+                                                        if (months > 0) parts.push(`${months} months`);
+                                                        if (days > 0 || parts.length === 0) parts.push(`${days} days`);
+
+                                                        return parts.join(' ');
+                                                    })()}
+                                                </TableCell>
                                                 <TableCell className=" text-center text-sm py-3">{file.created_by_name}</TableCell>
                                                 <TableCell className=" text-center text-sm py-3">{file.assigned_to_name || "Unassigned"} </TableCell>
 
