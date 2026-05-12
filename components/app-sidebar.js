@@ -48,6 +48,13 @@ const items = [
         icon: ChartPie,
         visible: [1, 2, 3, 4]
     },
+
+    {
+        title: "Generate Reports",
+        url: "/dashboard/generate-reports",
+        icon: NotebookText, // You already have this imported
+        visible: [1, 2] // Adjust based on which roles should see this
+    },
 ];
 
 export function AppSidebar() {
