@@ -61,7 +61,7 @@ export default function LoginPage() {
   React.useEffect(() => {
     if (status === "authenticated" && session?.user) {
       // Block e-filing users (role 4) from accessing video archiving system
-      if (session.user.userType === "user" && parseInt(session.user.role) === 4) {
+      if ((userType === "user" && parseInt(userRole) === 4 ) || (parseInt(userRole) === 5 ) ) {
         toast({
           title: "Access Denied",
           description: "E-filing users are not allowed to access the video archiving system. Please use the e-filing portal instead.",
@@ -194,7 +194,7 @@ export default function LoginPage() {
               const userRole = session?.user?.role;
               
               // Block e-filing users (role 4) from accessing video archiving system
-              if (userType === "user" && parseInt(userRole) === 4) {
+              if ((userType === "user" && parseInt(userRole) === 4 ) || (parseInt(userRole) === 5 ) ) {
                 toast({
                   title: "Access Denied",
                   description: "E-filing users are not allowed to access the video archiving system. Please use the e-filing portal instead.",
