@@ -15,7 +15,7 @@ const DEFAULT_WHATSAPP_MESSAGE =
     "This is a test message from the E-Filing admin communications panel. If you received this, the WhatsApp API is working.";
 
 const DEFAULT_EMAIL_MESSAGE =
-    "This is a test email from the E-Filing admin communications panel. If you received this, the email (SMTP) service is working.";
+    "This is a test email from the E-Filing admin communications panel. If you received this, the KW&SC mailer (efiling@kwsc.gos.pk) is working.";
 
 export default function CommunicationsTestPage() {
     const { data: session, status } = useSession();
@@ -144,7 +144,7 @@ export default function CommunicationsTestPage() {
             <div className="mb-6">
                 <h1 className="text-2xl font-bold text-gray-900">Communications test</h1>
                 <p className="text-gray-600 mt-1">
-                    Verify WhatsApp OTP delivery and email (SMTP) from the E-Filing admin panel.
+                    Verify WhatsApp and email (KW&SC mailer — same as OTP and meetings) from the E-Filing admin panel.
                     Use real phone numbers and email addresses you can access.
                 </p>
             </div>
@@ -208,7 +208,7 @@ export default function CommunicationsTestPage() {
                             Email test
                         </CardTitle>
                         <CardDescription>
-                            Sends a test email via SMTP (same service used for OTP emails).
+                            Sends via KW&SC mailer (efiling@kwsc.gos.pk) — same backend as OTP and meeting emails.
                         </CardDescription>
                     </CardHeader>
                     <CardContent>
@@ -267,9 +267,6 @@ function ResultBanner({ result }) {
         >
             <p className="font-medium">{ok ? "Success" : "Failed"}</p>
             <p className="mt-1">{result.message || result.error || (ok ? "Sent." : "Unknown error.")}</p>
-            {result.messageId && (
-                <p className="mt-1 text-xs opacity-80">Message ID: {result.messageId}</p>
-            )}
         </div>
     );
 }

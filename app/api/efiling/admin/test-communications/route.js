@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { sendWhatsAppMessage } from '@/lib/whatsappService';
-import { sendEmail } from '@/lib/emailService';
+// import { sendEmail } from '@/lib/emailService';
+import { sendMeetingEmail } from '@/lib/mailer';
 import { logAction } from '@/lib/actionLogger';
 
 function isAdminRole(session) {
@@ -97,22 +98,26 @@ export async function POST(request) {
             </html>
         `;
 
-        const result = await sendEmail(trimmedEmail, subject, html, trimmedMessage);
+        const sent = await sendMeetingEmail({
+            to: trimmedEmail,
+            subject,
+            html,
+        });
 
         await logAction(request, 'TEST', 'communications_test', {
             details: {
                 channel: 'email',
                 email: trimmedEmail,
-                success: result.success,
-                error: result.error || null,
+                success: sent,
+                error: sent ? null : 'Failed to send email',
             },
         }).catch(() => {});
 
-        if (!result.success) {
+        if (!sent) {
             return NextResponse.json(
                 {
                     success: false,
-                    error: result.error || 'Failed to send email',
+                    error: 'Failed to send email. Check EMAIL_PASSWORD and mail server (efiling@kwsc.gos.pk).',
                 },
                 { status: 500 }
             );
@@ -120,8 +125,7 @@ export async function POST(request) {
 
         return NextResponse.json({
             success: true,
-            message: result.message || 'Test email sent successfully',
-            messageId: result.data?.messageId,
+            message: 'Test email sent successfully via KW&SC mailer (same as OTP and meetings)',
         });
     } catch (error) {
         console.error('[test-communications]', error);
