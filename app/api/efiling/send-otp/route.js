@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/db';
 import { logAction } from '@/lib/actionLogger';
 import { sendOTPViaWhatsApp } from '@/lib/whatsappService';
-import { sendOTPViaEmail } from '@/lib/emailService';
+// import { sendOTPViaEmail } from '@/lib/emailService';
+import { sendOTPViaEmail } from '@/lib/mailer';
 import { auth } from '@/auth';
 
 export async function POST(request) {
