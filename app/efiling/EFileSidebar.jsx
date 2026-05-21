@@ -24,7 +24,8 @@ import {
     Bell,
     LogOut,
     MapPin,
-    Map
+    Map,
+    MessageCircle
 } from "lucide-react";
 import { useSidebar } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
@@ -186,6 +187,11 @@ const links = [
             { href: "/efiling/user-activity", label: "Activity Log", icon: <Clock className="w-4 h-4" /> },
             { href: "/efiling/user-activity/actions", label: "User Actions", icon: <Users className="w-4 h-4" /> },
         ]
+    },
+    {
+        href: "/efiling/communications-test",
+        label: "Communications Test",
+        icon: <MessageCircle className="w-5 h-5 mr-2" />,
     },
     // {
     //     href: "/efiling/settings",
