@@ -1,10 +1,20 @@
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/db';
 import bcrypt from 'bcryptjs';
+import { auth } from '@/auth';
+import { comparePassword } from '@/lib/passwordUtils';
 
 export async function POST(request) {
     let client;
     try {
+        const session = await auth();
+        if (!session?.user?.id) {
+            return NextResponse.json(
+                { error: 'Unauthorized' },
+                { status: 401 }
+            );
+        }
+
         const body = await request.json();
         const { current_password, new_password } = body;
 
@@ -22,27 +32,51 @@ export async function POST(request) {
             );
         }
 
+        const userId = parseInt(session.user.id, 10);
+        if (!userId || Number.isNaN(userId)) {
+            return NextResponse.json(
+                { error: 'Invalid session user' },
+                { status: 401 }
+            );
+        }
+
         client = await connectToDatabase();
-        
-        // For now, we'll use a simple approach
-        // In a real application, you'd want to verify the current user's session
-        // and get their user ID from the session
-        
-        // Hash the new password
+
+        const userResult = await client.query(
+            'SELECT id, password FROM users WHERE id = $1',
+            [userId]
+        );
+
+        if (userResult.rows.length === 0) {
+            return NextResponse.json(
+                { error: 'User not found' },
+                { status: 404 }
+            );
+        }
+
+        const user = userResult.rows[0];
+        const isCurrentValid = await comparePassword(
+            current_password,
+            user.password,
+            bcrypt
+        );
+
+        if (!isCurrentValid) {
+            return NextResponse.json(
+                { error: 'Current password is incorrect' },
+                { status: 400 }
+            );
+        }
+
         const hashedPassword = await bcrypt.hash(new_password, 12);
-        
-        // Update the password in the database
-        // Note: This is a simplified version - you'll need to implement proper user authentication
-        const query = `
-            UPDATE users 
-            SET password = $1, updated_date = CURRENT_TIMESTAMP 
-            WHERE id = $2
-        `;
-        
-        // For demo purposes, using user ID 1
-        // In production, get this from the authenticated session
-        const result = await client.query(query, [hashedPassword, 1]);
-        
+
+        const result = await client.query(
+            `UPDATE users 
+             SET password = $1, updated_date = CURRENT_TIMESTAMP 
+             WHERE id = $2`,
+            [hashedPassword, userId]
+        );
+
         if (result.rowCount === 0) {
             return NextResponse.json(
                 { error: 'User not found' },
