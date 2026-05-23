@@ -19,7 +19,7 @@ const TEAM_MEMBER_ROLES = ['AEE', 'SUB-Engineer', 'AOO', 'AO', 'DAO'];
 // Manager roles - these are the team leaders who can have teams
 const MANAGER_ROLE_CODES = [
     'XEN', 'RE', 'EE', 'SE', 'CE', 'MD', 'CEO', 'COO', 'CFO', 'CCO', 
-    'DIRECTOR', 'COMMITTEE', 'CIA', 'DMD',
+    'DIRECTOR', 'COMMITTEE', 'CIA', 'DMD', 'CITO',
     // Common variations
     'EXECUTIVE_ENGINEER', 'SUPERINTENDENT_ENGINEER', 'CHIEF_ENGINEER',
     'DIRECTOR', 'CHIEF_EXECUTIVE_OFFICER', 'CHIEF_OPERATING_OFFICER',
