@@ -14,7 +14,7 @@ import { Users, Plus, Trash2, Search, Building2, Shield, UserCheck, X } from "lu
 import { useToast } from "@/hooks/use-toast";
 
 // Team member roles - these are the subordinates that can be added to teams
-const TEAM_MEMBER_ROLES = ['AEE', 'SUB-Engineer', 'AOO', 'AO', 'DAO'];
+const TEAM_MEMBER_ROLES = ['AEE', 'SUB-Engineer', 'AOO', 'AO', 'DAO', 'O_IT_GA'];
 
 // Manager roles - these are the team leaders who can have teams
 const MANAGER_ROLE_CODES = [
@@ -56,7 +56,7 @@ const isManager = (user) => {
     
     // First, explicitly exclude team member roles to avoid false positives
     // This must be checked FIRST before checking for manager roles
-    const teamMemberIndicators = ['AEE', 'SUB-ENGINEER', 'SUBENGINEER', 'SUB_ENGINEER', 'SUB-ENGR', 'SUBENGR', 'AOO', 'AO', 'DAO'];
+    const teamMemberIndicators = ['AEE', 'SUB-ENGINEER', 'SUBENGINEER', 'SUB_ENGINEER', 'SUB-ENGR', 'SUBENGR', 'AOO', 'AO', 'DAO', 'Officer IT General Administration', 'O_IT_GA'];
     const isTeamMember = teamMemberIndicators.some(indicator => {
         const indicatorUpper = indicator.toUpperCase();
         // Check if role code starts with or exactly matches team member roles
@@ -406,7 +406,11 @@ export default function TeamsManagement() {
                                     'DAO': {
                                         roleCodes: ['DAO', 'DISTRICT_ACCOUNT_OFFICER', 'DIS_ACCOUNT'],
                                         roleNames: ['DAO', 'DISTRICT ACCOUNT OFFICER', 'DISTRICT OFFICER']
-                                    }
+                                    },
+                                    'O_IT_GA': {
+                                        roleCodes: ['O_IT_GA'],
+                                        roleNames: ['Officer IT General Administration']
+                                    },
                                 };
                                 
                                 const mapping = teamRoleMapping[formData.team_role] || { roleCodes: [], roleNames: [] };
