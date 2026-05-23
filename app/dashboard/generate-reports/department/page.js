@@ -7,15 +7,18 @@ import { FileText, Building2, Calendar, Filter } from 'lucide-react';
 export default function DepartmentReportPage() {
     const [deptOptions, setDeptOptions] = useState([]);
     const [workTypeOptions, setWorkTypeOptions] = useState([]);
+    const [townOptions, setTownOptions] = useState([]); // Array state for town listings
+    
     const [selectedDepts, setSelectedDepts] = useState([]);
     const [selectedWorkTypes, setSelectedWorkTypes] = useState([]);
+    const [selectedTowns, setSelectedTowns] = useState([]); // Track selected town items
     const [dateFrom, setDateFrom] = useState('');
     const [dateTo, setDateTo] = useState('');
+    
     const [showWorkType, setShowWorkType] = useState(false);
-    const [loading, setLoading] = useState(false);
-
-    // New State for Nature of Work
     const [showNatureOfWork, setShowNatureOfWork] = useState(false);
+    const [showTown, setShowTown] = useState(false);
+    
     const [selectedNatures, setSelectedNatures] = useState([]);
     const [natureOptions] = useState([
         { id: 'Sunk Down', name: 'Sunk Down' },
@@ -30,16 +33,20 @@ export default function DepartmentReportPage() {
     useEffect(() => {
         const fetchFilters = async () => {
             try {
-                const [dRes, wRes] = await Promise.all([
+                const [dRes, wRes, tRes] = await Promise.all([
                     fetch('/api/complaints/types'), 
-                    fetch('/api/complaints/subtypes')
+                    fetch('/api/complaints/subtypes'),
+                    fetch('/api/towns') // Fetches the complete town list registry
                 ]);
                 const dData = await dRes.json();
                 const wData = await wRes.json();
+                const tData = await tRes.json();
+                
                 setDeptOptions(Array.isArray(dData) ? dData : dData.data || []);
                 setWorkTypeOptions(Array.isArray(wData) ? wData : wData.data || []);
+                setTownOptions(Array.isArray(tData) ? tData : tData.data || []);
             } catch (err) {
-                console.error("Failed to load filters");
+                console.error("Failed to load layout filters smoothly", err);
             }
         };
         fetchFilters();
@@ -55,10 +62,12 @@ export default function DepartmentReportPage() {
                     dateFrom,
                     dateTo,
                     showWorkType,
-                    showNatureOfWork, // Added
+                    showNatureOfWork,
+                    showTown,
                     departments: selectedDepts,
                     workTypes: selectedWorkTypes,
-                    naturesOfWork: showNatureOfWork ? selectedNatures : [] // Added
+                    naturesOfWork: showNatureOfWork ? selectedNatures : [],
+                    towns: showTown ? selectedTowns : [] // Pass selective town filtering options down
                 })
             });
 
@@ -76,6 +85,8 @@ export default function DepartmentReportPage() {
             setLoading(false);
         }
     };
+
+    const [loading, setLoading] = useState(false);
 
     const renderFilterList = (title, options, selected, setSelected, displayKey) => (
         <div className="flex flex-col gap-2">
@@ -116,6 +127,7 @@ export default function DepartmentReportPage() {
             </h1>
 
             <div className="grid grid-cols-1 gap-6">
+                {/* Date Selection Panel */}
                 <Card>
                     <CardHeader>
                         <CardTitle className="text-lg flex items-center gap-2">
@@ -136,19 +148,31 @@ export default function DepartmentReportPage() {
                     </CardContent>
                 </Card>
 
+                {/* Filter Configurations Panel */}
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between border-b pb-4">
                         <CardTitle className="text-lg flex items-center gap-2">
                             <Filter className="w-5 h-5 text-blue-600" /> Report Filters
                         </CardTitle>
                         
-                        <div className="flex gap-4">
+                        <div className="flex gap-3">
+                            {/* Toggle Towns */}
+                            <label className="flex items-center gap-2 cursor-pointer bg-purple-50 px-3 py-1.5 rounded-full border border-purple-100">
+                                <input type="checkbox" checked={showTown}
+                                    onChange={(e) => {
+                                        setShowTown(e.target.checked);
+                                        if(!e.target.checked) setSelectedTowns([]);
+                                    }}
+                                    className="w-4 h-4 rounded border-gray-300 text-purple-900" />
+                                <span className="text-[10px] font-bold text-purple-900 uppercase tracking-tight">Show Towns</span>
+                            </label>
+
                             {/* Toggle Work Type */}
                             <label className="flex items-center gap-2 cursor-pointer bg-blue-50 px-3 py-1.5 rounded-full border border-blue-100">
                                 <input type="checkbox" checked={showWorkType}
                                     onChange={(e) => {
                                         setShowWorkType(e.target.checked);
-                                        if (e.target.checked) setShowNatureOfWork(false); // Mutual Exclusion
+                                        if (e.target.checked) setShowNatureOfWork(false);
                                     }}
                                     className="w-4 h-4 rounded border-gray-300 text-blue-900" />
                                 <span className="text-[10px] font-bold text-blue-900 uppercase tracking-tight">Show Work Type</span>
@@ -159,7 +183,7 @@ export default function DepartmentReportPage() {
                                 <input type="checkbox" checked={showNatureOfWork}
                                     onChange={(e) => {
                                         setShowNatureOfWork(e.target.checked);
-                                        if (e.target.checked) setShowWorkType(false); // Mutual Exclusion
+                                        if (e.target.checked) setShowWorkType(false);
                                     }}
                                     className="w-4 h-4 rounded border-gray-300 text-green-900" />
                                 <span className="text-[10px] font-bold text-green-900 uppercase tracking-tight">Show Nature of Work</span>
@@ -168,14 +192,18 @@ export default function DepartmentReportPage() {
                     </CardHeader>
                     <CardContent className="pt-6">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {/* Always visible base option */}
                             {renderFilterList("Select Departments", deptOptions, selectedDepts, setSelectedDepts, 'type_name')}
 
-                            {showWorkType ? (
-                                renderFilterList("Select Work Types", workTypeOptions, selectedWorkTypes, setSelectedWorkTypes, 'subtype_name')
-                            ) : showNatureOfWork ? (
-                                renderFilterList("Select Nature of Work", natureOptions, selectedNatures, setSelectedNatures, 'name')
-                            ) : (
-                                <div className="flex items-center justify-center border-2 border-dashed rounded-md bg-gray-50 text-gray-400 text-sm p-4 text-center">
+                            {/* Render matching targeted filters dynamically depending on configuration options checked above */}
+                            {showTown && renderFilterList("Select Towns Filter", townOptions, selectedTowns, setSelectedTowns, 'town')}
+                            
+                            {showWorkType && renderFilterList("Select Work Types", workTypeOptions, selectedWorkTypes, setSelectedWorkTypes, 'subtype_name')}
+                            
+                            {showNatureOfWork && renderFilterList("Select Nature of Work", natureOptions, selectedNatures, setSelectedNatures, 'name')}
+
+                            {!showWorkType && !showNatureOfWork && !showTown && (
+                                <div className="flex items-center justify-center border-2 border-dashed rounded-md bg-gray-50 text-gray-400 text-sm p-4 text-center md:col-span-1">
                                     Enable a distribution toggle above to filter by specific categories
                                 </div>
                             )}
@@ -183,6 +211,7 @@ export default function DepartmentReportPage() {
                     </CardContent>
                 </Card>
 
+                {/* Submitting Action Interface */}
                 <Button
                     onClick={handleGenerate}
                     disabled={loading}

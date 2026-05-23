@@ -67,33 +67,44 @@ export default function MyTemplates() {
     }, [profile?.department_id]);
 
     const fetchMyTemplates = async () => {
-        try {
-            setLoading(true);
-            // Fetch templates created by current user
-            const userRes = await fetch('/api/efiling/users/profile?userId=' + session.user.id);
-            if (userRes.ok) {
-                const userData = await userRes.json();
-                const efilingUserId = userData.efiling_user_id;
-                
-                if (efilingUserId) {
-                    const res = await fetch(`/api/efiling/templates?user_id=${efilingUserId}`);
-                    if (res.ok) {
-                        const data = await res.json();
-                        setTemplates(data.templates || []);
-                    }
-                }
-            }
-        } catch (error) {
-            console.error('Error fetching templates:', error);
+    try {
+        setLoading(true);
+        
+        // Wait until context profile loader is completely done
+        if (profileLoading) return;
+
+        // Fallback checks to find the correct active internal efiling user primary key identifier
+        const efilingUserId = profile?.id || profile?.efiling_user_id;
+        
+        if (!efilingUserId) {
+            console.error("Efiling context loaded but no User identifier discovered:", profile);
             toast({
-                title: "Error",
-                description: "Failed to load templates",
+                title: "Profile Missing",
+                description: "Your profile was found but it is missing an e-filing reference ID.",
                 variant: "destructive",
             });
-        } finally {
-            setLoading(false);
+            return;
         }
-    };
+        
+        // Target dynamic route passing user reference
+        const res = await fetch(`/api/efiling/templates?user_id=${efilingUserId}`);
+        if (!res.ok) {
+            throw new Error(`Templates API returned status ${res.status}`);
+        }
+
+        const data = await res.json();
+        setTemplates(data.templates || []);
+    } catch (error) {
+        console.error('Error fetching templates sequence:', error);
+        toast({
+            title: "Error",
+            description: error.message || "Failed to load templates",
+            variant: "destructive",
+        });
+    } finally {
+        setLoading(false);
+    }
+};
 
     const fetchCategories = async () => {
         try {
@@ -420,6 +431,7 @@ export default function MyTemplates() {
                                     <TableHead>Type</TableHead>
                                     <TableHead>Title</TableHead>
                                     <TableHead>Usage</TableHead>
+                                    <TableHead>Last Used</TableHead>
                                     <TableHead>Actions</TableHead>
                                 </TableRow>
                             </TableHeader>
@@ -443,9 +455,13 @@ export default function MyTemplates() {
                                             <div className="flex items-center gap-2">
                                                 <BarChart3 className="w-4 h-4 text-gray-400" />
                                                 <span>{template.usage_count || 0} times</span>
+                                            </div>
+                                        </TableCell>
+                                        <TableCell>
+                                            <div className="flex items-center gap-2">
                                                 {template.last_used_at && (
-                                                    <span className="text-xs text-gray-500">
-                                                        ({new Date(template.last_used_at).toLocaleDateString()})
+                                                    <span>
+                                                        {new Date(template.last_used_at).toLocaleDateString()}
                                                     </span>
                                                 )}
                                             </div>

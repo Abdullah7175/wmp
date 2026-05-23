@@ -29,20 +29,8 @@ export async function GET(request) {
         const templateType = searchParams.get('template_type');
         const userId = searchParams.get('user_id');
         const includeSystem = searchParams.get('include_system') !== 'false';
-
-        const session = await auth();
         
         // Better error logging
-        if (!session) {
-            console.error('Templates GET: No session found');
-            return NextResponse.json({ error: 'Unauthorized - No session' }, { status: 401 });
-        }
-        
-        if (!session.user) {
-            console.error('Templates GET: No user in session:', session);
-            return NextResponse.json({ error: 'Unauthorized - No user in session' }, { status: 401 });
-        }
-        
         if (!session.user.id) {
             console.error('Templates GET: No user ID in session:', session.user);
             return NextResponse.json({ error: 'Unauthorized - No user ID' }, { status: 401 });
@@ -82,7 +70,6 @@ export async function GET(request) {
                 t.last_used_at,
                 t.created_at,
                 t.updated_at,
-                -- Multiple departments (using subquery to get distinct values)
                 COALESCE(
                     (SELECT jsonb_agg(jsonb_build_object('id', dept_id, 'name', dept_name))
                      FROM (SELECT DISTINCT td.department_id as dept_id, d.name as dept_name
@@ -91,7 +78,6 @@ export async function GET(request) {
                            WHERE td.template_id = t.id AND td.department_id IS NOT NULL) depts),
                     '[]'::jsonb
                 )::json as departments,
-                -- Multiple roles (using subquery to get distinct values)
                 COALESCE(
                     (SELECT jsonb_agg(jsonb_build_object('id', role_id, 'name', role_name, 'code', role_code))
                      FROM (SELECT DISTINCT tr.role_id, r.name as role_name, r.code as role_code
@@ -111,10 +97,10 @@ export async function GET(request) {
         let paramIndex = 1;
         const conditions = [];
 
-        // For non-admin users, filter by their department/role
+        // For non-admin users, filter by their department/role OR allow viewing explicitly requested user logs
         if (!isAdmin && userEfiling) {
             conditions.push(`(
-                -- Global templates (no department, no role, no bridge entries)
+                -- Global templates
                 (
                     t.department_id IS NULL 
                     AND t.role_id IS NULL
@@ -122,9 +108,8 @@ export async function GET(request) {
                     AND NOT EXISTS (SELECT 1 FROM efiling_template_roles tr WHERE tr.template_id = t.id)
                 )
                 OR
-                -- Templates matching user's department AND role (both must match)
+                -- Templates matching user's department AND role
                 (
-                    -- Department matches (from bridge table or single department)
                     (
                         EXISTS (
                             SELECT 1 FROM efiling_template_departments td 
@@ -132,7 +117,6 @@ export async function GET(request) {
                         ) OR t.department_id = $${paramIndex}
                     )
                     AND
-                    -- Role matches (from bridge table or single role)
                     (
                         EXISTS (
                             SELECT 1 FROM efiling_template_roles tr 
@@ -148,7 +132,7 @@ export async function GET(request) {
             paramIndex += 3;
         }
 
-        // Filter by department_id if provided (check both bridge table and single department)
+        // Filter by department_id parameter override if provided
         if (departmentId) {
             conditions.push(`(
                 EXISTS (
@@ -160,7 +144,7 @@ export async function GET(request) {
             paramIndex++;
         }
 
-        // Filter by role_id if provided (check both bridge table and single role)
+        // Filter by role_id parameter override if provided
         if (roleId) {
             conditions.push(`(
                 EXISTS (
@@ -172,21 +156,21 @@ export async function GET(request) {
             paramIndex++;
         }
 
-        // Filter by template_type if provided
+        // Filter by template_type parameter if provided
         if (templateType) {
             conditions.push(`t.template_type = $${paramIndex}`);
             params.push(templateType);
             paramIndex++;
         }
 
-        // Filter by user_id if provided
-        if (userId) {
+        // Only explicitly apply this separate t.created_by if an Admin requests an isolation check 
+        if (userId && isAdmin) {
             conditions.push(`t.created_by = $${paramIndex}`);
             params.push(parseInt(userId));
             paramIndex++;
         }
 
-        // Filter system templates if needed
+        // Filter system templates if requested
         if (!includeSystem) {
             conditions.push(`t.is_system_template = false`);
         }
