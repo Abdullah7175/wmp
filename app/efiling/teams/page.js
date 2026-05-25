@@ -613,7 +613,7 @@ export default function TeamsManagement() {
                                                                 <Button
                                                                     variant="ghost"
                                                                     size="sm"
-                                                                    onClick={() => handleRemoveTeamMember(team.manager.id, member.id)}
+                                                                    onClick={() => handleRemoveTeamMember(team.manager.id, member.team_member_id)}
                                                                     className="text-red-600 hover:text-red-700"
                                                                 >
                                                                     <Trash2 className="w-4 h-4" />
