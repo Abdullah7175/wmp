@@ -14,7 +14,7 @@ const Page = () => {
           <ListPlus className="w-8 h-8 text-blue-950" />
         </div>
         <div className='flex flex-col items-center justify-center w-full'>
-          <AddMilestoneForm />
+          <AddMilestoneForm /> 
         </div>
       </div>
   );

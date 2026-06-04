@@ -83,7 +83,7 @@ export async function POST(req) {
         });
 
         return NextResponse.json({
-            message: 'Milestone definition added successfully',
+            message: 'Milestone definition added successfully', 
             data: rows[0],
         }, { status: 201 });
 
