@@ -78,34 +78,6 @@ export async function POST(request) {
                 );
             }
 
-            // Check if CNIC already exists
-            const existingCnic = await client.query(
-                'SELECT id FROM users WHERE cnic = $1',
-                [cnic]
-            );
-
-            if (existingCnic.rows.length > 0) {
-                return NextResponse.json(
-                    { error: 'User with this CNIC already exists' },
-                    { status: 400 }
-                );
-            }
-
-            // Check if employee_id already exists in efiling_users table (only for KWSC employees)
-            if (!is_consultant && employee_id) {
-                const existingEmployee = await client.query(
-                    'SELECT id FROM efiling_users WHERE employee_id = $1',
-                    [employee_id]
-                );
-
-                if (existingEmployee.rows.length > 0) {
-                    return NextResponse.json(
-                        { error: 'Employee ID already exists' },
-                        { status: 400 }
-                    );
-                }
-            }
-
             // Hash password
             const hashedPassword = await bcrypt.hash(password, 12);
 
