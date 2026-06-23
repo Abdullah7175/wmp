@@ -192,6 +192,7 @@ const Page = () => {
                             ["Status", data.status_name || 'N/A'],
                             ["Video Link", videoLink],
                             ["B.G #", data.budget_code || 'N/A'],
+                            ["File Type", data.file_type || 'N/A'],
                         ].map(([label, value], index) => (
                             <tr key={index} className={index % 2 === 0 ? "bg-gray-100" : ""}>
                                 <td className='px-4 py-2 font-medium border border-gray-300'>{label}:</td>

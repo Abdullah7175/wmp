@@ -1,28 +1,36 @@
 "use client"
-import { useState, useEffect, useCallback, Suspense } from 'react';
+import { useState, useEffect, useCallback, useRef, Suspense } from 'react';
 import { Button } from '@/components/ui/button';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { EnhancedDataTable } from '@/components/ui/enhanced-data-table';
 import { columns } from './columns';
 import { Input } from '@/components/ui/input';
 import { useSession } from 'next-auth/react';
+import { Download } from 'lucide-react';
+
+const PAGE_SIZE_OPTIONS = [5, 10, 20, 25];
 
 const RequestsPageContent = () => {
     const [requests, setRequests] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [totalItems, setTotalItems] = useState(0);
+    const [exporting, setExporting] = useState(false);
     const router = useRouter();
     const searchParams = useSearchParams();
     const { data: session } = useSession();
     
-    // Initialize state from URL parameters
     const [search, setSearch] = useState(searchParams.get('search') || "");
     const [dateFrom, setDateFrom] = useState(searchParams.get('dateFrom') || "");
     const [dateTo, setDateTo] = useState(searchParams.get('dateTo') || "");
+    const [pageSize, setPageSize] = useState(() => {
+        const limitParam = searchParams.get('limit');
+        const parsed = limitParam ? parseInt(limitParam, 10) : 10;
+        return PAGE_SIZE_OPTIONS.includes(parsed) ? parsed : 10;
+    });
     const [currentPage, setCurrentPage] = useState(() => {
         const pageParam = searchParams.get('page');
-        return pageParam ? parseInt(pageParam) - 1 : 0; // Convert from 1-based URL to 0-based state
+        return pageParam ? parseInt(pageParam, 10) - 1 : 0;
     });
     const [sorting, setSorting] = useState(() => {
         const sortParam = searchParams.get('sort');
@@ -36,7 +44,6 @@ const RequestsPageContent = () => {
         return [];
     });
 
-    // Function to update URL parameters
     const updateURL = useCallback((newParams) => {
         const params = new URLSearchParams(searchParams);
         
@@ -52,19 +59,30 @@ const RequestsPageContent = () => {
         router.replace(newURL, { scroll: false });
     }, [searchParams, router]);
 
-    // Update URL when filters change
     useEffect(() => {
         updateURL({
             search,
             dateFrom,
             dateTo,
-            page: currentPage > 0 ? (currentPage + 1).toString() : null, // Convert from 0-based state to 1-based URL
+            limit: pageSize !== 10 ? pageSize.toString() : null,
+            page: currentPage > 0 ? (currentPage + 1).toString() : null,
             sort: sorting.length > 0 ? encodeURIComponent(JSON.stringify(sorting)) : null
         });
-    }, [search, dateFrom, dateTo, currentPage, sorting, updateURL]);
+    }, [search, dateFrom, dateTo, currentPage, pageSize, sorting, updateURL]);
+
+    const isFirstFilterRender = useRef(true);
+
+    useEffect(() => {
+        if (isFirstFilterRender.current) {
+            isFirstFilterRender.current = false;
+            return;
+        }
+        setCurrentPage(0);
+    }, [search, dateFrom, dateTo]);
 
     useEffect(() => {
         const fetchRequests = async () => {
+            setLoading(true);
             try {
                 let url = '/api/requests';
                 const params = [];
@@ -72,11 +90,9 @@ const RequestsPageContent = () => {
                 if (dateFrom) params.push(`date_from=${dateFrom}`);
                 if (dateTo) params.push(`date_to=${dateTo}`);
                 
-                // Add pagination
-                params.push(`page=${currentPage + 1}`); // API uses 1-based pagination (currentPage is 0-based)
-                params.push(`limit=5`);
+                params.push(`page=${currentPage + 1}`);
+                params.push(`limit=${pageSize}`);
                 
-                // Add sorting
                 if (sorting && sorting.length > 0) {
                     const sort = sorting[0];
                     params.push(`sortBy=${sort.id}`);
@@ -93,9 +109,7 @@ const RequestsPageContent = () => {
                 const data = await res.json();
                 setRequests(data.data || data || []);
                 
-                // Update pagination info if available
                 if (data.total !== undefined) {
-                    // Store total for pagination
                     setTotalItems(data.total);
                 }
             } catch (error) {
@@ -107,7 +121,7 @@ const RequestsPageContent = () => {
         };
 
         fetchRequests();
-    }, [search, dateFrom, dateTo, currentPage, sorting]);
+    }, [search, dateFrom, dateTo, currentPage, pageSize, sorting]);
 
     const handleEdit = (requestId) => {
         router.push(`/dashboard/requests/${requestId}/edit`);
@@ -125,7 +139,54 @@ const RequestsPageContent = () => {
         router.push(`/dashboard/requests/${requestId}/view`);
     };
 
-    if (loading) {
+    const handlePaginationChange = (updater) => {
+        const prev = { pageIndex: currentPage, pageSize };
+        const newState = typeof updater === 'function' ? updater(prev) : updater;
+        if (newState.pageSize !== pageSize) {
+            setPageSize(newState.pageSize);
+            setCurrentPage(0);
+        } else {
+            setCurrentPage(newState.pageIndex);
+        }
+    };
+
+    const handleExport = async () => {
+        setExporting(true);
+        try {
+            const params = [];
+            if (search) params.push(`filter=${encodeURIComponent(search)}`);
+            if (dateFrom) params.push(`date_from=${dateFrom}`);
+            if (dateTo) params.push(`date_to=${dateTo}`);
+            if (sorting && sorting.length > 0) {
+                const sort = sorting[0];
+                params.push(`sortBy=${sort.id}`);
+                params.push(`sortOrder=${sort.desc ? 'desc' : 'asc'}`);
+            }
+
+            const url = `/api/requests/export${params.length ? '?' + params.join('&') : ''}`;
+            const res = await fetch(url);
+            if (!res.ok) {
+                throw new Error('Failed to export requests');
+            }
+
+            const blob = await res.blob();
+            const downloadUrl = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = downloadUrl;
+            link.download = `work-requests-${new Date().toISOString().slice(0, 10)}.csv`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(downloadUrl);
+        } catch (error) {
+            console.error('Error exporting requests:', error);
+            alert('Failed to export requests. Please try again.');
+        } finally {
+            setExporting(false);
+        }
+    };
+
+    if (loading && requests.length === 0) {
         return (
             <div className="container mx-auto px-4 py-10">
                 <div className="text-center">
@@ -157,9 +218,20 @@ const RequestsPageContent = () => {
         <div className="container mx-auto py-6">
             <div className="flex justify-between items-center mb-6">
                 <h1 className="text-2xl font-bold">Work Requests</h1>
-                <Button onClick={() => router.push('/dashboard/requests/new')}>
-                    Create New Request
-                </Button>
+                <div className="flex gap-2">
+                    <Button
+                        variant="outline"
+                        onClick={handleExport}
+                        disabled={exporting}
+                        className="flex items-center gap-2"
+                    >
+                        <Download className="h-4 w-4" />
+                        {exporting ? 'Exporting...' : 'Export Excel'}
+                    </Button>
+                    <Button onClick={() => router.push('/dashboard/requests/new')}>
+                        Create New Request
+                    </Button>
+                </div>
             </div>
             <div className="flex flex-wrap gap-4 mb-4 items-end">
                 <Input
@@ -201,24 +273,18 @@ const RequestsPageContent = () => {
                         onView: handleView,
                         userRole: session?.user?.role
                     }}
-                    pageSize={5}
+                    pageSize={pageSize}
                     totalItems={totalItems}
-                    initialState={{
+                    pageSizeOptions={PAGE_SIZE_OPTIONS}
+                    state={{
                         pagination: {
                             pageIndex: currentPage,
-                            pageSize: 5,
+                            pageSize: pageSize,
                         },
                         sorting: sorting,
                     }}
                     onSortingChange={setSorting}
-                    onPaginationChange={(updater) => {
-                        if (typeof updater === 'function') {
-                            const newState = updater({ pageIndex: currentPage, pageSize: 5 });
-                            setCurrentPage(newState.pageIndex);
-                        } else {
-                            setCurrentPage(updater.pageIndex);
-                        }
-                    }}
+                    onPaginationChange={handlePaginationChange}
                 />
             </div>
         </div>

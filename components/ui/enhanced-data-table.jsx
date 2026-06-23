@@ -9,9 +9,15 @@ import {
   getSortedRowModel,
   useReactTable,
 } from "@tanstack/react-table"
-import { useRouter } from "next/navigation"
 
 import { Button } from "@/components/ui/button"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import {
   Table,
   TableBody,
@@ -30,15 +36,16 @@ export function EnhancedDataTable({
   initialState,
   state,
   onSortingChange,
-  onPaginationChange 
+  onPaginationChange,
+  pageSizeOptions,
 }) {
-  const router = useRouter()
-  // Use controlled state if provided, otherwise use initialState
   const [pagination, setPagination] = React.useState({
-    pageIndex: 0,
-    pageSize: pageSize,
+    pageIndex: initialState?.pagination?.pageIndex ?? 0,
+    pageSize: initialState?.pagination?.pageSize ?? pageSize,
   });
-  const sortingState = state?.sorting || initialState?.sorting || [];
+
+  const currentPagination = state?.pagination ?? pagination;
+  const currentPageSize = currentPagination.pageSize;
   
   const table = useReactTable({
     data,
@@ -48,15 +55,12 @@ export function EnhancedDataTable({
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     meta: meta,
-    // If totalItems is provided, we assume server-side (manual) pagination
     manualPagination: totalItems !== undefined,
-    pageCount: totalItems !== undefined ? Math.ceil(totalItems / pageSize) : undefined,
+    pageCount: totalItems !== undefined ? Math.ceil(totalItems / currentPageSize) : undefined,
     state: {
-      // FIX: Use provided state or fall back to local state
-      pagination: state?.pagination || pagination,
-      sorting: state?.sorting || [],
+      pagination: currentPagination,
+      sorting: state?.sorting ?? initialState?.sorting ?? [],
     },
-    // FIX: Use provided handler or update local state
     onPaginationChange: onPaginationChange || setPagination,
     onSortingChange: onSortingChange,
   })
@@ -114,14 +118,37 @@ export function EnhancedDataTable({
           </TableBody>
         </Table>
       </div>
-      <div className="flex items-center justify-between space-x-2 py-4 px-4">
-        <div className="text-sm text-gray-500">
-          Showing {table.getState().pagination.pageIndex * table.getState().pagination.pageSize + 1} to{" "}
-          {Math.min(
-            (table.getState().pagination.pageIndex + 1) * table.getState().pagination.pageSize,
-            totalItems || table.getFilteredRowModel().rows.length
-          )}{" "}
-          of {totalItems || table.getFilteredRowModel().rows.length} entries
+      <div className="flex flex-wrap items-center justify-between gap-4 space-x-2 py-4 px-4">
+        <div className="flex items-center gap-4">
+          <div className="text-sm text-gray-500">
+            Showing {totalItems === 0 ? 0 : table.getState().pagination.pageIndex * table.getState().pagination.pageSize + 1} to{" "}
+            {Math.min(
+              (table.getState().pagination.pageIndex + 1) * table.getState().pagination.pageSize,
+              totalItems || table.getFilteredRowModel().rows.length
+            )}{" "}
+            of {totalItems || table.getFilteredRowModel().rows.length} entries
+          </div>
+          {pageSizeOptions && pageSizeOptions.length > 0 && (
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-500">Show</span>
+              <Select
+                value={String(table.getState().pagination.pageSize)}
+                onValueChange={(value) => table.setPageSize(Number(value))}
+              >
+                <SelectTrigger className="h-8 w-[70px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {pageSizeOptions.map((size) => (
+                    <SelectItem key={size} value={String(size)}>
+                      {size}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <span className="text-sm text-gray-500">per page</span>
+            </div>
+          )}
         </div>
         <div className="flex items-center space-x-2">
           <Button
@@ -141,7 +168,7 @@ export function EnhancedDataTable({
             Previous
           </Button>
           <span className="text-sm text-gray-500">
-            Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount()}
+            Page {totalItems === 0 ? 0 : table.getState().pagination.pageIndex + 1} of {Math.max(table.getPageCount(), 1)}
           </span>
           <Button
             variant="outline"
