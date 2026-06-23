@@ -15,6 +15,14 @@ function escapeCsvValue(value) {
     return str;
 }
 
+function formatDateTime(value) {
+    if (!value) return '';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+}
+
 function formatAdditionalLocations(locations) {
     if (!locations) return '';
     const arr = typeof locations === 'string' ? JSON.parse(locations) : locations;
@@ -93,8 +101,8 @@ function buildCsv(rows) {
             row.ceo_approval_status,
             row.coo_approval_status,
             row.ce_approval_status,
-            row.created_date ? new Date(row.created_date).toISOString() : '',
-            row.updated_date ? new Date(row.updated_date).toISOString() : '',
+            row.created_date ? formatDateTime(row.created_date) : '',
+            row.updated_date ? formatDateTime(row.updated_date) : '',
         ].map(escapeCsvValue);
         csvRows.push(values.join(','));
     });
