@@ -53,6 +53,7 @@ export const RequestForm = ({ isPublic = false, initialValues, onSubmit, isEditM
     const [filteredExecutiveEngineers, setFilteredExecutiveEngineers] = useState([]);
     const [smAgents, setSmAgents] = useState([]);
     const [selectedSmAgents, setSelectedSmAgents] = useState([]);
+    const [submitLocked, setSubmitLocked] = useState(false);
 
     const isAgentUser = session?.user?.userType === 'agent';
 
@@ -146,6 +147,8 @@ export const RequestForm = ({ isPublic = false, initialValues, onSubmit, isEditM
         validateOnBlur: true,
         enableReinitialize: true,
         onSubmit: async (values) => {
+            if (submitLocked) return;
+
             // Prepare submit values
             const submitValues = { ...values, additional_locations: additionalLocations };
             const normalizeInt = (val) => {
@@ -209,62 +212,73 @@ export const RequestForm = ({ isPublic = false, initialValues, onSubmit, isEditM
             };
             console.log('[RequestForm] Prepared payload', JSON.stringify(debugPayload, null, 2));
             
-            if (onSubmit) {
-                await onSubmit(submitValues);
-            } else {
-            try {
-                const response = await fetch('/api/requests', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                        body: JSON.stringify(submitValues),
-                });
-                console.log('[RequestForm] POST /api/requests status', response.status);
+            setSubmitLocked(true);
 
-                if (response.ok) {
-                const responseData = await response.json().catch(() => ({}));
-                    console.log('[RequestForm] Success payload', responseData);
-                toast({
-                        title: "Request submitted successfully",
-                    description: responseData?.id
-                        ? `Work request #${responseData.id} has been created.`
-                        : 'Your work request has been received.',
-                        variant: 'success',
-                    });
-                formik.resetForm();
-                setAdditionalLocations([]);
-                setSelectedComplaintType(null);
-                setSelectedTown(null);
-                setFilteredSubtowns([]);
-                setFilteredExecutiveEngineers([]);
-                setSelectedSmAgents([]);
-                setIsDivisionBased(false);
+            try {
+                if (onSubmit) {
+                    await onSubmit(submitValues);
                 } else {
-                    let errorMessage = 'Please try again later.';
-                    try {
-                        const err = await response.json();
-                        console.warn('[RequestForm] Error response', err);
-                        errorMessage = err?.error || err?.details || JSON.stringify(err);
-                    } catch (parseErr) {
-                        // ignore parse error
-                        console.warn('[RequestForm] Failed to parse error response', parseErr);
-                    }
-                    toast({
-                        title: "Failed to submit request",
-                        description: errorMessage,
-                        variant: 'destructive',
+                    const response = await fetch('/api/requests', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(submitValues),
                     });
+                    console.log('[RequestForm] POST /api/requests status', response.status);
+
+                    if (response.ok) {
+                        const responseData = await response.json().catch(() => ({}));
+                        console.log('[RequestForm] Success payload', responseData);
+                        toast({
+                            title: "Request submitted successfully",
+                            description: responseData?.id
+                                ? `Work request #${responseData.id} has been created.`
+                                : 'Your work request has been received.',
+                            variant: 'success',
+                        });
+                        formik.resetForm();
+                        setAdditionalLocations([]);
+                        setSelectedComplaintType(null);
+                        setSelectedTown(null);
+                        setFilteredSubtowns([]);
+                        setFilteredExecutiveEngineers([]);
+                        setSelectedSmAgents([]);
+                        setIsDivisionBased(false);
+                    } else {
+                        setSubmitLocked(false);
+                        let errorMessage = 'Please try again later.';
+                        try {
+                            const err = await response.json();
+                            console.warn('[RequestForm] Error response', err);
+                            errorMessage = err?.error || err?.details || JSON.stringify(err);
+                        } catch (parseErr) {
+                            console.warn('[RequestForm] Failed to parse error response', parseErr);
+                        }
+                        toast({
+                            title: "Failed to submit request",
+                            description: errorMessage,
+                            variant: 'destructive',
+                        });
+                    }
                 }
             } catch (error) {
+                if (onSubmit) {
+                    setSubmitLocked(false);
+                    toast({
+                        title: isEditMode ? "Failed to update request" : "Failed to submit request",
+                        description: error?.message || 'Please try again.',
+                        variant: 'destructive',
+                    });
+                    return;
+                }
                 console.error('[RequestForm] Network/JS error submitting request:', error);
                 toast({
-                    title: "An error occurred",
-                    description: 'Please try again later.',
+                    title: "Submission may have completed",
+                    description: 'Connection issue detected. Please check the requests list before submitting again.',
                     variant: 'destructive',
                 });
             }
-        }
         },
     });
 
@@ -1314,9 +1328,12 @@ export const RequestForm = ({ isPublic = false, initialValues, onSubmit, isEditM
                 <div className="mt-6 flex justify-end">
                     <button
                         type="submit"
-                        className="px-4 py-2 bg-indigo-600 text-white font-medium rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                        disabled={submitLocked || formik.isSubmitting}
+                        className="px-4 py-2 bg-indigo-600 text-white font-medium rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                        Submit Request
+                        {submitLocked || formik.isSubmitting
+                            ? (isEditMode ? 'Updating...' : 'Submitting...')
+                            : (isEditMode ? 'Update Request' : 'Submit Request')}
                     </button>
                 </div>
             </form>

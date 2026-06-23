@@ -770,6 +770,7 @@ export async function PUT(req) {
             longitude,
             town_id,
             subtown_id,
+            division_id,
             complaint_type_id,
             complaint_subtype_id,
             contact_number,
@@ -857,11 +858,23 @@ export async function PUT(req) {
             updateParams.push(nature_of_work);
         }
 
-        if (town_id !== undefined && town_id !== null && town_id !== '') {
-            const validTownId = validateIntegerParam(town_id, 'town_id');
-            if (validTownId !== null) {
+        if (division_id !== undefined || town_id !== undefined) {
+            const validDivisionId = division_id !== undefined && division_id !== null && division_id !== ''
+                ? validateIntegerParam(division_id, 'division_id')
+                : null;
+            const validTownId = town_id !== undefined && town_id !== null && town_id !== ''
+                ? validateIntegerParam(town_id, 'town_id')
+                : null;
+
+            if (validDivisionId !== null) {
+                updateFields.push(`division_id = $${++paramIdx}`);
+                updateParams.push(validDivisionId);
+                updateFields.push(`town_id = NULL`);
+                updateFields.push(`subtown_id = NULL`);
+            } else if (validTownId !== null) {
                 updateFields.push(`town_id = $${++paramIdx}`);
                 updateParams.push(validTownId);
+                updateFields.push(`division_id = NULL`);
             }
         }
         if (subtown_id !== undefined && subtown_id !== null && subtown_id !== '') {

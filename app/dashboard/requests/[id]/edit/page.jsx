@@ -96,15 +96,12 @@ const EditRequestPage = () => {
                 });
                 router.back();
             } else {
-                throw new Error('Failed to update request');
+                const err = await response.json().catch(() => ({}));
+                throw new Error(err?.error || 'Failed to update request');
             }
         } catch (error) {
             console.error('Error updating request:', error);
-            toast({
-                title: "Error",
-                description: "Failed to update request",
-                variant: 'destructive',
-            });
+            throw error;
         }
     };
 
@@ -163,6 +160,7 @@ const EditRequestPage = () => {
             <RequestForm 
                 initialValues={{
                     town_id: requestData.town_id,
+                    division_id: requestData.division_id || '',
                     subtown_id: requestData.subtown_id || '',
                     complaint_type_id: requestData.complaint_type_id,
                     complaint_subtype_id: requestData.complaint_subtype_id || '',
