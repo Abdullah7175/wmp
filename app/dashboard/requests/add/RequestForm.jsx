@@ -26,7 +26,7 @@ const createValidationSchema = (isDivisionBased) => Yup.object({
     latitude: Yup.number().nullable(),
     longitude: Yup.number().nullable(),
     budget_code: Yup.string(),
-    file_type: Yup.string().oneOf(['SPI', 'R&M', 'ADP', '']).nullable(),
+    file_type: Yup.string().oneOf(['SPI', 'R&M', 'E', 'ADP', '']).nullable(),
     nature_of_work: Yup.string().required('Nature of Work is required'),
 });
 
