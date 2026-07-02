@@ -1017,6 +1017,7 @@ export const RequestForm = ({ isPublic = false, initialValues, onSubmit, isEditM
                                 <option value="">Select file type...</option>
                                 <option value="SPI">Single Page Info (SPI)</option>
                                 <option value="R&M">Repair & Maintenance (R&M)</option>
+                                <option value="E">Emergent Works (EW)</option>
                                 <option value="ADP">Annual Development (ADP)</option>
                             </select>
                             {formik.errors.file_type && formik.touched.file_type && (
