@@ -82,6 +82,7 @@ export async function GET(request, { params }) {
                 f.*,
                 d.name AS department_name,
                 c.name AS category_name,
+                t.name AS file_type_name,
                 s.name AS status_name,
                 s.code AS status_code,
                 s.color AS status_color,
@@ -137,6 +138,7 @@ export async function GET(request, { params }) {
             LEFT JOIN efiling_files_costing fc ON f.id = fc.file_id
             LEFT JOIN efiling_departments d ON f.department_id = d.id
             LEFT JOIN efiling_file_categories c ON f.category_id = c.id
+            LEFT JOIN efiling_file_types t ON f.file_type_id = t.id
             LEFT JOIN efiling_file_status s ON f.status_id = s.id
             LEFT JOIN efiling_users assigned_efiling ON f.assigned_to = assigned_efiling.id
             LEFT JOIN users assigned_user ON assigned_efiling.user_id = assigned_user.id

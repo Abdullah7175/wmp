@@ -1182,6 +1182,10 @@ export default function FileDetail() {
                                         <label className="text-sm font-medium text-gray-600">Category</label>
                                         <p>{file.category_name}</p>
                                     </div>
+                                    <div>
+                                        <label className="text-sm font-medium text-gray-600">File Type</label>
+                                        <p>{file.file_type_name}</p>
+                                    </div>
                                 </div>
 
                                 <div className="flex items-start space-x-3">
