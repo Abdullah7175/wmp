@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Save, FileText, Loader2 } from "lucide-react";
+import { ArrowLeft, Save, FileText, Loader2, Plus, Trash2 } from "lucide-react";
 
 export default function EditFileType() {
     const params = useParams();
@@ -22,13 +22,15 @@ export default function EditFileType() {
     const [roles, setRoles] = useState([]);
     const [slaMatrixEntries, setSlaMatrixEntries] = useState([]);
     const [selectedCreators, setSelectedCreators] = useState([]);
+    
+    // Store array of selected SLA matrix IDs to maintain sequential routing
+    const [selectedSlaIds, setSelectedSlaIds] = useState([]);
 
     const [formData, setFormData] = useState({
         name: '',
         code: '',
         description: '',
         department_id: '',
-        sla_matrix_id: '',
         requires_approval: false,
         auto_assign: false,
         workflow_template_id: '',
@@ -43,7 +45,6 @@ export default function EditFileType() {
     }, [params.id]);
 
     useEffect(() => {
-        // Load SLA matrix entries when department changes
         if (formData.department_id) {
             loadSlaMatrixEntries(formData.department_id);
         } else {
@@ -66,23 +67,32 @@ export default function EditFileType() {
                 const data = await response.json();
                 const fileType = data.fileType || data;
                 
-                console.log('Loaded file type data:', fileType);
-                
                 setFormData({
                     name: fileType.name || '',
                     code: fileType.code || '',
                     description: fileType.description || '',
                     department_id: fileType.department_id || null,
-                    sla_matrix_id: fileType.sla_matrix_id || '',
                     requires_approval: fileType.requires_approval || false,
                     auto_assign: fileType.auto_assign || false,
                     workflow_template_id: fileType.workflow_template_id || '',
                     is_active: fileType.is_active !== undefined ? fileType.is_active : true
                 });
-                const cr = Array.isArray(fileType.can_create_roles) ? fileType.can_create_roles : (()=>{ try { return JSON.parse(fileType.can_create_roles||'[]'); } catch { return []; }})();
+
+                // Populate creator roles
+                const cr = Array.isArray(fileType.can_create_roles) 
+                    ? fileType.can_create_roles 
+                    : (()=>{ try { return JSON.parse(fileType.can_create_roles || '[]'); } catch { return []; }})();
                 setSelectedCreators(cr);
                 
-                // Load SLA matrix entries if department is set
+                // Populate existing SLA sequence array
+                if (Array.isArray(fileType.sla_mappings) && fileType.sla_mappings.length > 0) {
+                    setSelectedSlaIds(fileType.sla_mappings.map(s => s.sla_matrix_id.toString()));
+                } else if (fileType.sla_matrix_id) {
+                    setSelectedSlaIds([fileType.sla_matrix_id.toString()]);
+                } else {
+                    setSelectedSlaIds([]);
+                }
+
                 if (fileType.department_id) {
                     loadSlaMatrixEntries(fileType.department_id);
                 }
@@ -105,10 +115,7 @@ export default function EditFileType() {
             const response = await fetch('/api/efiling/departments?is_active=true');
             if (response.ok) {
                 const data = await response.json();
-                console.log('Loaded departments:', data);
                 setDepartments(Array.isArray(data) ? data : []);
-            } else {
-                console.error('Failed to load departments:', response.status);
             }
         } catch (error) {
             console.error('Error loading departments:', error);
@@ -149,62 +156,53 @@ export default function EditFileType() {
             [field]: value
         }));
         
-        // Reload SLA matrix entries when department changes
         if (field === 'department_id') {
             loadSlaMatrixEntries(value || null);
-            // Clear SLA matrix selection when department changes
             if (value !== formData.department_id) {
-                setFormData(prev => ({
-                    ...prev,
-                    sla_matrix_id: ''
-                }));
+                setSelectedSlaIds([]);
             }
         }
     };
 
-    const handleCheckboxChange = (field, checked) => {
-        setFormData(prev => ({
-            ...prev,
-            [field]: checked
-        }));
+    const handleAddSlaStep = () => {
+        setSelectedSlaIds(prev => [...prev, ""]);
     };
 
-    const validateForm = () => {
+    const handleUpdateSlaStep = (index, value) => {
+        setSelectedSlaIds(prev => {
+            const updated = [...prev];
+            updated[index] = value;
+            return updated;
+        });
+    };
+
+    const handleRemoveSlaStep = (index) => {
+        setSelectedSlaIds(prev => prev.filter((_, i) => i !== index));
+    };
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+
         if (!formData.name || !formData.code) {
             toast({
                 title: "Validation Error",
                 description: "Please fill in all required fields.",
                 variant: "destructive",
             });
-            return false;
+            return;
         }
-
-        if (formData.code.length < 2) {
-            toast({
-                title: "Validation Error",
-                description: "File type code must be at least 2 characters long.",
-                variant: "destructive",
-            });
-            return false;
-        }
-
-        return true;
-    };
-
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        
-        if (!validateForm()) return;
 
         setLoading(true);
 
         try {
+            const validSlaIds = selectedSlaIds.filter(id => id !== "" && id !== "none");
+            
             const requestBody = {
                 ...formData,
                 id: params.id,
-                can_create_roles: selectedCreators
+                can_create_roles: selectedCreators,
+                sla_matrix_id: validSlaIds // Pass array of SLA matrix IDs
             };
-            console.log('Submitting form data:', requestBody);
             
             const response = await fetch(`/api/efiling/file-types`, {
                 method: 'PUT',
@@ -252,13 +250,8 @@ export default function EditFileType() {
     return (
         <div className="container mx-auto py-6 px-4">
             <div className="flex items-center gap-4 mb-6">
-                <Button
-                    variant="outline"
-                    onClick={() => router.back()}
-                    className="flex items-center gap-2"
-                >
-                    <ArrowLeft className="w-4 h-4" />
-                    Back
+                <Button variant="outline" onClick={() => router.back()} className="flex items-center gap-2">
+                    <ArrowLeft className="w-4 h-4" /> Back
                 </Button>
                 <h1 className="text-2xl font-bold">Edit File Type</h1>
             </div>
@@ -266,13 +259,11 @@ export default function EditFileType() {
             <Card className="max-w-2xl mx-auto">
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2">
-                        <FileText className="w-5 h-5" />
-                        Edit File Type
+                        <FileText className="w-5 h-5" /> Edit File Type
                     </CardTitle>
                 </CardHeader>
                 <CardContent>
                     <form onSubmit={handleSubmit} className="space-y-6">
-                        {/* Basic Information */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div>
                                 <Label htmlFor="name">File Type Name *</Label>
@@ -290,13 +281,12 @@ export default function EditFileType() {
                                     id="code"
                                     value={formData.code}
                                     onChange={(e) => handleInputChange('code', e.target.value.toUpperCase())}
-                                    placeholder="Enter file type code (e.g., WB, IT, HR)"
+                                    placeholder="Enter file type code"
                                     required
                                 />
                             </div>
                         </div>
 
-                        {/* Department, SLA Policy and Status */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div>
                                 <Label htmlFor="department_id">Department</Label>
@@ -305,7 +295,7 @@ export default function EditFileType() {
                                     onValueChange={(value) => handleInputChange('department_id', value === "none" ? null : parseInt(value))}
                                 >
                                     <SelectTrigger>
-                                        <SelectValue placeholder="Select department (optional)">
+                                        <SelectValue placeholder="Select department">
                                             {formData.department_id ? departments.find(d => d.id == formData.department_id)?.name : "No Department"}
                                         </SelectValue>
                                     </SelectTrigger>
@@ -319,38 +309,7 @@ export default function EditFileType() {
                                     </SelectContent>
                                 </Select>
                             </div>
-                            <div>
-                                <Label htmlFor="sla_matrix_id">SLA Matrix Entry</Label>
-                                <Select 
-                                    value={formData.sla_matrix_id ? formData.sla_matrix_id.toString() : "none"} 
-                                    onValueChange={(value) => handleInputChange('sla_matrix_id', value === "none" ? '' : value)}
-                                    disabled={!formData.department_id}
-                                >
-                                    <SelectTrigger>
-                                        <SelectValue placeholder={formData.department_id ? "Select SLA matrix entry (optional)" : "Select department first"}>
-                                            {formData.sla_matrix_id && slaMatrixEntries.find(e => e.id == formData.sla_matrix_id)
-                                                ? `${slaMatrixEntries.find(e => e.id == formData.sla_matrix_id).from_role_code} → ${slaMatrixEntries.find(e => e.id == formData.sla_matrix_id).to_role_code} (${slaMatrixEntries.find(e => e.id == formData.sla_matrix_id).sla_hours}h)`
-                                                : formData.department_id ? "No SLA Matrix Entry" : "Select department first"}
-                                        </SelectValue>
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="none">No SLA Matrix Entry</SelectItem>
-                                        {slaMatrixEntries.map((entry) => (
-                                            <SelectItem key={entry.id} value={entry.id.toString()}>
-                                                {entry.from_role_code} → {entry.to_role_code} ({entry.sla_hours}h) {entry.department_name ? `- ${entry.department_name}` : '(Global)'}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                                {!formData.department_id && (
-                                    <p className="text-sm text-muted-foreground mt-1">
-                                        Please select a department first to see available SLA matrix entries
-                                    </p>
-                                )}
-                            </div>
-                        </div>
-                        
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
                             <div>
                                 <Label htmlFor="is_active">Status</Label>
                                 <Select value={formData.is_active.toString()} onValueChange={(value) => handleInputChange('is_active', value === 'true')}>
@@ -367,7 +326,62 @@ export default function EditFileType() {
                             </div>
                         </div>
 
-                        {/* Description */}
+                        {/* Sequential SLA Matrix Configuration */}
+                        <div className="space-y-3 border p-4 rounded-md bg-muted/20">
+                            <div className="flex items-center justify-between">
+                                <Label className="font-bold text-base">Sequential Workflow SLAs</Label>
+                                <Button 
+                                    type="button" 
+                                    variant="outline" 
+                                    size="sm" 
+                                    onClick={handleAddSlaStep}
+                                    disabled={!formData.department_id}
+                                    className="flex items-center gap-1"
+                                >
+                                    <Plus className="w-4 h-4" /> Add SLA Step
+                                </Button>
+                            </div>
+                            
+                            {!formData.department_id ? (
+                                <p className="text-sm text-muted-foreground">Select a department first to configure SLA steps.</p>
+                            ) : selectedSlaIds.length === 0 ? (
+                                <p className="text-sm text-muted-foreground">No SLA steps attached. Click "Add SLA Step" to configure sequence.</p>
+                            ) : (
+                                selectedSlaIds.map((slaId, index) => (
+                                    <div key={index} className="flex items-center gap-2">
+                                        <span className="text-xs font-semibold px-2 py-1 bg-muted rounded border min-w-[65px]">
+                                            Step {index + 1}
+                                        </span>
+                                        <Select 
+                                            value={slaId ? slaId.toString() : "none"} 
+                                            onValueChange={(val) => handleUpdateSlaStep(index, val === "none" ? "" : val)}
+                                        >
+                                            <SelectTrigger className="w-full">
+                                                <SelectValue placeholder="Select SLA rule" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="none">-- Select SLA Rule --</SelectItem>
+                                                {slaMatrixEntries.map((entry) => (
+                                                    <SelectItem key={entry.id} value={entry.id.toString()}>
+                                                        {entry.from_role_code} → {entry.to_role_code} ({entry.sla_hours}h)
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                        <Button 
+                                            type="button" 
+                                            variant="ghost" 
+                                            size="icon" 
+                                            onClick={() => handleRemoveSlaStep(index)}
+                                            className="text-destructive hover:bg-destructive/10"
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                        </Button>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+
                         <div>
                             <Label htmlFor="description">Description</Label>
                             <Textarea
@@ -379,7 +393,6 @@ export default function EditFileType() {
                             />
                         </div>
 
-                        {/* Creator roles */}
                         <div>
                             <Label>Who can create (select roles)</Label>
                             <div className="max-h-64 overflow-y-auto border rounded p-3 grid grid-cols-1 md:grid-cols-2 gap-2">
@@ -397,55 +410,13 @@ export default function EditFileType() {
                             </div>
                         </div>
 
-                        {/* Configuration Options */}
-                        <div className="space-y-4">
-                            <h3 className="text-lg font-semibold">Configuration Options</h3>
-                            <div className="space-y-3">
-                                <div className="flex items-center space-x-2">
-                                    <Checkbox
-                                        id="requires_approval"
-                                        checked={formData.requires_approval}
-                                        onCheckedChange={(checked) => handleCheckboxChange('requires_approval', checked)}
-                                    />
-                                    <Label htmlFor="requires_approval">Requires approval before processing</Label>
-                                </div>
-                                <div className="flex items-center space-x-2">
-                                    <Checkbox
-                                        id="auto_assign"
-                                        checked={formData.auto_assign}
-                                        onCheckedChange={(checked) => handleCheckboxChange('auto_assign', checked)}
-                                    />
-                                    <Label htmlFor="auto_assign">Auto-assign to department users</Label>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Submit Button */}
                         <div className="flex justify-end gap-4 pt-6 border-t">
-                            <Button
-                                type="button"
-                                variant="outline"
-                                onClick={() => router.back()}
-                                disabled={loading}
-                            >
+                            <Button type="button" variant="outline" onClick={() => router.back()} disabled={loading}>
                                 Cancel
                             </Button>
-                            <Button
-                                type="submit"
-                                disabled={loading}
-                                className="flex items-center gap-2"
-                            >
-                                {loading ? (
-                                    <>
-                                        <Loader2 className="w-4 h-4 animate-spin" />
-                                        Updating...
-                                    </>
-                                ) : (
-                                    <>
-                                        <Save className="w-4 h-4" />
-                                        Update File Type
-                                    </>
-                                )}
+                            <Button type="submit" disabled={loading} className="flex items-center gap-2">
+                                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                                Update File Type
                             </Button>
                         </div>
                     </form>

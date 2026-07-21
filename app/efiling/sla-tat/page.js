@@ -399,7 +399,7 @@ export default function SLAMatrixPage() {
                             {editingEntry ? 'Edit SLA Matrix Entry' : 'Create SLA Matrix Entry'}
                         </DialogTitle>
                         <DialogDescription>
-                            {editingEntry 
+                            {editingEntry  
                                 ? 'Update the SLA matrix entry configuration'
                                 : 'Create a new SLA matrix entry for role-based routing'}
                         </DialogDescription>
@@ -550,6 +550,6 @@ export default function SLAMatrixPage() {
                     </form>
                 </DialogContent>
             </Dialog>
-        </div>
+        </div> 
     );
 }

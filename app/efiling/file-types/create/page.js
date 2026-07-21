@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, Plus } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2 } from 'lucide-react';
 
 export default function CreateFileType() {
     const { data: session } = useSession();
@@ -24,15 +24,16 @@ export default function CreateFileType() {
     const [departments, setDepartments] = useState([]);
     const [slaMatrixEntries, setSlaMatrixEntries] = useState([]);
     const [selectedCreators, setSelectedCreators] = useState([]);
+    const [selectedSlas, setSelectedSlas] = useState([]);
+    const [pendingSlaSelect, setPendingSlaSelect] = useState('');
+
     const [formData, setFormData] = useState({
         name: '',
         description: '',
         categoryId: '',
         code: '',
         requiresApproval: true,
-        can_create_roles: '',
         department_id: '',
-        sla_matrix_id: '',
         max_approval_level: ''
     });
 
@@ -41,7 +42,6 @@ export default function CreateFileType() {
             loadCategories();
             loadRoles();
             loadDepartments();
-            // Don't load SLA matrix entries initially - wait for department selection
         }
     }, [session]);
 
@@ -50,12 +50,7 @@ export default function CreateFileType() {
             const response = await fetch('/api/efiling/file-categories?is_active=true');
             if (response.ok) {
                 const data = await response.json();
-                console.log('Categories loaded:', data);
                 setCategories(data.categories || []);
-            } else {
-                console.error('Failed to load categories:', response.status);
-                const errorData = await response.json();
-                console.error('Categories error data:', errorData);
             }
         } catch (error) {
             console.error('Error loading categories:', error);
@@ -103,23 +98,35 @@ export default function CreateFileType() {
     };
 
     const handleInputChange = (field, value) => {
-        console.log(`Setting ${field} to:`, value);
         setFormData(prev => ({
             ...prev,
             [field]: value
         }));
         
-        // Reload SLA matrix entries when department changes
         if (field === 'department_id') {
+            setSelectedSlas([]); // Clear sequence when switching departments
+            setPendingSlaSelect('');
             loadSlaMatrixEntries(value || null);
-            // Clear SLA matrix selection when department changes
-            if (value !== formData.department_id) {
-                setFormData(prev => ({
-                    ...prev,
-                    sla_matrix_id: ''
-                }));
-            }
         }
+    };
+
+    // Add SLA via button click (matching Edit Page workflow)
+    const addSlaStep = () => {
+        if (!pendingSlaSelect || pendingSlaSelect === 'none') return;
+        if (selectedSlas.includes(pendingSlaSelect)) {
+            toast({ 
+                title: "Already added", 
+                description: "This SLA step is already in your sequence.", 
+                variant: "destructive" 
+            });
+            return;
+        }
+        setSelectedSlas(prev => [...prev, pendingSlaSelect]);
+        setPendingSlaSelect('');
+    };
+
+    const removeSlaStep = (indexToRemove) => {
+        setSelectedSlas(prev => prev.filter((_, idx) => idx !== indexToRemove));
     };
 
     const handleSubmit = async (e) => {
@@ -143,18 +150,17 @@ export default function CreateFileType() {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    ...formData,
+                    ...formData, 
+                    sla_matrix_ids: selectedSlas, // Sequence array
                     can_create_roles: selectedCreators,
-                    createdBy: session.user.id,
-                    ipAddress: '127.0.0.1',
-                    userAgent: navigator.userAgent
+                    createdBy: session.user.id
                 }),
             });
 
             if (response.ok) {
                 toast({
                     title: "Success",
-                    description: "File type created successfully",
+                    description: "File type created successfully with SLA workflow",
                 });
                 router.push('/efiling/file-types');
             } else {
@@ -166,7 +172,7 @@ export default function CreateFileType() {
                 });
             }
         } catch (error) {
-            console.error('Error creating file type:', error);
+            console.error('Error me creating file type:', error);
             toast({
                 title: "Error",
                 description: "Failed to create file type",
@@ -271,32 +277,73 @@ export default function CreateFileType() {
                                 </Select>
                             </div>
 
-                            <div>
-                                <Label htmlFor="sla_matrix_id">SLA Matrix Entry</Label>
-                                <Select 
-                                    value={formData.sla_matrix_id || undefined} 
-                                    onValueChange={(value) => handleInputChange('sla_matrix_id', value === 'none' ? '' : value)}
-                                    disabled={!formData.department_id}
-                                >
-                                    <SelectTrigger>
-                                        <SelectValue placeholder={formData.department_id ? "Select SLA matrix entry (optional)" : "Select department first"}>
-                                            {formData.sla_matrix_id && slaMatrixEntries.find(e => e.id == formData.sla_matrix_id) 
-                                                ? `${slaMatrixEntries.find(e => e.id == formData.sla_matrix_id).from_role_code} → ${slaMatrixEntries.find(e => e.id == formData.sla_matrix_id).to_role_code} (${slaMatrixEntries.find(e => e.id == formData.sla_matrix_id).sla_hours}h)`
-                                                : ''}
-                                        </SelectValue>
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="none">No SLA Matrix Entry</SelectItem>
-                                        {slaMatrixEntries.map((entry) => (
-                                            <SelectItem key={entry.id} value={entry.id.toString()}>
-                                                {entry.from_role_code} → {entry.to_role_code} ({entry.sla_hours}h) {entry.department_name ? `- ${entry.department_name}` : '(Global)'}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
+                            {/* SLA Workflow Builder */}
+                            <div className="col-span-1 md:col-span-2 space-y-3 border p-4 rounded-lg bg-slate-50">
+                                <Label className="font-semibold text-base">SLA Workflow Steps (In Sequence Order)</Label>
+                                <p className="text-sm text-muted-foreground">Add SLAs in the exact sequence the file will route (Step 1, Step 2, etc.)</p>
+                                
+                                {/* Ordered Sequence Listing */}
+                                {selectedSlas.length > 0 && (
+                                    <div className="space-y-2 mb-4">
+                                        {selectedSlas.map((slaId, index) => {
+                                            const entry = slaMatrixEntries.find(e => e.id == slaId);
+                                            return (
+                                                <div key={index} className="flex items-center justify-between bg-white border p-3 rounded shadow-sm">
+                                                    <div className="flex items-center gap-3">
+                                                        <span className="font-bold bg-primary text-primary-foreground w-6 h-6 rounded-full flex items-center justify-center text-xs">
+                                                            {index + 1}
+                                                        </span>
+                                                        <span className="font-medium text-sm">
+                                                            {entry ? `${entry.from_role_code} → ${entry.to_role_code} (${entry.sla_hours}h)` : `SLA #${slaId}`}
+                                                        </span>
+                                                    </div>
+                                                    <Button 
+                                                        type="button" 
+                                                        variant="ghost" 
+                                                        size="sm" 
+                                                        className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                                                        onClick={() => removeSlaStep(index)}
+                                                    >
+                                                        <Trash2 className="w-4 h-4" />
+                                                    </Button>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+
+                                {/* Dropdown + Explicit Add Step Button */}
+                                <div className="flex gap-2">
+                                    <div className="flex-1">
+                                        <Select 
+                                            value={pendingSlaSelect}
+                                            onValueChange={(value) => setPendingSlaSelect(value)}
+                                            disabled={!formData.department_id}
+                                        >
+                                            <SelectTrigger className="bg-white">
+                                                <SelectValue placeholder={formData.department_id ? "Select SLA step..." : "Select department first"} />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {slaMatrixEntries.map((entry) => (
+                                                    <SelectItem key={entry.id} value={entry.id.toString()}>
+                                                        {entry.from_role_code} → {entry.to_role_code} ({entry.sla_hours}h) {entry.department_name ? `- ${entry.department_name}` : '(Global)'}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <Button 
+                                        type="button" 
+                                        onClick={addSlaStep}
+                                        disabled={!pendingSlaSelect || !formData.department_id}
+                                        className="flex items-center gap-1"
+                                    >
+                                        <Plus className="w-4 h-4" /> Add Step
+                                    </Button>
+                                </div>
                                 {!formData.department_id && (
-                                    <p className="text-sm text-muted-foreground mt-1">
-                                        Please select a department first to see available SLA matrix entries
+                                    <p className="text-xs text-muted-foreground">
+                                        Please select a department first to load available SLA matrix entries.
                                     </p>
                                 )}
                             </div>
@@ -313,7 +360,6 @@ export default function CreateFileType() {
                                     placeholder="1-5 (optional)"
                                 />
                             </div>
-
                         </div>
 
                         <div>
@@ -331,7 +377,7 @@ export default function CreateFileType() {
                             <Label>Who can create (select roles)</Label>
                             <div className="max-h-64 overflow-y-auto border rounded p-3 grid grid-cols-1 md:grid-cols-2 gap-2">
                                 {roles.map((r) => (
-                                    <label key={r.id} className="flex items-center gap-2 text-sm">
+                                    <label key={r.id} className="flex items-center gap-2 text-sm cursor-pointer">
                                         <input
                                             type="checkbox"
                                             className="h-4 w-4"

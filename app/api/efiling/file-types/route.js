@@ -48,6 +48,26 @@ export async function GET(request) {
             `, [id]);
 
             if (result.rows.length === 0) {
+                return NextResponse.json({ error: 'File type not found' }, { status: 404 });
+            }
+
+            // FETCH ORDERED SLAs FOR THIS FILE TYPE
+            const slaResult = await client.query(`
+                SELECT fts.sla_matrix_id, fts.sequence_order, sm.from_role_code, sm.to_role_code, sm.sla_hours
+                FROM efiling_file_type_slas fts
+                JOIN efiling_sla_matrix sm ON fts.sla_matrix_id = sm.id
+                WHERE fts.file_type_id = $1
+                ORDER BY fts.sequence_order ASC
+            `, [id]);
+
+            const fileTypeData = {
+                ...result.rows[0],
+                sla_mappings: slaResult.rows // Attached ordered list of SLAs
+            };
+
+            return NextResponse.json(fileTypeData);
+
+            if (result.rows.length === 0) {
                 return NextResponse.json(
                     { error: 'File type not found' },
                     { status: 404 }
@@ -185,15 +205,13 @@ export async function POST(request) {
             code, 
             requiresApproval, 
             createdBy, 
-            ipAddress, 
-            userAgent,
             can_create_roles,
             department_id,
-            sla_matrix_id,
+            sla_matrix_id,   // Keep for single backward compatibility
+            sla_matrix_ids,  // <-- Added to capture frontend payload
             max_approval_level
         } = body;
 
-        // Input validation
         if (!name || !categoryId || !code) {
             return NextResponse.json(
                 { error: 'Name, category ID, and code are required' },
@@ -201,11 +219,9 @@ export async function POST(request) {
             );
         }
 
-
-
         client = await connectToDatabase();
 
-        // Check if code already exists
+        // Check unique code
         const existingCode = await client.query(`
             SELECT id FROM efiling_file_types WHERE code = $1
         `, [code]);
@@ -217,7 +233,15 @@ export async function POST(request) {
             );
         }
 
-        // Create file type
+        // 1. Determine primary sla_matrix_id for main record (if applicable)
+        const rawSlaArray = sla_matrix_ids || sla_matrix_id;
+        const slaIds = Array.isArray(rawSlaArray) 
+            ? rawSlaArray 
+            : (rawSlaArray ? [rawSlaArray] : []);
+
+        const primarySlaId = slaIds.length > 0 ? parseInt(slaIds[0]) : null;
+
+        // 2. Insert main file type record
         const result = await client.query(`
             INSERT INTO efiling_file_types (
                 name, description, category_id, code, requires_approval, 
@@ -232,12 +256,23 @@ export async function POST(request) {
             requiresApproval !== false,
             Array.isArray(can_create_roles) ? JSON.stringify(can_create_roles) : (typeof can_create_roles === 'string' ? can_create_roles : null),
             department_id || null,
-            sla_matrix_id || null,
+            primarySlaId,
             max_approval_level || null
         ]);
 
         const fileType = result.rows[0];
 
+        // 3. Insert into efiling_file_type_slas junction table
+        if (slaIds.length > 0) {
+            for (let i = 0; i < slaIds.length; i++) {
+                if (slaIds[i]) {
+                    await client.query(`
+                        INSERT INTO efiling_file_type_slas (file_type_id, sla_matrix_id, sequence_order)
+                        VALUES ($1, $2, $3)
+                    `, [fileType.id, parseInt(slaIds[i]), i + 1]);
+                }
+            }
+        }
         // Log the action
         try {
             await eFileActionLogger.logAction({
@@ -324,7 +359,29 @@ export async function PUT(request) {
                 { status: 409 }
             );
         }
+        if (Array.isArray(sla_matrix_id)) {
+            // Clear old mappings
+            await client.query(`DELETE FROM efiling_file_type_slas WHERE file_type_id = $1`, [id]);
+            
+            // Normalize sla_matrix_id input
+            const slaIds = Array.isArray(sla_matrix_id) 
+                ? sla_matrix_id 
+                : (sla_matrix_id ? [sla_matrix_id] : []);
 
+            // Always clear and rebuild mappings if payload provides sla_matrix_id
+            if (sla_matrix_id !== undefined) {
+                await client.query(`DELETE FROM efiling_file_type_slas WHERE file_type_id = $1`, [id]);
+                
+                for (let i = 0; i < slaIds.length; i++) {
+                    if (slaIds[i]) {
+                        await client.query(`
+                            INSERT INTO efiling_file_type_slas (file_type_id, sla_matrix_id, sequence_order)
+                            VALUES ($1, $2, $3)
+                        `, [id, parseInt(slaIds[i]), i + 1]);
+                    }
+                }
+            }
+        }
         // Update file type
         // Handle sla_matrix_id: allow setting to NULL if empty string or null is provided
         const finalSlaMatrixId = (sla_matrix_id === '' || sla_matrix_id === null || sla_matrix_id === undefined) 
@@ -488,7 +545,7 @@ export async function DELETE(request) {
             { error: 'Failed to delete file type' },
             { status: 500 }
         );
-    } finally {
+    } finally { 
         if (client) {
             await client.release();
         }
