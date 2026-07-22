@@ -195,13 +195,17 @@ export default function EditFileType() {
         setLoading(true);
 
         try {
-            const validSlaIds = selectedSlaIds.filter(id => id !== "" && id !== "none");
+            // Filter and sanitize integers safely
+            const validSlaIds = selectedSlaIds
+                .filter(id => id !== "" && id !== "none" && id !== null && id !== undefined)
+                .map(id => parseInt(id, 10))
+                .filter(num => !isNaN(num));
             
             const requestBody = {
                 ...formData,
                 id: params.id,
                 can_create_roles: selectedCreators,
-                sla_matrix_id: validSlaIds // Pass array of SLA matrix IDs
+                sla_matrix_id: validSlaIds.length > 0 ? validSlaIds : null
             };
             
             const response = await fetch(`/api/efiling/file-types`, {
@@ -292,7 +296,7 @@ export default function EditFileType() {
                                 <Label htmlFor="department_id">Department</Label>
                                 <Select 
                                     value={formData.department_id ? formData.department_id.toString() : "none"} 
-                                    onValueChange={(value) => handleInputChange('department_id', value === "none" ? null : parseInt(value))}
+                                    onValueChange={(value) => handleInputChange('department_id', value === "none" ? null : parseInt(value, 10))}
                                 >
                                     <SelectTrigger>
                                         <SelectValue placeholder="Select department">
