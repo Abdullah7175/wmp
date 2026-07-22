@@ -541,10 +541,13 @@ export default function FileDetail() {
         }
     };
 
-    const openAttachmentModal = (attachment) => {
-        setSelectedAttachment(attachment);
-        setIsModalOpen(true);
-    };
+const openAttachmentModal = (attachment) => {
+    console.log("🔍 Selected Attachment Data:", attachment);
+    console.log("🔍 File URL:", attachment?.file_url);
+    console.log("🔍 File Type:", attachment?.file_type);
+    setSelectedAttachment(attachment);
+    setIsModalOpen(true);
+};
 
     const closeAttachmentModal = () => {
         setSelectedAttachment(null);
@@ -1792,37 +1795,61 @@ export default function FileDetail() {
                         </DialogHeader>
                         {selectedAttachment && (
                             <div className="space-y-4">
-                                {selectedAttachment.file_url && selectedAttachment.file_type?.startsWith('image/') ? (
-                                    <div className="text-center">
-                                        <Image
-                                            src={selectedAttachment.file_url}
-                                            alt={selectedAttachment.file_name}
-                                            width={800}
-                                            height={600}
-                                            className="max-w-full max-h-[70vh] object-contain mx-auto rounded-lg shadow-lg"
-                                        />
-                                    </div>
-                                ) : selectedAttachment.file_type === 'application/pdf' || selectedAttachment.file_name?.toLowerCase().endsWith('.pdf') ? (
+                                {(() => {
+                                    // 1. Helper function to fix upload URL path
+                                    const getImageUrl = (url) => {
+                                        if (!url) return '';
+                                        if (url.startsWith('/uploads/')) return url.replace('/uploads/', '/api/uploads/');
+                                        return url;
+                                    };
+
+                                    // 2. Check either MIME type OR file extension (.png, .jpg, etc.)
+                                    const isImage = 
+                                        selectedAttachment.file_type?.startsWith('image/') ||
+                                        /\.(jpg|jpeg|png|webp|gif|svg)$/i.test(selectedAttachment.file_name || '');
+
+                                    const imageUrl = getImageUrl(selectedAttachment.file_url);
+
+                                    if (selectedAttachment.file_url && isImage) {
+                                        return (
+                                            <div className="text-center">
+                                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                                <img
+                                                    src={imageUrl}
+                                                    alt={selectedAttachment.file_name}
+                                                    className="max-w-full max-h-[70vh] object-contain mx-auto rounded-lg shadow-lg"
+                                                    onError={(e) => {
+                                                        // Fallback to original URL if /api/ path fails
+                                                        if (e.target.src !== selectedAttachment.file_url) {
+                                                            e.target.src = selectedAttachment.file_url;
+                                                        }
+                                                    }}
+                                                />
+                                            </div>
+                                        );
+                                    }
+
+                                    return null;
+                                })()}
+
+                                {/* PDF Check */}
+                                {selectedAttachment.file_type === 'application/pdf' || selectedAttachment.file_name?.toLowerCase().endsWith('.pdf') ? (
                                     <div className="space-y-4">
                                         <div className="border rounded-lg overflow-hidden bg-gray-50">
                                             {(() => {
-                                                // Helper function to get the correct PDF URL
                                                 const getPdfUrl = (fileUrl) => {
                                                     if (!fileUrl) {
                                                         console.error('PDF file_url is missing');
                                                         return null;
                                                     }
-                                                    // If it's already an API URL, return as is
                                                     if (fileUrl.startsWith('/api/uploads/')) {
                                                         return fileUrl;
                                                     }
-                                                    // If it starts with /uploads/, convert to /api/uploads/
                                                     if (fileUrl.startsWith('/uploads/')) {
                                                         const converted = fileUrl.replace('/uploads/', '/api/uploads/');
                                                         console.log('PDF URL converted:', fileUrl, '->', converted);
                                                         return converted;
                                                     }
-                                                    // If it's a full URL with domain, extract the path and convert
                                                     if (fileUrl.startsWith('http://') || fileUrl.startsWith('https://')) {
                                                         try {
                                                             const url = new URL(fileUrl);
@@ -1833,14 +1860,12 @@ export default function FileDetail() {
                                                             if (path.startsWith('/api/uploads/')) {
                                                                 return path;
                                                             }
-                                                            // If path doesn't match expected patterns, try to construct
                                                             return `/api/uploads${path}`;
                                                         } catch (e) {
                                                             console.error('Error parsing PDF URL:', e);
                                                             return fileUrl;
                                                         }
                                                     }
-                                                    // Otherwise, assume it's a relative path
                                                     const converted = `/api/uploads${fileUrl.startsWith('/') ? '' : '/'}${fileUrl}`;
                                                     console.log('PDF URL converted (relative):', fileUrl, '->', converted);
                                                     return converted;
@@ -1859,28 +1884,24 @@ export default function FileDetail() {
                                                 }
 
                                                 return (
-                                                    <>
-                                                        {/* Use iframe as primary method (object tag has CSP issues) */}
-                                                        <iframe
-                                                            src={pdfUrl}
-                                                            className="w-full h-[70vh] min-h-[500px] border-0"
-                                                            title={selectedAttachment.file_name}
-                                                            style={{ display: 'block' }}
-                                                            onError={(e) => {
-                                                                console.error('Iframe failed to load PDF:', pdfUrl, e);
-                                                                // Show error message if iframe fails
-                                                                const container = e.target.parentElement;
-                                                                if (container) {
-                                                                    container.innerHTML = `
-                                                                    <div class="p-8 text-center text-red-600">
-                                                                        <p class="mb-2">Failed to load PDF preview</p>
-                                                                        <p class="text-sm text-gray-500">Please use "Open in New Tab" or "Download" buttons below</p>
-                                                                    </div>
-                                                                `;
-                                                                }
-                                                            }}
-                                                        />
-                                                    </>
+                                                    <iframe
+                                                        src={pdfUrl}
+                                                        className="w-full h-[70vh] min-h-[500px] border-0"
+                                                        title={selectedAttachment.file_name}
+                                                        style={{ display: 'block' }}
+                                                        onError={(e) => {
+                                                            console.error('Iframe failed to load PDF:', pdfUrl, e);
+                                                            const container = e.target.parentElement;
+                                                            if (container) {
+                                                                container.innerHTML = `
+                                                                <div class="p-8 text-center text-red-600">
+                                                                    <p class="mb-2">Failed to load PDF preview</p>
+                                                                    <p class="text-sm text-gray-500">Please use "Open in New Tab" or "Download" buttons below</p>
+                                                                </div>
+                                                            `;
+                                                            }
+                                                        }}
+                                                    />
                                                 );
                                             })()}
                                         </div>
@@ -1966,7 +1987,7 @@ export default function FileDetail() {
                                             </Button>
                                         </div>
                                     </div>
-                                ) : (
+                                ) : !selectedAttachment.file_type?.startsWith('image/') && !/\.(jpg|jpeg|png|webp|gif|svg)$/i.test(selectedAttachment.file_name || '') ? (
                                     <div className="text-center py-8">
                                         <FileText className="w-16 h-16 mx-auto text-gray-400 mb-4" />
                                         <p className="text-gray-600 mb-2">{selectedAttachment.file_name}</p>
@@ -1981,7 +2002,9 @@ export default function FileDetail() {
                                             Download File
                                         </Button>
                                     </div>
-                                )}
+                                ) : null}
+
+                                {/* Metadata Details Section */}
                                 <div className="border-t pt-4">
                                     <div className="grid grid-cols-2 gap-4 text-sm">
                                         <div>
