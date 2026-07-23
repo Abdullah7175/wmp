@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Edit2, Trash2, Clock, ArrowLeft, Save } from "lucide-react";
+import { Plus, Edit2, Trash2, Clock, ArrowLeft, Save, Search, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
 import {
     Dialog,
     DialogContent,
@@ -29,6 +29,9 @@ export default function SLAMatrixPage() {
     const [editingEntry, setEditingEntry] = useState(null);
     const [departments, setDepartments] = useState([]);
     const [roles, setRoles] = useState([]);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [currentPage, setCurrentPage] = useState(1);
+    const [itemsPerPage, setItemsPerPage] = useState(5);
 
     const [formData, setFormData] = useState({
         from_role_code: '',
@@ -256,6 +259,30 @@ export default function SLAMatrixPage() {
         }
     };
 
+    // Filter SLA entries based on search search query
+    const filteredEntries = slaEntries.filter((entry) => {
+        const query = searchTerm.toLowerCase();
+        return (
+            (entry.from_role_code && entry.from_role_code.toLowerCase().includes(query)) ||
+            (entry.to_role_code && entry.to_role_code.toLowerCase().includes(query)) ||
+            (entry.level_scope && entry.level_scope.toLowerCase().includes(query)) ||
+            (entry.department_name && entry.department_name.toLowerCase().includes(query)) ||
+            (entry.description && entry.description.toLowerCase().includes(query))
+        );
+    });
+
+    // Pagination calculations
+    const totalEntries = filteredEntries.length;
+    const totalPages = Math.ceil(totalEntries / itemsPerPage) || 1;
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = Math.min(startIndex + itemsPerPage, totalEntries);
+    const currentEntries = filteredEntries.slice(startIndex, endIndex);
+
+    const handleSearchChange = (e) => {
+        setSearchTerm(e.target.value);
+        setCurrentPage(1); // Reset to first page on search
+    };
+
     if (loading) {
         return (
             <div className="container mx-auto py-6">
@@ -294,11 +321,20 @@ export default function SLAMatrixPage() {
             </div>
 
             <Card>
-                <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+                    <CardTitle className="flex items-center gap-2 text-lg font-bold">
                         <Clock className="w-5 h-5" />
-                        SLA Matrix Entries
+                        SLA Matrix ({filteredEntries.length})
                     </CardTitle>
+                    <div className="relative w-72">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                        <Input
+                            placeholder="Search SLA entries..."
+                            value={searchTerm}
+                            onChange={handleSearchChange}
+                            className="pl-9"
+                        />
+                    </div>
                 </CardHeader>
                 <CardContent>
                     {slaEntries.length === 0 ? (
@@ -325,7 +361,7 @@ export default function SLAMatrixPage() {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {slaEntries.map((entry) => (
+                                    {currentEntries.map((entry) => (
                                         <tr key={entry.id} className="border-b hover:bg-gray-50">
                                             <td className="p-3 font-medium">
                                                 {entry.from_role_code}
@@ -387,7 +423,89 @@ export default function SLAMatrixPage() {
                                 </tbody>
                             </table>
                         </div>
+
+
                     )}
+{/* Pagination Footer */}
+                        {filteredEntries.length > 0 && (
+                            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-4 pt-4 border-t text-sm text-gray-600">
+                                <div className="flex items-center gap-2">
+                                    <span>
+                                        Showing {totalEntries > 0 ? startIndex + 1 : 0} to {endIndex} of {totalEntries} results
+                                    </span>
+                                    <span className="ml-2">Show:</span>
+                                    <Select
+                                        value={itemsPerPage.toString()}
+                                        onValueChange={(val) => {
+                                            setItemsPerPage(Number(val));
+                                            setCurrentPage(1);
+                                        }}
+                                    >
+                                        <SelectTrigger className="w-16 h-8 text-xs">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="5">5</SelectItem>
+                                            <SelectItem value="10">10</SelectItem>
+                                            <SelectItem value="20">20</SelectItem>
+                                            <SelectItem value="50">50</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                    <span>per page</span>
+                                </div>
+
+                                <div className="flex items-center gap-1">
+                                    <Button
+                                        variant="outline"
+                                        size="icon"
+                                        className="h-8 w-8"
+                                        onClick={() => setCurrentPage(1)}
+                                        disabled={currentPage === 1}
+                                    >
+                                        <ChevronsLeft className="h-4 w-4" />
+                                    </Button>
+                                    <Button
+                                        variant="outline"
+                                        size="icon"
+                                        className="h-8 w-8"
+                                        onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+                                        disabled={currentPage === 1}
+                                    >
+                                        <ChevronLeft className="h-4 w-4" />
+                                    </Button>
+
+                                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                                        <Button
+                                            key={page}
+                                            variant={currentPage === page ? "default" : "outline"}
+                                            className={`h-8 w-8 text-xs ${currentPage === page ? "bg-black text-white hover:bg-gray-800" : ""}`}
+                                            onClick={() => setCurrentPage(page)}
+                                        >
+                                            {page}
+                                        </Button>
+                                    ))}
+
+                                    <Button
+                                        variant="outline"
+                                        size="icon"
+                                        className="h-8 w-8"
+                                        onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+                                        disabled={currentPage === totalPages}
+                                    >
+                                        <ChevronRight className="h-4 w-4" />
+                                    </Button>
+                                    <Button
+                                        variant="outline"
+                                        size="icon"
+                                        className="h-8 w-8"
+                                        onClick={() => setCurrentPage(totalPages)}
+                                        disabled={currentPage === totalPages}
+                                    >
+                                        <ChevronsRight className="h-4 w-4" />
+                                    </Button>
+                                </div>
+                            </div>
+                        )}
                 </CardContent>
             </Card>
 

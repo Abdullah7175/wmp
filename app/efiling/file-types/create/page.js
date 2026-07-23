@@ -26,6 +26,7 @@ export default function CreateFileType() {
     const [selectedCreators, setSelectedCreators] = useState([]);
     const [selectedSlas, setSelectedSlas] = useState([]);
     const [pendingSlaSelect, setPendingSlaSelect] = useState('');
+    const [roleSearch, setRoleSearch] = useState('');
 
     const [formData, setFormData] = useState({
         name: '',
@@ -332,7 +333,7 @@ export default function CreateFileType() {
                                             </SelectContent>
                                         </Select>
                                     </div>
-                                    <Button 
+                                    <Button  
                                         type="button" 
                                         onClick={addSlaStep}
                                         disabled={!pendingSlaSelect || !formData.department_id}
@@ -373,22 +374,57 @@ export default function CreateFileType() {
                             />
                         </div>
 
-                        <div>
-                            <Label>Who can create (select roles)</Label>
-                            <div className="max-h-64 overflow-y-auto border rounded p-3 grid grid-cols-1 md:grid-cols-2 gap-2">
-                                {roles.map((r) => (
-                                    <label key={r.id} className="flex items-center gap-2 text-sm cursor-pointer">
-                                        <input
-                                            type="checkbox"
-                                            className="h-4 w-4"
-                                            checked={selectedCreators.includes(r.code)}
-                                            onChange={() => setSelectedCreators(prev => prev.includes(r.code) ? prev.filter(c => c !== r.code) : [...prev, r.code])}
-                                        />
-                                        <span>{r.name} ({r.code})</span>
-                                    </label>
-                                ))}
-                            </div>
+                    {/* Replace old "Who can create" section with this */}
+                    <div>
+                        <Label>Who can create (select roles)</Label>
+                        
+                        {/* Search Input for Roles */}
+                        <Input
+                            type="text"
+                            placeholder="Search roles or users..."
+                            value={roleSearch}
+                            onChange={(e) => setRoleSearch(e.target.value)}
+                            className="mb-2 mt-1"
+                        />
+
+                        <div className="max-h-64 overflow-y-auto border rounded p-3 grid grid-cols-1 md:grid-cols-2 gap-2">
+                            {roles
+                                .filter((r) => {
+                                    const search = roleSearch.toLowerCase();
+                                    const userName = r.user_name || r.user?.name || r.full_name || r.userName || '';
+                                    return (
+                                        r.name?.toLowerCase().includes(search) ||
+                                        r.code?.toLowerCase().includes(search) ||
+                                        userName.toLowerCase().includes(search)
+                                    );
+                                })
+                                .map((r) => {
+                                    const userName = r.user_name || r.user?.name || r.full_name || r.userName;
+                                    return (
+                                        <label key={r.id} className="flex items-center gap-2 text-sm cursor-pointer hover:bg-slate-50 p-1 rounded">
+                                            <input
+                                                type="checkbox"
+                                                className="h-4 w-4"
+                                                checked={selectedCreators.includes(r.code)}
+                                                onChange={() => setSelectedCreators(prev => prev.includes(r.code) ? prev.filter(c => c !== r.code) : [...prev, r.code])}
+                                            />
+                                            <span>
+                                                
+                                                <strong className="font-medium">{r.name}</strong> ({r.code})
+                                                {userName ? <span className="text-muted-foreground text-xs ml-1">[User: {userName}]</span> : null}
+                                            </span>
+                                        </label>
+                                    );
+                                })}
+                            {roles.length > 0 && roles.filter(r => {
+                                const search = roleSearch.toLowerCase();
+                                const userName = r.user_name || r.user?.name || r.full_name || r.userName || '';
+                                return r.name?.toLowerCase().includes(search) || r.code?.toLowerCase().includes(search) || userName.toLowerCase().includes(search);
+                            }).length === 0 && (
+                                <p className="text-xs text-muted-foreground col-span-2">No roles found matching "{roleSearch}"</p>
+                            )}
                         </div>
+                    </div>
 
                         <div className="flex items-center space-x-2">
                             <Checkbox

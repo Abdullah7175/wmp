@@ -22,6 +22,7 @@ export default function EditFileType() {
     const [roles, setRoles] = useState([]);
     const [slaMatrixEntries, setSlaMatrixEntries] = useState([]);
     const [selectedCreators, setSelectedCreators] = useState([]);
+    const [roleSearch, setRoleSearch] = useState('');
     
     // Store array of selected SLA matrix IDs to maintain sequential routing
     const [selectedSlaIds, setSelectedSlaIds] = useState([]);
@@ -389,28 +390,61 @@ export default function EditFileType() {
                         <div>
                             <Label htmlFor="description">Description</Label>
                             <Textarea
-                                id="description"
+                                id="description" 
                                 value={formData.description}
                                 onChange={(e) => handleInputChange('description', e.target.value)}
                                 placeholder="Enter file type description"
                                 rows={3}
                             />
                         </div>
-
+                        {/* who can create  */}
                         <div>
                             <Label>Who can create (select roles)</Label>
+                            
+                            {/* Search Input for Roles */}
+                            <Input
+                                type="text"
+                                placeholder="Search roles or users..."
+                                value={roleSearch}
+                                onChange={(e) => setRoleSearch(e.target.value)}
+                                className="mb-2 mt-1"
+                            />
+
                             <div className="max-h-64 overflow-y-auto border rounded p-3 grid grid-cols-1 md:grid-cols-2 gap-2">
-                                {roles.map((r) => (
-                                    <label key={r.id} className="flex items-center gap-2 text-sm">
-                                        <input
-                                            type="checkbox"
-                                            className="h-4 w-4"
-                                            checked={selectedCreators.includes(r.code)}
-                                            onChange={() => setSelectedCreators(prev => prev.includes(r.code) ? prev.filter(c => c !== r.code) : [...prev, r.code])}
-                                        />
-                                        <span>{r.name} ({r.code})</span>
-                                    </label>
-                                ))}
+                                {roles
+                                    .filter((r) => {
+                                        const search = roleSearch.toLowerCase();
+                                        const userName = r.user_name || r.user?.name || r.full_name || r.userName || '';
+                                        return (
+                                            r.name?.toLowerCase().includes(search) ||
+                                            r.code?.toLowerCase().includes(search) ||
+                                            userName.toLowerCase().includes(search)
+                                        );
+                                    })
+                                    .map((r) => {
+                                        const userName = r.user_name || r.user?.name || r.full_name || r.userName;
+                                        return (
+                                            <label key={r.id} className="flex items-center gap-2 text-sm cursor-pointer hover:bg-slate-50 p-1 rounded">
+                                                <input
+                                                    type="checkbox"
+                                                    className="h-4 w-4"
+                                                    checked={selectedCreators.includes(r.code)}
+                                                    onChange={() => setSelectedCreators(prev => prev.includes(r.code) ? prev.filter(c => c !== r.code) : [...prev, r.code])}
+                                                />
+                                                <span>
+                                                    <strong className="font-medium">{r.name}</strong> ({r.code})
+                                                    {userName ? <span className="text-muted-foreground text-xs ml-1">[User: {userName}]</span> : null}
+                                                </span>
+                                            </label>
+                                        );
+                                    })}
+                                {roles.length > 0 && roles.filter(r => {
+                                    const search = roleSearch.toLowerCase();
+                                    const userName = r.user_name || r.user?.name || r.full_name || r.userName || '';
+                                    return r.name?.toLowerCase().includes(search) || r.code?.toLowerCase().includes(search) || userName.toLowerCase().includes(search);
+                                }).length === 0 && (
+                                    <p className="text-xs text-muted-foreground col-span-2">No roles found matching "{roleSearch}"</p>
+                                )}
                             </div>
                         </div>
 

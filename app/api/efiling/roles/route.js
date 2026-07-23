@@ -36,12 +36,17 @@ export async function GET(request) {
             if (id) {
                 // Fetch single role by ID
                 const query = `
-                    SELECT r.*, d.name as department_name
+                    SELECT 
+                        r.*, 
+                        d.name as department_name,
+                        STRING_AGG(u.name, ', ') as user_name
                     FROM efiling_roles r
                     LEFT JOIN efiling_departments d ON r.department_id = d.id
+                    LEFT JOIN efiling_users eu ON eu.efiling_role_id = r.id
+                    LEFT JOIN users u ON u.id = eu.user_id
                     WHERE r.id = $1
+                    GROUP BY r.id, d.name
                 `;
-                
                 const result = await client.query(query, [id]);
                 
                 if (result.rows.length === 0) {
@@ -70,9 +75,14 @@ export async function GET(request) {
 
                 // Fetch all roles
                 let query = `
-                    SELECT DISTINCT r.*, d.name as department_name
+                    SELECT 
+                        r.*, 
+                        d.name as department_name,
+                        STRING_AGG(DISTINCT u.name, ', ') as user_name
                     FROM efiling_roles r
                     LEFT JOIN efiling_departments d ON r.department_id = d.id
+                    LEFT JOIN efiling_users eu ON eu.efiling_role_id = r.id
+                    LEFT JOIN users u ON u.id = eu.user_id
                     ${hasRoleLocationsTable ? 'LEFT JOIN efiling_role_locations rl ON rl.role_id = r.id' : ''}
                 `;
                 
@@ -114,8 +124,7 @@ export async function GET(request) {
                     query += ` WHERE ${conditions.join(' AND ')}`;
                 }
 
-                query += ` ORDER BY r.name ASC`;
-
+                query += ` GROUP BY r.id, d.name ORDER BY r.name ASC`;
                 const result = await client.query(query, params);
 
                 return NextResponse.json({
