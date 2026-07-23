@@ -77,7 +77,7 @@ export default function EFileUserDashboard() {
         return () => clearInterval(interval);
     }, []);
 
-    const loadDashboardData = async () => {
+const loadDashboardData = async () => {
         try {
             setLoading(true);
             
@@ -100,7 +100,6 @@ export default function EFileUserDashboard() {
                     const mapRes = await fetch(`/api/efiling/users/profile?userId=${session.user.id}`);
                     if (mapRes.ok) {
                         const data = await mapRes.json();
-                        // Handle both response formats: { success: true, user: {...} } or direct user object
                         profileData = data.success ? data.user : data;
                         if (profileData?.efiling_user_id) {
                             finalEfilingUserId = profileData.efiling_user_id;
@@ -111,10 +110,18 @@ export default function EFileUserDashboard() {
                 }
             }
             
-            // If we still don't have efilingUserId, use the userId as fallback
             if (!finalEfilingUserId) {
                 finalEfilingUserId = userId;
             }
+
+            // 🔍 DEBUG LOG 1: Check IDs and Profile fetched for CE_CHRO_HRDA
+            console.log('=== [DEBUG] DASHBOARD USER INFO ===', {
+                sessionUserId: session?.user?.id,
+                efilingUserIdContext: efilingUserId,
+                finalEfilingUserId,
+                roleCode,
+                userProfile: profileData
+            });
             
             const [myFilesRes, assignedFilesRes] = await Promise.all([
                 fetch(`/api/efiling/files?created_by=${finalEfilingUserId}`),
@@ -123,10 +130,31 @@ export default function EFileUserDashboard() {
 
             const myFiles = myFilesRes.ok ? await myFilesRes.json() : { files: [] };
             const assignedFiles = assignedFilesRes.ok ? await assignedFilesRes.json() : { files: [] };
+
+            // 🔍 DEBUG LOG 2: Check raw API response from Live DB before filtering
+            console.log('=== [DEBUG] RAW API RESPONSE FROM LIVE DB ===', {
+                rawMyFiles: myFiles.files,
+                rawAssignedFiles: assignedFiles.files
+            });
             
             // Filter files based on user's department and role
             const filteredMyFiles = filterFilesByDepartment(myFiles.files || [], profileData);
-            const filteredAssignedFiles = filterFilesByDepartment(assignedFiles.files || [], profileData);
+            // Don't filter out files explicitly assigned to the user by department
+            const filteredAssignedFiles = (assignedFiles.files || []).filter(file => {
+                // If explicitly assigned to this efiling user ID, always show it
+                if (file.assigned_to === finalEfilingUserId) return true; 
+                
+                // Fall back to department check if needed
+                return filterFilesByDepartment([file], profileData).length > 0;
+            });
+
+            setAssignedCount(filteredAssignedFiles.length);
+            // 🔍 DEBUG LOG 3: Check counts before and after department filtering
+            console.log('=== [DEBUG] FILTERED RESULTS ===', {
+                rawAssignedCount: (assignedFiles.files || []).length,
+                filteredAssignedCount: filteredAssignedFiles.length,
+                filteredAssignedFiles
+            });
             
             setCreatedCount(filteredMyFiles.length);
             setAssignedCount(filteredAssignedFiles.length);
@@ -140,6 +168,7 @@ export default function EFileUserDashboard() {
             const overdue = uniqueFiles.filter(f => f.sla_deadline && new Date(f.sla_deadline) < new Date() && f.status_code !== 'COMPLETED').length;
             setStats({ totalFiles: uniqueFiles.length, pendingFiles: pending, completedFiles: completed, overdueFiles: overdue });
         } catch (error) {
+            console.error('=== [DEBUG] DASHBOARD ERROR ===', error);
             setDataError(true);
             toast({ title: 'Error', description: 'Failed to load dashboard data', variant: 'destructive' });
         } finally {
@@ -150,7 +179,6 @@ export default function EFileUserDashboard() {
     const filterFilesByDepartment = (files, userProfile) => {
         if (!userProfile) return files;
         
-        // Handle both profile structures: { role_code, ... } or { efiling_role: { code, ... } }
         const userRole = userProfile.role_code || userProfile.efiling_role?.code;
         const userDepartment = userProfile.department_id;
         
@@ -159,30 +187,32 @@ export default function EFileUserDashboard() {
             return files;
         }
         
-        // Filter by department_id first (more reliable)
-        // If file has department_id, it must match user's department
-        // Otherwise, fall back to file_type_code filtering
         return files.filter(file => {
+            let matches = true;
+
             // If file has department_id, check if it matches user's department
             if (file.department_id) {
-                return file.department_id === userDepartment;
+                matches = file.department_id === userDepartment;
+            } else if ([6, 7, 8, 9].includes(userDepartment)) {
+                matches = ['WSP', 'WB_MW', 'PLM', 'EW_WE&M'].includes(file.file_type_code || file.file_type?.code);
+            } else if ([10, 19].includes(userDepartment)) {
+                matches = ['SEP'].includes(file.file_type_code || file.file_type?.code);
             }
-            
-            // Fallback to file_type_code filtering for files without department_id
-            // Water department users can only see water files
-            if ([6, 7, 8, 9].includes(userDepartment)) {
-                return ['WSP', 'WB_MW', 'PLM', 'EW_WE&M'].includes(file.file_type_code || file.file_type?.code);
-            }
-            
-            // Sewerage department users can only see sewerage files
-            if ([10, 19].includes(userDepartment)) {
-                return ['SEP'].includes(file.file_type_code || file.file_type?.code);
-            }
-            
-            // For other departments, show all files
-            return true;
+
+            // 🔍 DEBUG LOG 4: Trace each file evaluation
+            console.log(`=== [DEBUG] FILTER FILE #${file.id || file.file_number} ===`, {
+                fileDepartmentId: file.department_id,
+                userDepartmentId: userDepartment,
+                fileTypeCode: file.file_type_code || file.file_type?.code,
+                userRole,
+                passedFilter: matches
+            });
+
+            return matches;
         });
     };
+
+   
 
     const getRoleDisplayName = (roleCode) => {
         const roleMap = {
