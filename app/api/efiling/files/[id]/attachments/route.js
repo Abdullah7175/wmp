@@ -22,6 +22,12 @@ export async function GET(request, { params }) {
 
         client = await connectToDatabase();
 
+        // Ensure preferred-name column exists for older DBs
+        await client.query(`
+            ALTER TABLE public.efiling_file_attachments
+            ADD COLUMN IF NOT EXISTS attachment_name varchar(255) NULL
+        `);
+
         // SECURITY: Check file access
         const { checkFileAccess } = await import('@/lib/authMiddleware');
         const userId = parseInt(session.user.id);
@@ -41,6 +47,7 @@ export async function GET(request, { params }) {
                 id,
                 file_id,
                 file_name,
+                attachment_name,
                 file_size,
                 file_type,
                 file_url,

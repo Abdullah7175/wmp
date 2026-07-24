@@ -1035,13 +1035,16 @@ export default function FileDetail() {
                                     <div key={a.id || idx} className="print-attachment-item">
                                         {a.file_url && a.file_type?.startsWith('image/') ? (
                                             // eslint-disable-next-line @next/next/no-img-element
-                                            <img src={a.file_url} alt={a.file_name} />
+                                            <img src={a.file_url} alt={a.attachment_name || a.file_name} />
                                         ) : (
                                             <div style={{ padding: '10mm', backgroundColor: '#f0f0f0', textAlign: 'center', border: '1px solid #ccc', marginBottom: '3mm' }}>
                                                 <div style={{ fontSize: '11pt', color: '#666' }}>{a.file_type || 'Document'}</div>
                                             </div>
                                         )}
-                                        <div style={{ fontWeight: 'bold', fontSize: '11pt', marginBottom: '2mm' }}>{a.file_name}</div>
+                                        <div style={{ fontWeight: 'bold', fontSize: '11pt', marginBottom: '2mm' }}>{a.attachment_name || a.file_name}</div>
+                                        {a.attachment_name ? (
+                                            <div style={{ color: '#666', fontSize: '9pt', marginBottom: '1mm' }}>{a.file_name}</div>
+                                        ) : null}
                                         <div style={{ color: '#666', fontSize: '9pt' }}>
                                             Size: {Math.round((a.file_size || 0) / 1024)} KB | Uploaded: {formatDate(a.uploaded_at)}
                                         </div>

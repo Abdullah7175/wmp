@@ -288,15 +288,17 @@ export async function GET(request, { params }) {
 
         // Add attachments
         attachmentsQuery.rows.forEach((attachment, index) => {
+            const displayName = attachment.attachment_name || attachment.file_name;
             history.timeline.push({
                 id: `attachment_${attachment.id}`,
                 type: 'attachment',
                 timestamp: attachment.uploaded_at,
                 user: attachment.uploaded_by_name || 'System',
                 action: 'Attachment Uploaded',
-                description: `File "${attachment.file_name}" attached`,
+                description: `File "${displayName}" attached`,
                 details: {
                     file_name: attachment.file_name,
+                    attachment_name: attachment.attachment_name,
                     file_size: attachment.file_size,
                     file_type: attachment.file_type
                 }

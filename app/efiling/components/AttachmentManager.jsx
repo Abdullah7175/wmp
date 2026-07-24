@@ -272,9 +272,12 @@ export default function AttachmentManager({ fileId, canEdit = true }) {
                                     {getFileIcon(attachment.file_type)}
                                     <div>
                                         <div className="font-medium text-sm">
-                                            {attachment.file_name}
+                                            {attachment.attachment_name || attachment.file_name}
                                         </div>
                                         <div className="text-xs text-gray-500">
+                                            {attachment.attachment_name ? (
+                                                <span className="block truncate" title={attachment.file_name}>{attachment.file_name}</span>
+                                            ) : null}
                                             {formatFileSize(attachment.file_size)} • 
                                             {new Date(attachment.uploaded_at).toLocaleDateString()}
                                         </div>
@@ -288,7 +291,7 @@ export default function AttachmentManager({ fileId, canEdit = true }) {
                                             // In production, this would download the actual file
                                             toast({
                                                 title: "Download",
-                                                description: `Downloading ${attachment.file_name}`,
+                                                description: `Downloading ${attachment.attachment_name || attachment.file_name}`,
                                             });
                                         }}
                                     >
@@ -298,7 +301,7 @@ export default function AttachmentManager({ fileId, canEdit = true }) {
                                         <Button
                                             variant="ghost"
                                             size="sm"
-                                            onClick={() => handleDeleteAttachment(attachment.id, attachment.file_name)}
+                                            onClick={() => handleDeleteAttachment(attachment.id, attachment.attachment_name || attachment.file_name)}
                                             className="text-red-600 hover:text-red-700"
                                         >
                                             <Trash2 className="w-4 h-4" />

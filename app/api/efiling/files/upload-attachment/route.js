@@ -21,8 +21,15 @@ export async function POST(request) {
         }
 
         client = await connectToDatabase();
+
+        // Ensure preferred-name column exists
+        await client.query(`
+            ALTER TABLE public.efiling_file_attachments
+            ADD COLUMN IF NOT EXISTS attachment_name varchar(255) NULL
+        `);
         
         const fileName = file.name;
+        const preferredName = (typeof attachmentName === 'string' ? attachmentName.trim() : '') || null;
         const fileSize = file.size;
         const fileType = file.type;
         
@@ -88,16 +95,17 @@ export async function POST(request) {
         // Generate public URL - use /api/uploads/ to ensure it goes through authenticated route
         const fileUrl = `/api/uploads/efiling/attachments/${uniqueFileName}`;
         
-        // Store attachment information with file URL
+        // Store attachment information with file URL and user-preferred name
         const result = await client.query(`
             INSERT INTO efiling_file_attachments (
-                id, file_id, file_name, file_size, file_type, file_url,
+                id, file_id, file_name, attachment_name, file_size, file_type, file_url,
                 uploaded_by, uploaded_at, is_active
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), true)
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), true)
             RETURNING *
-        `, [attachmentId, fileId, fileName, fileSize, fileType, fileUrl, userId]);
+        `, [attachmentId, fileId, fileName, preferredName, fileSize, fileType, fileUrl, userId]);
         
         const attachment = result.rows[0];
+        const displayName = preferredName || fileName;
         
         // Get user name for notifications
         let userName = 'System';
@@ -137,7 +145,7 @@ export async function POST(request) {
                     await client.query(`
                         INSERT INTO efiling_notifications (user_id, file_id, type, message, priority, action_required, created_at)
                         VALUES ($1, $2, $3, $4, 'normal', true, NOW())
-                    `, [createdBy, fileId, 'attachment_added', `${userName} added an attachment "${fileName}" to file`]);
+                    `, [createdBy, fileId, 'attachment_added', `${userName} added an attachment "${displayName}" to file`]);
                 }
                 
                 // Notify current assignee (if not creator and not uploader)
@@ -145,7 +153,7 @@ export async function POST(request) {
                     await client.query(`
                         INSERT INTO efiling_notifications (user_id, file_id, type, message, priority, action_required, created_at)
                         VALUES ($1, $2, $3, $4, 'normal', true, NOW())
-                    `, [currentAssignee, fileId, 'attachment_added', `${userName} added an attachment "${fileName}" to file`]);
+                    `, [currentAssignee, fileId, 'attachment_added', `${userName} added an attachment "${displayName}" to file`]);
                 }
                 
                 // Notify all users who have been marked to this file
@@ -162,7 +170,7 @@ export async function POST(request) {
                         await client.query(`
                             INSERT INTO efiling_notifications (user_id, file_id, type, message, priority, action_required, created_at)
                             VALUES ($1, $2, $3, $4, 'normal', false, NOW())
-                        `, [markedUserId, fileId, 'attachment_added', `${userName} added an attachment "${fileName}" to file`]);
+                        `, [markedUserId, fileId, 'attachment_added', `${userName} added an attachment "${displayName}" to file`]);
                     }
                 }
             }
@@ -179,10 +187,10 @@ export async function POST(request) {
             details: {
                 fileId: fileId,
                 fileName: fileName,
+                attachmentName: preferredName || 'Unnamed',
                 fileSize: fileSize,
                 fileType: fileType,
-                attachmentName: attachmentName || 'Unnamed',
-                description: `Attachment "${fileName}" uploaded to file ${fileId}`
+                description: `Attachment "${displayName}" uploaded to file ${fileId}`
             },
             ipAddress: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip'),
             userAgent: request.headers.get('user-agent')
@@ -194,8 +202,10 @@ export async function POST(request) {
             action: EFILING_ACTION_TYPES.DOCUMENT_UPLOADED,
             userId: efilingUserId.toString(),
             details: {
-                description: `Attachment uploaded: ${fileName}`,
+                description: `Attachment uploaded: ${displayName}`,
                 attachmentId,
+                fileName,
+                attachmentName: preferredName,
                 fileType,
                 fileSize
             },
@@ -208,6 +218,8 @@ export async function POST(request) {
             attachment: {
                 id: attachment.id,
                 name: attachment.file_name,
+                file_name: attachment.file_name,
+                attachment_name: attachment.attachment_name,
                 size: attachment.file_size,
                 type: attachment.file_type,
                 url: attachment.file_url,

@@ -537,7 +537,7 @@ export default function DocumentViewer() {
                                                         <div className="relative">
                                                             <Image 
                                                                 src={a.file_url} 
-                                                                alt={a.file_name} 
+                                                                alt={a.attachment_name || a.file_name} 
                                                                 width={200} 
                                                                 height={150} 
                                                                 className="w-full h-32 object-cover rounded mb-2" 
@@ -552,7 +552,10 @@ export default function DocumentViewer() {
                                                         </div>
                                                     )}
                                                     <div className="space-y-1">
-                                                        <div className="font-medium text-sm truncate" title={a.file_name}>{a.file_name}</div>
+                                                        <div className="font-medium text-sm truncate" title={a.attachment_name || a.file_name}>{a.attachment_name || a.file_name}</div>
+                                                        {a.attachment_name ? (
+                                                            <div className="text-xs text-gray-400 truncate" title={a.file_name}>{a.file_name}</div>
+                                                        ) : null}
                                                         <div className="text-xs text-gray-500">
                                                             {Math.round((a.file_size || 0)/1024)} KB • {formatDate(a.uploaded_at)}
                                                         </div>
@@ -655,7 +658,7 @@ export default function DocumentViewer() {
                 <DialogContent className="max-w-4xl max-h-[90vh] overflow-auto">
                     <DialogHeader>
                         <DialogTitle className="flex items-center justify-between">
-                            <span>{selectedAttachment?.file_name}</span>
+                            <span>{selectedAttachment?.attachment_name || selectedAttachment?.file_name}</span>
                             <Button variant="ghost" size="sm" onClick={closeAttachmentModal}>
                                 <X className="w-4 h-4" />
                             </Button>
@@ -711,7 +714,7 @@ export default function DocumentViewer() {
                                                     <div className="p-8 text-center text-gray-500">
                                                         <FileText className="w-16 h-16 mx-auto mb-4 text-gray-400" />
                                                         <p>PDF URL is missing or invalid</p>
-                                                        <p className="text-xs mt-2">File: {selectedAttachment.file_name}</p>
+                                                        <p className="text-xs mt-2">File: {selectedAttachment.attachment_name || selectedAttachment.file_name}</p>
                                                     </div>
                                                 );
                                             }
@@ -817,7 +820,7 @@ export default function DocumentViewer() {
                             ) : (
                                 <div className="text-center py-8">
                                     <FileText className="w-16 h-16 mx-auto text-gray-400 mb-4" />
-                                    <p className="text-gray-600 mb-2">{selectedAttachment.file_name}</p>
+                                    <p className="text-gray-600 mb-2">{selectedAttachment.attachment_name || selectedAttachment.file_name}</p>
                                     <p className="text-sm text-gray-500">
                                         {Math.round((selectedAttachment.file_size || 0)/1024)} KB • {formatDate(selectedAttachment.uploaded_at)}
                                     </p>
@@ -831,6 +834,12 @@ export default function DocumentViewer() {
                                 </div>
                             )}
                             <div className="border-t pt-4 grid grid-cols-2 gap-4 text-sm">
+                                {selectedAttachment.attachment_name ? (
+                                    <div>
+                                        <span className="font-medium">Attachment Name:</span>
+                                        <p className="text-gray-600">{selectedAttachment.attachment_name}</p>
+                                    </div>
+                                ) : null}
                                 <div>
                                     <span className="font-medium">File Name:</span>
                                     <p className="text-gray-600">{selectedAttachment.file_name}</p>
