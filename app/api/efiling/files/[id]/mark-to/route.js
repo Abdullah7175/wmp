@@ -20,6 +20,38 @@ import {
 import { sendWhatsAppMessage } from '@/lib/whatsappService';
 import { isCcOnlyOnFile } from '@/lib/authMiddleware';
 
+
+
+/**
+ * Calculates SLA deadline by skipping Saturdays and Sundays (Pakistani Standard Time / Asia/Karachi).
+ * Adds standard working hours while freezing clock on weekends.
+ * 
+ * @param {Date} startDate - Starting Date object (defaults to current time)
+ * @param {number} slaHours - SLA duration in hours
+ * @returns {Date} - Calculated SLA deadline Date object
+ */
+function addSlaHoursSkippingWeekends(startDate, slaHours) {
+    let current = new Date(startDate.getTime());
+    let remainingHours = slaHours;
+
+    while (remainingHours > 0) {
+        // Advance current time by 1 hour
+        current.setTime(current.getTime() + (60 * 60 * 1000));
+
+        // Get day of week in Pakistan timezone
+        const dayOfWeekStr = current.toLocaleString('en-US', {
+            timeZone: 'Asia/Karachi',
+            weekday: 'short'
+        });
+
+        // Skip Saturday ('Sat') and Sunday ('Sun')
+        if (dayOfWeekStr !== 'Sat' && dayOfWeekStr !== 'Sun') {
+            remainingHours--;
+        }
+    }
+
+    return current;
+}
 // Role categorization functions for mark-to visibility rules (shared by POST and GET routes)
 const isGlobalRole = (roleCode) => {
     if (!roleCode) return false;
@@ -966,9 +998,11 @@ export async function POST(request, { params }) {
                     );
 
                     if (slaResult.rows.length > 0) {
-                        const hours = parseInt(slaResult.rows[0].sla_hours);
-                        // Use getTime() to add milliseconds to avoid timezone/DST hour shifts
-                        finalSlaDeadline = new Date(Date.now() + (hours * 60 * 60 * 1000));
+                        const hours = parseInt(slaResult.rows[0].sla_hours, 10);
+                        if (!isNaN(hours) && hours > 0) {
+                            // Calculates deadline skipping weekends in PKT
+                            finalSlaDeadline = addSlaHoursSkippingWeekends(new Date(), hours);
+                        }
                     }
                 }
                 await client.query(
