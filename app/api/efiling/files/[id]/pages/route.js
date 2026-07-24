@@ -31,6 +31,14 @@ export async function POST(request, { params }) {
         
         client = await connectToDatabase();
         await client.query('BEGIN');
+
+        const { rejectCcOnlyMutation } = await import('@/lib/authMiddleware');
+        const isAdmin = [1, 2].includes(parseInt(session.user.role));
+        const ccBlock = await rejectCcOnlyMutation(client, parseInt(id), session.user.id, isAdmin);
+        if (ccBlock) {
+            await client.query('ROLLBACK');
+            return ccBlock;
+        }
         
         // Get current user's efiling info
         const currentUserRes = await client.query(`

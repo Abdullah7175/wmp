@@ -31,6 +31,8 @@ export default function FileDetail() {
     const [workRequests, setWorkRequests] = useState([]);
     const [selectedWorkRequestId, setSelectedWorkRequestId] = useState(null);
     const [savingFileInfo, setSavingFileInfo] = useState(false);
+    const [canMarkTo, setCanMarkTo] = useState(true);
+    const [isCcOnly, setIsCcOnly] = useState(false);
 
     useEffect(() => {
         if (!session?.user?.id || !params.id) return;
@@ -39,9 +41,24 @@ export default function FileDetail() {
             await fetchExtras();
             await fetchComments();
             await fetchTimeline();
+            await fetchPermissions();
         };
         loadData();
     }, [session?.user?.id, params.id]);
+
+    const fetchPermissions = async () => {
+        try {
+            const permRes = await fetch(`/api/efiling/files/${params.id}/permissions`);
+            if (permRes.ok) {
+                const permData = await permRes.json();
+                const permissions = permData.permissions;
+                setIsCcOnly(permissions?.isCcOnly || false);
+                setCanMarkTo(permissions?.isCcOnly ? false : (permissions?.canMarkTo !== false));
+            }
+        } catch (e) {
+            console.error('Error loading permissions:', e);
+        }
+    };
 
     const fetchFile = async () => {
         setLoading(true);
@@ -1088,10 +1105,16 @@ export default function FileDetail() {
                                 <CardTitle>Quick Actions</CardTitle>
                             </CardHeader>
                             <CardContent className="space-y-2">
+                                {canMarkTo && !isCcOnly ? (
                                 <Button variant="outline" className="w-full justify-start" onClick={() => setShowMarkModal(true)}>
                                     <Forward className="w-4 h-4 mr-2" />
                                     Mark / Forward File
                                 </Button>
+                                ) : isCcOnly ? (
+                                    <p className="text-sm text-gray-500 px-1">
+                                        View only (CC) — no mark/forward actions.
+                                    </p>
+                                ) : null}
                                 <Button variant="outline" className="w-full justify-start">
                                     <Eye className="w-4 h-4 mr-2" />
                                     View History

@@ -100,13 +100,17 @@ export default function AddPageEditor() {
                         if (permRes.ok) {
                             const permData = await permRes.json();
                             const isHigherAuth = permData.permissions?.isHigherAuthority || false;
+                            const canAdd = permData.permissions?.canAddPage || false;
+                            const isCcOnly = permData.permissions?.isCcOnly || false;
                             setIsHigherAuthority(isHigherAuth);
                             
-                            if (!isHigherAuth) {
-                                // Redirect if not higher authority
+                            if (isCcOnly || !canAdd || !isHigherAuth) {
+                                // Redirect if view-only CC or not allowed to add pages
                                 toast({
                                     title: "Access Denied",
-                                    description: "This editor is only available for higher authority users (SE/CE/CEO/COO).",
+                                    description: isCcOnly
+                                        ? "You are CC'd on this file and have view-only access."
+                                        : "This editor is only available for higher authority users (SE/CE/CEO/COO).",
                                     variant: "destructive",
                                 });
                                 router.push(`/efilinguser/files/${params.id}`);

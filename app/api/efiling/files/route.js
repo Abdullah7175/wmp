@@ -34,6 +34,7 @@ export async function GET(request) {
     const status_id = parseIntegerParam(searchParams.get('status_id'), 'status_id');
     const created_by = parseIntegerParam(searchParams.get('created_by'), 'created_by');
     const assigned_to = parseIntegerParam(searchParams.get('assigned_to'), 'assigned_to');
+    const cc_to = parseIntegerParam(searchParams.get('cc_to'), 'cc_to');
     const work_request_id = parseIntegerParam(searchParams.get('work_request_id'), 'work_request_id');
     const priority = searchParams.get('priority'); // String, not integer
     
@@ -122,6 +123,19 @@ export async function GET(request) {
     const client = await connectToDatabase();
     
     try {
+        // Ensure CC table exists before filtering by CC visibility
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS public.efiling_file_cc (
+                id serial4 NOT NULL,
+                file_id int4 NOT NULL,
+                cc_user_id int4 NOT NULL,
+                marked_by int4 NOT NULL,
+                remarks text NULL,
+                created_at timestamp DEFAULT CURRENT_TIMESTAMP NULL,
+                CONSTRAINT efiling_file_cc_pkey PRIMARY KEY (id)
+            )
+        `);
+
         // Check if the efiling_files table exists
         try {
             const tableCheck = await client.query(`
@@ -170,7 +184,14 @@ export async function GET(request) {
                         const aclRes = await client.query(`
                             SELECT 1
                             FROM efiling_files f
-                    WHERE f.id = $1 AND (f.created_by = $2 OR f.assigned_to = $2)
+                            WHERE f.id = $1 AND (
+                                f.created_by = $2
+                                OR f.assigned_to = $2
+                                OR EXISTS (
+                                    SELECT 1 FROM efiling_file_cc cc
+                                    WHERE cc.file_id = f.id AND cc.cc_user_id = $2
+                                )
+                            )
                         `, [id, efUserId]);
                         if (aclRes.rows.length === 0) {
                             return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
@@ -366,6 +387,22 @@ export async function GET(request) {
                 params.push(assigned_to);
                 paramIndex++;
             }
+
+            if (cc_to) {
+                // CC list: files carbon-copied to this user, excluding ones they own or are assigned
+                conditions.push(`EXISTS (
+                    SELECT 1 FROM efiling_file_cc cc
+                    WHERE cc.file_id = f.id AND cc.cc_user_id = $${paramIndex}
+                )`);
+                params.push(cc_to);
+                paramIndex++;
+                conditions.push(`(f.assigned_to IS DISTINCT FROM $${paramIndex})`);
+                params.push(cc_to);
+                paramIndex++;
+                conditions.push(`(f.created_by IS DISTINCT FROM $${paramIndex})`);
+                params.push(cc_to);
+                paramIndex++;
+            }
             
             if (priority) {
                 conditions.push(`f.priority = $${paramIndex}`);
@@ -442,15 +479,28 @@ export async function GET(request) {
             
             // Add user-based filtering for efiling users (only if no specific filters are applied)
             const session = await auth();
-            if (session?.user?.id && ![1,2].includes(parseInt(session.user.role)) && !created_by && !assigned_to) {
-                // For efiling users, only show files they created or are assigned to
+            if (
+                session?.user?.id &&
+                ![1,2].includes(parseInt(session.user.role)) &&
+                !created_by &&
+                !assigned_to &&
+                !cc_to
+            ) {
+                // For efiling users, only show files they created, are assigned to, or are CC'd on
                 const efilingUserRes = await client.query(
                     'SELECT id FROM efiling_users WHERE user_id = $1 AND is_active = true', 
                     [session.user.id]
                 );
                 if (efilingUserRes.rows.length > 0) {
                     const efilingUserId = efilingUserRes.rows[0].id;
-                    conditions.push(`(f.created_by = $${paramIndex} OR f.assigned_to = $${paramIndex})`);
+                    conditions.push(`(
+                        f.created_by = $${paramIndex}
+                        OR f.assigned_to = $${paramIndex}
+                        OR EXISTS (
+                            SELECT 1 FROM efiling_file_cc cc
+                            WHERE cc.file_id = f.id AND cc.cc_user_id = $${paramIndex}
+                        )
+                    )`);
                     params.push(efilingUserId);
                     paramIndex++;
                 }

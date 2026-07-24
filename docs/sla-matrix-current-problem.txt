@@ -1,0 +1,206 @@
+====================================================================
+E-FILING SLA MATRIX - CURRENT PROBLEM DOCUMENT
+What is happening right now and in which files
+Date: 17 July 2026
+====================================================================
+
+
+SUMMARY
+--------------------------------------------------------------------
+We create SLA matrix entries in the efiling_sla_matrix table, but files
+do not follow them. The reason is that the mark-to API decides almost
+everything using hardcoded role code lists written inside the code.
+The matrix is only partially used, and in the most important place
+(the deadline calculation) it is queried in a wrong way, so most
+matrix rows are never applied.
+
+There are 4 main problems. All of them are inside this file:
+
+    app/api/efiling/files/[id]/mark-to/route.js
+
+with one helper file involved:
+
+    lib/efilingGeographicRouting.js
+
+
+PROBLEM 1 - HARDCODED "EXTERNAL ROLES" LISTS DECIDE IF TAT/SLA STARTS
+--------------------------------------------------------------------
+File: app/api/efiling/files/[id]/mark-to/route.js
+
+Location 1 (around line 1099, inside the marking loop):
+
+    const externalRoles = ['SE', 'CE', 'CFO', 'COO', 'CEO'];
+    const isMovingToExternal = externalRoles.includes(toRoleCode);
+
+Location 2 (around line 1325, final assignment):
+
+    const externalRoles = ['SE', 'CE', 'CFO', 'COO', 'CEO','DCE',
+    'DIRECTOR_MEDICAL_SERVICES','MEDICAL_SCRUTINY_COMMITTEE',
+    'CHIEF_INTERNAL_AUDITOR','CONSULTANT','DIRECTOR','CON','COMMITTEE',
+    'COMMITE','MD','MANAGING_DIRECTOR','BILLING','BUDGET','IAO-II'];
+    const isMovingToExternalFinal = externalRoles.includes(lastUserRoleCode);
+
+What goes wrong:
+
+1. includes() is an EXACT string match. Our real role codes are
+   variants like SE_CEN, CE_WAT, XEN_SAF etc. These are NOT equal to
+   'SE' or 'CE', so isMovingToExternal becomes false.
+
+2. When it is false, the file is treated as team internal. The
+   workflow state stays TEAM_INTERNAL, TAT never starts, and the SLA
+   block is skipped completely. The matrix is never even looked at.
+
+3. The two lists are DIFFERENT from each other. So the per-user loop
+   and the final assignment can disagree about the same recipient.
+
+Result: even with a correct matrix row for the role pair, the file
+never enters the external flow and never gets a TAT/SLA deadline.
+
+
+PROBLEM 2 - THE DEADLINE QUERY BYPASSES THE MATRIX MATCHING LOGIC
+--------------------------------------------------------------------
+File: app/api/efiling/files/[id]/mark-to/route.js
+Location: around line 935 to 946
+
+    if (targetUser.role_code !== 'CEO') {
+        const slaResult = await client.query(
+            `SELECT sla_hours FROM efiling_sla_matrix
+             WHERE from_role_id = $1 AND to_role_id = $2
+             AND is_active = true LIMIT 1`,
+            [fromRoleId, toRoleId]
+        );
+        if (slaResult.rows.length > 0) {
+            const hours = parseInt(slaResult.rows[0].sla_hours);
+            finalSlaDeadline = new Date(Date.now() + (hours * 60 * 60 * 1000));
+        }
+    }
+
+What goes wrong:
+
+1. It matches ONLY on from_role_id and to_role_id. In the table these
+   columns are nullable. Matrix rows created earlier (before role IDs
+   were required in the create form) have NULL in these columns, so
+   they can NEVER match this query. No error is shown, the deadline
+   just stays empty.
+
+2. The line "if (targetUser.role_code !== 'CEO')" means marking to CEO
+   skips the matrix completely. A CEO matrix entry can never work.
+
+3. It ignores department_id and level_scope. If several rows match the
+   role pair, LIMIT 1 picks a random one.
+
+4. In a multi-user marking, finalSlaDeadline keeps the value from the
+   previous user in the loop, so a stale deadline can be saved.
+
+To check which rows are silently dead, run this query:
+
+    SELECT id, from_role_code, to_role_code, from_role_id, to_role_id, sla_hours
+    FROM efiling_sla_matrix
+    WHERE is_active = true
+    AND (from_role_id IS NULL OR to_role_id IS NULL);
+
+Every row returned by this query is a matrix entry that the current
+code can never apply.
+
+
+PROBLEM 3 - THE CORRECT MATRIX FUNCTION EXISTS BUT IS NEVER CALLED
+--------------------------------------------------------------------
+File: lib/efilingGeographicRouting.js
+Location: function getSLA, lines 365 to 424
+
+This function does everything correctly:
+- matches on from_role_code and to_role_code (text codes)
+- supports wildcard patterns with *
+- gives priority to department specific rows
+- gives priority to level_scope match
+- falls back to 24 hours only if nothing matches
+
+It is imported at the top of mark-to/route.js:
+
+    import { getAllowedRecipients, getSLA, validateGeographicMatch }
+    from '@/lib/efilingGeographicRouting';
+
+But getSLA is NEVER called anywhere in the file. The block that was
+supposed to call it (around lines 1331 to 1360) fetches the target role
+code, fetches the department, computes the levelScope variable, and
+then does NOTHING with them. The actual getSLA call was deleted at
+some point and only the preparation code is left behind (dead code).
+
+
+PROBLEM 4 - GREEDY ROLE CLASSIFIERS OVERRIDE THE MATRIX RECIPIENTS
+--------------------------------------------------------------------
+File: app/api/efiling/files/[id]/mark-to/route.js
+Location: isGlobalRole (lines 23 to 92), isMidLevelRole (94 to 104),
+isLowerLevelRole (106 to 115), canBypassGeographicValidation (135 to 204)
+Used at lines 675 to 760 (POST) and around 1962 (GET)
+
+What goes wrong:
+
+1. isGlobalRole uses substring checks like:
+
+       code.includes('SE')
+       code.includes('CE')
+       code.includes('MD')
+       code.includes('CON')
+       code.includes('CIA')
+
+   Any role code that CONTAINS these letters anywhere is classified
+   as a global role. For example a code containing SEW matches 'SE',
+   and many unrelated codes contain MD or CON. This is wrong
+   classification by accident.
+
+2. When the sender is classified as "global", the code throws away the
+   matrix-based recipient list and loads ALL active users instead
+   (lines 691 to 744). So the SLA matrix rules about who can mark to
+   whom stop mattering for these users.
+
+3. When the sender is classified as mid or lower level, the recipient
+   list is filtered down to their own department only, even if the
+   matrix explicitly allows a cross-department pair.
+
+4. There is also a hardcoded hierarchy in getRoleLevel (lines 954 to
+   976): RE/XEN/EE = 1, SE = 2, CE = 3, COO = 4, CEO = 5, CFO = 6.
+   Again with substring matching, and again ignoring the matrix.
+
+
+PROBLEM 5 - TWO DIFFERENT MATCHING SYSTEMS ON THE SAME TABLE
+--------------------------------------------------------------------
+The recipient eligibility check (getAllowedRecipients in
+lib/efilingGeographicRouting.js) matches matrix rows by ROLE CODE with
+wildcard support.
+
+The deadline calculation (Problem 2) matches matrix rows by ROLE ID
+with exact match only.
+
+So it is easily possible that a matrix row ALLOWS the marking (code
+match works) but NEVER produces the SLA hours (ID match fails).
+This is exactly the behaviour we are seeing: the person can be marked,
+but the file does not follow the matrix deadline.
+
+
+SIDE NOTE - GLOBAL_ROLE_CODES
+--------------------------------------------------------------------
+File: lib/efilingGeographicRouting.js, line 6:
+
+    export const GLOBAL_ROLE_CODES = new Set(['CEO', 'COO']);
+
+CEO and COO senders skip the matrix completely in getAllowedRecipients
+and see all users. Team members also bypass the matrix through the
+INTERNAL_TEAM path. This is intentional design, but it is defined
+differently from the "global" definition inside mark-to (Problem 4),
+so the same word means two different things in two files.
+
+
+CONCLUSION
+--------------------------------------------------------------------
+The SLA matrix is not broken. The mark-to route:
+1. decides external vs internal using hardcoded role name lists,
+2. calculates the deadline with a wrong exact-ID query,
+3. skips CEO by a hardcoded condition,
+4. never calls the correct getSLA function,
+5. overrides matrix recipients using greedy substring role checks.
+
+Any role whose code is not literally in the hardcoded arrays will
+never follow the matrix, no matter how many matrix rows we create.
+
+See the second document (sla-matrix-solution.txt) for the fix plan.

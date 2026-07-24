@@ -1,0 +1,243 @@
+====================================================================
+E-FILING SLA MATRIX - SOLUTION DOCUMENT
+How to remove the hardcoded flow and make the SLA matrix the
+single source of truth
+Date: 17 July 2026
+====================================================================
+
+
+GOAL
+--------------------------------------------------------------------
+Every decision that is today made by hardcoded role code arrays
+should instead come from data:
+
+1. Whether a marking is external (TAT starts) or internal
+2. How many SLA hours apply to a from-role to to-role movement
+3. Who a user is allowed to mark a file to
+4. Which roles are global / can bypass geography
+
+After this change, adding a new role or changing a deadline should
+only require adding or editing rows in the database. No code deploy.
+
+
+STEP 1 - FIX THE DEADLINE CALCULATION (SMALLEST FIX, BIGGEST EFFECT)
+--------------------------------------------------------------------
+File: app/api/efiling/files/[id]/mark-to/route.js
+Around line 935 to 946.
+
+Replace the raw query:
+
+    if (targetUser.role_code !== 'CEO') {
+        const slaResult = await client.query(
+            `SELECT sla_hours FROM efiling_sla_matrix
+             WHERE from_role_id = $1 AND to_role_id = $2
+             AND is_active = true LIMIT 1`,
+            [fromRoleId, toRoleId]
+        );
+        ...
+    }
+
+With a call to the getSLA function that already exists and is already
+imported in this file:
+
+    const slaHours = await getSLA(
+        client,
+        fromRoleCode,          // sender role code, already available
+        toRoleCode,            // recipient role code, already available
+        targetUser.department_id || fileRow.department_id,
+        levelScope             // 'division' or 'district', see Step 2
+    );
+    finalSlaDeadline = new Date(Date.now() + (slaHours * 60 * 60 * 1000));
+
+Why this fixes it:
+- getSLA matches by role CODE, with wildcard support, so old rows with
+  NULL role IDs start working again.
+- getSLA respects department_id and level_scope priority.
+- The random LIMIT 1 problem disappears.
+
+Also in this step:
+- Remove the hardcoded condition: if (targetUser.role_code !== 'CEO').
+  If CEO should have no deadline, that is Step 4 (a role flag),
+  not a hardcoded string in the route.
+- Reset finalSlaDeadline to null at the start of each loop iteration
+  so a stale value from the previous recipient is never saved.
+- Delete the dead block around lines 1331 to 1360 or complete it with
+  the same getSLA call (keep the deadline calculation in ONE place
+  only, preferably for the final assignee).
+
+
+STEP 2 - DERIVE "EXTERNAL / TAT STARTS" FROM DATA, NOT FROM ARRAYS
+--------------------------------------------------------------------
+File: app/api/efiling/files/[id]/mark-to/route.js
+Around lines 1099 and 1325 (the two externalRoles arrays).
+
+Option A (recommended, no schema change):
+An SLA matrix rule for the from-role to to-role pair IS the signal
+that the movement is external. Replace both arrays with one check:
+
+    async function isExternalMovement(client, fromRoleCode, toRoleCode) {
+        const rows = await client.query(
+            `SELECT 1 FROM efiling_sla_matrix
+             WHERE is_active = true`
+        );
+        // reuse rolePatternMatches from efilingGeographicRouting
+        // return true when any active rule matches the pair
+    }
+
+Or simpler: getSLA already returns the hours. If an explicit matrix
+rule matched (not the fallback), the movement is external and TAT
+starts with exactly those hours. This makes the matrix the ONLY
+definition of the external flow.
+
+Option B (schema change, more explicit):
+Add a column to efiling_roles:
+
+    ALTER TABLE efiling_roles ADD COLUMN is_external boolean DEFAULT false;
+
+Set it to true for SE, CE, CFO, COO, CEO, DCE, consultants, billing,
+budget, and every future role that should start TAT. Then:
+
+    const isMovingToExternal = targetRole.is_external;
+
+Either way:
+- Both places (the loop and the final assignment) must use the SAME
+  check. Delete both hardcoded arrays.
+- The typo entry 'COMMITE' disappears automatically.
+
+
+STEP 3 - LET THE MATRIX CONTROL WHO CAN BE MARKED
+--------------------------------------------------------------------
+File: app/api/efiling/files/[id]/mark-to/route.js
+Lines 675 to 760 (POST) and around 1962 (GET).
+
+The functions isGlobalRole, isMidLevelRole, isLowerLevelRole,
+isDepartmentManagerRole and canBypassGeographicValidation (lines 23
+to 204) should be deleted. The recipient list should come from
+getAllowedRecipients only, which already reads the matrix.
+
+How to represent today's behaviour inside the matrix:
+
+- Global roles that can mark anyone:
+  add matrix rows with wildcards, for example
+      from_role_code = 'CEO%' or 'CEO*'   to_role_code = '*'   level_scope = 'global'
+  (the matrix already supports * wildcards through rolePatternMatches)
+
+- Mid-level roles that can mark inside their department:
+  keep them restricted by NOT giving them global rows. Department
+  restriction is handled by department_id on the matrix row.
+
+- Lower-level roles that can only mark department managers:
+  add explicit rows for each allowed pair, for example
+      from_role_code = 'AEE*'  to_role_code = 'XEN*'
+      from_role_code = 'AEE*'  to_role_code = 'EE*'
+
+If a per-department restriction is needed that the matrix cannot
+express today, add one column instead of code:
+
+    ALTER TABLE efiling_sla_matrix
+    ADD COLUMN same_department_only boolean DEFAULT false;
+
+and apply it inside getAllowedRecipients.
+
+
+STEP 4 - MOVE ROLE FLAGS INTO THE efiling_roles TABLE
+--------------------------------------------------------------------
+Add flags so no code ever needs to parse role code strings again:
+
+    ALTER TABLE efiling_roles ADD COLUMN is_global boolean DEFAULT false;
+    ALTER TABLE efiling_roles ADD COLUMN is_external boolean DEFAULT false;
+    ALTER TABLE efiling_roles ADD COLUMN can_bypass_geography boolean DEFAULT false;
+    ALTER TABLE efiling_roles ADD COLUMN hierarchy_level int DEFAULT 0;
+    ALTER TABLE efiling_roles ADD COLUMN no_sla_deadline boolean DEFAULT false;
+
+Backfill once with an UPDATE per role group, for example:
+
+    UPDATE efiling_roles SET is_global = true, can_bypass_geography = true
+    WHERE code = 'CEO' OR code LIKE 'CEO_%' OR code = 'COO' OR code LIKE 'COO_%';
+
+    UPDATE efiling_roles SET no_sla_deadline = true
+    WHERE code = 'CEO' OR code LIKE 'CEO_%';
+
+Then replace in code:
+- GLOBAL_ROLE_CODES (lib/efilingGeographicRouting.js line 6)
+  with: role.is_global
+- getRoleLevel (mark-to lines 954 to 976)
+  with: role.hierarchy_level
+- the CEO skip in the deadline calculation
+  with: role.no_sla_deadline
+- isHigherAuthority lists (mark-to line 979, permissions route line
+  148, workflow state manager line 206)
+  with: hierarchy_level comparison, for example
+      isHigherAuthority = senderRole.hierarchy_level >= 2
+
+One helper file should load these flags:
+
+    lib/efilingRolePolicy.js
+        getRolePolicy(client, roleId or roleCode)
+        returns { is_global, is_external, can_bypass_geography,
+                  hierarchy_level, no_sla_deadline }
+
+Every route imports from this ONE file. No route defines its own
+role list anymore.
+
+
+STEP 5 - REPAIR THE EXISTING MATRIX DATA
+--------------------------------------------------------------------
+Run once to find dead rows:
+
+    SELECT id, from_role_code, to_role_code, from_role_id, to_role_id
+    FROM efiling_sla_matrix
+    WHERE is_active = true
+    AND (from_role_id IS NULL OR to_role_id IS NULL);
+
+Backfill the IDs from the codes:
+
+    UPDATE efiling_sla_matrix sm
+    SET from_role_id = r.id
+    FROM efiling_roles r
+    WHERE sm.from_role_id IS NULL AND r.code = sm.from_role_code;
+
+    UPDATE efiling_sla_matrix sm
+    SET to_role_id = r.id
+    FROM efiling_roles r
+    WHERE sm.to_role_id IS NULL AND r.code = sm.to_role_code;
+
+Note: after Step 1 the system matches by code, so the IDs become
+optional. Decide on ONE of the two (codes recommended, because
+wildcards only work with codes) and stop writing the other.
+
+
+STEP 6 - CLEAN UP AND VERIFY
+--------------------------------------------------------------------
+Delete after the steps above are done:
+- both externalRoles arrays (mark-to lines 1099 and 1325)
+- isGlobalRole, isMidLevelRole, isLowerLevelRole,
+  isDepartmentManagerRole, canBypassGeographicValidation
+  (mark-to lines 23 to 204)
+- getRoleLevel (mark-to lines 954 to 976)
+- the dead SLA block (mark-to lines 1331 to 1360)
+
+Verification checklist (test with real role codes like SE_CEN):
+1. Create a matrix row XEN_SAF to SE_CEN with 48 hours.
+2. Mark a file from a XEN_SAF user to a SE_CEN user.
+3. Confirm: workflow state becomes EXTERNAL, TAT starts,
+   sla_deadline = now + 48 hours.
+4. Change the row to 12 hours, mark another file, confirm the new
+   deadline follows without any code change.
+5. Add a brand new role, add matrix rows for it, confirm it works
+   without touching any code file.
+6. Mark to CEO and confirm the intended behaviour (deadline or no
+   deadline) comes from the role flag, not from a hardcoded string.
+
+
+ORDER OF WORK AND RISK
+--------------------------------------------------------------------
+Step 1 (deadline uses getSLA)        low risk, do first, fixes the
+                                     main complaint immediately
+Step 5 (backfill matrix IDs)         zero risk, data only, do with 1
+Step 2 (external from matrix)        medium risk, test TAT start
+Step 4 (role flags table)            medium risk, backfill carefully
+Step 3 (remove visibility filters)   highest risk, do last, verify
+                                     each role level still sees the
+                                     correct recipient list
+Step 6 (cleanup)                     only after everything is stable

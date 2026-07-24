@@ -204,6 +204,18 @@ export default function DocumentEditor() {
                             const canAdd = permissions?.canAddPage || false;
                             const wasMarkedBack = permissions?.wasMarkedBackByHigherAuthority || false;
                             const isHigherAuth = permissions?.isHigherAuthority || false;
+                            const isCcOnly = permissions?.isCcOnly || false;
+
+                            if (isCcOnly) {
+                                toast({
+                                    title: "View only (CC)",
+                                    description: "You are CC'd on this file and cannot edit it.",
+                                    variant: "destructive",
+                                });
+                                router.push(`/efilinguser/files/${params.id}`);
+                                return;
+                            }
+
                             setCanEditDocument(canEdit);
                             setCanAddPage(canAdd);
                             setWasMarkedBackByHigherAuthority(wasMarkedBack);

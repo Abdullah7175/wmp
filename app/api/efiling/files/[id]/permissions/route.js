@@ -89,20 +89,41 @@ export async function GET(request, { params }) {
         // Check if user is system admin
         const isSystemAdmin = userEfiling.role_code === 'SYS_ADMIN' || [1, 2].includes(parseInt(session.user.role));
         
-        // Check if user is file creator
-        const isCreator = file.created_by === userEfiling.id;
+        // Check if user is file creator / currently assigned (type-safe)
+        const isCreator = Number(file.created_by) === Number(userEfiling.id);
+        const isAssigned = file.assigned_to != null && Number(file.assigned_to) === Number(userEfiling.id);
         
-        // Check if user is currently assigned
-        const isAssigned = file.assigned_to === userEfiling.id;
-        
-        // Check if file has been marked to this user
+        // Check if file has been marked to this user (exclude CC movements)
         const markedToRes = await client.query(`
             SELECT COUNT(*) as count
             FROM efiling_file_movements
-            WHERE file_id = $1 AND to_user_id = $2
+            WHERE file_id = $1
+              AND to_user_id = $2
+              AND UPPER(COALESCE(action_type, '')) <> 'CC'
         `, [id, userEfiling.id]);
         
         const isMarkedTo = markedToRes.rows[0].count > 0;
+
+        // CC-only: has CC row but is not creator/assignee and cannot mark
+        let isCc = false;
+        let isCcOnly = false;
+        try {
+            const { isCcOnlyOnFile } = await import('@/lib/authMiddleware');
+            const ccRes = await client.query(`
+                SELECT 1 FROM efiling_file_cc
+                WHERE file_id = $1 AND cc_user_id = $2
+                LIMIT 1
+            `, [id, userEfiling.id]);
+            isCc = ccRes.rows.length > 0;
+            isCcOnly = await isCcOnlyOnFile(client, id, userEfiling.id, file);
+            if (isSystemAdmin) {
+                isCcOnly = false;
+            }
+        } catch (ccError) {
+            if (ccError.code !== '42P01') {
+                console.warn('[Permissions] CC check failed:', ccError.message);
+            }
+        }
         
         // Check if user has signed the file
         const signatureRes = await client.query(`
@@ -207,40 +228,41 @@ export async function GET(request, { params }) {
         // Permission calculations based on requirements
         const permissions = {
             // EDIT: Only admin or file creator (when within team or returned)
-            canEdit: canEdit,
+            canEdit: isCcOnly ? false : canEdit,
             
             // VIEW: All users who have access
             canView: true,
             
-            // SIGNATURE: All users can add signatures
-            canAddSignature: true,
-            
-            // COMMENT: All users can add comments
-            canAddComment: true,
-            
-            // ATTACHMENT: All users can add attachments
-            canAddAttachment: true,
+            // SIGNATURE / COMMENT / ATTACHMENT — disabled for CC-only viewers
+            canAddSignature: isCcOnly ? false : true,
+            canAddComment: isCcOnly ? false : true,
+            canAddAttachment: isCcOnly ? false : true,
             
             // ADD PAGE: SE/CE and their assistants can add pages
-            canAddPage: canAddPage,
+            canAddPage: isCcOnly ? false : canAddPage,
             
-            // MARK TO: Updated for team workflow
-            canMarkTo: canMark && (!requiresSignatureForMarking || hasSigned),
+            // MARK TO: show for anyone allowed to mark.
+            // Signature requirement is enforced on mark-to submit / shown via requiresSignature.
+            // Do not hide the button until after e-sign — that caused assignees to never see Mark To
+            // after signing because permissions were not refreshed.
+            canMarkTo: isCcOnly ? false : canMark,
             
             // APPROVE: Assigned user (must have signed)
-            canApprove: isAssigned && hasSigned,
+            canApprove: isCcOnly ? false : (isAssigned && hasSigned),
             
             // REJECT: Assigned user (must have signed)
-            canReject: isAssigned && hasSigned,
+            canReject: isCcOnly ? false : (isAssigned && hasSigned),
             
-            // FORWARD: Assigned user (must have signed) OR admin
-            canForward: (isAssigned && hasSigned) || isSystemAdmin,
+            // FORWARD: same as mark-to visibility for UI; signature checked on action
+            canForward: isCcOnly ? false : (canMark || isSystemAdmin),
             
             // Status flags
             isAdmin: isSystemAdmin,
             isCreator,
             isAssigned,
             isMarkedTo,
+            isCc,
+            isCcOnly,
             isTeamMember: isTeamMemberOfCreator,
             hasSigned,
             creatorHasSigned,
@@ -249,12 +271,12 @@ export async function GET(request, { params }) {
             // Workflow state
             workflow_state: currentState,
             is_within_team: isWithinTeam,
-            wasMarkedBackByHigherAuthority,
-            isHigherAuthority,
+            wasMarkedBackByHigherAuthority: isCcOnly ? false : wasMarkedBackByHigherAuthority,
+            isHigherAuthority: isCcOnly ? false : isHigherAuthority,
             
             // Requirements
-            requiresSignature: requiresSignatureForMarking && !hasSigned,
-            requiresCreatorSignature: !creatorHasSigned && currentState !== 'TEAM_INTERNAL',
+            requiresSignature: isCcOnly ? false : (requiresSignatureForMarking && !hasSigned),
+            requiresCreatorSignature: isCcOnly ? false : (!creatorHasSigned && currentState !== 'TEAM_INTERNAL'),
             
             // Detailed access
             access: {

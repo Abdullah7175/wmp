@@ -19,9 +19,13 @@ export async function POST(request, { params }) {
         const { content, template } = body;
 
         client = await connectToDatabase();
+
+        const { rejectCcOnlyMutation } = await import('@/lib/authMiddleware');
+        const isAdmin = [1, 2].includes(parseInt(session.user.role));
+        const ccBlock = await rejectCcOnlyMutation(client, parseInt(id), session.user.id, isAdmin);
+        if (ccBlock) return ccBlock;
         
         // Check if user can edit (workflow state check)
-        const isAdmin = [1, 2].includes(parseInt(session.user.role));
         if (!isAdmin) {
             // Get user's efiling ID
             const userRes = await client.query(`

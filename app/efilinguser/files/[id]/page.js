@@ -55,6 +55,10 @@ export default function FileDetail() {
     const [isCreator, setIsCreator] = useState(false);
     const [canAddAttachment, setCanAddAttachment] = useState(false);
     const [canAddPage, setCanAddPage] = useState(false);
+    const [canMarkTo, setCanMarkTo] = useState(false);
+    const [canEdit, setCanEdit] = useState(false);
+    const [canAddSignature, setCanAddSignature] = useState(false);
+    const [isCcOnly, setIsCcOnly] = useState(false);
     const [showAttachmentUpload, setShowAttachmentUpload] = useState(false);
     const [uploadingAttachment, setUploadingAttachment] = useState(false);
     const [attachmentName, setAttachmentName] = useState("");
@@ -230,6 +234,10 @@ export default function FileDetail() {
                 setIsCreator(permissions?.isCreator || false);
                 setCanAddAttachment(permissions?.canAddAttachment || false);
                 setCanAddPage(permissions?.canAddPage || false);
+                setCanMarkTo(permissions?.canMarkTo || false);
+                setCanEdit(permissions?.canEdit || false);
+                setCanAddSignature(permissions?.canAddSignature || false);
+                setIsCcOnly(permissions?.isCcOnly || false);
             }
         } catch (e) {
             console.error('Error loading permissions:', e);
@@ -1111,13 +1119,13 @@ const openAttachmentModal = (attachment) => {
                         </div>
                     </div>
                     <div className="flex space-x-2 no-print">
-                        {isCreator && (
+                        {canEdit && isCreator && !isCcOnly && (
                             <Button onClick={() => router.push(`/efilinguser/files/${file.id}/edit-document`)} className="bg-blue-600 hover:bg-blue-700">
                                 <Edit className="w-4 h-4 mr-2" />
                                 Edit Document
                             </Button>
                         )}
-                        {isHigherAuthority && (
+                        {canAddPage && isHigherAuthority && !isCcOnly && (
                             <Button onClick={() => router.push(`/efilinguser/files/${file.id}/add-page`)} className="bg-blue-600 hover:bg-blue-700">
                                 <Edit className="w-4 h-4 mr-2" />
                                 Add Notesheet
@@ -1138,6 +1146,21 @@ const openAttachmentModal = (attachment) => {
                     </div>
                 </div>
 
+                {isCcOnly && (
+                    <div className="mb-4 p-4 bg-violet-50 border border-violet-200 rounded-lg no-print flex-shrink-0">
+                        <div className="flex items-start gap-2">
+                            <Eye className="w-5 h-5 text-violet-600 mt-0.5" />
+                            <div>
+                                <div className="font-medium text-violet-900">View only (CC)</div>
+                                <p className="text-sm text-violet-700">
+                                    You were carbon-copied on this file. You can view the full file, history, and status,
+                                    but you cannot mark, edit, sign, comment, or change it.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1 overflow-hidden">
                     <div className="lg:col-span-2 space-y-6 overflow-y-auto pr-2">
                         <Card className="no-print">
@@ -1147,6 +1170,7 @@ const openAttachmentModal = (attachment) => {
                                         <FileText className="w-5 h-5 mr-2" />
                                         File Information
                                     </CardTitle>
+                                    {canEdit && !isCcOnly && (
                                     <Button
                                         variant="outline"
                                         size="sm"
@@ -1156,6 +1180,7 @@ const openAttachmentModal = (attachment) => {
                                         <Edit className="w-4 h-4 mr-2" />
                                         Edit
                                     </Button>
+                                    )}
                                 </div>
                             </CardHeader>
                             <CardContent className="space-y-4">
@@ -1533,11 +1558,13 @@ const openAttachmentModal = (attachment) => {
                                 <CardTitle>Quick Actions</CardTitle>
                             </CardHeader>
                             <CardContent className="space-y-2">
+                                {canMarkTo && !isCcOnly && (
                                 <Button variant="outline" className="w-full justify-start" onClick={openMarkModal}>
                                     <Forward className="w-4 h-4 mr-2" />
                                     Mark / Forward File
                                 </Button>
-                                {canAddPage && (
+                                )}
+                                {canAddPage && !isCcOnly && (
                                     <Button
                                         variant="outline"
                                         className="w-full justify-start"
@@ -1546,6 +1573,11 @@ const openAttachmentModal = (attachment) => {
                                         <FileText className="w-4 h-4 mr-2" />
                                         Add Note Sheet
                                     </Button>
+                                )}
+                                {isCcOnly && (
+                                    <p className="text-sm text-gray-500 px-1">
+                                        No actions available — you have view-only (CC) access.
+                                    </p>
                                 )}
                             </CardContent>
                         </Card>
@@ -1562,13 +1594,14 @@ const openAttachmentModal = (attachment) => {
                                 <DocumentSignatureSystem
                                     fileId={params.id}
                                     userRole={userRole}
-                                    canEditDocument={true}
+                                    canEditDocument={canAddSignature && !isCcOnly}
                                     hasUserSigned={hasUserSigned}
                                     onSignatureAdded={(signature) => {
                                         console.log('Signature added:', signature);
                                         setHasUserSigned(true);
-                                        // Refresh signatures list
+                                        // Refresh signatures + permissions so Mark To appears after e-sign
                                         fetchExtras();
+                                        fetchPermissions();
                                         toast({
                                             title: "Signature Added",
                                             description: "Your signature has been successfully added to the document.",

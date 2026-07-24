@@ -20,6 +20,20 @@ export async function POST(request, { params }) {
             return NextResponse.json({ error: 'Action is required' }, { status: 400 });
         }
 
+        // Block CC-only viewers from workflow actions
+        try {
+            const { auth } = await import('@/auth');
+            const { rejectCcOnlyMutation } = await import('@/lib/authMiddleware');
+            const session = await auth();
+            if (session?.user?.id) {
+                const isAdmin = [1, 2].includes(parseInt(session.user.role));
+                const ccBlock = await rejectCcOnlyMutation(client, parseInt(id), session.user.id, isAdmin);
+                if (ccBlock) return ccBlock;
+            }
+        } catch (ccGuardError) {
+            console.warn('[progress-workflow] CC guard skipped:', ccGuardError.message);
+        }
+
         const upperAction = action.toUpperCase();
 
         if (upperAction === 'FORWARD') {

@@ -18,6 +18,7 @@ import {
     markReturnToCreator,
 } from '@/lib/efilingWorkflowStateManager';
 import { sendWhatsAppMessage } from '@/lib/whatsappService';
+import { isCcOnlyOnFile } from '@/lib/authMiddleware';
 
 // Role categorization functions for mark-to visibility rules (shared by POST and GET routes)
 const isGlobalRole = (roleCode) => {
@@ -214,7 +215,7 @@ export async function POST(request, { params }) {
         
         const { id } = await params;
         const body = await request.json();
-        const { user_ids, remarks } = body;
+        const { user_ids, remarks, cc_user_ids = [] } = body;
 
         if (!user_ids || !Array.isArray(user_ids) || user_ids.length === 0) {
             return NextResponse.json({ error: 'User IDs array is required' }, { status: 400 });
@@ -228,6 +229,22 @@ export async function POST(request, { params }) {
 
         client = await connectToDatabase();
         await client.query('BEGIN');
+
+        // Ensure CC table exists (safe if migration already applied)
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS public.efiling_file_cc (
+                id serial4 NOT NULL,
+                file_id int4 NOT NULL,
+                cc_user_id int4 NOT NULL,
+                marked_by int4 NOT NULL,
+                remarks text NULL,
+                created_at timestamp DEFAULT CURRENT_TIMESTAMP NULL,
+                CONSTRAINT efiling_file_cc_pkey PRIMARY KEY (id)
+            )
+        `);
+        await client.query(`CREATE INDEX IF NOT EXISTS idx_efiling_file_cc_file_id ON public.efiling_file_cc (file_id)`);
+        await client.query(`CREATE INDEX IF NOT EXISTS idx_efiling_file_cc_cc_user_id ON public.efiling_file_cc (cc_user_id)`);
+        await client.query(`CREATE INDEX IF NOT EXISTS idx_efiling_file_cc_file_user ON public.efiling_file_cc (file_id, cc_user_id)`);
 
         // Check if SLA deadline column exists
         let hasSlaDeadline = false;
@@ -375,6 +392,16 @@ export async function POST(request, { params }) {
         const currentUser = currentUserRes.rows[0];
         const currentUserEfilingId = currentUser.id;
         const currentUserRoleCode = (currentUser.role_code || '').toUpperCase();
+
+        // CC-only users can view the file but cannot mark/forward
+        if (await isCcOnlyOnFile(client, fileId, currentUserEfilingId, fileRow)) {
+            await client.query('ROLLBACK');
+            return NextResponse.json({
+                error: 'You are CC\'d on this file and have view-only access. You cannot mark or forward it.',
+                code: 'CC_VIEW_ONLY'
+            }, { status: 403 });
+        }
+
         const isCEO = isCEORole(currentUserRoleCode);
         const isCOO = currentUserRoleCode === 'COO';
         const isSE = currentUserRoleCode === 'SE' || currentUserRoleCode.startsWith('SE_');
@@ -1535,17 +1562,206 @@ export async function POST(request, { params }) {
                 }
             }
 
-            // Notify creator that the file has been forwarded
+            // Notify creator that the file has been forwarded (in-app)
             try {
                 const createdBy = fileRow.created_by;
-                if (createdBy && createdBy !== newAssignee) {
-                await client.query(`
+                if (createdBy && Number(createdBy) !== Number(newAssignee)) {
+                    await client.query(`
                         INSERT INTO efiling_notifications (user_id, file_id, type, message, priority, action_required, created_at)
                         VALUES ($1, $2, $3, $4, 'low', false, NOW())
                     `, [createdBy, fileId, 'file_forwarded', `Your file has been marked to ${assigneeDisplayName} (${assigneeRole})`]);
+                } else if (createdBy && Number(createdBy) === Number(newAssignee) && Number(currentUser.id) !== Number(createdBy)) {
+                    await client.query(`
+                        INSERT INTO efiling_notifications (user_id, file_id, type, message, priority, action_required, created_at)
+                        VALUES ($1, $2, $3, $4, 'normal', true, NOW())
+                    `, [createdBy, fileId, 'file_returned', `Your file has been marked back to you${remarks ? `: ${remarks}` : ''}`]);
                 }
             } catch (e) {
                 console.warn('Notify creator on mark-to failed', e);
+            }
+
+            // ========== CC (carbon copy) users ==========
+            // CC users are notified and can view the file, but assignment/SLA does not change.
+            const primaryAssigneeSet = new Set(validatedUserIds.map((id) => Number(id)));
+            const creatorId = Number(fileRow.created_by);
+            const rawCcIds = Array.isArray(cc_user_ids) ? cc_user_ids : [];
+            const validatedCcUserIds = [];
+            for (const rawId of rawCcIds) {
+                const ccId = safeParseInt(rawId);
+                if (!ccId) continue;
+                if (ccId === currentUser.id) continue; // cannot CC self
+                if (creatorId && ccId === creatorId) continue; // cannot CC file creator
+                if (primaryAssigneeSet.has(ccId)) continue; // already primary recipient
+                if (validatedCcUserIds.includes(ccId)) continue; // dedupe
+                validatedCcUserIds.push(ccId);
+            }
+
+            let ccDisplayNames = [];
+            if (validatedCcUserIds.length > 0) {
+                const ccUsersRes = await client.query(`
+                    SELECT eu.id, u.name as user_name, u.contact_number, r.code as role_code, r.name as role_name
+                    FROM efiling_users eu
+                    LEFT JOIN users u ON eu.user_id = u.id
+                    LEFT JOIN efiling_roles r ON eu.efiling_role_id = r.id
+                    WHERE eu.is_active = true AND eu.id = ANY($1::int[])
+                `, [validatedCcUserIds]);
+
+                const activeCcIds = ccUsersRes.rows.map((row) => Number(row.id));
+                const ccNameById = new Map(ccUsersRes.rows.map((row) => [Number(row.id), row.user_name || 'User']));
+                const ccPhoneById = new Map(ccUsersRes.rows.map((row) => [Number(row.id), row.contact_number || null]));
+                ccDisplayNames = ccUsersRes.rows.map((row) => {
+                    const name = row.user_name || 'User';
+                    const role = row.role_code || row.role_name || '';
+                    return role ? `${name} (${role})` : name;
+                });
+
+                for (const ccUserId of activeCcIds) {
+                    try {
+                        await client.query(`
+                            INSERT INTO efiling_file_cc (file_id, cc_user_id, marked_by, remarks, created_at)
+                            VALUES ($1, $2, $3, $4, NOW())
+                        `, [fileId, ccUserId, currentUser.id, remarks || null]);
+
+                        await client.query(`
+                            INSERT INTO efiling_file_movements (
+                                file_id, from_user_id, to_user_id, action_type, remarks, created_at
+                            ) VALUES ($1, $2, $3, 'CC', $4, NOW())
+                        `, [
+                            fileId,
+                            currentUser.id,
+                            ccUserId,
+                            remarks || `CC: File ${fileRow.file_number || fileId} marked to ${assigneeDisplayName}`
+                        ]);
+
+                        await client.query(`
+                            INSERT INTO efiling_notifications (user_id, file_id, type, message, priority, action_required, created_at)
+                            VALUES ($1, $2, $3, $4, 'low', false, NOW())
+                        `, [
+                            ccUserId,
+                            fileId,
+                            'file_cc',
+                            `You were CC'd on file ${fileRow.file_number || fileId} (marked to ${assigneeDisplayName})`
+                        ]);
+                    } catch (ccError) {
+                        console.warn('[MARK-TO] Failed to process CC for user:', ccUserId, ccError.message);
+                    }
+                }
+
+                // Optional WhatsApp for CC users (best-effort, does not fail mark-to)
+                for (const ccUserId of activeCcIds) {
+                    const phone = ccPhoneById.get(ccUserId);
+                    if (!phone) continue;
+                    try {
+                        const ccName = ccNameById.get(ccUserId) || 'User';
+                        const ccMessage =
+                            `📋 *File CC*\n\n` +
+                            `File Number: ${fileRow.file_number || fileId}\n` +
+                            `Subject: ${fileRow.subject || 'N/A'}\n` +
+                            `Marked to: ${assigneeDisplayName}\n` +
+                            `You were carbon-copied (CC) on this file for your information.\n\n` +
+                            `Thank you,\nE-Filing System`;
+                        const ccWhatsApp = await sendWhatsAppMessage(phone, ccMessage);
+                        if (ccWhatsApp.success) {
+                            console.log('[MARK-TO] WhatsApp CC notification sent to', ccName, phone);
+                        } else {
+                            console.warn('[MARK-TO] WhatsApp CC failed for', ccName, ':', ccWhatsApp.error);
+                        }
+                    } catch (ccWaError) {
+                        console.warn('[MARK-TO] WhatsApp CC error:', ccWaError.message);
+                    }
+                }
+            }
+
+            // ========== Creator WhatsApp follow-up (status tracking) ==========
+            // Creator always gets a WhatsApp update on where their file is now.
+            // Does not change assignee WhatsApp behaviour above.
+            try {
+                if (creatorId) {
+                    const creatorInfoRes = await client.query(`
+                        SELECT u.name as user_name, u.contact_number
+                        FROM efiling_users eu
+                        LEFT JOIN users u ON eu.user_id = u.id
+                        WHERE eu.id = $1
+                    `, [creatorId]);
+
+                    const creatorPhone = creatorInfoRes.rows[0]?.contact_number;
+                    const creatorName = creatorInfoRes.rows[0]?.user_name || 'Creator';
+
+                    if (creatorPhone) {
+                        const markerInfoRes = await client.query(`
+                            SELECT u.name, eu.designation, r.code as role_code, r.name as role_name
+                            FROM efiling_users eu
+                            LEFT JOIN users u ON eu.user_id = u.id
+                            LEFT JOIN efiling_roles r ON r.id = eu.efiling_role_id
+                            WHERE eu.id = $1
+                        `, [currentUser.id]);
+
+                        const marker = markerInfoRes.rows[0] || {};
+                        const markerName = marker.name || 'User';
+                        const markerRole = (marker.role_code || marker.role_name || '').toUpperCase();
+                        const markerDesignation = marker.designation || '';
+                        const markerDisplay = markerDesignation
+                            ? `${markerName} (${markerDesignation})`
+                            : markerRole
+                              ? `${markerName} (${markerRole})`
+                              : markerName;
+
+                        const targetRoleDisplay = assigneeRole
+                            ? `${assigneeDisplayName} (${assigneeRole})`
+                            : assigneeDisplayName;
+
+                        const fileNumber = fileRow.file_number || `File #${fileId}`;
+                        const fileSubject = fileRow.subject || 'N/A';
+                        const ccLine = ccDisplayNames.length > 0
+                            ? `\nCC: ${ccDisplayNames.join(', ')}`
+                            : '';
+                        const remarksText = (remarks || '').trim();
+                        const isMarkedBackToCreator =
+                            Number(newAssignee) === creatorId ||
+                            newState === 'RETURNED_TO_CREATOR';
+
+                        let creatorWhatsAppMessage;
+                        if (isMarkedBackToCreator) {
+                            creatorWhatsAppMessage =
+                                `↩️ *File Marked Back to You*\n\n` +
+                                `File Number: ${fileNumber}\n` +
+                                `Subject: ${fileSubject}\n\n` +
+                                `Your file has been marked back to you by:\n` +
+                                `👤 ${markerDisplay}\n` +
+                                (remarksText ? `\nComment/Remarks:\n${remarksText}\n` : '\n') +
+                                ccLine +
+                                `\n\nPlease review and take necessary action.\n\n` +
+                                `Thank you,\nE-Filing System`;
+                        } else {
+                            const markedBySelf = Number(currentUser.id) === creatorId;
+                            creatorWhatsAppMessage =
+                                `📍 *File Status Update*\n\n` +
+                                `File Number: ${fileNumber}\n` +
+                                `Subject: ${fileSubject}\n\n` +
+                                `Your file is now marked to:\n` +
+                                `👤 ${targetRoleDisplay}\n` +
+                                (markedBySelf
+                                    ? `\nYou marked this file forward.`
+                                    : `\nMarked by: ${markerDisplay}`) +
+                                (remarksText ? `\nRemarks: ${remarksText}` : '') +
+                                ccLine +
+                                `\n\nThank you,\nE-Filing System`;
+                        }
+
+                        console.log('[MARK-TO] Sending creator follow-up WhatsApp to', creatorName, creatorPhone);
+                        const creatorWaResult = await sendWhatsAppMessage(creatorPhone, creatorWhatsAppMessage);
+                        if (creatorWaResult.success) {
+                            console.log('[MARK-TO] ✅ Creator follow-up WhatsApp sent to', creatorName);
+                        } else {
+                            console.warn('[MARK-TO] ❌ Creator follow-up WhatsApp failed:', creatorWaResult.error);
+                        }
+                    } else {
+                        console.log('[MARK-TO] Skipping creator WhatsApp — no phone for creator:', creatorName);
+                    }
+                }
+            } catch (creatorWaError) {
+                // Do not fail mark-to if creator WhatsApp fails
+                console.warn('[MARK-TO] Creator follow-up WhatsApp error:', creatorWaError.message);
             }
 
             await client.query('COMMIT');
@@ -1553,7 +1769,13 @@ export async function POST(request, { params }) {
             await logAction(request, 'MARK_TO', ENTITY_TYPES.EFILING_FILE, {
                 entityId: fileId,
                 entityName: `File ${fileRow.file_number || fileId}`,
-                details: { user_ids, remarks, movements_created: processedMovements.length, assigned_to: newAssignee }
+                details: {
+                    user_ids,
+                    cc_user_ids: validatedCcUserIds,
+                    remarks,
+                    movements_created: processedMovements.length,
+                    assigned_to: newAssignee
+                }
             });
 
             return NextResponse.json({ 
@@ -1562,6 +1784,8 @@ export async function POST(request, { params }) {
                 workflow_state: newState,
                 is_team_internal: isTeamInternalFinal,
                 assigned_to: newAssignee,
+                cc_user_ids: validatedCcUserIds,
+                cc_count: validatedCcUserIds.length,
                 allowed_recipients: allowedRecipients
             });
         } catch (error) {
@@ -1643,6 +1867,19 @@ export async function GET(request, { params }) {
         const currentUserDivisionId = currentUser.division_id;
         const currentUserRoleCodeUpper = (currentUser.role_code || '').toUpperCase();
         const isSE = currentUserRoleCodeUpper === 'SE' || currentUserRoleCodeUpper.startsWith('SE_');
+
+        // CC-only: allow loading page context but mark as not allowed to mark
+        const isCcOnlyViewer = await isCcOnlyOnFile(client, fileId, currentUserEfilingId, file);
+        if (isCcOnlyViewer) {
+            return NextResponse.json({
+                file_id: fileId,
+                allowed_recipients: [],
+                movements: [],
+                can_mark: false,
+                is_cc_only: true,
+                message: 'You are CC\'d on this file and have view-only access.'
+            });
+        }
         
         // Helper function to get role hierarchy level (lower number = lower level)
         const getRoleLevel = (roleCode) => {
@@ -2321,7 +2558,8 @@ export async function GET(request, { params }) {
             can_mark: canMark,
             is_assigned_to_someone_else: isAssignedToSomeoneElse,
             assigned_to_name: assignedToName,
-            assigned_to_id: file.assigned_to
+            assigned_to_id: file.assigned_to,
+            created_by: file.created_by
         });
     } catch (error) {
         console.error('Database error:', error);

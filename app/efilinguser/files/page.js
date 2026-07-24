@@ -47,6 +47,7 @@ export default function FilesPage() {
     const [statuses, setStatuses] = useState([]);
     const [myFiles, setMyFiles] = useState([]);
     const [assignedToMe, setAssignedToMe] = useState([]);
+    const [ccFiles, setCcFiles] = useState([]);
     const isExternal = isExternalUser(roleCode);
     // External users (ADLFA/CON) should only see "assigned" tab (marked to them)
     const [activeTab, setActiveTab] = useState(isExternal ? 'assigned' : 'mine');
@@ -99,6 +100,8 @@ export default function FilesPage() {
                 params.append('assigned_to', efilingUserId);
             } else if (activeTab === 'mine') {
                 params.append('created_by', efilingUserId);
+            } else if (activeTab === 'cc') {
+                params.append('cc_to', efilingUserId);
             } else {
                 params.append('assigned_to', efilingUserId);
             }
@@ -119,6 +122,8 @@ export default function FilesPage() {
 
             if (activeTab === 'mine') {
                 setMyFiles(fileList);
+            } else if (activeTab === 'cc') {
+                setCcFiles(fileList);
             } else {
                 setAssignedToMe(fileList);
             }
@@ -129,7 +134,12 @@ export default function FilesPage() {
                     action_type: EFILING_ACTIONS.FILE_VIEWED,
                     description: `Accessed files list - found ${fileList.length} files`,
                     entity_type: 'files_list',
-                    entity_name: activeTab === 'mine' ? 'My Files List' : 'Assigned Files List'
+                    entity_name:
+                        activeTab === 'mine'
+                            ? 'My Files List'
+                            : activeTab === 'cc'
+                              ? 'CC Files List'
+                              : 'Assigned Files List'
                 });
             }
         } catch (error) {
@@ -185,6 +195,7 @@ export default function FilesPage() {
 
     const filteredMyFiles = useMemo(() => filterRows(myFiles), [myFiles, searchTerm]);
     const filteredAssignedFiles = useMemo(() => filterRows(assignedToMe), [assignedToMe, searchTerm]);
+    const filteredCcFiles = useMemo(() => filterRows(ccFiles), [ccFiles, searchTerm]);
 
     const handlePageChange = (page) => {
         setCurrentPage(page);
@@ -454,6 +465,7 @@ export default function FilesPage() {
                 <TabsList>
                     {!isExternal && <TabsTrigger value="mine">My Files</TabsTrigger>}
                     <TabsTrigger value="assigned">Marked To Me</TabsTrigger>
+                    {!isExternal && <TabsTrigger value="cc">CC Files</TabsTrigger>}
                 </TabsList>
 
                 <TabsContent value="mine">
@@ -469,7 +481,8 @@ export default function FilesPage() {
                         efilingUserId,
                         isGlobal,
                         getStatusBadge,
-                        formatTimeRemaining
+                        formatTimeRemaining,
+                        false
                     )}
                 </TabsContent>
 
@@ -486,7 +499,26 @@ export default function FilesPage() {
                         efilingUserId,
                         isGlobal,
                         getStatusBadge,
-                        formatTimeRemaining
+                        formatTimeRemaining,
+                        false
+                    )}
+                </TabsContent>
+
+                <TabsContent value="cc">
+                    {renderFilesTable(
+                        filteredCcFiles,
+                        currentPage,
+                        itemsPerPage,
+                        handlePageChange,
+                        handleItemsPerPageChange,
+                        (fileId) => router.push(`/efilinguser/files/${fileId}`),
+                        (fileId) => router.push(`/efilinguser/files/${fileId}/edit-document`),
+                        setMarkModalFile,
+                        efilingUserId,
+                        isGlobal,
+                        getStatusBadge,
+                        formatTimeRemaining,
+                        true
                     )}
                 </TabsContent>
             </Tabs>
@@ -534,7 +566,8 @@ function renderFilesTable(
     efilingUserId,
     isGlobal,
     getStatusBadge,
-    formatTimeRemaining
+    formatTimeRemaining,
+    isCcTab = false
 ) {
     // Calculate pagination for this specific table
     const totalPages = Math.ceil(rows.length / itemsPerPage);
@@ -547,7 +580,7 @@ function renderFilesTable(
             <CardHeader>
                 <CardTitle className="flex items-center">
                     <FileText className="w-5 h-5 mr-2" />
-                    Files ({rows.length})
+                    {isCcTab ? 'CC Files' : 'Files'} ({rows.length})
                 </CardTitle>
             </CardHeader>
             <CardContent>
@@ -555,7 +588,11 @@ function renderFilesTable(
                     <div className="text-center py-12 text-gray-500">
                         <FileText className="w-16 h-16 mx-auto mb-4 text-gray-300" />
                         <h3 className="text-lg font-medium mb-2">No files found</h3>
-                        <p className="text-sm mb-4">No files in this list</p>
+                        <p className="text-sm mb-4">
+                            {isCcTab
+                                ? 'No files have been carbon-copied (CC) to you yet'
+                                : 'No files in this list'}
+                        </p>
                     </div>
                 ) : (
                     <div className="overflow-x-auto">
@@ -578,14 +615,19 @@ function renderFilesTable(
                                 {paginatedRows.map((file) => {
                                     const isCreator = Number(file.created_by) === Number(efilingUserId);
                                     const isAssignee = Number(file.assigned_to) === Number(efilingUserId);
-                                    const canEdit = isCreator || isGlobal;
-                                    const canMark = (handleMark && (isCreator || isAssignee || isGlobal));
+                                    const canEdit = !isCcTab && (isCreator || isGlobal);
+                                    const canMark = !isCcTab && handleMark && (isCreator || isAssignee || isGlobal);
                                     return (
                                         <TableRow key={file.id} className="hover:bg-gray-50">
                                             <TableCell className="font-medium">
                                                 <div className="flex items-center space-x-2">
                                                     <FileText className="w-4 h-4 text-blue-600" />
                                                     <span>{file.file_number}</span>
+                                                    {isCcTab && (
+                                                        <Badge variant="outline" className="text-violet-700 border-violet-200 bg-violet-50">
+                                                            CC
+                                                        </Badge>
+                                                    )}
                                                 </div>
                                             </TableCell>
                                             <TableCell>
