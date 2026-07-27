@@ -14,7 +14,7 @@ import { Users, Plus, Trash2, Search, Building2, Shield, UserCheck, X } from "lu
 import { useToast } from "@/hooks/use-toast";
 
 // Team member roles - these are the subordinates that can be added to teams
-const TEAM_MEMBER_ROLES = ['AEE', 'SUB-Engineer', 'AOO', 'AO', 'DAO', 'O_IT_GA'];
+const TEAM_MEMBER_ROLES = ['AEE', 'SUB-Engineer', 'AOO', 'AO', 'DAO', 'O_IT_GA','SO_TO_COO'];
 
 // Manager roles - these are the team leaders who can have teams
 const MANAGER_ROLE_CODES = [
@@ -46,7 +46,7 @@ const MANAGER_ROLE_NAMES = [
     // Medical and audit roles
     'DIRECTOR MEDICAL SERVICES', 'DMS',
     'MEDICAL SCRUTINY COMMITTEE', 'MSC',
-    'CHIEF INTERNAL AUDITOR'
+    'CHIEF INTERNAL AUDITOR',
 ];
 
 // Helper function to check if a user is a manager
@@ -56,7 +56,7 @@ const isManager = (user) => {
     
     // First, explicitly exclude team member roles to avoid false positives
     // This must be checked FIRST before checking for manager roles
-    const teamMemberIndicators = ['AEE', 'SUB-ENGINEER', 'SUBENGINEER', 'SUB_ENGINEER', 'SUB-ENGR', 'SUBENGR', 'AOO', 'AO', 'DAO', 'Officer IT General Administration', 'O_IT_GA'];
+    const teamMemberIndicators = ['AEE', 'SUB-ENGINEER', 'SUBENGINEER', 'SUB_ENGINEER', 'SUB-ENGR', 'SUBENGR', 'AOO', 'AO', 'DAO', 'Officer IT General Administration', 'O_IT_GA', 'SO', 'SO_TO_COO'];
     const isTeamMember = teamMemberIndicators.some(indicator => {
         const indicatorUpper = indicator.toUpperCase();
         // Check if role code starts with or exactly matches team member roles
@@ -411,6 +411,10 @@ export default function TeamsManagement() {
                                         roleCodes: ['O_IT_GA'],
                                         roleNames: ['Officer IT General Administration']
                                     },
+                                    'SO_TO_COO': {
+                                        roleCodes: ['SO_TO_COO', 'SO'],
+                                        roleNames: ['STAFF OFFICER', 'SO to COO']
+                                    }
                                 };
                                 
                                 const mapping = teamRoleMapping[formData.team_role] || { roleCodes: [], roleNames: [] };
