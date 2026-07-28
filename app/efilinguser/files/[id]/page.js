@@ -1,5 +1,5 @@
 "use client";
-
+// print file
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter, useParams } from "next/navigation";
@@ -946,15 +946,23 @@ const openAttachmentModal = (attachment) => {
                         color: #000;
                     }
                     
-                    /* Print sections for signatures, attachments, comments */
-                    .print-section {
-                        page-break-inside: auto;
-                        margin-top: 0;
-                        padding: 15mm;
-                        border: 2px solid #333;
-                        background: white !important;
+                    /* Force Attachments and other print sections to START on a NEW PAGE */
+                    .print-section,
+                    .attachments-section {
+                        break-before: page !important;
+                        page-break-before: always !important;
+                        margin-top: 0 !important;
+                        padding-top: 15mm !important;
                         display: block !important;
-                        visibility: visible !important;
+                        clear: both !important;
+                    }
+
+                    /* Ensure individual attachment items don't break in half mid-image */
+                    .print-attachment-item,
+                    .attachment-item {
+                        break-inside: avoid !important;
+                        page-break-inside: avoid !important;
+                        margin-bottom: 5mm !important;
                     }
                     
                     /* Only add page break before if section has content and is not the last element */
@@ -1494,7 +1502,7 @@ const openAttachmentModal = (attachment) => {
 
                         {/* Print-only Attachments Section */}
                         {attachments.length > 0 && (
-                            <div className="print-only print-section">
+                            <div className="print-only print-section attachments-section">
                                 <h3>Attachments ({attachments.length})</h3>
                                 {attachments.map((a, idx) => (
                                     <div key={a.id || idx} className="print-attachment-item">
