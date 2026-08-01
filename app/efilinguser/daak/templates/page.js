@@ -8,13 +8,13 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Plus, Edit, Trash2, Eye, Search, FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useEfilingUser } from "@/context/EfilingUserContext";
 import { isExternalUser } from "@/lib/efilingRoleHelpers";
-
+import TipTapEditor from "@/app/efilinguser/components/TipTapEditor";
+import "@/app/efilinguser/components/TipTapEditor.css";
 const emptyForm = {
     name: "",
     subject: "",
@@ -221,7 +221,7 @@ export default function MyDaakTemplatesPage() {
             </Card>
 
             <Dialog open={showDialog} onOpenChange={setShowDialog}>
-                <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
+                <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
                     <DialogHeader>
                         <DialogTitle>{editing ? "Edit Template" : "New Personal Template"}</DialogTitle>
                     </DialogHeader>
@@ -244,7 +244,18 @@ export default function MyDaakTemplatesPage() {
                         </div>
                         <div>
                             <Label>Content</Label>
-                            <Textarea rows={8} value={formData.content} onChange={(e) => setFormData({ ...formData, content: e.target.value })} />
+                            <p className="text-xs text-slate-500 mb-2">
+                                Paste from Word or Docs — headings, bold, and other formatting are kept
+                            </p>
+                            {showDialog && (
+                                <TipTapEditor
+                                    key={editing?.id ? `edit-${editing.id}` : "new-template"}
+                                    value={formData.content}
+                                    onChange={(value) => setFormData((prev) => ({ ...prev, content: value }))}
+                                    placeholder="Paste or type letter body…"
+                                    className="min-h-[280px]"
+                                />
+                            )}
                         </div>
                     </div>
                     <DialogFooter>
@@ -255,7 +266,7 @@ export default function MyDaakTemplatesPage() {
             </Dialog>
 
             <Dialog open={showPreview} onOpenChange={setShowPreview}>
-                <DialogContent>
+                <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
                     <DialogHeader>
                         <DialogTitle>{preview?.name}</DialogTitle>
                     </DialogHeader>
@@ -264,7 +275,7 @@ export default function MyDaakTemplatesPage() {
                             {preview.to_header && <p><strong>TO:</strong> {preview.to_header}</p>}
                             <p><strong>Subject:</strong> {preview.subject || "—"}</p>
                             <div
-                                className="border rounded p-3"
+                                className="border rounded p-3 prose prose-sm max-w-none tiptap-editor"
                                 dangerouslySetInnerHTML={{ __html: preview.content || "<em>No content</em>" }}
                             />
                         </div>

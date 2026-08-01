@@ -1,27 +1,46 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Calendar } from "@/components/ui/calendar";
-import { X, Plus, Save, Calendar as CalendarIcon, MapPin, Video, Clock, Users, Edit2, ChevronDown } from "lucide-react";
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogFooter,
+} from "@/components/ui/dialog";
+import {
+    X,
+    Plus,
+    Save,
+    Calendar as CalendarIcon,
+    MapPin,
+    Video,
+    Clock,
+    Users,
+    ArrowLeft,
+    Building2,
+} from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useEfilingUser } from "@/context/EfilingUserContext";
 import { cn } from "@/lib/utils";
 import { isExternalUser } from "@/lib/efilingRoleHelpers";
+import SearchableSelect from "@/components/ui/searchable-select";
 
-export default function CreateMeetingPage() {
+function CreateMeetingForm() {
     const router = useRouter();
+    const searchParams = useSearchParams();
     const { toast } = useToast();
     const { efilingUserId, roleCode, loading: profileLoading } = useEfilingUser();
 
-    // Redirect external users (ADLFA/CON) - they cannot create meetings
     useEffect(() => {
         if (!profileLoading && isExternalUser(roleCode)) {
             toast({
@@ -29,9 +48,10 @@ export default function CreateMeetingPage() {
                 description: "External users cannot create meetings. Redirecting...",
                 variant: "destructive",
             });
-            router.push('/efilinguser/meetings');
+            router.push("/efilinguser/meetings");
         }
     }, [profileLoading, roleCode, router, toast]);
+
     const [loading, setLoading] = useState(false);
     const [departments, setDepartments] = useState([]);
     const [roles, setRoles] = useState([]);
@@ -39,12 +59,14 @@ export default function CreateMeetingPage() {
     const [teams, setTeams] = useState([]);
     const [users, setUsers] = useState([]);
 
+    const prefilledDate = searchParams.get("date") || "";
+
     const [formData, setFormData] = useState({
         title: "",
         description: "",
         agenda: "",
         meeting_type: "IN_PERSON",
-        meeting_date: "",
+        meeting_date: prefilledDate,
         start_time: "",
         end_time: "",
         venue_address: "",
@@ -68,18 +90,17 @@ export default function CreateMeetingPage() {
     });
 
     const [selectedTimeSlot, setSelectedTimeSlot] = useState(null);
-    const [duration, setDuration] = useState(30); // minutes
+    const [duration, setDuration] = useState(30);
 
-    // Generate time slots (30 min intervals from 8 AM to 8 PM)
     const generateTimeSlots = (dur) => {
         const slots = [];
         for (let hour = 8; hour < 20; hour++) {
             for (let minute = 0; minute < 60; minute += 30) {
-                const time = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+                const time = `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
                 const totalMinutes = minute + dur;
                 const endHour = hour + Math.floor(totalMinutes / 60);
                 const endMinute = totalMinutes % 60;
-                const endTime = `${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`;
+                const endTime = `${String(endHour).padStart(2, "0")}:${String(endMinute).padStart(2, "0")}`;
                 slots.push({ start: time, end: endTime });
             }
         }
@@ -97,12 +118,24 @@ export default function CreateMeetingPage() {
     }, []);
 
     useEffect(() => {
+        if (prefilledDate && !formData.meeting_date) {
+            setFormData((prev) => ({ ...prev, meeting_date: prefilledDate }));
+        }
+    }, [prefilledDate]);
+
+    useEffect(() => {
         if (attendeeType === "USER") {
-            setAttendeeOptions(users.map(u => ({ id: u.id, name: u.designation || u.employee_id || `User ${u.id}`, designation: u.designation })));
+            setAttendeeOptions(
+                users.map((u) => ({
+                    id: u.id,
+                    name: u.designation || u.employee_id || `User ${u.id}`,
+                    designation: u.designation,
+                }))
+            );
         } else if (attendeeType === "ROLE") {
-            setAttendeeOptions(roles.map(r => ({ id: r.id, name: r.name, title: r.name })));
+            setAttendeeOptions(roles.map((r) => ({ id: r.id, name: r.name, title: r.name })));
         } else if (attendeeType === "ROLE_GROUP") {
-            setAttendeeOptions(roleGroups.map(rg => ({ id: rg.id, name: rg.name, title: rg.name })));
+            setAttendeeOptions(roleGroups.map((rg) => ({ id: rg.id, name: rg.name, title: rg.name })));
         } else if (attendeeType === "TEAM") {
             setAttendeeOptions(teams);
         }
@@ -159,8 +192,14 @@ export default function CreateMeetingPage() {
             const res = await fetch("/api/efiling/users?is_active=true");
             if (res.ok) {
                 const data = await res.json();
-                const users = Array.isArray(data) ? data : [];
-                setTeams(users.map(u => ({ id: u.id, name: u.designation || u.employee_id || `User ${u.id}`, title: u.designation })));
+                const list = Array.isArray(data) ? data : [];
+                setTeams(
+                    list.map((u) => ({
+                        id: u.id,
+                        name: u.designation || u.employee_id || `User ${u.id}`,
+                        title: u.designation,
+                    }))
+                );
             }
         } catch (error) {
             console.error("Error fetching teams:", error);
@@ -183,9 +222,7 @@ export default function CreateMeetingPage() {
         if (selectedAttendeeId) {
             const option = attendeeOptions.find((opt) => opt.id.toString() === selectedAttendeeId);
             if (option) {
-                const exists = attendees.some(
-                    (a) => a.type === attendeeType && a.id === option.id
-                );
+                const exists = attendees.some((a) => a.type === attendeeType && a.id === option.id);
                 if (!exists) {
                     setAttendees([
                         ...attendees,
@@ -298,70 +335,118 @@ export default function CreateMeetingPage() {
 
     const formatTime = (time) => {
         if (!time) return "";
-        const [hours, minutes] = time.split(':');
-        const hour = parseInt(hours);
-        const ampm = hour >= 12 ? 'PM' : 'AM';
+        const [hours, minutes] = time.split(":");
+        const hour = parseInt(hours, 10);
+        const ampm = hour >= 12 ? "PM" : "AM";
         const displayHour = hour % 12 || 12;
         return `${displayHour}:${minutes} ${ampm}`;
     };
 
+    const formatDisplayDate = (ymd) => {
+        if (!ymd) return "Not selected";
+        const [y, m, d] = ymd.split("-").map(Number);
+        return new Date(y, m - 1, d).toLocaleDateString(undefined, {
+            weekday: "short",
+            month: "short",
+            day: "numeric",
+            year: "numeric",
+        });
+    };
+
+    const meetingTypeLabel = {
+        IN_PERSON: "In person",
+        VIRTUAL: "Virtual",
+        HYBRID: "Hybrid",
+    };
+
+    const totalGuests = attendees.length + externalAttendees.length;
+
     return (
-        <div className="min-h-screen bg-gray-50">
-            <div className="container mx-auto p-6 max-w-7xl">
-                {/* Header */}
-                <div className="mb-6">
-                    <h1 className="text-3xl font-bold text-gray-900">Schedule Meeting</h1>
-                    <p className="text-gray-600 mt-1">Create a new meeting and invite attendees</p>
+        <div className="min-h-screen bg-slate-50">
+            <div className="container mx-auto p-4 md:p-6 max-w-7xl space-y-6 pb-8">
+                <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
+                    <div>
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className="mb-2 -ml-2 text-slate-600"
+                            onClick={() => router.push("/efilinguser/meetings")}
+                        >
+                            <ArrowLeft className="w-4 h-4 mr-1.5" />
+                            Back to calendar
+                        </Button>
+                        <h1 className="text-3xl font-semibold tracking-tight text-slate-900">
+                            Schedule meeting
+                        </h1>
+                        <p className="text-slate-600 mt-1">
+                            Set the details, pick a date and time, then invite attendees
+                        </p>
+                    </div>
+                    {(formData.meeting_date || selectedTimeSlot) && (
+                        <div className="rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm shadow-sm">
+                            <p className="text-xs font-medium uppercase tracking-wide text-slate-400 mb-1">
+                                Summary
+                            </p>
+                            <p className="font-medium text-slate-900">
+                                {formatDisplayDate(formData.meeting_date)}
+                            </p>
+                            <p className="text-slate-600">
+                                {selectedTimeSlot
+                                    ? `${formatTime(selectedTimeSlot.start)} – ${formatTime(selectedTimeSlot.end)}`
+                                    : "Select a time"}
+                            </p>
+                        </div>
+                    )}
                 </div>
 
-                {/* Main Content - Two Column Layout */}
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    {/* Left Panel - Meeting Details */}
-                    <div className="lg:col-span-1 space-y-4">
-                        <Card className="border-0 shadow-lg">
-                            <CardHeader className="pb-4">
-                                <div className="flex items-center justify-between">
-                                    <CardTitle className="text-xl font-semibold">Meeting Details</CardTitle>
-                                    <Button variant="ghost" size="icon" className="h-8 w-8">
-                                        <Edit2 className="h-4 w-4" />
-                                    </Button>
-                                </div>
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                    {/* Details */}
+                    <div className="lg:col-span-5 space-y-4">
+                        <Card className="border-slate-200 shadow-sm">
+                            <CardHeader className="pb-3">
+                                <CardTitle className="text-lg">Meeting details</CardTitle>
+                                <CardDescription>Title, type, venue, and notes</CardDescription>
                             </CardHeader>
                             <CardContent className="space-y-4">
-                                {/* Title */}
                                 <div>
-                                    <Label className="text-sm font-medium text-gray-700">Meeting Title</Label>
+                                    <Label className="text-sm font-medium text-slate-700">
+                                        Meeting title <span className="text-rose-500">*</span>
+                                    </Label>
                                     <Input
                                         value={formData.title}
                                         onChange={(e) =>
                                             setFormData({ ...formData, title: e.target.value })
                                         }
-                                        placeholder="Enter meeting title"
-                                        className="mt-1"
+                                        placeholder="e.g. Monthly progress review"
+                                        className="mt-1.5"
                                     />
                                 </div>
 
-                                {/* Duration */}
                                 <div>
-                                    <Label className="text-sm font-medium text-gray-700">Duration</Label>
+                                    <Label className="text-sm font-medium text-slate-700">Duration</Label>
                                     <Select
                                         value={duration.toString()}
                                         onValueChange={(value) => {
-                                            const newDuration = parseInt(value);
+                                            const newDuration = parseInt(value, 10);
                                             setDuration(newDuration);
                                             if (selectedTimeSlot) {
-                                                const [hours, minutes] = selectedTimeSlot.start.split(':');
-                                                const startHour = parseInt(hours);
-                                                const startMinute = parseInt(minutes);
+                                                const [hours, minutes] =
+                                                    selectedTimeSlot.start.split(":");
+                                                const startHour = parseInt(hours, 10);
+                                                const startMinute = parseInt(minutes, 10);
                                                 const totalMinutes = startMinute + newDuration;
-                                                const endHour = startHour + Math.floor(totalMinutes / 60);
+                                                const endHour =
+                                                    startHour + Math.floor(totalMinutes / 60);
                                                 const endMinute = totalMinutes % 60;
-                                                const endTime = `${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`;
-                                                setSelectedTimeSlot({ ...selectedTimeSlot, end: endTime });
+                                                const endTime = `${String(endHour).padStart(2, "0")}:${String(endMinute).padStart(2, "0")}`;
+                                                setSelectedTimeSlot({
+                                                    ...selectedTimeSlot,
+                                                    end: endTime,
+                                                });
                                             }
                                         }}
                                     >
-                                        <SelectTrigger className="mt-1">
+                                        <SelectTrigger className="mt-1.5">
                                             <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent>
@@ -375,80 +460,95 @@ export default function CreateMeetingPage() {
                                     </Select>
                                 </div>
 
-                                {/* Meeting Type */}
                                 <div>
-                                    <Label className="text-sm font-medium text-gray-700">Conference Type</Label>
-                                    <Select
-                                        value={formData.meeting_type}
-                                        onValueChange={(value) =>
-                                            setFormData({ ...formData, meeting_type: value })
-                                        }
-                                    >
-                                        <SelectTrigger className="mt-1">
-                                            <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="IN_PERSON">
-                                                <div className="flex items-center">
-                                                    <MapPin className="w-4 h-4 mr-2" />
-                                                    In-Person
-                                                </div>
-                                            </SelectItem>
-                                            <SelectItem value="VIRTUAL">
-                                                <div className="flex items-center">
-                                                    <Video className="w-4 h-4 mr-2" />
-                                                    Virtual (Zoom/Meet)
-                                                </div>
-                                            </SelectItem>
-                                            <SelectItem value="HYBRID">
-                                                <div className="flex items-center">
-                                                    <Video className="w-4 h-4 mr-2" />
-                                                    Hybrid
-                                                </div>
-                                            </SelectItem>
-                                        </SelectContent>
-                                    </Select>
+                                    <Label className="text-sm font-medium text-slate-700 mb-1.5 block">
+                                        Meeting type
+                                    </Label>
+                                    <div className="flex gap-2">
+                                        {[
+                                            { value: "IN_PERSON", icon: MapPin, label: "In person" },
+                                            { value: "VIRTUAL", icon: Video, label: "Virtual" },
+                                            { value: "HYBRID", icon: Building2, label: "Hybrid" },
+                                        ].map(({ value, icon: Icon, label }) => (
+                                            <button
+                                                key={value}
+                                                type="button"
+                                                onClick={() =>
+                                                    setFormData({ ...formData, meeting_type: value })
+                                                }
+                                                className={cn(
+                                                    "flex-1 rounded-lg border px-2 py-2.5 text-xs font-medium transition flex flex-col items-center gap-1",
+                                                    formData.meeting_type === value
+                                                        ? "border-slate-900 bg-slate-900 text-white"
+                                                        : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+                                                )}
+                                            >
+                                                <Icon className="w-4 h-4" />
+                                                {label}
+                                            </button>
+                                        ))}
+                                    </div>
                                 </div>
 
-                                {/* Venue or Link */}
-                                {(formData.meeting_type === "IN_PERSON" || formData.meeting_type === "HYBRID") && (
+                                {(formData.meeting_type === "IN_PERSON" ||
+                                    formData.meeting_type === "HYBRID") && (
                                     <div>
-                                        <Label className="text-sm font-medium text-gray-700">Venue Address</Label>
+                                        <Label className="text-sm font-medium text-slate-700">
+                                            Venue address{" "}
+                                            {formData.meeting_type === "IN_PERSON" && (
+                                                <span className="text-rose-500">*</span>
+                                            )}
+                                        </Label>
                                         <Input
                                             value={formData.venue_address}
                                             onChange={(e) =>
-                                                setFormData({ ...formData, venue_address: e.target.value })
+                                                setFormData({
+                                                    ...formData,
+                                                    venue_address: e.target.value,
+                                                })
                                             }
-                                            placeholder="Enter venue address"
-                                            className="mt-1"
-                                        />
-                                    </div>
-                                )}
-                                {(formData.meeting_type === "VIRTUAL" || formData.meeting_type === "HYBRID") && (
-                                    <div>
-                                        <Label className="text-sm font-medium text-gray-700">Meeting Link</Label>
-                                        <Input
-                                            value={formData.meeting_link}
-                                            onChange={(e) =>
-                                                setFormData({ ...formData, meeting_link: e.target.value })
-                                            }
-                                            placeholder="https://meet.google.com/..."
-                                            className="mt-1"
+                                            placeholder="Conference room / office address"
+                                            className="mt-1.5"
                                         />
                                     </div>
                                 )}
 
-                                {/* Department */}
+                                {(formData.meeting_type === "VIRTUAL" ||
+                                    formData.meeting_type === "HYBRID") && (
+                                    <div>
+                                        <Label className="text-sm font-medium text-slate-700">
+                                            Meeting link{" "}
+                                            {formData.meeting_type === "VIRTUAL" && (
+                                                <span className="text-rose-500">*</span>
+                                            )}
+                                        </Label>
+                                        <Input
+                                            value={formData.meeting_link}
+                                            onChange={(e) =>
+                                                setFormData({
+                                                    ...formData,
+                                                    meeting_link: e.target.value,
+                                                })
+                                            }
+                                            placeholder="https://meet.google.com/..."
+                                            className="mt-1.5"
+                                        />
+                                    </div>
+                                )}
+
                                 <div>
-                                    <Label className="text-sm font-medium text-gray-700">Department</Label>
+                                    <Label className="text-sm font-medium text-slate-700">Department</Label>
                                     <Select
                                         value={formData.department_id || undefined}
                                         onValueChange={(value) =>
-                                            setFormData({ ...formData, department_id: value === "none" ? "" : value })
+                                            setFormData({
+                                                ...formData,
+                                                department_id: value === "none" ? "" : value,
+                                            })
                                         }
                                     >
-                                        <SelectTrigger className="mt-1">
-                                            <SelectValue placeholder="Select department" />
+                                        <SelectTrigger className="mt-1.5">
+                                            <SelectValue placeholder="Optional department" />
                                         </SelectTrigger>
                                         <SelectContent>
                                             <SelectItem value="none">None</SelectItem>
@@ -461,324 +561,408 @@ export default function CreateMeetingPage() {
                                     </Select>
                                 </div>
 
-                                {/* Description */}
                                 <div>
-                                    <Label className="text-sm font-medium text-gray-700">Description</Label>
+                                    <Label className="text-sm font-medium text-slate-700">Description</Label>
                                     <Textarea
                                         value={formData.description}
                                         onChange={(e) =>
                                             setFormData({ ...formData, description: e.target.value })
                                         }
-                                        placeholder="Meeting description..."
+                                        placeholder="Brief overview of the meeting"
                                         rows={3}
-                                        className="mt-1"
+                                        className="mt-1.5"
                                     />
                                 </div>
 
-                                {/* Agenda */}
                                 <div>
-                                    <Label className="text-sm font-medium text-gray-700">Agenda</Label>
+                                    <Label className="text-sm font-medium text-slate-700">Agenda</Label>
                                     <Textarea
                                         value={formData.agenda}
                                         onChange={(e) =>
                                             setFormData({ ...formData, agenda: e.target.value })
                                         }
-                                        placeholder="Meeting agenda items..."
+                                        placeholder="Key discussion points…"
                                         rows={3}
-                                        className="mt-1"
+                                        className="mt-1.5"
                                     />
                                 </div>
-
-                                {/* Hosts Section */}
-                                <div className="pt-2 border-t">
-                                    <Label className="text-sm font-medium text-gray-700 mb-2 block">Hosts</Label>
-                                    <div className="flex items-center gap-2 text-sm text-gray-600">
-                                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                                            <Users className="w-4 h-4 text-primary" />
-                                        </div>
-                                        <span>You (Organizer)</span>
-                                    </div>
-                                </div>
-
-                                {/* Contacts Section */}
-                                <div className="pt-2 border-t">
-                                    <div className="flex items-center justify-between mb-2">
-                                        <Label className="text-sm font-medium text-gray-700">Contacts</Label>
-                                        <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            onClick={() => setShowAttendeeModal(true)}
-                                            className="h-7 text-xs"
-                                        >
-                                            <Plus className="w-3 h-3 mr-1" />
-                                            Add guests
-                                        </Button>
-                                    </div>
-                                    {attendees.length === 0 && externalAttendees.length === 0 ? (
-                                        <p className="text-xs text-gray-500">No attendees added</p>
-                                    ) : (
-                                        <div className="space-y-2">
-                                            {attendees.map((attendee, index) => (
-                                                <div key={index} className="flex items-center justify-between text-sm bg-gray-50 p-2 rounded">
-                                                    <span className="text-gray-700">{attendee.name}</span>
-                                                    <button
-                                                        onClick={() => removeAttendee(index)}
-                                                        className="text-gray-400 hover:text-red-500"
-                                                    >
-                                                        <X className="w-3 h-3" />
-                                                    </button>
-                                                </div>
-                                            ))}
-                                            {externalAttendees.map((attendee, index) => (
-                                                <div key={index} className="flex items-center justify-between text-sm bg-gray-50 p-2 rounded">
-                                                    <span className="text-gray-700">{attendee.name}</span>
-                                                    <button
-                                                        onClick={() => removeExternalAttendee(index)}
-                                                        className="text-gray-400 hover:text-red-500"
-                                                    >
-                                                        <X className="w-3 h-3" />
-                                                    </button>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-
-                                {/* External Attendees Button */}
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => setShowExternalModal(true)}
-                                    className="w-full"
-                                >
-                                    <Plus className="w-4 h-4 mr-2" />
-                                    Add External Attendee
-                                </Button>
                             </CardContent>
                         </Card>
-                    </div>
 
-                    {/* Right Panel - Calendar & Time Selection */}
-                    <div className="lg:col-span-2 space-y-4">
-                        <Card className="border-0 shadow-lg">
-                            <CardHeader className="pb-4">
-                                <div className="flex items-center justify-between">
-                                    <CardTitle className="text-xl font-semibold">Select a time to book</CardTitle>
-                                    <div className="text-sm text-gray-500">
-                                        Time zone: {Intl.DateTimeFormat().resolvedOptions().timeZone}
+                        <Card className="border-slate-200 shadow-sm">
+                            <CardHeader className="pb-3">
+                                <div className="flex items-center justify-between gap-2">
+                                    <div>
+                                        <CardTitle className="text-lg">Attendees</CardTitle>
+                                        <CardDescription>
+                                            {totalGuests === 0
+                                                ? "Invite internal or external guests"
+                                                : `${totalGuests} guest${totalGuests === 1 ? "" : "s"} invited`}
+                                        </CardDescription>
                                     </div>
+                                    <Badge variant="outline" className="shrink-0">
+                                        <Users className="w-3 h-3 mr-1" />
+                                        You host
+                                    </Badge>
                                 </div>
                             </CardHeader>
-                            <CardContent>
-                                {/* Calendar */}
-                                <div className="mb-6">
-                                    <Calendar
-                                        value={formData.meeting_date}
-                                        onChange={(date) => {
-                                            setFormData({ ...formData, meeting_date: date });
-                                            setSelectedTimeSlot(null);
-                                        }}
-                                        minDate={new Date().toISOString().split('T')[0]}
-                                    />
+                            <CardContent className="space-y-3">
+                                <div className="flex flex-wrap gap-2">
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => setShowAttendeeModal(true)}
+                                    >
+                                        <Plus className="w-3.5 h-3.5 mr-1.5" />
+                                        Add guests
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => setShowExternalModal(true)}
+                                    >
+                                        <Plus className="w-3.5 h-3.5 mr-1.5" />
+                                        External
+                                    </Button>
                                 </div>
 
-                                {/* Time Slots */}
-                                {formData.meeting_date ? (
-                                    <div>
-                                        <Label className="text-sm font-medium text-gray-700 mb-3 block">
-                                            Available Times
-                                        </Label>
-                                        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2 max-h-96 overflow-y-auto">
-                                            {timeSlots.map((slot, index) => {
-                                                const isSelected = selectedTimeSlot?.start === slot.start;
-                                                return (
-                                                    <button
-                                                        key={index}
-                                                        onClick={() => setSelectedTimeSlot(slot)}
-                                                        className={cn(
-                                                            "px-3 py-2 text-sm rounded-md border transition-colors",
-                                                            "hover:bg-primary hover:text-primary-foreground hover:border-primary",
-                                                            isSelected
-                                                                ? "bg-primary text-primary-foreground border-primary"
-                                                                : "bg-white border-gray-200 text-gray-700"
-                                                        )}
-                                                    >
-                                                        {formatTime(slot.start)}
-                                                    </button>
-                                                );
-                                            })}
-                                        </div>
-                                        {selectedTimeSlot && (
-                                            <div className="mt-4 p-3 bg-primary/10 rounded-md">
-                                                <p className="text-sm font-medium text-gray-700">
-                                                    Selected: {formatTime(selectedTimeSlot.start)} - {formatTime(selectedTimeSlot.end)}
-                                                </p>
-                                            </div>
-                                        )}
+                                {totalGuests === 0 ? (
+                                    <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50/80 px-4 py-6 text-center text-sm text-slate-500">
+                                        No attendees yet — add people who should join
                                     </div>
                                 ) : (
-                                    <div className="text-center py-12 text-gray-500">
-                                        <CalendarIcon className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-                                        <p>Select a date to view available times</p>
+                                    <div className="space-y-2 max-h-56 overflow-y-auto">
+                                        {attendees.map((attendee, index) => (
+                                            <div
+                                                key={`int-${index}`}
+                                                className="flex items-center justify-between gap-2 rounded-lg border border-slate-100 bg-white px-3 py-2 text-sm"
+                                            >
+                                                <div className="min-w-0">
+                                                    <p className="font-medium text-slate-800 truncate">
+                                                        {attendee.name}
+                                                    </p>
+                                                    <p className="text-xs text-slate-500 capitalize">
+                                                        {String(attendee.type || "")
+                                                            .toLowerCase()
+                                                            .replace("_", " ")}
+                                                    </p>
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => removeAttendee(index)}
+                                                    className="text-slate-400 hover:text-rose-600 p-1"
+                                                    aria-label="Remove attendee"
+                                                >
+                                                    <X className="w-4 h-4" />
+                                                </button>
+                                            </div>
+                                        ))}
+                                        {externalAttendees.map((attendee, index) => (
+                                            <div
+                                                key={`ext-${index}`}
+                                                className="flex items-center justify-between gap-2 rounded-lg border border-slate-100 bg-white px-3 py-2 text-sm"
+                                            >
+                                                <div className="min-w-0">
+                                                    <p className="font-medium text-slate-800 truncate">
+                                                        {attendee.name}
+                                                    </p>
+                                                    <p className="text-xs text-slate-500 truncate">
+                                                        {attendee.email}
+                                                        {attendee.organization
+                                                            ? ` · ${attendee.organization}`
+                                                            : ""}
+                                                    </p>
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => removeExternalAttendee(index)}
+                                                    className="text-slate-400 hover:text-rose-600 p-1"
+                                                    aria-label="Remove external attendee"
+                                                >
+                                                    <X className="w-4 h-4" />
+                                                </button>
+                                            </div>
+                                        ))}
                                     </div>
                                 )}
                             </CardContent>
                         </Card>
+                    </div>
 
-                        {/* Action Buttons */}
-                        <div className="flex justify-end gap-3">
-                            <Button
-                                variant="outline"
-                                onClick={() => router.back()}
-                                disabled={loading}
-                            >
+                    {/* Date & time */}
+                    <div className="lg:col-span-7 space-y-4">
+                        <Card className="border-slate-200 shadow-sm">
+                            <CardHeader className="pb-3">
+                                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                                    <div>
+                                        <CardTitle className="text-lg">Date & time</CardTitle>
+                                        <CardDescription>
+                                            Choose a day, then pick an available slot
+                                        </CardDescription>
+                                    </div>
+                                    <p className="text-xs text-slate-500 flex items-center gap-1.5">
+                                        <Clock className="w-3.5 h-3.5" />
+                                        {Intl.DateTimeFormat().resolvedOptions().timeZone}
+                                    </p>
+                                </div>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                                    <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-3">
+                                        <Calendar
+                                            value={formData.meeting_date}
+                                            onChange={(date) => {
+                                                setFormData({ ...formData, meeting_date: date });
+                                                setSelectedTimeSlot(null);
+                                            }}
+                                            minDate={new Date().toISOString().split("T")[0]}
+                                        />
+                                    </div>
+
+                                    <div>
+                                        {formData.meeting_date ? (
+                                            <>
+                                                <div className="flex items-center justify-between mb-3">
+                                                    <Label className="text-sm font-medium text-slate-700">
+                                                        Available times
+                                                    </Label>
+                                                    <span className="text-xs text-slate-500">
+                                                        {formatDisplayDate(formData.meeting_date)}
+                                                    </span>
+                                                </div>
+                                                <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-[340px] overflow-y-auto pr-1">
+                                                    {timeSlots.map((slot, index) => {
+                                                        const isSelected =
+                                                            selectedTimeSlot?.start === slot.start;
+                                                        return (
+                                                            <button
+                                                                key={index}
+                                                                type="button"
+                                                                onClick={() => setSelectedTimeSlot(slot)}
+                                                                className={cn(
+                                                                    "px-2 py-2.5 text-sm rounded-lg border transition-colors font-medium",
+                                                                    isSelected
+                                                                        ? "bg-slate-900 text-white border-slate-900"
+                                                                        : "bg-white border-slate-200 text-slate-700 hover:border-slate-400"
+                                                                )}
+                                                            >
+                                                                {formatTime(slot.start)}
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+                                                {selectedTimeSlot && (
+                                                    <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-sm text-emerald-900">
+                                                        <span className="font-medium">Booked slot: </span>
+                                                        {formatTime(selectedTimeSlot.start)} –{" "}
+                                                        {formatTime(selectedTimeSlot.end)} ·{" "}
+                                                        {meetingTypeLabel[formData.meeting_type]}
+                                                    </div>
+                                                )}
+                                            </>
+                                        ) : (
+                                            <div className="h-full min-h-[280px] flex flex-col items-center justify-center text-center text-slate-500 rounded-xl border border-dashed border-slate-200 bg-slate-50/50 px-6">
+                                                <CalendarIcon className="w-10 h-10 mb-3 text-slate-300" />
+                                                <p className="font-medium text-slate-700">Select a date</p>
+                                                <p className="text-sm mt-1">
+                                                    Available time slots will appear here
+                                                </p>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    </div>
+                </div>
+
+                <Card className="border-slate-200 shadow-sm">
+                    <CardContent className="py-4 px-4 md:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="text-sm text-slate-600">
+                            {formData.title ? (
+                                <span className="font-medium text-slate-900">{formData.title}</span>
+                            ) : (
+                                <span>Untitled meeting</span>
+                            )}
+                            {formData.meeting_date && selectedTimeSlot && (
+                                <span className="text-slate-500">
+                                    {" "}
+                                    · {formatDisplayDate(formData.meeting_date)} ·{" "}
+                                    {formatTime(selectedTimeSlot.start)}
+                                </span>
+                            )}
+                        </div>
+                        <div className="flex justify-end gap-2">
+                            <Button variant="outline" onClick={() => router.back()} disabled={loading}>
                                 Cancel
                             </Button>
                             <Button
                                 onClick={handleSubmit}
                                 disabled={loading || !formData.meeting_date || !selectedTimeSlot}
-                                className="min-w-[140px]"
+                                className="min-w-[150px]"
                             >
                                 {loading ? (
-                                    "Creating..."
+                                    "Creating…"
                                 ) : (
                                     <>
                                         <Save className="w-4 h-4 mr-2" />
-                                        Book Meeting
+                                        Book meeting
                                     </>
                                 )}
                             </Button>
                         </div>
-                    </div>
-                </div>
-
-                {/* Modals */}
-                {showAttendeeModal && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-                        <Card className="bg-white p-6 rounded-lg w-full max-w-md shadow-xl">
-                            <CardContent className="space-y-4">
-                                <h3 className="text-lg font-semibold">Add Attendee</h3>
-                                <div>
-                                    <Label>Attendee Type</Label>
-                                    <Select
-                                        value={attendeeType}
-                                        onValueChange={setAttendeeType}
-                                    >
-                                        <SelectTrigger>
-                                            <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="USER">User</SelectItem>
-                                            <SelectItem value="ROLE">Role</SelectItem>
-                                            <SelectItem value="ROLE_GROUP">Role Group</SelectItem>
-                                            <SelectItem value="TEAM">Team</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                                <div>
-                                    <Label>Select {attendeeType.replace("_", " ")}</Label>
-                                    <Select
-                                        value={selectedAttendeeId}
-                                        onValueChange={setSelectedAttendeeId}
-                                    >
-                                        <SelectTrigger>
-                                            <SelectValue placeholder={`Select ${attendeeType}`} />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {attendeeOptions.length > 0 ? (
-                                                attendeeOptions.map((opt) => (
-                                                    <SelectItem
-                                                        key={opt.id}
-                                                        value={opt.id.toString()}
-                                                    >
-                                                        {opt.name || opt.designation || opt.title || `ID: ${opt.id}`}
-                                                    </SelectItem>
-                                                ))
-                                            ) : (
-                                                <SelectItem value="no-options" disabled>
-                                                    No options available
-                                                </SelectItem>
-                                            )}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                                <div className="flex gap-2 justify-end">
-                                    <Button
-                                        variant="outline"
-                                        onClick={() => setShowAttendeeModal(false)}
-                                    >
-                                        Cancel
-                                    </Button>
-                                    <Button onClick={addAttendee}>Add</Button>
-                                </div>
-                            </CardContent>
-                        </Card>
-                    </div>
-                )}
-
-                {showExternalModal && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-                        <Card className="bg-white p-6 rounded-lg w-full max-w-md shadow-xl">
-                            <CardContent className="space-y-4">
-                                <h3 className="text-lg font-semibold">Add External Attendee</h3>
-                                <div>
-                                    <Label>Email *</Label>
-                                    <Input
-                                        type="email"
-                                        value={externalForm.email}
-                                        onChange={(e) =>
-                                            setExternalForm({ ...externalForm, email: e.target.value })
-                                        }
-                                        placeholder="Enter email address"
-                                    />
-                                </div>
-                                <div>
-                                    <Label>Name *</Label>
-                                    <Input
-                                        value={externalForm.name}
-                                        onChange={(e) =>
-                                            setExternalForm({ ...externalForm, name: e.target.value })
-                                        }
-                                        placeholder="Full name"
-                                    />
-                                </div>
-                                <div>
-                                    <Label>Designation</Label>
-                                    <Input
-                                        value={externalForm.designation}
-                                        onChange={(e) =>
-                                            setExternalForm({ ...externalForm, designation: e.target.value })
-                                        }
-                                        placeholder="Designation"
-                                    />
-                                </div>
-                                <div>
-                                    <Label>Organization</Label>
-                                    <Input
-                                        value={externalForm.organization}
-                                        onChange={(e) =>
-                                            setExternalForm({ ...externalForm, organization: e.target.value })
-                                        }
-                                        placeholder="Organization"
-                                    />
-                                </div>
-                                <div className="flex gap-2 justify-end">
-                                    <Button
-                                        variant="outline"
-                                        onClick={() => {
-                                            setShowExternalModal(false);
-                                            setExternalForm({ email: "", name: "", designation: "", organization: "" });
-                                        }}
-                                    >
-                                        Cancel
-                                    </Button>
-                                    <Button onClick={addExternalAttendee}>Add</Button>
-                                </div>
-                            </CardContent>
-                        </Card>
-                    </div>
-                )}
+                    </CardContent>
+                </Card>
             </div>
+
+            <Dialog open={showAttendeeModal} onOpenChange={setShowAttendeeModal}>
+                <DialogContent className="max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Add attendee</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4 py-2">
+                        <div>
+                            <Label>Attendee type</Label>
+                            <Select value={attendeeType} onValueChange={setAttendeeType}>
+                                <SelectTrigger className="mt-1.5">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="USER">User</SelectItem>
+                                    <SelectItem value="ROLE">Role</SelectItem>
+                                    <SelectItem value="ROLE_GROUP">Role group</SelectItem>
+                                    <SelectItem value="TEAM">Team</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div>
+                            <Label>
+                                Select {attendeeType.replace("_", " ").toLowerCase()}
+                            </Label>
+                            <div className="mt-1.5">
+                                <SearchableSelect
+                                    value={selectedAttendeeId}
+                                    onValueChange={setSelectedAttendeeId}
+                                    options={attendeeOptions}
+                                    getValue={(o) => String(o.id)}
+                                    getLabel={(o) =>
+                                        o.name || o.designation || o.title || `ID: ${o.id}`
+                                    }
+                                    placeholder={`Search ${attendeeType.toLowerCase().replace("_", " ")}…`}
+                                    emptyText="No options available"
+                                />
+                            </div>
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setShowAttendeeModal(false)}>
+                            Cancel
+                        </Button>
+                        <Button onClick={addAttendee} disabled={!selectedAttendeeId}>
+                            Add
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={showExternalModal} onOpenChange={setShowExternalModal}>
+                <DialogContent className="max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Add external attendee</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-3 py-2">
+                        <div>
+                            <Label>Email *</Label>
+                            <Input
+                                type="email"
+                                value={externalForm.email}
+                                onChange={(e) =>
+                                    setExternalForm({ ...externalForm, email: e.target.value })
+                                }
+                                placeholder="email@example.com"
+                                className="mt-1.5"
+                            />
+                        </div>
+                        <div>
+                            <Label>Name *</Label>
+                            <Input
+                                value={externalForm.name}
+                                onChange={(e) =>
+                                    setExternalForm({ ...externalForm, name: e.target.value })
+                                }
+                                placeholder="Full name"
+                                className="mt-1.5"
+                            />
+                        </div>
+                        <div>
+                            <Label>Designation</Label>
+                            <Input
+                                value={externalForm.designation}
+                                onChange={(e) =>
+                                    setExternalForm({
+                                        ...externalForm,
+                                        designation: e.target.value,
+                                    })
+                                }
+                                placeholder="Optional"
+                                className="mt-1.5"
+                            />
+                        </div>
+                        <div>
+                            <Label>Organization</Label>
+                            <Input
+                                value={externalForm.organization}
+                                onChange={(e) =>
+                                    setExternalForm({
+                                        ...externalForm,
+                                        organization: e.target.value,
+                                    })
+                                }
+                                placeholder="Optional"
+                                className="mt-1.5"
+                            />
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button
+                            variant="outline"
+                            onClick={() => {
+                                setShowExternalModal(false);
+                                setExternalForm({
+                                    email: "",
+                                    name: "",
+                                    designation: "",
+                                    organization: "",
+                                });
+                            }}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            onClick={addExternalAttendee}
+                            disabled={!externalForm.email || !externalForm.name}
+                        >
+                            Add
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
+    );
+}
+
+export default function CreateMeetingPage() {
+    return (
+        <Suspense
+            fallback={
+                <div className="min-h-screen bg-slate-50 flex items-center justify-center text-slate-500">
+                    Loading…
+                </div>
+            }
+        >
+            <CreateMeetingForm />
+        </Suspense>
     );
 }

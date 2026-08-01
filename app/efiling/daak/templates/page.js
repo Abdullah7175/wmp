@@ -10,11 +10,12 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Plus, Edit, Trash2, Eye, Search } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import SearchableSelect from "@/components/ui/searchable-select";
+import TipTapEditor from "@/app/efiling/components/TipTapEditor";
+import "@/app/efiling/components/TipTapEditor.css";
 
 const emptyForm = {
     name: "",
@@ -299,7 +300,7 @@ export default function AdminDaakTemplatesPage() {
             </Card>
 
             <Dialog open={showDialog} onOpenChange={setShowDialog}>
-                <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
                     <DialogHeader>
                         <DialogTitle>{editing ? "Edit Daak Template" : "New Daak Template"}</DialogTitle>
                     </DialogHeader>
@@ -400,13 +401,19 @@ export default function AdminDaakTemplatesPage() {
                             </Select>
                         </div>
                         <div>
-                            <Label>Content (HTML allowed)</Label>
-                            <Textarea
-                                rows={8}
-                                value={formData.content}
-                                onChange={(e) => setFormData({ ...formData, content: e.target.value })}
-                                placeholder="Letter body..."
-                            />
+                            <Label>Content</Label>
+                            <p className="text-xs text-slate-500 mb-2">
+                                Paste from Word or Docs — headings, bold, and other formatting are kept
+                            </p>
+                            {showDialog && (
+                                <TipTapEditor
+                                    key={editing?.id ? `edit-${editing.id}` : "new-template"}
+                                    value={formData.content}
+                                    onChange={(value) => setFormData((prev) => ({ ...prev, content: value }))}
+                                    placeholder="Paste or type letter body…"
+                                    className="min-h-[280px]"
+                                />
+                            )}
                         </div>
                     </div>
                     <DialogFooter>
@@ -428,7 +435,7 @@ export default function AdminDaakTemplatesPage() {
                             <p><strong>Org:</strong> {preview.organization_name || "KW&SC"}</p>
                             <p><strong>Subject:</strong> {preview.subject || "—"}</p>
                             <div
-                                className="border rounded p-3 mt-2 prose prose-sm max-w-none"
+                                className="border rounded p-3 mt-2 prose prose-sm max-w-none tiptap-editor"
                                 dangerouslySetInnerHTML={{ __html: preview.content || "<p><em>No content</em></p>" }}
                             />
                         </div>

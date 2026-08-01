@@ -20,6 +20,7 @@ import Link from '@tiptap/extension-link';
 import BulletList from '@tiptap/extension-bullet-list';
 import OrderedList from '@tiptap/extension-ordered-list';
 import ListItem from '@tiptap/extension-list-item';
+import { normalizePastedHtml } from "@/lib/tiptapPaste";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -162,7 +163,7 @@ export default function TipTapEditor({
             }),
             Underline,
             TextAlign.configure({
-                types: ['paragraph'],
+                types: ['heading', 'paragraph'],
                 alignments: ['left', 'center', 'right', 'justify'],
             }),
             Highlight.configure({
@@ -231,6 +232,7 @@ export default function TipTapEditor({
                 class: 'prose prose-sm sm:prose lg:prose-lg xl:prose-2xl mx-auto focus:outline-none min-h-[500px] p-4 border border-gray-200 rounded-md',
                 style: 'font-family: Arial, sans-serif; font-size: 14px;',
             },
+            transformPastedHTML: (html) => normalizePastedHtml(html),
             handleKeyDown: (view, event) => {
                 // Let TipTap handle list behavior naturally
                 // Only handle Tab key for indentation
