@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/db';
 import { auth } from '@/auth';
+import { ensureDaakLetterSchema } from '@/lib/efilingDaakHelpers';
 
 async function getEfilingUserId(session, client) {
     if (session?.user && [1, 2].includes(parseInt(session.user.role))) {
@@ -34,6 +35,7 @@ export async function GET(request, { params }) {
 
         const { id } = await params;
         client = await connectToDatabase();
+        await ensureDaakLetterSchema(client);
         const efilingUserId = await getEfilingUserId(session, client);
 
         // Get daak with details
@@ -46,6 +48,7 @@ export async function GET(request, { params }) {
                 u.designation as created_by_designation,
                 u.employee_id as created_by_employee_id,
                 dept.name as department_name,
+                creator_dept.name as creator_department_name,
                 r.name as role_name,
                 (SELECT COUNT(*) FROM efiling_daak_recipients dr WHERE dr.daak_id = d.id) as recipient_count,
                 (SELECT COUNT(*) FROM efiling_daak_acknowledgments da WHERE da.daak_id = d.id) as acknowledged_count
@@ -53,6 +56,7 @@ export async function GET(request, { params }) {
              LEFT JOIN efiling_daak_categories dc ON d.category_id = dc.id
              LEFT JOIN efiling_users u ON d.created_by = u.id
              LEFT JOIN efiling_departments dept ON d.department_id = dept.id
+             LEFT JOIN efiling_departments creator_dept ON u.department_id = creator_dept.id
              LEFT JOIN efiling_roles r ON d.role_id = r.id
              WHERE d.id = $1`,
             [id]
@@ -105,6 +109,17 @@ export async function GET(request, { params }) {
             [id]
         );
         daak.recipients = recipients.rows;
+        daak.to_recipients = recipients.rows.filter((r) => (r.addressing || 'TO') === 'TO');
+        daak.cc_recipients = recipients.rows.filter((r) => r.addressing === 'CC');
+
+        // Signatures
+        const signatures = await client.query(
+            `SELECT * FROM efiling_daak_signatures
+             WHERE daak_id = $1 AND is_active = true
+             ORDER BY signed_at ASC`,
+            [id]
+        );
+        daak.signatures = signatures.rows;
 
         // Get user's acknowledgment if exists
         if (efilingUserId) {
@@ -114,6 +129,17 @@ export async function GET(request, { params }) {
             );
             daak.user_acknowledgment = userAck.rows[0] || null;
             daak.is_acknowledged = userAck.rows.length > 0;
+
+            const myRecipient = recipients.rows.find((r) => r.efiling_user_id === efilingUserId);
+            daak.my_addressing = myRecipient?.addressing || null;
+            daak.is_recipient = !!myRecipient;
+            daak.is_creator = Number(daak.created_by) === Number(efilingUserId);
+            // Only non-creator recipients acknowledge
+            daak.can_acknowledge =
+                daak.status === 'SENT' &&
+                daak.is_recipient &&
+                !daak.is_creator &&
+                !daak.is_acknowledged;
         }
 
         return NextResponse.json({ daak });
@@ -167,6 +193,8 @@ export async function PUT(request, { params }) {
             );
         }
 
+        await ensureDaakLetterSchema(client);
+
         const {
             subject,
             content,
@@ -176,7 +204,11 @@ export async function PUT(request, { params }) {
             role_id,
             is_urgent,
             is_public,
-            expires_at
+            expires_at,
+            reference_number,
+            to_header,
+            organization_name,
+            letter_date,
         } = body;
 
         const updateFields = [];
@@ -218,6 +250,22 @@ export async function PUT(request, { params }) {
         if (expires_at !== undefined) {
             updateFields.push(`expires_at = $${paramCount++}`);
             updateValues.push(expires_at);
+        }
+        if (reference_number !== undefined) {
+            updateFields.push(`reference_number = $${paramCount++}`);
+            updateValues.push(reference_number || null);
+        }
+        if (to_header !== undefined) {
+            updateFields.push(`to_header = $${paramCount++}`);
+            updateValues.push(to_header || null);
+        }
+        if (organization_name !== undefined) {
+            updateFields.push(`organization_name = $${paramCount++}`);
+            updateValues.push(organization_name || 'KW&SC');
+        }
+        if (letter_date !== undefined) {
+            updateFields.push(`letter_date = $${paramCount++}`);
+            updateValues.push(letter_date || null);
         }
 
         if (updateFields.length === 0) {

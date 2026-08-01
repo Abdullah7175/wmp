@@ -16,9 +16,13 @@ import {
     FileText,
     ArrowLeft,
     Check,
-    Send
+    Send,
+    PenLine
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { Input } from "@/components/ui/input";
+import DaakLetterDocument from "@/app/efiling/components/DaakLetterDocument";
+import DaakAttachmentsGrid from "@/app/efiling/components/DaakAttachmentsGrid";
 import "@/app/efiling/components/TipTapEditor.css";
 
 export default function DaakDetailPage() {
@@ -28,6 +32,8 @@ export default function DaakDetailPage() {
     const [loading, setLoading] = useState(true);
     const [acknowledging, setAcknowledging] = useState(false);
     const [sending, setSending] = useState(false);
+    const [signing, setSigning] = useState(false);
+    const [uploading, setUploading] = useState(false);
     const [daak, setDaak] = useState(null);
     const [acknowledgmentText, setAcknowledgmentText] = useState("");
 
@@ -99,6 +105,59 @@ export default function DaakDetailPage() {
         }
     };
 
+    const handleSign = async () => {
+        setSigning(true);
+        try {
+            const res = await fetch(`/api/efiling/daak/${params.id}/sign`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: "{}",
+            });
+            const data = await res.json();
+            if (res.ok) {
+                toast({ title: "Signed", description: "E-signature applied to this daak" });
+                fetchDaak();
+            } else {
+                toast({
+                    title: "Could not sign",
+                    description: data.error || "Upload a signature in your profile first",
+                    variant: "destructive",
+                });
+            }
+        } catch (error) {
+            toast({ title: "Error", description: "Failed to apply signature", variant: "destructive" });
+        } finally {
+            setSigning(false);
+        }
+    };
+
+    const handleAttachmentUpload = async (e) => {
+        const files = Array.from(e.target.files || []);
+        if (!files.length) return;
+        setUploading(true);
+        try {
+            for (const file of files) {
+                const fd = new FormData();
+                fd.append("file", file);
+                const res = await fetch(`/api/efiling/daak/${params.id}/attachments`, {
+                    method: "POST",
+                    body: fd,
+                });
+                if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.error || "Upload failed");
+                }
+            }
+            toast({ title: "Uploaded", description: "Attachment(s) added" });
+            fetchDaak();
+        } catch (error) {
+            toast({ title: "Error", description: error.message, variant: "destructive" });
+        } finally {
+            setUploading(false);
+            e.target.value = "";
+        }
+    };
+
     const getPriorityColor = (priority) => {
         switch (priority) {
             case "URGENT":
@@ -132,26 +191,30 @@ export default function DaakDetailPage() {
 
     return (
         <div className="container mx-auto p-6 space-y-6">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between no-print">
                 <div className="flex items-center gap-4">
                     <Button variant="ghost" onClick={() => router.back()}>
                         <ArrowLeft className="w-4 h-4 mr-2" />
                         Back
                     </Button>
                     <div>
-                        <h1 className="text-3xl font-bold">{daak.subject}</h1>
-                        <p className="text-gray-600 mt-1">Daak Number: {daak.daak_number}</p>
+                        <h1 className="text-xl font-bold">Daak Letter</h1>
+                        <p className="text-gray-600 text-sm mt-0.5">{daak.daak_number}</p>
                     </div>
                 </div>
                 {daak.status === "DRAFT" && (
-                    <Button onClick={handleSend} disabled={sending}>
-                        <Send className="w-4 h-4 mr-2" />
-                        {sending ? "Sending..." : "Send Daak"}
-                    </Button>
+                    <div className="flex gap-2">
+                        <Button onClick={handleSend} disabled={sending}>
+                            <Send className="w-4 h-4 mr-2" />
+                            {sending ? "Sending..." : "Send Daak"}
+                        </Button>
+                    </div>
                 )}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <DaakLetterDocument daak={daak} />
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 no-print">
                 <Card>
                     <CardHeader>
                         <CardTitle className="text-sm font-medium">Status</CardTitle>
@@ -189,18 +252,6 @@ export default function DaakDetailPage() {
                     </CardContent>
                 </Card>
             </div>
-
-            <Card>
-                <CardHeader>
-                    <CardTitle>Content</CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <div 
-                        className="daak-display-content"
-                        dangerouslySetInnerHTML={{ __html: daak.content }} 
-                    />
-                </CardContent>
-            </Card>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <Card>
@@ -254,6 +305,7 @@ export default function DaakDetailPage() {
                         <Table>
                             <TableHeader>
                                 <TableRow>
+                                    <TableHead>Addressing</TableHead>
                                     <TableHead>Name</TableHead>
                                     <TableHead>Designation</TableHead>
                                     <TableHead>Department</TableHead>
@@ -264,6 +316,11 @@ export default function DaakDetailPage() {
                             <TableBody>
                                 {daak.recipients.map((recipient) => (
                                     <TableRow key={recipient.id}>
+                                        <TableCell>
+                                            <Badge variant={(recipient.addressing || "TO") === "TO" ? "default" : "outline"}>
+                                                {recipient.addressing || "TO"}
+                                            </Badge>
+                                        </TableCell>
                                         <TableCell>{recipient.recipient_name || "N/A"}</TableCell>
                                         <TableCell>{recipient.designation || "N/A"}</TableCell>
                                         <TableCell>{recipient.department_name || "N/A"}</TableCell>
@@ -295,37 +352,80 @@ export default function DaakDetailPage() {
                 </Card>
             )}
 
-            {daak.attachments && daak.attachments.length > 0 && (
-                <Card>
-                    <CardHeader>
+            <Card>
+                <CardHeader>
+                    <div className="flex justify-between items-center gap-2">
+                        <CardTitle className="text-sm font-medium flex items-center gap-2">
+                            <PenLine className="w-4 h-4" />
+                            E-Signature
+                        </CardTitle>
+                        {daak.status === "DRAFT" && (
+                            <Button variant="outline" size="sm" onClick={handleSign} disabled={signing}>
+                                <PenLine className="w-4 h-4 mr-2" />
+                                {signing ? "Signing..." : (daak.signatures?.length ? "Update E-Sign" : "Add E-Sign")}
+                            </Button>
+                        )}
+                    </div>
+                </CardHeader>
+                <CardContent>
+                    {(!daak.signatures || daak.signatures.length === 0) ? (
+                        <p className="text-sm text-gray-500">No e-signature on this daak yet</p>
+                    ) : (
+                        <div className="space-y-4">
+                            {daak.signatures.map((sig) => (
+                                <div key={sig.id} className="border rounded-lg p-4 bg-gray-50">
+                                    {sig.signature_content?.startsWith("data:") ||
+                                    sig.signature_content?.startsWith("/") ||
+                                    sig.signature_content?.startsWith("http") ? (
+                                        // eslint-disable-next-line @next/next/no-img-element
+                                        <img
+                                            src={sig.signature_content}
+                                            alt="E-signature"
+                                            className="max-h-24 object-contain mb-2"
+                                        />
+                                    ) : (
+                                        <p className="italic text-2xl mb-2 text-gray-800">{sig.signature_content}</p>
+                                    )}
+                                    <p className="text-sm font-medium">{sig.user_name}</p>
+                                    {sig.user_role && (
+                                        <p className="text-xs text-gray-600">{sig.user_role}</p>
+                                    )}
+                                    <p className="text-xs text-gray-500 mt-1">
+                                        Signed: {new Date(sig.signed_at).toLocaleString()}
+                                    </p>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
+
+            <Card>
+                <CardHeader>
+                    <div className="flex justify-between items-center">
                         <CardTitle className="text-sm font-medium flex items-center gap-2">
                             <FileText className="w-4 h-4" />
                             Attachments
                         </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="space-y-2">
-                            {daak.attachments.map((attachment) => (
-                                <div
-                                    key={attachment.id}
-                                    className="flex items-center justify-between p-2 border rounded"
-                                >
-                                    <span>{attachment.file_name}</span>
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() =>
-                                            window.open(attachment.file_path, "_blank")
-                                        }
-                                    >
-                                        Download
-                                    </Button>
-                                </div>
-                            ))}
-                        </div>
-                    </CardContent>
-                </Card>
-            )}
+                        {daak.status === "DRAFT" && (
+                            <div className="flex items-center gap-2">
+                                <Input
+                                    type="file"
+                                    multiple
+                                    accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                                    onChange={handleAttachmentUpload}
+                                    disabled={uploading}
+                                    className="max-w-xs"
+                                />
+                                {uploading && <span className="text-xs text-gray-500">Uploading...</span>}
+                            </div>
+                        )}
+                    </div>
+                </CardHeader>
+                <CardContent>
+                    <DaakAttachmentsGrid attachments={daak.attachments || []} />
+                </CardContent>
+            </Card>
         </div>
     );
 }

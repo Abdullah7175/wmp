@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { X, Plus, Save, Send, ArrowLeft, Loader2, AlertCircle, User, Building, Shield, Users } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import TipTapEditor from "@/app/efiling/components/TipTapEditor";
+import SearchableSelect from "@/components/ui/searchable-select";
 import {
     Dialog,
     DialogContent,
@@ -24,10 +25,13 @@ import {
 
 export default function CreateDaakPage() {
     const router = useRouter();
+    const searchParams = useSearchParams();
     const { data: session } = useSession();
     const { toast } = useToast();
     const [loading, setLoading] = useState(false);
     const [fetching, setFetching] = useState(true);
+    const [availableTemplates, setAvailableTemplates] = useState([]);
+    const [selectedTemplateId, setSelectedTemplateId] = useState("");
     
     // Data states
     const [categories, setCategories] = useState([]);
@@ -47,13 +51,20 @@ export default function CreateDaakPage() {
         is_urgent: false,
         is_public: false,
         expires_at: "",
+        reference_number: "",
+        to_header: "",
+        organization_name: "KW&SC",
+        letter_date: new Date().toISOString().slice(0, 10),
     });
     
     // Form validation errors
     const [errors, setErrors] = useState({});
     
-    // Recipients
-    const [recipients, setRecipients] = useState([]);
+    // Recipients — TO (required) and CC (optional)
+    const [toRecipients, setToRecipients] = useState([]);
+    const [ccRecipients, setCcRecipients] = useState([]);
+    const [addressingMode, setAddressingMode] = useState("TO"); // TO | CC for modal
+    const [pendingFiles, setPendingFiles] = useState([]);
     const [showRecipientModal, setShowRecipientModal] = useState(false);
     const [recipientType, setRecipientType] = useState("USER");
     const [recipientOptions, setRecipientOptions] = useState([]);
@@ -62,7 +73,54 @@ export default function CreateDaakPage() {
     // Fetch all initial data
     useEffect(() => {
         fetchAllData();
+        fetchTemplatesForCreate();
     }, []);
+
+    // Apply template from query string (e.g. ?template_id=12)
+    useEffect(() => {
+        const tid = searchParams.get("template_id");
+        if (tid && availableTemplates.length > 0) {
+            applyTemplateById(tid);
+        }
+    }, [searchParams, availableTemplates]);
+
+    const fetchTemplatesForCreate = async () => {
+        try {
+            const res = await fetch("/api/efiling/daak/templates?for_create=true");
+            if (res.ok) {
+                const data = await res.json();
+                setAvailableTemplates(data.templates || []);
+            }
+        } catch (e) {
+            console.error("Error loading daak templates:", e);
+        }
+    };
+
+    const applyTemplateById = async (tid) => {
+        const t = availableTemplates.find((x) => String(x.id) === String(tid));
+        if (!t) return;
+        setSelectedTemplateId(String(t.id));
+        setFormData((prev) => ({
+            ...prev,
+            subject: t.subject || prev.subject,
+            content: t.content || prev.content,
+            to_header: t.to_header || prev.to_header,
+            organization_name: t.organization_name || prev.organization_name || "KW&SC",
+            reference_number: t.reference_number || prev.reference_number,
+            category_id: t.category_id ? String(t.category_id) : prev.category_id,
+        }));
+        try {
+            await fetch(`/api/efiling/daak/templates/${t.id}`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ mark_used: true }),
+            });
+        } catch (_) { /* ignore */ }
+        toast({
+            title: "Template applied",
+            description: `"${t.name}" loaded into the form`,
+        });
+    };
 
     // Update recipient options when type or data changes
     useEffect(() => {
@@ -203,8 +261,8 @@ export default function CreateDaakPage() {
             newErrors.content = "Content is required";
         }
         
-        if (recipients.length === 0) {
-            newErrors.recipients = "At least one recipient is required";
+        if (toRecipients.length === 0) {
+            newErrors.to_recipients = "At least one TO recipient is required";
         }
         
         setErrors(newErrors);
@@ -227,48 +285,51 @@ export default function CreateDaakPage() {
     };
 
     const addRecipient = () => {
+        const targetList = addressingMode === "CC" ? ccRecipients : toRecipients;
+        const setTarget = addressingMode === "CC" ? setCcRecipients : setToRecipients;
+
         if (recipientType === "EVERYONE") {
-            const exists = recipients.some((r) => r.type === "EVERYONE");
+            const exists = targetList.some((r) => r.type === "EVERYONE");
             if (!exists) {
-                setRecipients([...recipients, { type: "EVERYONE", id: null, name: "Everyone" }]);
+                setTarget([...targetList, { type: "EVERYONE", id: null, name: "Everyone", addressing: addressingMode }]);
                 setShowRecipientModal(false);
                 setSelectedRecipientId("");
             } else {
                 toast({
                     title: "Already Added",
-                    description: "Everyone is already in the recipient list",
+                    description: `Everyone is already in the ${addressingMode} list`,
                     variant: "default",
                 });
             }
         } else if (selectedRecipientId) {
             const option = recipientOptions.find((opt) => opt.id.toString() === selectedRecipientId);
             if (option) {
-                const exists = recipients.some(
+                const exists = targetList.some(
                     (r) => r.type === recipientType && r.id === option.id
                 );
                 if (!exists) {
-                    setRecipients([
-                        ...recipients,
+                    setTarget([
+                        ...targetList,
                         {
                             type: recipientType,
                             id: option.id,
                             name: option.name || option.designation || option.title || "Unknown",
+                            addressing: addressingMode,
                         },
                     ]);
                     setShowRecipientModal(false);
                     setSelectedRecipientId("");
-                    // Clear recipients error
-                    if (errors.recipients) {
-                        setErrors(prev => {
-                            const newErrors = { ...prev };
-                            delete newErrors.recipients;
-                            return newErrors;
+                    if (errors.to_recipients && addressingMode === "TO") {
+                        setErrors((prev) => {
+                            const next = { ...prev };
+                            delete next.to_recipients;
+                            return next;
                         });
                     }
                 } else {
                     toast({
                         title: "Already Added",
-                        description: "This recipient is already in the list",
+                        description: `This recipient is already in the ${addressingMode} list`,
                         variant: "default",
                     });
                 }
@@ -282,8 +343,12 @@ export default function CreateDaakPage() {
         }
     };
 
-    const removeRecipient = (index) => {
-        setRecipients(recipients.filter((_, i) => i !== index));
+    const removeToRecipient = (index) => {
+        setToRecipients(toRecipients.filter((_, i) => i !== index));
+    };
+
+    const removeCcRecipient = (index) => {
+        setCcRecipients(ccRecipients.filter((_, i) => i !== index));
     };
 
     const getRecipientIcon = (type) => {
@@ -324,7 +389,12 @@ export default function CreateDaakPage() {
                 is_urgent: formData.is_urgent,
                 is_public: formData.is_public,
                 expires_at: formData.expires_at || null,
-                recipients: recipients,
+                reference_number: formData.reference_number?.trim() || null,
+                to_header: formData.to_header?.trim() || null,
+                organization_name: formData.organization_name?.trim() || "KW&SC",
+                letter_date: formData.letter_date || null,
+                to_recipients: toRecipients,
+                cc_recipients: ccRecipients,
             };
 
             const res = await fetch("/api/efiling/daak", {
@@ -336,8 +406,25 @@ export default function CreateDaakPage() {
             const data = await res.json();
 
             if (res.ok && data.success) {
+                const daakId = data.daak.id;
+
+                // Upload pending attachments (if any)
+                for (const file of pendingFiles) {
+                    const fd = new FormData();
+                    fd.append("file", file);
+                    await fetch(`/api/efiling/daak/${daakId}/attachments`, {
+                        method: "POST",
+                        body: fd,
+                    });
+                }
+
                 if (send) {
-                    const sendRes = await fetch(`/api/efiling/daak/${data.daak.id}/send`, {
+                    // Apply e-sign from profile if available (non-blocking if missing)
+                    try {
+                        await fetch(`/api/efiling/daak/${daakId}/sign`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+                    } catch (_) { /* optional */ }
+
+                    const sendRes = await fetch(`/api/efiling/daak/${daakId}/send`, {
                         method: "POST",
                     });
                     if (sendRes.ok) {
@@ -353,14 +440,14 @@ export default function CreateDaakPage() {
                             description: `Daak "${data.daak.daak_number}" created but failed to send: ${sendError.error || "Unknown error"}`,
                             variant: "default",
                         });
-                        router.push(`/efiling/daak/${data.daak.id}`);
+                        router.push(`/efiling/daak/${daakId}`);
                     }
                 } else {
                     toast({
                         title: "Success",
                         description: `Daak "${data.daak.daak_number}" saved as draft successfully`,
                     });
-                    router.push(`/efiling/daak/${data.daak.id}`);
+                    router.push(`/efiling/daak/${daakId}`);
                 }
             } else {
                 throw new Error(data.error || "Failed to create daak");
@@ -404,6 +491,35 @@ export default function CreateDaakPage() {
                 </Button>
             </div>
 
+            {availableTemplates.length > 0 && (
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Use a Daak Template</CardTitle>
+                        <CardDescription>Optional — fills TO, subject, content, and organization</CardDescription>
+                    </CardHeader>
+                    <CardContent className="flex flex-wrap gap-3 items-end">
+                        <div className="flex-1 min-w-[220px] space-y-2">
+                            <Label>Template</Label>
+                            <Select
+                                value={selectedTemplateId || undefined}
+                                onValueChange={(v) => applyTemplateById(v)}
+                            >
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Select a template (optional)" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {availableTemplates.map((t) => (
+                                        <SelectItem key={t.id} value={String(t.id)}>
+                                            {t.name} ({t.scope})
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </CardContent>
+                </Card>
+            )}
+
             {/* Main Form */}
             <Card>
                 <CardHeader>
@@ -411,6 +527,47 @@ export default function CreateDaakPage() {
                     <CardDescription>Fill in the details for your daak</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
+                    {/* Letter header */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="to_header">TO (letter line)</Label>
+                            <Input
+                                id="to_header"
+                                value={formData.to_header}
+                                onChange={(e) => handleInputChange("to_header", e.target.value)}
+                                placeholder="e.g. PSO to MD/CEO"
+                            />
+                            <p className="text-xs text-gray-500">Shown above subject on the letter</p>
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="organization_name">Organization</Label>
+                            <Input
+                                id="organization_name"
+                                value={formData.organization_name}
+                                onChange={(e) => handleInputChange("organization_name", e.target.value)}
+                                placeholder="KW&SC"
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="letter_date">Date</Label>
+                            <Input
+                                id="letter_date"
+                                type="date"
+                                value={formData.letter_date}
+                                onChange={(e) => handleInputChange("letter_date", e.target.value)}
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="reference_number">Reference Number</Label>
+                            <Input
+                                id="reference_number"
+                                value={formData.reference_number}
+                                onChange={(e) => handleInputChange("reference_number", e.target.value)}
+                                placeholder="Office / file reference (optional)"
+                            />
+                        </div>
+                    </div>
+
                     {/* Subject and Category */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2">
@@ -547,49 +704,125 @@ export default function CreateDaakPage() {
                 </CardContent>
             </Card>
 
-            {/* Recipients Card */}
+            {/* TO Recipients */}
             <Card>
                 <CardHeader>
                     <div className="flex justify-between items-center">
                         <div>
-                            <CardTitle>Recipients</CardTitle>
-                            <CardDescription>Add recipients who should receive this daak</CardDescription>
+                            <CardTitle>TO <span className="text-red-500">*</span></CardTitle>
+                            <CardDescription>Primary addressees for this daak</CardDescription>
                         </div>
-                        <Button onClick={() => setShowRecipientModal(true)}>
+                        <Button onClick={() => { setAddressingMode("TO"); setShowRecipientModal(true); }}>
                             <Plus className="w-4 h-4 mr-2" />
-                            Add Recipient
+                            Add TO
                         </Button>
                     </div>
                 </CardHeader>
                 <CardContent>
-                    {errors.recipients && (
+                    {errors.to_recipients && (
                         <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md">
                             <p className="text-sm text-red-600 flex items-center gap-2">
                                 <AlertCircle className="w-4 h-4" />
-                                {errors.recipients}
+                                {errors.to_recipients}
                             </p>
                         </div>
                     )}
-                    {recipients.length === 0 ? (
-                        <div className="text-center py-8 text-gray-500">
-                            <Users className="w-12 h-12 mx-auto mb-2 text-gray-300" />
-                            <p>No recipients added</p>
-                            <p className="text-sm">Click "Add Recipient" to add recipients</p>
+                    {toRecipients.length === 0 ? (
+                        <div className="text-center py-6 text-gray-500">
+                            <Users className="w-10 h-10 mx-auto mb-2 text-gray-300" />
+                            <p>No TO recipients yet</p>
                         </div>
                     ) : (
                         <div className="flex flex-wrap gap-2">
-                            {recipients.map((recipient, index) => (
+                            {toRecipients.map((recipient, index) => (
                                 <Badge
-                                    key={index}
+                                    key={`to-${index}`}
                                     variant="secondary"
                                     className="text-sm py-2 px-3 flex items-center gap-2"
                                 >
                                     {getRecipientIcon(recipient.type)}
                                     <span>{recipient.name}</span>
                                     <button
-                                        onClick={() => removeRecipient(index)}
+                                        onClick={() => removeToRecipient(index)}
                                         className="ml-1 hover:text-red-500 transition-colors"
                                         type="button"
+                                    >
+                                        <X className="w-3 h-3" />
+                                    </button>
+                                </Badge>
+                            ))}
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
+
+            {/* CC Recipients */}
+            <Card>
+                <CardHeader>
+                    <div className="flex justify-between items-center">
+                        <div>
+                            <CardTitle>CC</CardTitle>
+                            <CardDescription>Carbon copy — informed parties (optional)</CardDescription>
+                        </div>
+                        <Button variant="outline" onClick={() => { setAddressingMode("CC"); setShowRecipientModal(true); }}>
+                            <Plus className="w-4 h-4 mr-2" />
+                            Add CC
+                        </Button>
+                    </div>
+                </CardHeader>
+                <CardContent>
+                    {ccRecipients.length === 0 ? (
+                        <p className="text-sm text-gray-500 text-center py-4">No CC recipients</p>
+                    ) : (
+                        <div className="flex flex-wrap gap-2">
+                            {ccRecipients.map((recipient, index) => (
+                                <Badge
+                                    key={`cc-${index}`}
+                                    variant="outline"
+                                    className="text-sm py-2 px-3 flex items-center gap-2"
+                                >
+                                    {getRecipientIcon(recipient.type)}
+                                    <span>{recipient.name}</span>
+                                    <button
+                                        onClick={() => removeCcRecipient(index)}
+                                        className="ml-1 hover:text-red-500 transition-colors"
+                                        type="button"
+                                    >
+                                        <X className="w-3 h-3" />
+                                    </button>
+                                </Badge>
+                            ))}
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
+
+            {/* Attachments */}
+            <Card>
+                <CardHeader>
+                    <CardTitle>Attachments</CardTitle>
+                    <CardDescription>Optional files (e.g. incoming letter from another organization). Max 10MB each.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                    <Input
+                        type="file"
+                        multiple
+                        accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                        onChange={(e) => {
+                            const files = Array.from(e.target.files || []);
+                            setPendingFiles((prev) => [...prev, ...files]);
+                            e.target.value = "";
+                        }}
+                    />
+                    {pendingFiles.length > 0 && (
+                        <div className="flex flex-wrap gap-2">
+                            {pendingFiles.map((file, index) => (
+                                <Badge key={`${file.name}-${index}`} variant="secondary" className="py-1 px-3 flex items-center gap-2">
+                                    {file.name}
+                                    <button
+                                        type="button"
+                                        onClick={() => setPendingFiles((prev) => prev.filter((_, i) => i !== index))}
+                                        className="hover:text-red-500"
                                     >
                                         <X className="w-3 h-3" />
                                     </button>
@@ -604,15 +837,21 @@ export default function CreateDaakPage() {
             <Dialog open={showRecipientModal} onOpenChange={setShowRecipientModal}>
                 <DialogContent className="sm:max-w-[425px]">
                     <DialogHeader>
-                        <DialogTitle>Add Recipient</DialogTitle>
+                        <DialogTitle>Add {addressingMode} Recipient</DialogTitle>
                         <DialogDescription>
-                            Select the type and recipient for this daak
+                            Select who should appear in the {addressingMode} list
                         </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4 py-4">
                         <div className="space-y-2">
                             <Label>Recipient Type</Label>
-                            <Select value={recipientType} onValueChange={setRecipientType}>
+                            <Select
+                                value={recipientType}
+                                onValueChange={(v) => {
+                                    setRecipientType(v);
+                                    setSelectedRecipientId("");
+                                }}
+                            >
                                 <SelectTrigger>
                                     <SelectValue />
                                 </SelectTrigger>
@@ -630,30 +869,22 @@ export default function CreateDaakPage() {
                                 <Label>
                                     Select {recipientType.replace("_", " ")}
                                 </Label>
-                                <Select
+                                <SearchableSelect
+                                    options={recipientOptions}
                                     value={selectedRecipientId}
                                     onValueChange={setSelectedRecipientId}
-                                >
-                                    <SelectTrigger>
-                                        <SelectValue placeholder={`Select ${recipientType.replace("_", " ")}`} />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {recipientOptions.length > 0 ? (
-                                            recipientOptions.map((opt) => (
-                                                <SelectItem
-                                                    key={opt.id}
-                                                    value={opt.id.toString()}
-                                                >
-                                                    {opt.name || opt.designation || opt.title || `ID: ${opt.id}`}
-                                                </SelectItem>
-                                            ))
-                                        ) : (
-                                            <SelectItem value="no-options" disabled>
-                                                No options available
-                                            </SelectItem>
-                                        )}
-                                    </SelectContent>
-                                </Select>
+                                    placeholder={`Type to search ${recipientType.replace("_", " ").toLowerCase()}...`}
+                                    emptyText="No matches found"
+                                    getValue={(opt) => String(opt.id)}
+                                    getLabel={(opt) =>
+                                        opt.name || opt.designation || opt.title || `ID: ${opt.id}`
+                                    }
+                                    getSearchText={(opt) =>
+                                        [opt.name, opt.designation, opt.title, opt.email]
+                                            .filter(Boolean)
+                                            .join(" ")
+                                    }
+                                />
                             </div>
                         )}
                     </div>

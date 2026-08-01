@@ -41,12 +41,22 @@ export async function POST(request, { params }) {
 
         // Check if daak exists
         const daakCheck = await client.query(
-            'SELECT id, status FROM efiling_daak WHERE id = $1',
+            'SELECT id, status, created_by FROM efiling_daak WHERE id = $1',
             [id]
         );
 
         if (daakCheck.rows.length === 0) {
             return NextResponse.json({ error: 'Daak not found' }, { status: 404 });
+        }
+
+        const daakRow = daakCheck.rows[0];
+
+        // Creator does not acknowledge their own daak — recipients only
+        if (Number(daakRow.created_by) === Number(efilingUserId)) {
+            return NextResponse.json(
+                { error: 'Creator does not need to acknowledge this daak. Only recipients acknowledge.' },
+                { status: 403 }
+            );
         }
 
         // Check if user is a recipient

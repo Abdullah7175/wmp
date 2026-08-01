@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/db';
 import { auth } from '@/auth';
+import { ensureDaakLetterSchema, normalizeDaakRecipients } from '@/lib/efilingDaakHelpers';
 
 export const dynamic = 'force-dynamic';
 
@@ -358,8 +359,14 @@ export async function POST(request) {
             is_urgent = false,
             is_public = false,
             expires_at,
-            recipients = [] // Array of {type: 'USER'|'ROLE'|..., id: number}
+            reference_number = null,
+            to_header = null,
+            organization_name = 'KW&SC',
+            letter_date = null,
         } = body;
+
+        const { toRecipients, ccRecipients } = normalizeDaakRecipients(body);
+        const allAddressed = [...toRecipients, ...ccRecipients];
 
         if (!subject || !content) {
             return NextResponse.json(
@@ -368,7 +375,23 @@ export async function POST(request) {
             );
         }
 
+        if (toRecipients.length === 0 && allAddressed.length === 0) {
+            return NextResponse.json(
+                { error: 'At least one TO recipient is required' },
+                { status: 400 }
+            );
+        }
+
+        // Prefer explicit TO; if only legacy recipients with CC somehow, require TO
+        if (toRecipients.length === 0) {
+            return NextResponse.json(
+                { error: 'At least one TO recipient is required (CC alone is not enough)' },
+                { status: 400 }
+            );
+        }
+
         client = await connectToDatabase();
+        await ensureDaakLetterSchema(client);
         const efilingUserId = await getEfilingUserId(session, client);
 
         if (!efilingUserId && session?.user && ![1, 2].includes(parseInt(session.user.role))) {
@@ -384,66 +407,96 @@ export async function POST(request) {
         const count = parseInt(countResult.rows[0].count) + 1;
         const daakNumber = `DAAK-${year}-${String(count).padStart(4, '0')}`;
 
-        // Create daak
+        // Create daak (letter fields are additive)
         const daakResult = await client.query(
             `INSERT INTO efiling_daak 
              (daak_number, subject, content, category_id, priority, created_by, department_id, role_id, 
-              is_urgent, is_public, expires_at, status)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'DRAFT')
+              is_urgent, is_public, expires_at, status,
+              reference_number, to_header, organization_name, letter_date)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'DRAFT', $12, $13, $14, $15)
              RETURNING *`,
             [
                 daakNumber, subject, content, category_id || null, priority,
                 efilingUserId, department_id || null, role_id || null,
-                is_urgent, is_public, expires_at || null
+                is_urgent, is_public, expires_at || null,
+                (typeof reference_number === 'string' ? reference_number.trim() : null) || null,
+                (typeof to_header === 'string' ? to_header.trim() : null) || null,
+                (typeof organization_name === 'string' ? organization_name.trim() : null) || 'KW&SC',
+                letter_date || null,
             ]
         );
 
         const daak = daakResult.rows[0];
 
-        // Process recipients
-        // Process recipients and prepare database insert
+        // Expand TO then CC. Same user in both → keep TO (conflict update).
         const recipientInserts = [];
         const allUserIds = new Set();
+        const addressingByUser = new Map(); // userId -> 'TO' | 'CC'
 
-        for (const recipient of recipients) {
-            // 1. Expand the recipient type into actual User IDs
+        for (const recipient of [...toRecipients, ...ccRecipients]) {
             const userIds = await expandRecipients(client, recipient.type, recipient.id);
+            const addressing = recipient.addressing === 'CC' ? 'CC' : 'TO';
 
-            // 2. Map every user found to this specific recipient source
-            userIds.forEach(userId => {
+            userIds.forEach((userId) => {
                 allUserIds.add(userId);
+                const existing = addressingByUser.get(userId);
+                if (existing === 'TO') return; // TO wins
+                addressingByUser.set(userId, addressing);
                 recipientInserts.push({
                     daak_id: daak.id,
                     recipient_type: recipient.type,
                     recipient_id: recipient.id || null,
                     efiling_user_id: userId,
-                    status: 'PENDING'
+                    status: 'PENDING',
+                    addressing,
                 });
             });
         }
 
-        // Insert recipients using the correct columns
-        if (recipientInserts.length > 0) {
+        // Deduplicate inserts by user (prefer last TO)
+        const uniqueByUser = new Map();
+        for (const ins of recipientInserts) {
+            const prev = uniqueByUser.get(ins.efiling_user_id);
+            if (!prev || ins.addressing === 'TO') {
+                uniqueByUser.set(ins.efiling_user_id, {
+                    ...ins,
+                    addressing: addressingByUser.get(ins.efiling_user_id) || ins.addressing,
+                });
+            }
+        }
+        const finalInserts = Array.from(uniqueByUser.values());
+
+        if (finalInserts.length > 0) {
             const recipientParams = [];
             const placeholders = [];
             let paramIndex = 1;
 
-            recipientInserts.forEach(ins => {
-                placeholders.push(`($${paramIndex}, $${paramIndex + 1}, $${paramIndex + 2}, $${paramIndex + 3}, $${paramIndex + 4})`);
-                recipientParams.push(ins.daak_id, ins.recipient_type, ins.recipient_id, ins.efiling_user_id, ins.status);
-                paramIndex += 5;
+            finalInserts.forEach((ins) => {
+                placeholders.push(`($${paramIndex}, $${paramIndex + 1}, $${paramIndex + 2}, $${paramIndex + 3}, $${paramIndex + 4}, $${paramIndex + 5})`);
+                recipientParams.push(
+                    ins.daak_id,
+                    ins.recipient_type,
+                    ins.recipient_id,
+                    ins.efiling_user_id,
+                    ins.status,
+                    ins.addressing
+                );
+                paramIndex += 6;
             });
 
             await client.query(
                 `INSERT INTO efiling_daak_recipients 
-                    (daak_id, recipient_type, recipient_id, efiling_user_id, status)
+                    (daak_id, recipient_type, recipient_id, efiling_user_id, status, addressing)
                     VALUES ${placeholders.join(', ')}
-                    ON CONFLICT (daak_id, efiling_user_id) DO NOTHING`, // Added to prevent errors if a user is in multiple groups
+                    ON CONFLICT (daak_id, efiling_user_id) DO UPDATE SET
+                        addressing = CASE
+                            WHEN efiling_daak_recipients.addressing = 'TO' OR EXCLUDED.addressing = 'TO' THEN 'TO'
+                            ELSE 'CC'
+                        END`,
                 recipientParams
             );
         }
 
-        // Update recipient count
         await client.query(
             `UPDATE efiling_daak SET total_recipients = $1 WHERE id = $2`,
             [allUserIds.size, daak.id]
