@@ -85,7 +85,7 @@ const isGlobalRole = (roleCode) => {
     if (code === 'MD' || code.startsWith('MD_') || (code.includes('MD') && !code.includes('ADLFA'))) {
         return true;
     }
-    if (code === 'MANAGING_DIRECTOR' || code.startsWith('MANAGING_DIRECTOR_') || (code.includes('MANAGING_DIRECTOR') && !code.includes('ADLFA'))) {
+    if (code === 'MANAGING_DIRECTOR' || code.startsWith('MANAGING_DIRECTOR_') || code.startsWith('DIR_')|| (code.includes('MANAGING_DIRECTOR') && !code.includes('ADLFA'))) {
         return true;
     }
     if (code === 'BILLING' || code.startsWith('BILLING_') || (code.includes('BILLING') && !code.includes('ADLFA'))) {

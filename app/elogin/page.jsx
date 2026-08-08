@@ -348,10 +348,10 @@ export default function EFileLoginPage() {
               <div className="mx-auto w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4">
                 <FileText className="w-8 h-8 text-green-600" />
               </div>
-              <CardTitle className="text-2xl text-green-900">Works Management Portal</CardTitle>
-              <CardDescription className="text-gray-600">
-                Electronic Filing System Login
-              </CardDescription>
+              <CardTitle className="text-2xl text-green-900"> Electronic Filing System Login
+            
+              </CardTitle>
+              
             </CardHeader>
             <CardContent className="space-y-6">
               {isLocked && (
