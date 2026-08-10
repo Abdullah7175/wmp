@@ -178,7 +178,7 @@ const canBypassGeographicValidation = (roleCode) => {
     }
     
     // Check DCE (Deputy Chief Engineer) - check before CE to avoid conflicts
-    if (code === 'DCE' || code.startsWith('DCE_') || (code.includes('DCE') && !code.includes('ADLFA'))) {
+    if (code === 'DCE' ||  code.startsWith('DIR_') || code.startsWith('DCE_') || (code.includes('DCE') && !code.includes('ADLFA'))) {
         return true;
     }
     

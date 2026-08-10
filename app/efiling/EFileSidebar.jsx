@@ -25,7 +25,7 @@ import {
     LogOut,
     MapPin,
     Map,
-    MessageCircle
+    MessageCircle, KeyRound
 } from "lucide-react";
 import { useSidebar } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
@@ -193,6 +193,12 @@ const links = [
         href: "/efiling/communications-test",
         label: "Communications Test",
         icon: <MessageCircle className="w-5 h-5 mr-2" />,
+    },
+
+    {
+        href: "/efiling/otp-management",
+        label: "OTP Management",
+        icon: <KeyRound className="w-5 h-5 mr-2" />,
     },
     // {
     //     href: "/efiling/settings",
