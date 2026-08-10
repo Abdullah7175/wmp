@@ -16,7 +16,7 @@ export default function CEOOverview() {
     const [loading, setLoading] = useState(true);
     const [stats, setStats] = useState(null);
     const [allFiles, setAllFiles] = useState([]);
-    const [fiscalYear, setFiscalYear] = useState('2025-26');
+    const [fiscalYear, setFiscalYear] = useState('2026-27');
 
 
     // Table States

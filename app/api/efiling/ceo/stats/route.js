@@ -44,8 +44,9 @@ export async function GET(request) {
                 COUNT(CASE WHEN f.sla_breached = true AND f.work_request_id IS NOT NULL THEN 1 END) as overdue_work_related
             FROM efiling_files f
             LEFT JOIN efiling_file_status s ON f.status_id = s.id
-            WHERE split_part(f.file_number, '/', 2) = $1
-        `, [fiscalYear]);
+            WHERE split_part(f.file_number, '/', 2) = $1 
+            AND (f.department_id IS NULL OR f.department_id != 36)
+          `, [fiscalYear]);
 
         const filesQuery = await client.query(`
             SELECT 
@@ -72,7 +73,8 @@ export async function GET(request) {
             -- Join to get Assignee Name
             LEFT JOIN efiling_users eu_assignee ON f.assigned_to = eu_assignee.id
             LEFT JOIN users u_assignee ON eu_assignee.user_id = u_assignee.id
-            WHERE split_part(f.file_number, '/', 2) = $1
+            WHERE split_part(f.file_number, '/', 2) = $1 
+            AND (f.department_id IS NULL OR f.department_id != 36)
             ORDER BY f.created_at DESC
         `, [fiscalYear]);
 
@@ -89,11 +91,15 @@ export async function GET(request) {
                 ) as status_distribution,
                 ROUND(AVG(EXTRACT(DAY FROM (CURRENT_TIMESTAMP - f.created_at)))::numeric, 1) as avg_aging
             FROM efiling_file_categories c
-            LEFT JOIN efiling_files f ON c.id = f.category_id AND split_part(f.file_number, '/', 2) = $1
+            LEFT JOIN efiling_files f ON c.id = f.category_id AND split_part(f.file_number, '/', 2) = $1 AND (f.department_id IS NULL OR f.department_id != 36)
             LEFT JOIN efiling_files_costing fc ON f.id = fc.file_id
             LEFT JOIN efiling_file_status s ON f.status_id = s.id
             GROUP BY c.id, c.name
-            ORDER BY total_estimated_cost DESC
+            ORDER BY 
+                (COUNT(f.id) > 0) DESC,         
+                COUNT(f.id) DESC,               
+                total_estimated_cost DESC;
+
         `, [fiscalYear]);
 
         return NextResponse.json({
