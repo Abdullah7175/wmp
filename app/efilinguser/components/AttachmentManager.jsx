@@ -76,7 +76,7 @@ export default function AttachmentManager({ fileId, canEdit = true }) {
         }
 
         // Check file size (5MB limit)
-        const maxSize = 5 * 1024 * 1024; // 5MB
+        const maxSize = 15 * 1024 * 1024; // 5MB
         if (file.size > maxSize) {
             return `File size exceeds limit. Maximum allowed: 5MB`;
         }
@@ -379,7 +379,7 @@ export default function AttachmentManager({ fileId, canEdit = true }) {
                                     className="mt-1"
                                 />
                                 <p className="text-sm text-gray-500 mt-1">
-                                    Allowed types: PDF, DOC, DOCX, JPG, JPEG, PNG (Max 10MB each)
+                                    Allowed types: PDF, DOC, DOCX, JPG, JPEG, PNG (Max 15MB each)
                                 </p>
                             </div>
 

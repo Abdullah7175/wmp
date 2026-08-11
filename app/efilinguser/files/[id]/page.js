@@ -6,7 +6,7 @@ import { useRouter, useParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Edit, Download, Eye, Clock, User, Building2, FileText, AlertCircle, MessageSquare, Forward, Printer, FileDown, X, Maximize2, Shield, Paperclip, Upload, Plus } from "lucide-react";
+import { ArrowLeft, Edit, Download, Eye, Clock, User, Building2, FileText, AlertCircle, MessageSquare, Forward, Printer, FileDown, X, Maximize2, Shield, Paperclip, Upload, Plus, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import Image from "next/image";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -290,7 +290,7 @@ export default function FileDetail() {
                     setHasUserSigned(userSigned);
                 }
             }
-        } catch (e) {
+        } catch (e) { 
             console.error('Error loading extras', e);
         }
     };
@@ -305,7 +305,7 @@ export default function FileDetail() {
             'image/jpg',
             'image/png'
         ];
-        const maxSize = 5 * 1024 * 1024; // 5MB
+        const maxSize = 15 * 1024 * 1024; // 5MB
 
         const validFiles = [];
         const errors = [];
@@ -406,6 +406,45 @@ export default function FileDetail() {
             });
         } finally {
             setUploadingAttachment(false);
+        }
+    };
+
+    const handleDeleteAttachment = async (attachmentId, e) => {
+        // Stop modal from opening when clicking the delete button
+        e.stopPropagation();
+
+        if (!confirm("Are you sure you want to delete this attachment?")) {
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/efiling/files/delete-attachment/${attachmentId}`, {
+                method: 'DELETE',
+            });
+
+            const data = await response.json();
+
+            if (response.ok && data.success) {
+                toast({
+                    title: "Success",
+                    description: "Attachment deleted successfully",
+                });
+                // Refresh attachments list
+                fetchExtras();
+            } else {
+                toast({
+                    title: "Error",
+                    description: data.error || "Failed to delete attachment",
+                    variant: "destructive",
+                });
+            }
+        } catch (error) {
+            console.error('Error deleting attachment:', error);
+            toast({
+                title: "Error",
+                description: "An unexpected error occurred while deleting",
+                variant: "destructive",
+            });
         }
     };
 
@@ -1722,7 +1761,23 @@ const openAttachmentModal = (attachment) => {
                                 ) : (
                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                                         {attachments.map(a => (
-                                            <div key={a.id} className="border rounded-lg p-3 hover:shadow-md transition-shadow cursor-pointer group" onClick={() => openAttachmentModal(a)}>
+                                            <div 
+                                                key={a.id} 
+                                                className="relative border rounded-lg p-3 hover:shadow-md transition-shadow cursor-pointer group" 
+                                                onClick={() => openAttachmentModal(a)}
+                                            >
+                                                {/* Red Delete Cross Button */}
+                                                {canAddAttachment && !isCcOnly && (
+                                                    <button
+                                                        type="button"
+                                                        title="Delete Attachment"
+                                                        onClick={(e) => handleDeleteAttachment(a.id, e)}
+                                                        className="absolute top-2 right-2 z-10 p-1.5 bg-red-600 hover:bg-red-700 text-white rounded-full shadow transition-all duration-150 hover:scale-105"
+                                                    >
+                                                        <Trash2 className="w-3.5 h-3.5" />
+                                                    </button>
+                                                )}
+
                                                 {a.file_url && a.file_type?.startsWith('image/') ? (
                                                     <div className="relative">
                                                         <Image
@@ -1733,7 +1788,7 @@ const openAttachmentModal = (attachment) => {
                                                             className="w-full h-32 object-cover rounded mb-2"
                                                             unoptimized
                                                         />
-                                                        <div className="absolute top-2 right-2 bg-black bg-opacity-50 text-white p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        <div className="absolute top-2 left-2 bg-black bg-opacity-50 text-white p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">
                                                             <Maximize2 className="w-4 h-4" />
                                                         </div>
                                                     </div>
@@ -1743,7 +1798,9 @@ const openAttachmentModal = (attachment) => {
                                                     </div>
                                                 )}
                                                 <div className="space-y-1">
-                                                    <div className="font-medium text-sm truncate" title={a.attachment_name || a.file_name}>{a.attachment_name || a.file_name}</div>
+                                                    <div className="font-medium text-sm truncate pr-6" title={a.attachment_name || a.file_name}>
+                                                        {a.attachment_name || a.file_name}
+                                                    </div>
                                                     {a.attachment_name ? (
                                                         <div className="text-xs text-gray-400 truncate" title={a.file_name}>{a.file_name}</div>
                                                     ) : null}
@@ -2118,7 +2175,7 @@ const openAttachmentModal = (attachment) => {
                                     className="mt-1"
                                 />
                                 <p className="text-sm text-gray-500 mt-1">
-                                    Allowed types: PDF, DOC, DOCX, JPG, JPEG, PNG (Max 5MB each)
+                                    Allowed types: PDF, DOC, DOCX, JPG, JPEG, PNG (Max 15MB each)
                                 </p>
                             </div>
 
