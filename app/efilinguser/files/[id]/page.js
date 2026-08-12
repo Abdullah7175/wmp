@@ -65,6 +65,12 @@ export default function FileDetail() {
     const [selectedFiles, setSelectedFiles] = useState([]);
     const [timeLeft, setTimeLeft] = useState("");
 
+    // Note sheet modal states
+    const [editingPage, setEditingPage] = useState(null);
+    const [editPageTitle, setEditPageTitle] = useState("");
+    const [editPageContent, setEditPageContent] = useState("");
+    const [isSavingPage, setIsSavingPage] = useState(false);
+
     const fetchUserRole = async () => {
         try {
             if (efilingUserId) {
@@ -448,6 +454,31 @@ export default function FileDetail() {
         }
     };
 
+
+    const handleOpenEditPage = (pageId) => {
+        router.push(`/efilinguser/files/${params.id}/add-page?pageId=${pageId}&mode=edit`);
+    };
+
+    
+
+    const handleDeletePage = async (pageId) => {
+        if (!confirm("Are you sure you want to delete this note sheet?")) return;
+        try {
+            const res = await fetch(`/api/efiling/files/${params.id}/pages?page_id=${pageId}`, {
+                method: 'DELETE'
+            });
+            if (res.ok) {
+                toast({ title: "Success", description: "Note sheet deleted successfully" });
+                await fetchExtras();
+            } else {
+                const err = await res.json();
+                toast({ title: "Error", description: err.error || "Failed to delete note sheet", variant: "destructive" });
+            }
+        } catch (e) {
+            console.error('Error deleting note sheet:', e);
+            toast({ title: "Error", description: "Unexpected error deleting note sheet", variant: "destructive" });
+        }
+    };
     const fetchTimeline = async () => {
         try {
             const res = await fetch(`/api/efiling/files/${params.id}/timeline`);
@@ -628,9 +659,31 @@ const openAttachmentModal = (attachment) => {
         return (
             <div
                 key={page.id || page.pageNumber}
-                className="bg-white shadow border mx-auto page-content"
+                className="bg-white shadow border mx-auto page-content relative group mb-6"
                 style={{ width: '794px', padding: '20px' }}
             >
+                {/* Note Sheet Action Controls (Edit & Delete) */}
+                {canAddPage && !isCcOnly && page.id && page.id !== 'main' && (
+                    <div className="absolute top-3 right-3 flex space-x-2 no-print opacity-90 hover:opacity-100 z-10">
+                       <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-8 px-2 bg-white text-blue-600 border-blue-200 hover:bg-blue-50"
+                            onClick={() => router.push(`/efilinguser/files/${params.id}/edit-page?pageId=${page.id}`)}
+                        >
+                            <Edit className="w-3.5 h-3.5 mr-1" /> Edit Notesheet
+                        </Button>
+                        <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-8 px-2 bg-white text-red-600 border-red-200 hover:bg-red-50"
+                            onClick={() => handleDeletePage(page.id)}
+                        >
+                            <Trash2 className="w-3.5 h-3.5 mr-1" /> Delete
+                        </Button>
+                    </div>
+                )}
+
                 {/* KWSC Header */}
                 <div className="border-b border-gray-300 pb-3 mb-4">
                     <div className="flex items-center space-x-3">
@@ -2320,6 +2373,7 @@ const openAttachmentModal = (attachment) => {
                     </DialogContent>
                 </Dialog>
             </div>
+           
         </>
     );
 } 

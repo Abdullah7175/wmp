@@ -309,3 +309,245 @@ export async function GET(request, { params }) {
     }
 }
 
+
+
+/**
+ * PUT /api/efiling/files/[id]/pages
+ * Edit an existing page in file
+ * Body: { page_id, page_title, page_content }
+ */
+export async function PUT(request, { params }) {
+    let client;
+    try {
+        const { id } = await params;
+        const body = await request.json();
+        const { page_id, page_title, page_content } = body;
+
+        if (!page_id) {
+            return NextResponse.json(
+                { error: 'page_id is required' },
+                { status: 400 }
+            );
+        }
+
+        const session = await auth();
+        if (!session?.user?.id) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
+        client = await connectToDatabase();
+        await client.query('BEGIN');
+
+        const { rejectCcOnlyMutation } = await import('@/lib/authMiddleware');
+        const isAdmin = [1, 2].includes(parseInt(session.user.role));
+        const ccBlock = await rejectCcOnlyMutation(client, parseInt(id), session.user.id, isAdmin);
+        if (ccBlock) {
+            await client.query('ROLLBACK');
+            return ccBlock;
+        }
+
+        // Check if user can manage/add pages
+        const currentUserRes = await client.query(`
+            SELECT eu.id, eu.efiling_role_id, r.code as role_code
+            FROM efiling_users eu
+            JOIN users u ON eu.user_id = u.id
+            LEFT JOIN efiling_roles r ON eu.efiling_role_id = r.id
+            WHERE u.id = $1 AND eu.is_active = true
+        `, [session.user.id]);
+
+        if (currentUserRes.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return NextResponse.json({ error: 'User not found in e-filing system' }, { status: 403 });
+        }
+
+        const currentUser = currentUserRes.rows[0];
+
+        const canAdd = await canAddPages(client, id, currentUser.id);
+        if (!canAdd) {
+            await client.query('ROLLBACK');
+            return NextResponse.json({
+                error: 'Only SE/CE and their assistants can update pages on this file',
+                code: 'PERMISSION_DENIED'
+            }, { status: 403 });
+        }
+
+        // Check page exists and belongs to this file
+        const pageCheck = await client.query(`
+            SELECT id, page_title, created_by 
+            FROM efiling_document_pages 
+            WHERE id = $1 AND file_id = $2 AND is_active = true
+        `, [page_id, id]);
+
+        if (pageCheck.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return NextResponse.json({ error: 'Page not found for this file' }, { status: 404 });
+        }
+
+        // Update document page
+        const updatedPageRes = await client.query(`
+            UPDATE efiling_document_pages
+            SET page_title = COALESCE($1, page_title),
+                page_content = COALESCE($2, page_content),
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = $3 AND file_id = $4
+            RETURNING id, page_number, page_title, page_type, updated_at
+        `, [page_title, page_content, page_id, id]);
+
+        // Log edit action
+        try {
+            await eFileActionLogger.logFileAction({
+                fileId: id,
+                action: EFILING_ACTION_TYPES.DOCUMENT_UPDATED || 'DOCUMENT_UPDATED',
+                userId: currentUser.id.toString(),
+                details: {
+                    description: `Note sheet updated: ${page_title || pageCheck.rows[0].page_title || 'Untitled'}`,
+                    page_id: page_id
+                },
+                ipAddress: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip'),
+                userAgent: request.headers.get('user-agent')
+            });
+        } catch (logError) {
+            console.error('Error logging page edit to timeline:', logError);
+        }
+
+        await client.query('COMMIT');
+
+        return NextResponse.json({
+            success: true,
+            message: 'Page updated successfully',
+            page: updatedPageRes.rows[0]
+        });
+
+    } catch (error) {
+        if (client) await client.query('ROLLBACK');
+        console.error('Error updating page:', error);
+        return NextResponse.json(
+            { error: 'Failed to update page', details: error.message },
+            { status: 500 }
+        );
+    } finally {
+        if (client) await client.release();
+    }
+}
+
+/**
+ * DELETE /api/efiling/files/[id]/pages?page_id=123
+ * Soft-delete or remove a note sheet page from file
+ */
+export async function DELETE(request, { params }) {
+    let client;
+    try {
+        const { id } = await params;
+        const { searchParams } = new URL(request.url);
+        const page_id = searchParams.get('page_id');
+
+        if (!page_id) {
+            return NextResponse.json(
+                { error: 'page_id query parameter is required' },
+                { status: 400 }
+            );
+        }
+
+        const session = await auth();
+        if (!session?.user?.id) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
+        client = await connectToDatabase();
+        await client.query('BEGIN');
+
+        const { rejectCcOnlyMutation } = await import('@/lib/authMiddleware');
+        const isAdmin = [1, 2].includes(parseInt(session.user.role));
+        const ccBlock = await rejectCcOnlyMutation(client, parseInt(id), session.user.id, isAdmin);
+        if (ccBlock) {
+            await client.query('ROLLBACK');
+            return ccBlock;
+        }
+
+        const currentUserRes = await client.query(`
+            SELECT eu.id, eu.efiling_role_id, r.code as role_code
+            FROM efiling_users eu
+            JOIN users u ON eu.user_id = u.id
+            LEFT JOIN efiling_roles r ON eu.efiling_role_id = r.id
+            WHERE u.id = $1 AND eu.is_active = true
+        `, [session.user.id]);
+
+        if (currentUserRes.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return NextResponse.json({ error: 'User not found in e-filing system' }, { status: 403 });
+        }
+
+        const currentUser = currentUserRes.rows[0];
+
+        const canAdd = await canAddPages(client, id, currentUser.id);
+        if (!canAdd) {
+            await client.query('ROLLBACK');
+            return NextResponse.json({
+                error: 'Only authorized roles can delete pages on this file',
+                code: 'PERMISSION_DENIED'
+            }, { status: 403 });
+        }
+
+        // Soft delete page
+        const pageRes = await client.query(`
+            UPDATE efiling_document_pages
+            SET is_active = false, updated_at = CURRENT_TIMESTAMP
+            WHERE id = $1 AND file_id = $2 AND is_active = true
+            RETURNING id, page_title, page_number
+        `, [page_id, id]);
+
+        if (pageRes.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return NextResponse.json({ error: 'Page not found' }, { status: 404 });
+        }
+
+        // Recalculate file page count
+        const countRes = await client.query(`
+            SELECT COUNT(*) as total
+            FROM efiling_document_pages
+            WHERE file_id = $1 AND is_active = true
+        `, [id]);
+
+        const newCount = parseInt(countRes.rows[0].total || 0);
+
+        await client.query(`
+            UPDATE efiling_files
+            SET page_count = $1, updated_at = CURRENT_TIMESTAMP
+            WHERE id = $2
+        `, [newCount, id]);
+
+        // Log deletion
+        try {
+            await eFileActionLogger.logFileAction({
+                fileId: id,
+                action: EFILING_ACTION_TYPES.DOCUMENT_DELETED || 'DOCUMENT_DELETED',
+                userId: currentUser.id.toString(),
+                details: {
+                    description: `Note sheet deleted: ${pageRes.rows[0].page_title || 'Untitled'}`,
+                    page_id: page_id
+                },
+                ipAddress: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip'),
+                userAgent: request.headers.get('user-agent')
+            });
+        } catch (logError) {
+            console.error('Error logging page deletion to timeline:', logError);
+        }
+
+        await client.query('COMMIT');
+
+        return NextResponse.json({
+            success: true,
+            message: 'Page deleted successfully'
+        });
+
+    } catch (error) {
+        if (client) await client.query('ROLLBACK');
+        console.error('Error deleting page:', error);
+        return NextResponse.json(
+            { error: 'Failed to delete page', details: error.message },
+            { status: 500 }
+        );
+    } finally {
+        if (client) await client.release();
+    }
+}
