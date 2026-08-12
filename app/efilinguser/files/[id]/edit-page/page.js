@@ -129,7 +129,7 @@ const fetchFileAndTargetPage = async () => {
                 }),
             });
 
-            if (!response.ok) throw new Error('Failed to update page');
+            if (!response.ok) throw new Error('Failed to update page (you might not be the creator of notesheet)');
 
             toast({ title: "Success", description: "Notesheet page updated successfully" });
             router.push(`/efilinguser/files/${params.id}`);

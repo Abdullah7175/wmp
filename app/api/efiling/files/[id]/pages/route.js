@@ -316,6 +316,11 @@ export async function GET(request, { params }) {
  * Edit an existing page in file
  * Body: { page_id, page_title, page_content }
  */
+/**
+ * PUT /api/efiling/files/[id]/pages
+ * Edit an existing page in file (Only the creator can edit)
+ * Body: { page_id, page_title, page_content }
+ */
 export async function PUT(request, { params }) {
     let client;
     try {
@@ -346,7 +351,7 @@ export async function PUT(request, { params }) {
             return ccBlock;
         }
 
-        // Check if user can manage/add pages
+        // Get current user's e-filing ID
         const currentUserRes = await client.query(`
             SELECT eu.id, eu.efiling_role_id, r.code as role_code
             FROM efiling_users eu
@@ -366,12 +371,12 @@ export async function PUT(request, { params }) {
         if (!canAdd) {
             await client.query('ROLLBACK');
             return NextResponse.json({
-                error: 'Only SE/CE and their assistants can update pages on this file',
+                error: 'Only authorized roles can update pages on this file',
                 code: 'PERMISSION_DENIED'
             }, { status: 403 });
         }
 
-        // Check page exists and belongs to this file
+        // Check page exists, belongs to file, AND was created by the current user
         const pageCheck = await client.query(`
             SELECT id, page_title, created_by 
             FROM efiling_document_pages 
@@ -381,6 +386,17 @@ export async function PUT(request, { params }) {
         if (pageCheck.rows.length === 0) {
             await client.query('ROLLBACK');
             return NextResponse.json({ error: 'Page not found for this file' }, { status: 404 });
+        }
+
+        const page = pageCheck.rows[0];
+
+        // STRICT OWNERSHIP CHECK: Only creator can edit
+        if (parseInt(page.created_by) !== parseInt(currentUser.id) && !isAdmin) {
+            await client.query('ROLLBACK');
+            return NextResponse.json({
+                error: 'You can only edit notesheets created by you',
+                code: 'OWNERSHIP_REQUIRED'
+            }, { status: 403 });
         }
 
         // Update document page
@@ -400,7 +416,7 @@ export async function PUT(request, { params }) {
                 action: EFILING_ACTION_TYPES.DOCUMENT_UPDATED || 'DOCUMENT_UPDATED',
                 userId: currentUser.id.toString(),
                 details: {
-                    description: `Note sheet updated: ${page_title || pageCheck.rows[0].page_title || 'Untitled'}`,
+                    description: `Note sheet updated: ${page_title || page.page_title || 'Untitled'}`,
                     page_id: page_id
                 },
                 ipAddress: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip'),
@@ -429,10 +445,13 @@ export async function PUT(request, { params }) {
         if (client) await client.release();
     }
 }
-
 /**
  * DELETE /api/efiling/files/[id]/pages?page_id=123
  * Soft-delete or remove a note sheet page from file
+ */
+/**
+ * DELETE /api/efiling/files/[id]/pages?page_id=123
+ * Soft-delete or remove a note sheet page from file (Only the creator can delete)
  */
 export async function DELETE(request, { params }) {
     let client;
@@ -488,6 +507,28 @@ export async function DELETE(request, { params }) {
             }, { status: 403 });
         }
 
+        // STRICT OWNERSHIP CHECK: Fetch page first and verify creator
+        const pageCheck = await client.query(`
+            SELECT id, page_title, created_by 
+            FROM efiling_document_pages 
+            WHERE id = $1 AND file_id = $2 AND is_active = true
+        `, [page_id, id]);
+
+        if (pageCheck.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return NextResponse.json({ error: 'Page not found' }, { status: 404 });
+        }
+
+        const page = pageCheck.rows[0];
+
+        if (parseInt(page.created_by) !== parseInt(currentUser.id) && !isAdmin) {
+            await client.query('ROLLBACK');
+            return NextResponse.json({
+                error: 'You can only delete notesheets created by you',
+                code: 'OWNERSHIP_REQUIRED'
+            }, { status: 403 });
+        }
+
         // Soft delete page
         const pageRes = await client.query(`
             UPDATE efiling_document_pages
@@ -495,11 +536,6 @@ export async function DELETE(request, { params }) {
             WHERE id = $1 AND file_id = $2 AND is_active = true
             RETURNING id, page_title, page_number
         `, [page_id, id]);
-
-        if (pageRes.rows.length === 0) {
-            await client.query('ROLLBACK');
-            return NextResponse.json({ error: 'Page not found' }, { status: 404 });
-        }
 
         // Recalculate file page count
         const countRes = await client.query(`
