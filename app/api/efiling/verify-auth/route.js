@@ -191,11 +191,12 @@ export async function POST(request) {
         console.log('OTP verification successful for efiling user:', efilingUserId);
         
         // Mark OTP as verified instead of deleting (for failure tracking)
+        // NEW CODE:
+        // Delete all OTP records for this user upon successful verification so no stale/true rows remain
         await client.query(`
-            UPDATE efiling_otp_codes 
-            SET verified = TRUE
-            WHERE user_id = $1 AND method = $2 AND otp_code = $3
-        `, [efilingUserIdStr, method, storedCode]);
+            DELETE FROM efiling_otp_codes 
+            WHERE user_id = $1
+        `, [efilingUserIdStr]);
         
         // Clean up old verified OTPs (older than 1 hour)
         await client.query(`

@@ -101,19 +101,20 @@ export async function POST(request) {
         }
 
         // Check OTP rate limiting (max 3 requests per user)
-        // Also get the time since last OTP to show countdown
+// 2. Count ONLY unverified/failed attempts within the last 60 seconds / active window
         const rateLimitCheck = await client.query(`
             SELECT COUNT(*) as count,
                    MAX(created_at) as last_otp_time
             FROM efiling_otp_codes
-            WHERE user_id = $1 AND created_at > NOW() - INTERVAL '1 hour'
+            WHERE user_id = $1 
+              AND verified = FALSE
+              AND created_at > NOW() - INTERVAL '1 hour'
         `, [efilingUserId]);
         
-        const recentOTPCount = parseInt(rateLimitCheck.rows[0]?.count || 0);
+        const recentFailedCount = parseInt(rateLimitCheck.rows[0]?.count || 0);
         const lastOtpTime = rateLimitCheck.rows[0]?.last_otp_time;
         
-        if (recentOTPCount >= 3) {
-            // Calculate seconds remaining until 60 seconds have passed since last OTP
+        if (recentFailedCount >= 3) {
             let secondsRemaining = 60;
             if (lastOtpTime) {
                 const lastOtpDate = new Date(lastOtpTime);
@@ -121,17 +122,26 @@ export async function POST(request) {
                 const secondsSinceLastOtp = Math.floor((now - lastOtpDate) / 1000);
                 secondsRemaining = Math.max(0, 60 - secondsSinceLastOtp);
             }
-            
-            return NextResponse.json(
-                { 
-                    error: 'Your last OTP timer is still active. Please wait for 60 seconds before requesting another OTP.',
-                    message: `Your last OTP timer is still active. Please wait ${secondsRemaining} more seconds before requesting another OTP.`,
-                    rateLimited: true,
-                    secondsRemaining: secondsRemaining,
-                    forceEmail: method === 'whatsapp' // Suggest email if WhatsApp was attempted
-                },
-                { status: 429 }
-            );
+
+            // Only enforce 429 block if time remaining is > 0
+            if (secondsRemaining > 0) {
+                return NextResponse.json(
+                    { 
+                        error: 'Your last OTP timer is still active. Please wait for 60 seconds before requesting another OTP.',
+                        message: `Your last OTP timer is still active. Please wait ${secondsRemaining} more seconds before requesting another OTP.`,
+                        rateLimited: true,
+                        secondsRemaining: secondsRemaining,
+                        forceEmail: method === 'whatsapp'
+                    },
+                    { status: 429 }
+                );
+            } else {
+                // Timer expired - clear failed attempts to allow fresh start
+                await client.query(`
+                    DELETE FROM efiling_otp_codes
+                    WHERE user_id = $1 AND verified = FALSE
+                `, [efilingUserId]);
+            }
         }
 
         // Check WhatsApp failure count - force email after 3 failures
@@ -244,9 +254,11 @@ export async function POST(request) {
         
         // Clean up old expired OTPs (older than 1 hour)
         await client.query(`
-            DELETE FROM efiling_otp_codes 
-            WHERE expires_at < NOW() - INTERVAL '1 hour'
-        `);
+            DELETE FROM efiling_otp_codes
+            WHERE user_id = $1 
+              AND verified = FALSE 
+              AND created_at < NOW() - INTERVAL '60 seconds'
+        `, [efilingUserId]);
         
         // Check if current user is admin (for admin fallback when WhatsApp fails)
         const isAdmin = session?.user?.role && [1, 2].includes(parseInt(session.user.role));

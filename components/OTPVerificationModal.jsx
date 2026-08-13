@@ -117,7 +117,7 @@ export function OTPVerificationModal({ show, onClose, onVerify, efilingUserId = 
     }, [show, efilingUserId, session]);
 
     // Send OTP
-    const sendOTP = async () => {
+    const sendOTP = async () => { 
         try {
             setLoading(true);
             const response = await fetch('/api/efiling/send-otp', {
