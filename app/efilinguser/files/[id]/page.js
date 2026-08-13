@@ -2208,109 +2208,155 @@ const openAttachmentModal = (attachment) => {
                     </DialogContent>
                 </Dialog>
 
-                {/* View All Attachments Modal */}
+                {/* View All Attachments Modal - Book/Vertical Reading Mode */}
                 <Dialog open={isAllAttachmentsModalOpen} onOpenChange={setIsAllAttachmentsModalOpen}>
-                    <DialogContent className="max-w-5xl max-h-[85vh] flex flex-col">
-                        <DialogHeader className="flex-shrink-0 border-b pb-3">
-                            <DialogTitle className="flex items-center justify-between">
-                                <span className="flex items-center gap-2 text-lg font-semibold">
-                                    <Paperclip className="w-5 h-5 text-blue-600" />
-                                    All Attachments ({attachments.length})
-                                </span>
-                                <Button variant="ghost" size="sm" onClick={() => setIsAllAttachmentsModalOpen(false)}>
-                                    <X className="w-4 h-4" />
-                                </Button>
+                    <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col p-0">
+                        {/* Sticky Header */}
+                        <DialogHeader className="p-4 border-b flex-shrink-0 bg-white z-10 flex flex-row items-center justify-between">
+                            <DialogTitle className="flex items-center gap-2 text-lg font-semibold">
+                                <Paperclip className="w-5 h-5 text-blue-600" />
+                                All Attachments Document View ({attachments.length})
                             </DialogTitle>
+                            <Button variant="ghost" size="sm" onClick={() => setIsAllAttachmentsModalOpen(false)}>
+                                <X className="w-4 h-4" />
+                            </Button>
                         </DialogHeader>
 
-                        {/* Scrollable Container */}
-                        <div className="flex-1 overflow-y-auto p-4 space-y-6">
+                        {/* Vertical Book-style Scrollable Body */}
+                        <div className="flex-1 overflow-y-auto p-6 bg-gray-100 space-y-8">
                             {attachments.length === 0 ? (
                                 <p className="text-center text-sm text-gray-500 py-8">No attachments found.</p>
                             ) : (
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                    {attachments.map((a) => {
-                                        const getImageUrl = (url) => {
-                                            if (!url) return '';
-                                            if (url.startsWith('/uploads/')) return url.replace('/uploads/', '/api/uploads/');
-                                            return url;
-                                        };
+                                attachments.map((a, index) => {
+                                    // Utility functions for URL mapping
+                                    const getMediaUrl = (url) => {
+                                        if (!url) return '';
+                                        if (url.startsWith('/uploads/')) return url.replace('/uploads/', '/api/uploads/');
+                                        return url;
+                                    };
 
-                                        const isImage = 
-                                            a.file_type?.startsWith('image/') ||
-                                            /\.(jpg|jpeg|png|webp|gif|svg)$/i.test(a.file_name || '');
+                                    const getPdfUrl = (fileUrl) => {
+                                        if (!fileUrl) return null;
+                                        if (fileUrl.startsWith('/api/uploads/')) return fileUrl;
+                                        if (fileUrl.startsWith('/uploads/')) return fileUrl.replace('/uploads/', '/api/uploads/');
+                                        if (fileUrl.startsWith('http://') || fileUrl.startsWith('https://')) {
+                                            try {
+                                                const url = new URL(fileUrl);
+                                                const path = url.pathname;
+                                                if (path.startsWith('/uploads/')) return path.replace('/uploads/', '/api/uploads/');
+                                                return path;
+                                            } catch (e) {
+                                                return fileUrl;
+                                            }
+                                        }
+                                        return `/api/uploads${fileUrl.startsWith('/') ? '' : '/'}${fileUrl}`;
+                                    };
 
-                                        const imageUrl = getImageUrl(a.file_url);
+                                    const isImage = 
+                                        a.file_type?.startsWith('image/') ||
+                                        /\.(jpg|jpeg|png|webp|gif|svg)$/i.test(a.file_name || '');
 
-                                        return (
-                                            <div 
-                                                key={a.id} 
-                                                className="relative border rounded-lg p-3 hover:shadow-md transition-shadow cursor-pointer group bg-white" 
-                                                onClick={() => {
-                                                    setIsAllAttachmentsModalOpen(false); // Close view all modal
-                                                    openAttachmentModal(a); // Open single attachment preview
-                                                }}
-                                            >
-                                                {/* Delete Cross Button */}
-                                                {canAddAttachment && !isCcOnly && (
-                                                    <button
-                                                        type="button"
-                                                        title="Delete Attachment"
-                                                        onClick={(e) => handleDeleteAttachment(a.id, e)}
-                                                        className="absolute top-2 right-2 z-10 p-1.5 bg-red-600 hover:bg-red-700 text-white rounded-full shadow transition-all duration-150 hover:scale-105"
-                                                    >
-                                                        <Trash2 className="w-3.5 h-3.5" />
-                                                    </button>
-                                                )}
+                                    const isPdf = 
+                                        a.file_type === 'application/pdf' || 
+                                        a.file_name?.toLowerCase().endsWith('.pdf');
 
-                                                {/* Preview Image / Icon */}
-                                                {a.file_url && isImage ? (
-                                                    <div className="relative">
-                                                        <Image
-                                                            src={imageUrl}
-                                                            alt={a.attachment_name || a.file_name}
-                                                            width={200}
-                                                            height={150}
-                                                            className="w-full h-32 object-cover rounded mb-2"
-                                                            unoptimized
-                                                        />
-                                                        <div className="absolute top-2 left-2 bg-black bg-opacity-50 text-white p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">
-                                                            <Maximize2 className="w-4 h-4" />
-                                                        </div>
-                                                    </div>
-                                                ) : (
-                                                    <div className="w-full h-32 flex items-center justify-center bg-gray-100 rounded mb-2 text-gray-500">
-                                                        <FileText className="w-8 h-8" />
-                                                    </div>
-                                                )}
+                                    const isWord = 
+                                        a.file_type === 'application/msword' ||
+                                        a.file_type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+                                        a.file_name?.toLowerCase().endsWith('.doc') ||
+                                        a.file_name?.toLowerCase().endsWith('.docx');
 
-                                                {/* Attachment Details */}
-                                                <div className="space-y-1">
-                                                    <div className="font-medium text-sm truncate pr-6" title={a.attachment_name || a.file_name}>
-                                                        {a.attachment_name || a.file_name}
-                                                    </div>
-                                                    {a.attachment_name ? (
-                                                        <div className="text-xs text-gray-400 truncate" title={a.file_name}>
-                                                            {a.file_name}
-                                                        </div>
-                                                    ) : null}
-                                                    <div className="text-xs text-gray-500">
-                                                        Size: {Math.round((a.file_size || 0) / 1024)} KB
-                                                    </div>
-                                                    <div className="text-xs text-gray-500">
-                                                        Type: {a.file_type || 'Unknown'}
-                                                    </div>
-                                                    <div className="text-xs text-gray-500">
-                                                        Uploaded: {formatDate(a.uploaded_at)}
-                                                    </div>
-                                                    <div className="text-xs text-blue-600 group-hover:text-blue-800 font-medium pt-1">
-                                                        Click to view details
-                                                    </div>
-                                                </div>
+                                    const mediaUrl = getMediaUrl(a.file_url);
+                                    const pdfUrl = getPdfUrl(a.file_url);
+
+                                    return (
+                                        <div 
+                                            key={a.id || index} 
+                                            className="bg-white shadow-md rounded-lg overflow-hidden border border-gray-200"
+                                        >
+                                            {/* Option bar to switch back to deep inspect/metadata modal if needed */}
+                                            <div className="bg-gray-50 px-4 py-2 border-b flex justify-between items-center text-xs text-gray-500">
+                                                <span>Attachment #{index + 1}</span>
+                                                <Button 
+                                                    variant="ghost" 
+                                                    size="sm" 
+                                                    className="h-6 text-xs text-blue-600 hover:text-blue-800 p-0"
+                                                    onClick={() => {
+                                                        setIsAllAttachmentsModalOpen(false);
+                                                        openAttachmentModal(a);
+                                                    }}
+                                                >
+                                                    Click to view details
+                                                </Button>
                                             </div>
-                                        );
-                                    })}
-                                </div>
+
+                                            {/* Line-wise Full View */}
+                                            <div className="w-full">
+                                                {isImage && (
+                                                    <div className="flex justify-center bg-gray-50 p-2">
+                                                        <img
+                                                            src={mediaUrl}
+                                                            alt={a.attachment_name || a.file_name}
+                                                            className="max-w-full h-auto object-contain mx-auto"
+                                                            onError={(e) => {
+                                                                if (e.target.src !== a.file_url) {
+                                                                    e.target.src = a.file_url;
+                                                                }
+                                                            }}
+                                                        />
+                                                    </div>
+                                                )}
+
+                                                {isPdf && (
+                                                    <div className="w-full h-[85vh]">
+                                                        <iframe
+                                                            src={pdfUrl}
+                                                            className="w-full h-full border-0"
+                                                            title={a.file_name || `PDF-${index}`}
+                                                        />
+                                                    </div>
+                                                )}
+
+                                                {isWord && (
+                                                    <div className="p-8 text-center bg-gray-50 border-t border-b">
+                                                        <FileText className="w-12 h-12 mx-auto text-gray-400 mb-2" />
+                                                        <p className="text-sm text-gray-600 mb-3">Word Document (Cannot be rendered inline)</p>
+                                                        <Button
+                                                            size="sm"
+                                                            variant="outline"
+                                                            onClick={() => {
+                                                                const link = document.createElement('a');
+                                                                link.href = a.file_url;
+                                                                link.download = a.file_name;
+                                                                link.target = '_blank';
+                                                                document.body.appendChild(link);
+                                                                link.click();
+                                                                document.body.removeChild(link);
+                                                            }}
+                                                        >
+                                                            <Download className="w-4 h-4 mr-2" />
+                                                            Download Document
+                                                        </Button>
+                                                    </div>
+                                                )}
+
+                                                {!isImage && !isPdf && !isWord && (
+                                                    <div className="p-8 text-center bg-gray-50">
+                                                        <FileText className="w-12 h-12 mx-auto text-gray-400 mb-2" />
+                                                        <p className="text-sm text-gray-600 mb-3">Unsupported inline format</p>
+                                                        <Button
+                                                            size="sm"
+                                                            onClick={() => window.open(a.file_url, '_blank')}
+                                                        >
+                                                            <Download className="w-4 h-4 mr-2" />
+                                                            Open / Download
+                                                        </Button>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    );
+                                })
                             )}
                         </div>
                     </DialogContent>
