@@ -560,7 +560,7 @@ export default function DocumentViewer() {
                                                             {Math.round((a.file_size || 0)/1024)} KB • {formatDate(a.uploaded_at)}
                                                         </div>
                                                         <div className="text-xs text-blue-600 group-hover:text-blue-800">
-                                                            Click to views
+                                                            Click to view
                                                         </div>
                                                     </div>
                                                 </div>

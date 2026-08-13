@@ -64,6 +64,7 @@ export default function FileDetail() {
     const [attachmentName, setAttachmentName] = useState("");
     const [selectedFiles, setSelectedFiles] = useState([]);
     const [timeLeft, setTimeLeft] = useState("");
+    const [isAllAttachmentsModalOpen, setIsAllAttachmentsModalOpen] = useState(false); // <--- ADD THIS LINE
 
     // Note sheet modal states
     const [editingPage, setEditingPage] = useState(null);
@@ -1792,22 +1793,36 @@ const openAttachmentModal = (attachment) => {
                         )}
 
                         <Card>
-                            <CardHeader>
-                                <div className="flex items-center justify-between">
-                                    <CardTitle>Attachments</CardTitle>
+                        <CardHeader>
+                            <div className="flex items-center justify-between">
+                                <CardTitle>Attachments</CardTitle>
+                                {/* Stack buttons vertically aligned to the right */}
+                                <div className="flex flex-col items-end gap-2"> 
                                     {canAddAttachment && (
                                         <Button
                                             variant="outline"
                                             size="sm"
                                             onClick={() => setShowAttachmentUpload(true)}
-                                            className="flex items-center gap-2"
+                                            className="flex items-center gap-2 w-full justify-center"
                                         >
                                             <Plus className="w-4 h-4" />
                                             Add Attachment
                                         </Button>
                                     )}
+                                    {attachments.length > 0 && (
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => setIsAllAttachmentsModalOpen(true)}
+                                            className="flex items-center gap-2 text-blue-600 border-blue-200 hover:bg-blue-50 w-full justify-center"
+                                        >
+                                            <Eye className="w-4 h-4" />
+                                            View All Attachments
+                                        </Button>
+                                    )}
                                 </div>
-                            </CardHeader>
+                            </div>
+                        </CardHeader>
                             <CardContent>
                                 {attachments.length === 0 ? (
                                     <p className="text-sm text-gray-500">No attachments in this file.</p>
@@ -2193,6 +2208,113 @@ const openAttachmentModal = (attachment) => {
                     </DialogContent>
                 </Dialog>
 
+                {/* View All Attachments Modal */}
+                <Dialog open={isAllAttachmentsModalOpen} onOpenChange={setIsAllAttachmentsModalOpen}>
+                    <DialogContent className="max-w-5xl max-h-[85vh] flex flex-col">
+                        <DialogHeader className="flex-shrink-0 border-b pb-3">
+                            <DialogTitle className="flex items-center justify-between">
+                                <span className="flex items-center gap-2 text-lg font-semibold">
+                                    <Paperclip className="w-5 h-5 text-blue-600" />
+                                    All Attachments ({attachments.length})
+                                </span>
+                                <Button variant="ghost" size="sm" onClick={() => setIsAllAttachmentsModalOpen(false)}>
+                                    <X className="w-4 h-4" />
+                                </Button>
+                            </DialogTitle>
+                        </DialogHeader>
+
+                        {/* Scrollable Container */}
+                        <div className="flex-1 overflow-y-auto p-4 space-y-6">
+                            {attachments.length === 0 ? (
+                                <p className="text-center text-sm text-gray-500 py-8">No attachments found.</p>
+                            ) : (
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                    {attachments.map((a) => {
+                                        const getImageUrl = (url) => {
+                                            if (!url) return '';
+                                            if (url.startsWith('/uploads/')) return url.replace('/uploads/', '/api/uploads/');
+                                            return url;
+                                        };
+
+                                        const isImage = 
+                                            a.file_type?.startsWith('image/') ||
+                                            /\.(jpg|jpeg|png|webp|gif|svg)$/i.test(a.file_name || '');
+
+                                        const imageUrl = getImageUrl(a.file_url);
+
+                                        return (
+                                            <div 
+                                                key={a.id} 
+                                                className="relative border rounded-lg p-3 hover:shadow-md transition-shadow cursor-pointer group bg-white" 
+                                                onClick={() => {
+                                                    setIsAllAttachmentsModalOpen(false); // Close view all modal
+                                                    openAttachmentModal(a); // Open single attachment preview
+                                                }}
+                                            >
+                                                {/* Delete Cross Button */}
+                                                {canAddAttachment && !isCcOnly && (
+                                                    <button
+                                                        type="button"
+                                                        title="Delete Attachment"
+                                                        onClick={(e) => handleDeleteAttachment(a.id, e)}
+                                                        className="absolute top-2 right-2 z-10 p-1.5 bg-red-600 hover:bg-red-700 text-white rounded-full shadow transition-all duration-150 hover:scale-105"
+                                                    >
+                                                        <Trash2 className="w-3.5 h-3.5" />
+                                                    </button>
+                                                )}
+
+                                                {/* Preview Image / Icon */}
+                                                {a.file_url && isImage ? (
+                                                    <div className="relative">
+                                                        <Image
+                                                            src={imageUrl}
+                                                            alt={a.attachment_name || a.file_name}
+                                                            width={200}
+                                                            height={150}
+                                                            className="w-full h-32 object-cover rounded mb-2"
+                                                            unoptimized
+                                                        />
+                                                        <div className="absolute top-2 left-2 bg-black bg-opacity-50 text-white p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">
+                                                            <Maximize2 className="w-4 h-4" />
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <div className="w-full h-32 flex items-center justify-center bg-gray-100 rounded mb-2 text-gray-500">
+                                                        <FileText className="w-8 h-8" />
+                                                    </div>
+                                                )}
+
+                                                {/* Attachment Details */}
+                                                <div className="space-y-1">
+                                                    <div className="font-medium text-sm truncate pr-6" title={a.attachment_name || a.file_name}>
+                                                        {a.attachment_name || a.file_name}
+                                                    </div>
+                                                    {a.attachment_name ? (
+                                                        <div className="text-xs text-gray-400 truncate" title={a.file_name}>
+                                                            {a.file_name}
+                                                        </div>
+                                                    ) : null}
+                                                    <div className="text-xs text-gray-500">
+                                                        Size: {Math.round((a.file_size || 0) / 1024)} KB
+                                                    </div>
+                                                    <div className="text-xs text-gray-500">
+                                                        Type: {a.file_type || 'Unknown'}
+                                                    </div>
+                                                    <div className="text-xs text-gray-500">
+                                                        Uploaded: {formatDate(a.uploaded_at)}
+                                                    </div>
+                                                    <div className="text-xs text-blue-600 group-hover:text-blue-800 font-medium pt-1">
+                                                        Click to view details
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </div>
+                    </DialogContent>
+                </Dialog>
                 {/* Attachment Upload Dialog */}
                 <Dialog open={showAttachmentUpload} onOpenChange={setShowAttachmentUpload}>
                     <DialogContent className="max-w-md">
