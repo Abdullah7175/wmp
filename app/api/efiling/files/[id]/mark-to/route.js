@@ -2342,7 +2342,7 @@ export async function GET(request, { params }) {
         // Rule: Once RE/XEN marks file to higher level, they cannot mark again until file is returned to them
         const isCreator = currentUserEfilingId === file.created_by;
         const currentUserLevel = getRoleLevel(currentUserRoleCodeUpper);
-        const isCreatorRole = currentUserLevel === 1; // RE/XEN/EE = level 1
+        const isCreatorRole = currentUserLevel === 2; // RE/XEN/EE = level 1
         
         if (isCreator && isCreatorRole) {
             // Check if file has been marked to higher level (SE or above) by checking movements
