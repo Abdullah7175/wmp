@@ -75,6 +75,8 @@ export default function FilesPage() {
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage, setItemsPerPage] = useState(5);
 
+    const [selectedFileIds, setSelectedFileIds] = useState([]);
+
     useEffect(() => {
         if (session?.user?.id) {
             fetchFiles();
@@ -278,6 +280,53 @@ export default function FilesPage() {
                 throw new Error(err.error || 'Delete failed');
             }
             toast({ title: 'Deleted', description: `${file.file_number} removed.` });
+            await fetchFiles();
+        } catch (e) {
+            toast({ title: 'Error', description: e.message, variant: 'destructive' });
+        }
+    };
+
+
+    const handleSelectAll = (e) => {
+        if (e.target.checked) {
+            const currentPageIds = paginatedFiles.map(file => file.id);
+            setSelectedFileIds(prev => Array.from(new Set([...prev, ...currentPageIds])));
+        } else {
+            const currentPageIds = paginatedFiles.map(file => file.id);
+            setSelectedFileIds(prev => prev.filter(id => !currentPageIds.includes(id)));
+        }
+    };
+
+    const handleSelectOne = (fileId) => {
+        setSelectedFileIds(prev =>
+            prev.includes(fileId) ? prev.filter(id => id !== fileId) : [...prev, fileId]
+        );
+    };
+
+    const handleBulkDelete = async () => {
+        if (!isAdmin) {
+            toast({ title: 'Forbidden', description: 'Only admin can delete files', variant: 'destructive' });
+            return;
+        }
+        if (selectedFileIds.length === 0) return;
+
+        const confirmed = window.confirm(`Delete ${selectedFileIds.length} selected files and all related data?`);
+        if (!confirmed) return;
+
+        try {
+            const res = await fetch('/api/efiling/files/bulk-delete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ids: selectedFileIds })
+            });
+
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.error || 'Bulk delete failed');
+            }
+
+            toast({ title: 'Deleted', description: `${selectedFileIds.length} files deleted successfully.` });
+            setSelectedFileIds([]);
             await fetchFiles();
         } catch (e) {
             toast({ title: 'Error', description: e.message, variant: 'destructive' });
@@ -498,11 +547,16 @@ export default function FilesPage() {
 
             {/* Files Table */}
             <Card>
-                <CardHeader>
+                <CardHeader className="flex flex-row items-center justify-between">
                     <CardTitle className="flex items-center">
                         <FileText className="w-5 h-5 mr-2" />
                         Files ({filteredFiles.length})
                     </CardTitle>
+                    {isAdmin && selectedFileIds.length > 0 && (
+                        <Button variant="destructive" onClick={handleBulkDelete}>
+                            Delete Selected ({selectedFileIds.length})
+                        </Button>
+                    )}
                 </CardHeader>
                 <CardContent>
                     {filteredFiles.length === 0 ? (
@@ -527,6 +581,16 @@ export default function FilesPage() {
                             <Table>
                                 <TableHeader>
                                     <TableRow>
+                                        <TableHead className="w-12">
+                                            <input
+                                                type="checkbox"
+                                                onChange={handleSelectAll}
+                                                checked={
+                                                    paginatedFiles.length > 0 &&
+                                                    paginatedFiles.every(file => selectedFileIds.includes(file.id))
+                                                }
+                                            />
+                                        </TableHead>
                                         <TableHead>File Number</TableHead>
                                         <TableHead>Subject</TableHead>
                                         <TableHead>Department</TableHead>
@@ -540,6 +604,13 @@ export default function FilesPage() {
                                 <TableBody>
                                     {paginatedFiles.map((file) => (
                                         <TableRow key={file.id} className="hover:bg-gray-50">
+                                            <TableCell>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={selectedFileIds.includes(file.id)}
+                                                    onChange={() => handleSelectOne(file.id)}
+                                                />
+                                            </TableCell>
                                             <TableCell className="font-medium">
                                                 <div className="flex items-center space-x-2">
                                                     <FileText className="w-4 h-4 text-blue-600" />
