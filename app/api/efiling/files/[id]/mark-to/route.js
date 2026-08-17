@@ -101,7 +101,7 @@ const isGlobalRole = (roleCode) => {
         return true;
     }
     // Check SE
-    if (code === 'SE' || code.startsWith('SE_') || code.includes('SE')) {
+    if (code === 'SE' || code.startsWith('SE_')) {
         return true;
     }
     // Check CE (but not AEE and not DCE)
