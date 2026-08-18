@@ -150,7 +150,7 @@ export async function GET(request) {
 
 export async function POST(request) {
     try {
-        const { name, code, description, department_id, permissions, is_active } = await request.json();
+        const { name, code, description, department_id, permissions, is_active, allowed_file_type_ids } = await request.json();
 
         // Validate required fields
         if (!name || !code) {
@@ -163,6 +163,8 @@ export async function POST(request) {
         const client = await connectToDatabase();
 
         try {
+            await client.query('BEGIN'); // Start transaction
+
             // Check if code already exists
             const existingCode = await client.query(
                 'SELECT id FROM efiling_roles WHERE code = $1',
@@ -170,6 +172,7 @@ export async function POST(request) {
             );
 
             if (existingCode.rows.length > 0) {
+                await client.query('ROLLBACK');
                 return NextResponse.json(
                     { error: 'Role code already exists' },
                     { status: 400 }
@@ -191,23 +194,55 @@ export async function POST(request) {
                 is_active !== undefined ? is_active : true
             ]);
 
+            const roleCode = code.toUpperCase();
+
+            // Handle Allowed File Types (can_create_roles jsonb update)
+            if (Array.isArray(allowed_file_type_ids)) {
+                // 1. Remove this role code from all file types where it currently exists
+                await client.query(`
+                    UPDATE efiling_file_types 
+                    SET can_create_roles = (
+                        SELECT jsonb_agg(elem)
+                        FROM jsonb_array_elements_text(COALESCE(can_create_roles, '[]'::jsonb)) AS elem
+                        WHERE elem != $1
+                    )
+                    WHERE can_create_roles ? $1
+                `, [roleCode]);
+
+                // 2. Add this role code to selected file types
+                if (allowed_file_type_ids.length > 0) {
+                    await client.query(`
+                        UPDATE efiling_file_types
+                        SET can_create_roles = CASE 
+                            WHEN can_create_roles IS NULL THEN jsonb_build_array($1::text)
+                            WHEN can_create_roles ? $1 THEN can_create_roles
+                            ELSE can_create_roles || jsonb_build_array($1::text)
+                        END
+                        WHERE id = ANY($2::int[])
+                    `, [roleCode, allowed_file_type_ids]);
+                }
+            }
+
+            await client.query('COMMIT'); // Commit transaction
+
             // Log the action
             try {
-                            await eFileActionLogger.logAction({
-                entityId: null,
-                userId: 'system', // Since this is system-level action
-                action: 'ROLE_CREATED',
-                entityType: 'efiling_role',
-                details: { 
-                    name, 
-                    code, 
-                    description, 
-                    department_id, 
-                    permissions, 
-                    is_active,
-                    description: `Role "${name}" (${code}) created`
-                }
-            });
+                await eFileActionLogger.logAction({
+                    entityId: null,
+                    userId: 'system',
+                    action: 'ROLE_CREATED',
+                    entityType: 'efiling_role',
+                    details: { 
+                        name, 
+                        code, 
+                        description, 
+                        department_id, 
+                        permissions, 
+                        is_active,
+                        allowed_file_type_ids,
+                        description: `Role "${name}" (${code}) created`
+                    }
+                });
             } catch (logError) {
                 console.error('Error logging role creation action:', logError);
             }
@@ -217,6 +252,9 @@ export async function POST(request) {
                 role: result.rows[0]
             }, { status: 201 });
 
+        } catch (dbErr) {
+            await client.query('ROLLBACK');
+            throw dbErr;
         } finally {
             await client.release();
         }
@@ -234,7 +272,7 @@ export async function POST(request) {
 
 export async function PUT(request) {
     try {
-        const { id, name, code, description, department_id, permissions, is_active } = await request.json();
+        const { id, name, code, description, department_id, permissions, is_active, allowed_file_type_ids } = await request.json();
 
         if (!id) {
             return NextResponse.json(
@@ -246,6 +284,8 @@ export async function PUT(request) {
         const client = await connectToDatabase();
 
         try {
+            await client.query('BEGIN');
+
             // Check if role exists
             const existing = await client.query(
                 'SELECT * FROM efiling_roles WHERE id = $1',
@@ -253,20 +293,25 @@ export async function PUT(request) {
             );
 
             if (existing.rows.length === 0) {
+                await client.query('ROLLBACK');
                 return NextResponse.json(
                     { error: 'Role not found' },
                     { status: 404 }
                 );
             }
 
+            const oldCode = existing.rows[0].code;
+            const newCode = code ? code.toUpperCase() : oldCode;
+
             // Check if code already exists (excluding current role)
-            if (code) {
+            if (code && code !== oldCode) {
                 const existingCode = await client.query(
                     'SELECT id FROM efiling_roles WHERE code = $1 AND id != $2',
                     [code, id]
                 );
 
                 if (existingCode.rows.length > 0) {
+                    await client.query('ROLLBACK');
                     return NextResponse.json(
                         { error: 'Role code already exists' },
                         { status: 400 }
@@ -290,30 +335,60 @@ export async function PUT(request) {
             const result = await client.query(query, [
                 id, 
                 name, 
-                code, 
+                newCode, 
                 description, 
                 department_id, 
                 permissions ? JSON.stringify(permissions) : null,
                 is_active
             ]);
 
-            // Log the action
-            try {
-                            await eFileActionLogger.logAction({
-                entityId: null,
-                userId: 'system', // Since this is system-level action
-                action: 'ROLE_UPDATED',
-                entityType: 'efiling_role',
-                details: { 
-                    name, 
-                    code, 
-                    description, 
-                    department_id, 
-                    permissions, 
-                    is_active,
-                    description: `Role "${name}" (${code}) updated`
+            // Handle Allowed File Types (can_create_roles jsonb update)
+            if (Array.isArray(allowed_file_type_ids)) {
+                // 1. Remove old and new role code references from all file types
+                await client.query(`
+                    UPDATE efiling_file_types 
+                    SET can_create_roles = (
+                        SELECT jsonb_agg(elem)
+                        FROM jsonb_array_elements_text(COALESCE(can_create_roles, '[]'::jsonb)) AS elem
+                        WHERE elem != $1 AND elem != $2
+                    )
+                    WHERE can_create_roles ? $1 OR can_create_roles ? $2
+                `, [oldCode, newCode]);
+
+                // 2. Add new role code to selected file types
+                if (allowed_file_type_ids.length > 0) {
+                    await client.query(`
+                        UPDATE efiling_file_types
+                        SET can_create_roles = CASE 
+                            WHEN can_create_roles IS NULL THEN jsonb_build_array($1::text)
+                            WHEN can_create_roles ? $1 THEN can_create_roles
+                            ELSE can_create_roles || jsonb_build_array($1::text)
+                        END
+                        WHERE id = ANY($2::int[])
+                    `, [newCode, allowed_file_type_ids]);
                 }
-            });
+            }
+
+            await client.query('COMMIT');
+
+            // Log action
+            try {
+                await eFileActionLogger.logAction({
+                    entityId: null,
+                    userId: 'system',
+                    action: 'ROLE_UPDATED',
+                    entityType: 'efiling_role',
+                    details: { 
+                        name, 
+                        code: newCode, 
+                        description, 
+                        department_id, 
+                        permissions, 
+                        is_active,
+                        allowed_file_type_ids,
+                        description: `Role "${name}" (${newCode}) updated`
+                    }
+                });
             } catch (logError) {
                 console.error('Error logging role update action:', logError);
             }
@@ -323,6 +398,9 @@ export async function PUT(request) {
                 role: result.rows[0]
             });
 
+        } catch (dbErr) {
+            await client.query('ROLLBACK');
+            throw dbErr;
         } finally {
             await client.release();
         }

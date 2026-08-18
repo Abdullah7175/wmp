@@ -9,13 +9,19 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Save, Shield } from "lucide-react";
+import { ArrowLeft, Save, Shield, ChevronDown, ChevronRight, FileText, Folder, Building } from "lucide-react";
 
 export default function CreateEfilingRole() {
     const router = useRouter();
     const { toast } = useToast();
     const [loading, setLoading] = useState(false);
     const [departments, setDepartments] = useState([]);
+
+    // File Metadata State
+    const [fileTreeData, setFileTreeData] = useState({ departments: [], categories: [], fileTypes: [] });
+    const [selectedFileTypeIds, setSelectedFileTypeIds] = useState([]);
+    const [expandedDepts, setExpandedDepts] = useState({});
+    const [expandedCats, setExpandedCats] = useState({});
 
     const [formData, setFormData] = useState({
         name: '',
@@ -38,9 +44,9 @@ export default function CreateEfilingRole() {
         is_active: true
     });
 
-    // Load departments
     useEffect(() => {
         loadDepartments();
+        loadFileTreeData();
     }, []);
 
     const loadDepartments = async () => {
@@ -52,6 +58,18 @@ export default function CreateEfilingRole() {
             }
         } catch (error) {
             console.error('Error loading departments:', error);
+        }
+    };
+
+    const loadFileTreeData = async () => {
+        try {
+            const response = await fetch('/api/efiling/file-types/tree');
+            if (response.ok) {
+                const data = await response.json();
+                setFileTreeData(data);
+            }
+        } catch (error) {
+            console.error('Error loading file metadata tree:', error);
         }
     };
 
@@ -70,6 +88,43 @@ export default function CreateEfilingRole() {
                 [permission]: value
             }
         }));
+    };
+
+    // --- File Types Selection Logic ---
+    const toggleDeptExpand = (deptId) => {
+        setExpandedDepts(prev => ({ ...prev, [deptId]: !prev[deptId] }));
+    };
+
+    const toggleCatExpand = (catId) => {
+        setExpandedCats(prev => ({ ...prev, [catId]: !prev[catId] }));
+    };
+
+    const handleFileTypeToggle = (typeId) => {
+        setSelectedFileTypeIds(prev => 
+            prev.includes(typeId) ? prev.filter(id => id !== typeId) : [...prev, typeId]
+        );
+    };
+
+    const handleCategoryToggle = (catId, fileTypesInCat) => {
+        const catTypeIds = fileTypesInCat.map(ft => ft.id);
+        const allSelected = catTypeIds.every(id => selectedFileTypeIds.includes(id));
+
+        if (allSelected) {
+            setSelectedFileTypeIds(prev => prev.filter(id => !catTypeIds.includes(id)));
+        } else {
+            setSelectedFileTypeIds(prev => Array.from(new Set([...prev, ...catTypeIds])));
+        }
+    };
+
+    const handleDepartmentToggle = (deptId, fileTypesInDept) => {
+        const deptTypeIds = fileTypesInDept.map(ft => ft.id);
+        const allSelected = deptTypeIds.every(id => selectedFileTypeIds.includes(id));
+
+        if (allSelected) {
+            setSelectedFileTypeIds(prev => prev.filter(id => !deptTypeIds.includes(id)));
+        } else {
+            setSelectedFileTypeIds(prev => Array.from(new Set([...prev, ...deptTypeIds])));
+        }
     };
 
     const validateForm = () => {
@@ -102,12 +157,17 @@ export default function CreateEfilingRole() {
         setLoading(true);
 
         try {
+            const payload = {
+                ...formData,
+                allowed_file_type_ids: selectedFileTypeIds
+            };
+
             const response = await fetch('/api/efiling/roles', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify(formData),
+                body: JSON.stringify(payload),
             });
 
             const result = await response.json();
@@ -179,7 +239,7 @@ export default function CreateEfilingRole() {
                             </div>
                         </div>
 
-                        {/* Department and Description */}
+                        {/* Department and Status */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div>
                                 <Label htmlFor="department_id">Department</Label>
@@ -341,6 +401,117 @@ export default function CreateEfilingRole() {
                                     />
                                     <Label htmlFor="can_close_files">Can Close Files</Label>
                                 </div>
+                            </div>
+                        </div>
+
+                        {/* Allowed File Types Section */}
+                        <div className="space-y-4 pt-4 border-t">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <h3 className="text-lg font-semibold flex items-center gap-2">
+                                        <FileText className="w-5 h-5 text-blue-600" />
+                                        Allowed File Types
+                                    </h3>
+                                    <p className="text-sm text-gray-500">
+                                        Select which file types this role is authorized to create across departments.
+                                    </p>
+                                </div>
+                                <span className="text-xs bg-blue-100 text-blue-800 font-medium px-2.5 py-0.5 rounded-full">
+                                    {selectedFileTypeIds.length} Selected
+                                </span>
+                            </div>
+
+                            <div className="border rounded-lg divide-y bg-slate-50/50 max-h-[450px] overflow-y-auto">
+                                {fileTreeData.departments.map(dept => {
+                                    const deptCategories = fileTreeData.categories.filter(c => c.department_id === dept.id);
+                                    const deptFileTypes = fileTreeData.fileTypes.filter(ft => ft.department_id === dept.id);
+                                    
+                                    if (deptFileTypes.length === 0) return null;
+
+                                    const isDeptExpanded = expandedDepts[dept.id];
+                                    const allDeptSelected = deptFileTypes.every(ft => selectedFileTypeIds.includes(ft.id));
+                                    const someDeptSelected = deptFileTypes.some(ft => selectedFileTypeIds.includes(ft.id));
+
+                                    return (
+                                        <div key={dept.id} className="bg-white">
+                                            {/* Department Header */}
+                                            <div className="flex items-center justify-between p-3 hover:bg-slate-100 transition-colors">
+                                                <div className="flex items-center gap-2 cursor-pointer select-none" onClick={() => toggleDeptExpand(dept.id)}>
+                                                    {isDeptExpanded ? <ChevronDown className="w-4 h-4 text-gray-500" /> : <ChevronRight className="w-4 h-4 text-gray-500" />}
+                                                    <Building className="w-4 h-4 text-blue-600" />
+                                                    <span className="font-semibold text-gray-800">{dept.name}</span>
+                                                    <span className="text-xs text-gray-400">({deptFileTypes.length} types)</span>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={allDeptSelected}
+                                                        ref={el => el && (el.indeterminate = someDeptSelected && !allDeptSelected)}
+                                                        onChange={() => handleDepartmentToggle(dept.id, deptFileTypes)}
+                                                        className="rounded text-blue-600 cursor-pointer"
+                                                    />
+                                                    <Label className="text-xs text-gray-600 cursor-pointer">Select All Dept</Label>
+                                                </div>
+                                            </div>
+
+                                            {/* Categories Under Department */}
+                                            {isDeptExpanded && (
+                                                <div className="pl-6 pr-3 py-2 space-y-2 bg-slate-50 border-t">
+                                                    {deptCategories.map(cat => {
+                                                        const catFileTypes = deptFileTypes.filter(ft => ft.category_id === cat.id);
+                                                        if (catFileTypes.length === 0) return null;
+
+                                                        const isCatExpanded = expandedCats[cat.id];
+                                                        const allCatSelected = catFileTypes.every(ft => selectedFileTypeIds.includes(ft.id));
+                                                        const someCatSelected = catFileTypes.some(ft => selectedFileTypeIds.includes(ft.id));
+
+                                                        return (
+                                                            <div key={cat.id} className="border rounded bg-white p-2">
+                                                                <div className="flex items-center justify-between">
+                                                                    <div className="flex items-center gap-2 cursor-pointer select-none" onClick={() => toggleCatExpand(cat.id)}>
+                                                                        {isCatExpanded ? <ChevronDown className="w-3.5 h-3.5 text-gray-400" /> : <ChevronRight className="w-3.5 h-3.5 text-gray-400" />}
+                                                                        <Folder className="w-4 h-4 text-amber-500" />
+                                                                        <span className="text-sm font-medium text-gray-700">{cat.name}</span>
+                                                                    </div>
+                                                                    <div className="flex items-center gap-2">
+                                                                        <input
+                                                                            type="checkbox"
+                                                                            checked={allCatSelected}
+                                                                            ref={el => el && (el.indeterminate = someCatSelected && !allCatSelected)}
+                                                                            onChange={() => handleCategoryToggle(cat.id, catFileTypes)}
+                                                                            className="rounded text-blue-600 cursor-pointer"
+                                                                        />
+                                                                        <Label className="text-xs text-gray-500 cursor-pointer">All Cat</Label>
+                                                                    </div>
+                                                                </div>
+
+                                                                {/* File Types Under Category */}
+                                                                {isCatExpanded && (
+                                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2 pt-2 border-t pl-4">
+                                                                        {catFileTypes.map(ft => (
+                                                                            <div key={ft.id} className="flex items-center space-x-2">
+                                                                                <input
+                                                                                    type="checkbox"
+                                                                                    id={`ft-${ft.id}`}
+                                                                                    checked={selectedFileTypeIds.includes(ft.id)}
+                                                                                    onChange={() => handleFileTypeToggle(ft.id)}
+                                                                                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                                                                />
+                                                                                <Label htmlFor={`ft-${ft.id}`} className="text-xs font-normal text-gray-700 cursor-pointer">
+                                                                                    {ft.name} <span className="text-gray-400">({ft.code})</span>
+                                                                                </Label>
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })}
                             </div>
                         </div>
 
