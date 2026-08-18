@@ -297,7 +297,7 @@ export default function FileDetail() {
                     setHasUserSigned(userSigned);
                 }
             }
-        } catch (e) { 
+        } catch (e) {
             console.error('Error loading extras', e);
         }
     };
@@ -460,7 +460,7 @@ export default function FileDetail() {
         router.push(`/efilinguser/files/${params.id}/add-page?pageId=${pageId}&mode=edit`);
     };
 
-    
+
 
     const handleDeletePage = async (pageId) => {
         if (!confirm("Are you sure you want to delete this note sheet?")) return;
@@ -620,13 +620,13 @@ export default function FileDetail() {
         }
     };
 
-const openAttachmentModal = (attachment) => {
-    console.log("🔍 Selected Attachment Data:", attachment);
-    console.log("🔍 File URL:", attachment?.file_url);
-    console.log("🔍 File Type:", attachment?.file_type);
-    setSelectedAttachment(attachment);
-    setIsModalOpen(true);
-};
+    const openAttachmentModal = (attachment) => {
+        console.log("🔍 Selected Attachment Data:", attachment);
+        console.log("🔍 File URL:", attachment?.file_url);
+        console.log("🔍 File Type:", attachment?.file_type);
+        setSelectedAttachment(attachment);
+        setIsModalOpen(true);
+    };
 
     const closeAttachmentModal = () => {
         setSelectedAttachment(null);
@@ -666,7 +666,7 @@ const openAttachmentModal = (attachment) => {
                 {/* Note Sheet Action Controls (Edit & Delete) */}
                 {canAddPage && !isCcOnly && page.id && page.id !== 'main' && (
                     <div className="absolute top-3 right-3 flex space-x-2 no-print opacity-90 hover:opacity-100 z-10">
-                       <Button
+                        <Button
                             size="sm"
                             variant="outline"
                             className="h-8 px-2 bg-white text-blue-600 border-blue-200 hover:bg-blue-50"
@@ -1155,11 +1155,31 @@ const openAttachmentModal = (attachment) => {
                     }
 
                     .print-attachment-item {
-                        margin-bottom: 3mm;
+                        margin-bottom: 5mm;
                         padding: 3mm;
                         border: 1px solid #666;
                         page-break-inside: avoid;
-                        background: #f9f9f9 !important;
+                        page-break-after: always; /* Ensures each attachment occupies a full page */
+                        background: #ffffff !important;
+                    }
+
+                    /* Full-width image attachments */
+                    .print-attachment-item img {
+                        width: 100% !important;
+                        max-width: 100% !important;
+                        height: auto !important;
+                        max-height: 220mm !important;
+                        object-fit: contain;
+                        margin-bottom: 1mm;
+                        display: block;
+                    }
+
+                    /* Full page view for attached PDF documents */
+                    .print-attachment-item iframe {
+                        width: 100% !important;
+                        height: 270mm !important; /* Standard A4 printable height */
+                        border: none !important;
+                        display: block !important;
                     }
 
                     .print-comment-item {
@@ -1272,15 +1292,15 @@ const openAttachmentModal = (attachment) => {
                                         File Information
                                     </CardTitle>
                                     {canEdit && !isCcOnly && (
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={handleOpenEditFileInfo}
-                                        className="flex items-center"
-                                    >
-                                        <Edit className="w-4 h-4 mr-2" />
-                                        Edit
-                                    </Button>
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={handleOpenEditFileInfo}
+                                            className="flex items-center"
+                                        >
+                                            <Edit className="w-4 h-4 mr-2" />
+                                            Edit
+                                        </Button>
                                     )}
                                 </div>
                             </CardHeader>
@@ -1577,7 +1597,8 @@ const openAttachmentModal = (attachment) => {
                                                             fontFamily: s.signature_font || 'monospace',
                                                             fontSize: '12pt', // Increased size for better print readability
                                                             marginBottom: '2mm',
-                                                            color: s.signature_color === 'blue' ? '#2563eb' : s.signature_color === 'red' ? '#dc2626' : s.signature_color === 'green' ? '#16a34a' : '#000000'                                                        }}
+                                                            color: s.signature_color === 'blue' ? '#2563eb' : s.signature_color === 'red' ? '#dc2626' : s.signature_color === 'green' ? '#16a34a' : '#000000'
+                                                        }}
                                                     >
                                                         {s.content}
                                                     </div>
@@ -1663,10 +1684,10 @@ const openAttachmentModal = (attachment) => {
                             </CardHeader>
                             <CardContent className="space-y-2">
                                 {canMarkTo && !isCcOnly && (
-                                <Button variant="outline" className="w-full justify-start" onClick={openMarkModal}>
-                                    <Forward className="w-4 h-4 mr-2" />
-                                    Mark / Forward File
-                                </Button>
+                                    <Button variant="outline" className="w-full justify-start" onClick={openMarkModal}>
+                                        <Forward className="w-4 h-4 mr-2" />
+                                        Mark / Forward File
+                                    </Button>
                                 )}
                                 {canAddPage && !isCcOnly && (
                                     <Button
@@ -1793,45 +1814,45 @@ const openAttachmentModal = (attachment) => {
                         )}
 
                         <Card>
-                        <CardHeader>
-                            <div className="flex items-center justify-between">
-                                <CardTitle>Attachments</CardTitle>
-                                {/* Stack buttons vertically aligned to the right */}
-                                <div className="flex flex-col items-end gap-2"> 
-                                    {canAddAttachment && (
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={() => setShowAttachmentUpload(true)}
-                                            className="flex items-center gap-2 w-full justify-center"
-                                        >
-                                            <Plus className="w-4 h-4" />
-                                            Add Attachment
-                                        </Button>
-                                    )}
-                                    {attachments.length > 0 && (
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={() => setIsAllAttachmentsModalOpen(true)}
-                                            className="flex items-center gap-2 text-blue-600 border-blue-200 hover:bg-blue-50 w-full justify-center"
-                                        >
-                                            <Eye className="w-4 h-4" />
-                                            View All Attachments
-                                        </Button>
-                                    )}
+                            <CardHeader>
+                                <div className="flex items-center justify-between">
+                                    <CardTitle>Attachments</CardTitle>
+                                    {/* Stack buttons vertically aligned to the right */}
+                                    <div className="flex flex-col items-end gap-2">
+                                        {canAddAttachment && (
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => setShowAttachmentUpload(true)}
+                                                className="flex items-center gap-2 w-full justify-center"
+                                            >
+                                                <Plus className="w-4 h-4" />
+                                                Add Attachment
+                                            </Button>
+                                        )}
+                                        {attachments.length > 0 && (
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => setIsAllAttachmentsModalOpen(true)}
+                                                className="flex items-center gap-2 text-blue-600 border-blue-200 hover:bg-blue-50 w-full justify-center"
+                                            >
+                                                <Eye className="w-4 h-4" />
+                                                View All Attachments
+                                            </Button>
+                                        )}
+                                    </div>
                                 </div>
-                            </div>
-                        </CardHeader>
+                            </CardHeader>
                             <CardContent>
                                 {attachments.length === 0 ? (
                                     <p className="text-sm text-gray-500">No attachments in this file.</p>
                                 ) : (
                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                                         {attachments.map(a => (
-                                            <div 
-                                                key={a.id} 
-                                                className="relative border rounded-lg p-3 hover:shadow-md transition-shadow cursor-pointer group" 
+                                            <div
+                                                key={a.id}
+                                                className="relative border rounded-lg p-3 hover:shadow-md transition-shadow cursor-pointer group"
                                                 onClick={() => openAttachmentModal(a)}
                                             >
                                                 {/* Red Delete Cross Button */}
@@ -1976,7 +1997,7 @@ const openAttachmentModal = (attachment) => {
                                     };
 
                                     // 2. Check either MIME type OR file extension (.png, .jpg, etc.)
-                                    const isImage = 
+                                    const isImage =
                                         selectedAttachment.file_type?.startsWith('image/') ||
                                         /\.(jpg|jpeg|png|webp|gif|svg)$/i.test(selectedAttachment.file_name || '');
 
@@ -2252,15 +2273,15 @@ const openAttachmentModal = (attachment) => {
                                         return `/api/uploads${fileUrl.startsWith('/') ? '' : '/'}${fileUrl}`;
                                     };
 
-                                    const isImage = 
+                                    const isImage =
                                         a.file_type?.startsWith('image/') ||
                                         /\.(jpg|jpeg|png|webp|gif|svg)$/i.test(a.file_name || '');
 
-                                    const isPdf = 
-                                        a.file_type === 'application/pdf' || 
+                                    const isPdf =
+                                        a.file_type === 'application/pdf' ||
                                         a.file_name?.toLowerCase().endsWith('.pdf');
 
-                                    const isWord = 
+                                    const isWord =
                                         a.file_type === 'application/msword' ||
                                         a.file_type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
                                         a.file_name?.toLowerCase().endsWith('.doc') ||
@@ -2270,16 +2291,16 @@ const openAttachmentModal = (attachment) => {
                                     const pdfUrl = getPdfUrl(a.file_url);
 
                                     return (
-                                        <div 
-                                            key={a.id || index} 
+                                        <div
+                                            key={a.id || index}
                                             className="bg-white shadow-md rounded-lg overflow-hidden border border-gray-200"
                                         >
                                             {/* Option bar to switch back to deep inspect/metadata modal if needed */}
                                             <div className="bg-gray-50 px-4 py-2 border-b flex justify-between items-center text-xs text-gray-500">
                                                 <span>Attachment #{index + 1}</span>
-                                                <Button 
-                                                    variant="ghost" 
-                                                    size="sm" 
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
                                                     className="h-6 text-xs text-blue-600 hover:text-blue-800 p-0"
                                                     onClick={() => {
                                                         setIsAllAttachmentsModalOpen(false);
@@ -2541,7 +2562,7 @@ const openAttachmentModal = (attachment) => {
                     </DialogContent>
                 </Dialog>
             </div>
-           
+
         </>
     );
 } 
