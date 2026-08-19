@@ -519,7 +519,11 @@ export async function POST(request, { params }) {
                     LEFT JOIN divisions div ON eu.division_id = div.id
                     WHERE eu.department_id = $1
                     AND eu.is_active = true
-                    AND (UPPER(r.code) LIKE '%SE%' OR UPPER(r.code) = 'SE' OR UPPER(r.name) LIKE '%SUPERINTENDENT%ENGINEER%')
+                    AND (
+                        UPPER(r.code) = 'SE' 
+                        OR LEFT(UPPER(r.code), 3) = 'SE_' 
+                        OR UPPER(r.name) LIKE '%SUPERINTENDENT%ENGINEER%'
+                    )
                     AND eu.id != $2
                     ORDER BY u.name ASC
                 `, [departmentId, userId]);
@@ -580,7 +584,11 @@ export async function POST(request, { params }) {
                     LEFT JOIN divisions div ON eu.division_id = div.id
                     WHERE eu.division_id = $1
                     AND eu.is_active = true
-                    AND (UPPER(r.code) LIKE '%SE%' OR UPPER(r.code) = 'SE' OR UPPER(r.name) LIKE '%SUPERINTENDENT%ENGINEER%')
+                    AND (
+                        UPPER(r.code) = 'SE' 
+                        OR LEFT(UPPER(r.code), 3) = 'SE_' 
+                        OR UPPER(r.name) LIKE '%SUPERINTENDENT%ENGINEER%'
+                    )
                     AND eu.id != $2
                     ORDER BY u.name ASC
                 `, [divisionId, userId]);
@@ -2020,7 +2028,11 @@ export async function GET(request, { params }) {
                     LEFT JOIN divisions div ON eu.division_id = div.id
                     WHERE eu.department_id = $1
                     AND eu.is_active = true
-                    AND (UPPER(r.code) LIKE '%SE%' OR UPPER(r.code) = 'SE' OR UPPER(r.name) LIKE '%SUPERINTENDENT%ENGINEER%')
+                    AND (
+                        UPPER(r.code) = 'SE' 
+                        OR LEFT(UPPER(r.code), 3) = 'SE_' 
+                        OR UPPER(r.name) LIKE '%SUPERINTENDENT%ENGINEER%'
+                    )
                     AND eu.id != $2
                     ORDER BY u.name ASC
                 `, [departmentId, userId]);
@@ -2081,7 +2093,11 @@ export async function GET(request, { params }) {
                     LEFT JOIN divisions div ON eu.division_id = div.id
                     WHERE eu.division_id = $1
                     AND eu.is_active = true
-                    AND (UPPER(r.code) LIKE '%SE%' OR UPPER(r.code) = 'SE' OR UPPER(r.name) LIKE '%SUPERINTENDENT%ENGINEER%')
+                    AND (
+                        UPPER(r.code) = 'SE' 
+                        OR LEFT(UPPER(r.code), 3) = 'SE_' 
+                        OR UPPER(r.name) LIKE '%SUPERINTENDENT%ENGINEER%'
+                    )
                     AND eu.id != $2
                     ORDER BY u.name ASC
                 `, [divisionId, userId]);
@@ -2355,7 +2371,7 @@ export async function GET(request, { params }) {
                 AND m.from_user_id = $2
                 AND (
                     r.code LIKE 'SE%' OR r.code LIKE 'CE%' OR r.code = 'CEO' OR r.code = 'COO' OR r.code = 'CFO'
-                    OR r.code LIKE '%SE%' OR r.code LIKE '%CE%' OR r.code LIKE '%CEO%' OR r.code LIKE '%COO%'
+                    OR UPPER(r.code) = 'SE' OR LEFT(UPPER(r.code), 3) = 'SE_' OR UPPER(r.name) LIKE '%SUPERINTENDENT%ENGINEER%' OR r.code LIKE '%CE%' OR r.code LIKE '%CEO%' OR r.code LIKE '%COO%'
                     OR UPPER(r.code) LIKE '%SUPERINTENDENT%' OR UPPER(r.code) LIKE '%CHIEF%'
                 )
                 ORDER BY m.created_at DESC
