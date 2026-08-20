@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -7,7 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { 
     ArrowLeft, FileText, Clock, CheckCircle2, AlertCircle, 
-    FileEdit, XCircle, Loader2, Search, ChevronLeft, ChevronRight, ChevronsRight 
+    FileEdit, XCircle, Loader2, Search, ChevronLeft, ChevronRight, ChevronsRight, ChevronDown 
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
@@ -18,7 +18,14 @@ export default function CEOOverview() {
     const [allFiles, setAllFiles] = useState([]);
     const [fiscalYear, setFiscalYear] = useState('2026-27');
 
+    const [expandedCats, setExpandedCats] = useState({});
 
+    const toggleCatExpand = (catId) => {
+        setExpandedCats(prev => ({
+            ...prev,
+            [catId]: !prev[catId]
+        }));
+    };
     // Table States
     const [currentPage, setCurrentPage] = useState(1);
     const [statusFilter, setStatusFilter] = useState('all');
@@ -131,7 +138,7 @@ export default function CEOOverview() {
                 <MiniStat title="Completed" value={stats?.completed} workRelated={stats?.completed_work_related} loading={loading} icon={<CheckCircle2 className="h-4 w-4 text-purple-500" />} />
             </div>
 
-            {/* Category Wise Analytics Section */}
+            {/* Category Wise Analytics Section */} 
             <Card className="border shadow-sm">
                 <CardHeader className="py-3 px-4 border-b bg-white">
                     <CardTitle className="text-lg font-bold flex items-center gap-2">
@@ -149,26 +156,89 @@ export default function CEOOverview() {
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {categoryData.slice((catPage - 1) * catItemsPerPage, catPage * catItemsPerPage).map((cat) => (
-                                <TableRow key={cat.id} className="text-sm">
-                                    <TableCell className="font-semibold">{cat.category_name}</TableCell>
-                                    <TableCell>{cat.total_files}</TableCell>
-                                    <TableCell className="font-bold text-emerald-700">
-                                        Rs. {parseFloat(cat.total_estimated_cost || 0).toLocaleString()}
-                                    </TableCell>
-                                    <TableCell>
-                                        <div className="flex flex-wrap gap-1">
-                                            {Object.entries(cat.status_distribution || {}).map(([status, count]) => (
-                                                count > 0 && (
-                                                    <Badge key={status} variant="secondary" className="text-[10px] px-1 h-5">
-                                                        {status}: {count}
-                                                    </Badge>
-                                                )
-                                            ))}
-                                        </div>
-                                    </TableCell>
-                                </TableRow>
-                            ))}
+                            {categoryData.slice((catPage - 1) * catItemsPerPage, catPage * catItemsPerPage).map((cat) => {
+                                const isExpanded = !!expandedCats[cat.id];
+                                const hasTypes = cat.type_breakdown && cat.type_breakdown.length > 0;
+
+                                return (
+                                    <React.Fragment key={cat.id}>
+                                        <TableRow className="text-sm hover:bg-gray-50/80 transition-colors">
+                                            <TableCell className="font-semibold flex items-center gap-2">
+                                                {hasTypes ? (
+                                                    <Button 
+                                                        variant="ghost" 
+                                                        size="sm" 
+                                                        className="h-6 w-6 p-0 text-gray-500 hover:text-gray-900" 
+                                                        onClick={() => toggleCatExpand(cat.id)}
+                                                    >
+                                                        {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                                                    </Button>
+                                                ) : (
+                                                    <span className="w-6" /> // spacer
+                                                )}
+                                                {cat.category_name}
+                                            </TableCell>
+                                            <TableCell>{cat.total_files}</TableCell>
+                                            <TableCell className="font-bold text-emerald-700">
+                                                Rs. {parseFloat(cat.total_estimated_cost || 0).toLocaleString()}
+                                            </TableCell>
+                                            <TableCell>
+                                                <div className="flex flex-wrap gap-1">
+                                                    {Object.entries(cat.status_distribution || {}).map(([status, count]) => (
+                                                        count > 0 && (
+                                                            <Badge key={status} variant="secondary" className="text-[10px] px-1 h-5">
+                                                                {status}: {count}
+                                                            </Badge>
+                                                        )
+                                                    ))}
+                                                </div>
+                                            </TableCell>
+                                        </TableRow>
+
+                                        {/* Expanded Type-Wise Breakdown Row */}
+                                        {isExpanded && hasTypes && (
+                                            <TableRow className="bg-slate-50/70 border-b">
+                                                <TableCell colSpan={4} className="p-3 pl-10">
+                                                    <div className="border rounded-md bg-white overflow-hidden shadow-2xs">
+                                                        <Table>
+                                                            <TableHeader className="bg-slate-100/60">
+                                                                <TableRow>
+                                                                    <TableHead className="text-[11px] font-bold uppercase py-1.5">File Type</TableHead>
+                                                                    <TableHead className="text-[11px] font-bold uppercase py-1.5">Files</TableHead>
+                                                                    <TableHead className="text-[11px] font-bold uppercase py-1.5">Est. Total Cost (Excl. Draft)</TableHead>
+                                                                    <TableHead className="text-[11px] font-bold uppercase py-1.5">Status Breakdown</TableHead>
+                                                                </TableRow>
+                                                            </TableHeader>
+                                                            <TableBody>
+                                                                {cat.type_breakdown.map((typeItem) => (
+                                                                    <TableRow key={typeItem.type_id} className="text-xs hover:bg-slate-50">
+                                                                        <TableCell className="font-medium text-slate-700">{typeItem.type_name}</TableCell>
+                                                                        <TableCell>{typeItem.total_files}</TableCell>
+                                                                        <TableCell className="font-semibold text-emerald-600">
+                                                                            Rs. {parseFloat(typeItem.total_estimated_cost || 0).toLocaleString()}
+                                                                        </TableCell>
+                                                                        <TableCell>
+                                                                            <div className="flex flex-wrap gap-1">
+                                                                                {Object.entries(typeItem.status_distribution || {}).map(([status, count]) => (
+                                                                                    count > 0 && (
+                                                                                        <Badge key={status} variant="outline" className="text-[9px] px-1 h-4 bg-gray-50">
+                                                                                            {status}: {count}
+                                                                                        </Badge>
+                                                                                    )
+                                                                                ))}
+                                                                            </div>
+                                                                        </TableCell>
+                                                                    </TableRow>
+                                                                ))}
+                                                            </TableBody>
+                                                        </Table>
+                                                    </div>
+                                                </TableCell>
+                                            </TableRow>
+                                        )}
+                                    </React.Fragment>
+                                );
+                            })}
                         </TableBody>
                     </Table>
                     
