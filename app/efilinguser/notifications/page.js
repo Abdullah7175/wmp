@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Bell, FileText, User, Clock, Check, Archive } from 'lucide-react';
+import { Bell, FileText, User, Clock, Check, Archive, Filter } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { logEfilingUserAction, EFILING_ACTIONS } from '@/lib/efilingUserActionLogger';
 import { Pagination } from '@/components/ui/pagination';
@@ -17,6 +17,7 @@ export default function Notifications() {
     const [notifications, setNotifications] = useState([]);
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState('all'); // all, unread, dismissed
+    const [typeFilter, setTypeFilter] = useState('all'); // all, file_assigned, file_marked_to, workflow_update
     
     // Pagination state
     const [currentPage, setCurrentPage] = useState(1);
@@ -25,7 +26,6 @@ export default function Notifications() {
     useEffect(() => {
         if (session?.user?.id) {
             fetchNotifications();
-            // Log notifications access
             logEfilingUserAction({
                 user_id: session.user.id,
                 action_type: EFILING_ACTIONS.NOTIFICATION_READ,
@@ -39,7 +39,6 @@ export default function Notifications() {
     const fetchNotifications = async () => {
         try {
             setLoading(true);
-            // Map Users.id -> efiling_users.id
             let targetId = session?.user?.id;
             try {
                 const mapRes = await fetch(`/api/efiling/users/profile?userId=${session?.user?.id}`);
@@ -106,7 +105,7 @@ export default function Notifications() {
             toast({
                 title: "Error",
                 description: "Failed to dismiss notification",
-                variant: "destructive",
+                variant: "destructive", 
             });
         }
     };
@@ -137,10 +136,19 @@ export default function Notifications() {
         }
     };
 
+    // Combined filtering logic for status and type
     const filteredNotifications = notifications.filter(notification => {
-        if (filter === 'unread') return !notification.is_read && !notification.is_dismissed;
-        if (filter === 'dismissed') return notification.is_dismissed;
-        return !notification.is_dismissed;
+        let matchesStatus = true;
+        if (filter === 'unread') matchesStatus = !notification.is_read && !notification.is_dismissed;
+        else if (filter === 'dismissed') matchesStatus = notification.is_dismissed;
+        else matchesStatus = !notification.is_dismissed;
+
+        let matchesType = true;
+        if (typeFilter !== 'all') {
+            matchesType = notification.type === typeFilter;
+        }
+
+        return matchesStatus && matchesType;
     });
 
     // Calculate pagination
@@ -160,7 +168,7 @@ export default function Notifications() {
 
     useEffect(() => {
         setCurrentPage(1); // Reset to first page when filter changes
-    }, [filter]);
+    }, [filter, typeFilter]);
 
     if (loading) {
         return (
@@ -179,59 +187,48 @@ export default function Notifications() {
                 </div>
             </div>
 
-            {/* Filter Tabs */}
-            <div className="flex space-x-2 mb-6">
-                <Button
-                    variant={filter === 'all' ? 'default' : 'outline'}
-                    onClick={() => {
-                        setFilter('all');
-                        if (session?.user?.id) {
-                            logEfilingUserAction({
-                                user_id: session.user.id,
-                                action_type: EFILING_ACTIONS.NOTIFICATION_READ,
-                                description: 'Filtered notifications to show all',
-                                entity_type: 'notifications_filter',
-                                entity_name: 'All Notifications'
-                            });
-                        }
-                    }}
-                >
-                    All ({notifications.filter(n => !n.is_dismissed).length})
-                </Button>
-                <Button
-                    variant={filter === 'unread' ? 'default' : 'outline'}
-                    onClick={() => {
-                        setFilter('unread');
-                        if (session?.user?.id) {
-                            logEfilingUserAction({
-                                user_id: session.user.id,
-                                action_type: EFILING_ACTIONS.NOTIFICATION_READ,
-                                description: 'Filtered notifications to show unread',
-                                entity_type: 'notifications_filter',
-                                entity_name: 'Unread Notifications'
-                            });
-                        }
-                    }}
-                >
-                    Unread ({notifications.filter(n => !n.is_read && !n.is_dismissed).length})
-                </Button>
-                <Button
-                    variant={filter === 'dismissed' ? 'default' : 'outline'}
-                    onClick={() => {
-                        setFilter('dismissed');
-                        if (session?.user?.id) {
-                            logEfilingUserAction({
-                                user_id: session.user.id,
-                                action_type: EFILING_ACTIONS.NOTIFICATION_DISMISSED,
-                                description: 'Filtered notifications to show dismissed',
-                                entity_type: 'notifications_filter',
-                                entity_name: 'Dismissed Notifications'
-                            });
-                        }
-                    }}
-                >
-                    Dismissed ({notifications.filter(n => n.is_dismissed).length})
-                </Button>
+            {/* Filter Controls Bar */}
+            <div className="flex flex-col sm:flex-row justify-between gap-4 mb-6">
+                {/* Status Filter Tabs */}
+                <div className="flex space-x-2">
+                    <Button
+                        variant={filter === 'all' ? 'default' : 'outline'}
+                        onClick={() => setFilter('all')}
+                    >
+                        All ({notifications.filter(n => !n.is_dismissed).length})
+                    </Button>
+                    <Button
+                        variant={filter === 'unread' ? 'default' : 'outline'}
+                        onClick={() => setFilter('unread')}
+                    >
+                        Unread ({notifications.filter(n => !n.is_read && !n.is_dismissed).length})
+                    </Button>
+                    <Button
+                        variant={filter === 'dismissed' ? 'default' : 'outline'}
+                        onClick={() => setFilter('dismissed')}
+                    >
+                        Dismissed ({notifications.filter(n => n.is_dismissed).length})
+                    </Button>
+                </div>
+
+                {/* Type Filter Select Dropdown */}
+                <div className="flex items-center gap-2">
+                    <Filter className="w-4 h-4 text-gray-500" />
+                    <select
+                        value={typeFilter}
+                        onChange={(e) => setTypeFilter(e.target.value)}
+                        className="border rounded-md px-3 py-2 text-sm bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                        <option value="all">All Types</option>
+                        <option value="file_assigned">File Assigned</option>
+                        <option value="file_marked_to">File Marked To</option>
+                        <option value="file_forwarded">File Forwarded</option>
+                        <option value="signature_added">Signature Added</option>
+                        <option value="comment_added">Comments Added</option>
+                        <option value="attachment_added">Attachments Added</option>
+
+                    </select>
+                </div>
             </div>
 
             {/* Notifications List */}
@@ -242,6 +239,7 @@ export default function Notifications() {
                         {filter === 'all' && 'My Notifications'}
                         {filter === 'unread' && 'My Unread Notifications'}
                         {filter === 'dismissed' && 'My Dismissed Notifications'}
+                        {typeFilter !== 'all' && ` (${typeFilter.replace('_', ' ').toUpperCase()})`}
                     </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -327,6 +325,6 @@ export default function Notifications() {
                     )}
                 </CardContent>
             </Card>
-        </div>
+        </div> 
     );
 }
