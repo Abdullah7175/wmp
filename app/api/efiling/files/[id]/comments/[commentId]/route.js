@@ -35,15 +35,15 @@ export async function PUT(request, { params }) {
 
         const comment = commentCheck.rows[0];
         
-        // Only the comment creator or superadmin/CEO/Chief IT Officer can edit
-        if (comment.user_id !== user_id) {
+        // FIX: Cast both IDs to String to avoid Number vs String mismatch (e.g. 77 !== "77")
+        if (String(comment.user_id) !== String(user_id)) {
             // Check if user has special privileges
             const userCheck = await client.query(`
                 SELECT role FROM users WHERE id = $1
             `, [user_id]);
 
             if (!userCheck.rows.length || 
-                !['superadmin', 'CEO', 'Chief IT Officer'].includes(userCheck.rows[0].role)) {
+                !['superadmin', 'CEO', 'Chief IT Officer'].includes(userCheck.rows[0].role?.trim())) {
                 return NextResponse.json(
                     { error: 'Unauthorized to edit this comment' },
                     { status: 403 }
@@ -115,15 +115,15 @@ export async function DELETE(request, { params }) {
 
         const comment = commentCheck.rows[0];
         
-        // Only the comment creator or superadmin/CEO/Chief IT Officer can delete
-        if (comment.user_id !== userId) {
+        // FIX: Cast both IDs to String to avoid Number vs String mismatch
+        if (String(comment.user_id) !== String(userId)) {
             // Check if user has special privileges
             const userCheck = await client.query(`
                 SELECT role FROM users WHERE id = $1
             `, [userId]);
 
             if (!userCheck.rows.length || 
-                !['superadmin', 'CEO', 'Chief IT Officer'].includes(userCheck.rows[0].role)) {
+                !['superadmin', 'CEO', 'Chief IT Officer'].includes(userCheck.rows[0].role?.trim())) {
                 return NextResponse.json(
                     { error: 'Unauthorized to delete this comment' },
                     { status: 403 }

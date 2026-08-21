@@ -78,6 +78,10 @@ export default function FileDetail() {
     const [editPageTitle, setEditPageTitle] = useState("");
     const [editPageContent, setEditPageContent] = useState("");
     const [isSavingPage, setIsSavingPage] = useState(false);
+    // Comment editing/deleting states
+    const [editingCommentId, setEditingCommentId] = useState(null);
+    const [editCommentText, setEditCommentText] = useState("");
+    const [updatingComment, setUpdatingComment] = useState(false);
 
     const fetchUserRole = async () => {
         try {
@@ -674,7 +678,79 @@ export default function FileDetail() {
             setPostingComment(false);
         }
     };
+// Helper function to check if the user can edit/delete a comment
+const canModifyComment = (comment) => {
+    if (!session?.user) return false;
+    if (isCcOnly) return false;
 
+    console.log("Comment User ID:", comment.user_id, typeof comment.user_id);
+    console.log("Session User ID:", session.user.id, typeof session.user.id);
+    console.log("Session Role:", session?.user?.role, "Fetched Role:", userRole);
+
+    const isCommentCreator = String(comment.user_id) === String(session.user.id);
+    const privilegedRoles = ['superadmin', 'CEO', 'Chief IT Officer'];
+    const isAuthorizedRole = privilegedRoles.includes(session.user.role) || privilegedRoles.includes(userRole);
+
+    return isCommentCreator || isAuthorizedRole;
+};
+
+// Handle initiating comment edit mode
+const handleStartEditComment = (comment) => {
+    setEditingCommentId(comment.id);
+    setEditCommentText(comment.text);
+};
+
+// Handle saving edited comment (PUT)
+const handleSaveEditComment = async (commentId) => {
+    if (!editCommentText.trim()) return;
+
+    try {
+        setUpdatingComment(true);
+        const res = await fetch(`/api/efiling/files/${params.id}/comments/${commentId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                text: editCommentText.trim(),
+                user_id: session?.user?.id
+            })
+        });
+
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.error || 'Failed to update comment');
+        }
+
+        setEditingCommentId(null);
+        setEditCommentText("");
+        await fetchComments();
+        toast({ title: 'Success', description: 'Comment updated successfully' });
+    } catch (e) {
+        toast({ title: 'Error', description: e.message, variant: 'destructive' });
+    } finally {
+        setUpdatingComment(false);
+    }
+};
+
+// Handle deleting comment (DELETE)
+const handleDeleteComment = async (commentId) => {
+    if (!confirm("Are you sure you want to delete this comment?")) return;
+
+    try {
+        const res = await fetch(`/api/efiling/files/${params.id}/comments/${commentId}?userId=${session?.user?.id}`, {
+            method: 'DELETE'
+        });
+
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.error || 'Failed to delete comment');
+        }
+
+        await fetchComments();
+        toast({ title: 'Success', description: 'Comment deleted successfully' });
+    } catch (e) {
+        toast({ title: 'Error', description: e.message, variant: 'destructive' });
+    }
+};
     const formatDate = (dateString) => {
         if (!dateString) return '-';
         return new Date(dateString).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' });
@@ -2139,28 +2215,105 @@ export default function FileDetail() {
 
                         <Card>
                             <CardHeader>
-                                <CardTitle className="flex items-center gap-2"><MessageSquare className="w-4 h-4" />Comments ({comments.length})</CardTitle>
+                                <CardTitle className="flex items-center gap-2">
+                                    <MessageSquare className="w-4 h-4" />
+                                    Comments ({comments.length})
+                                </CardTitle>
                             </CardHeader>
                             <CardContent>
                                 <div className="space-y-3">
                                     {comments.length > 0 ? (
                                         comments.map((c) => (
-                                            <div key={c.id} className="border-l-4 border-blue-500 pl-3">
-                                                <div className="text-sm font-medium text-gray-900">{c.user_name}</div>
+                                            <div key={c.id} className="border-l-4 border-blue-500 pl-3 py-1 relative group">
+                                                <div className="flex items-center justify-between">
+                                                    <div className="text-sm font-medium text-gray-900">
+                                                        {c.user_name}
+                                                        {c.edited && <span className="text-xs text-gray-400 italic ml-2">(edited)</span>}
+                                                    </div>
+                                                    
+                                                    {/* Edit & Delete Actions */}
+                                                    {canModifyComment(c) && editingCommentId !== c.id && (
+                                                        <div className="flex items-center space-x-1">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleStartEditComment(c)}
+                                                                className="p-1 text-gray-500 hover:text-blue-600 rounded"
+                                                                title="Edit comment"
+                                                            >
+                                                                <Edit className="w-3.5 h-3.5" />
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleDeleteComment(c.id)}
+                                                                className="p-1 text-gray-500 hover:text-red-600 rounded"
+                                                                title="Delete comment"
+                                                            >
+                                                                <Trash2 className="w-3.5 h-3.5" />
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                </div>
+
                                                 <div className="text-xs text-gray-500">{formatDate(c.timestamp)}</div>
-                                                <div className="text-sm text-gray-700 mt-1">{c.text}</div>
+
+                                                {/* Inline Comment Editing Input */}
+                                                {editingCommentId === c.id ? (
+                                                    <div className="mt-2 space-y-2">
+                                                        <textarea
+                                                            value={editCommentText}
+                                                            onChange={(e) => setEditCommentText(e.target.value)}
+                                                            rows={2}
+                                                            className="w-full border rounded-md p-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                        />
+                                                        <div className="flex justify-end gap-2">
+                                                            <Button
+                                                                size="sm"
+                                                                variant="outline"
+                                                                onClick={() => setEditingCommentId(null)}
+                                                                disabled={updatingComment}
+                                                            >
+                                                                Cancel
+                                                            </Button>
+                                                            <Button
+                                                                size="sm"
+                                                                onClick={() => handleSaveEditComment(c.id)}
+                                                                disabled={updatingComment || !editCommentText.trim()}
+                                                            >
+                                                                {updatingComment ? 'Saving...' : 'Save'}
+                                                            </Button>
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <div className="text-sm text-gray-700 mt-1">{c.text}</div>
+                                                )}
                                             </div>
                                         ))
                                     ) : (
                                         <p className="text-sm text-gray-500">No comments yet</p>
                                     )}
                                 </div>
-                                <div className="mt-4">
-                                    <textarea value={newComment} onChange={(e) => setNewComment(e.target.value)} rows={3} placeholder="Add a comment..." className="w-full border rounded-md p-2 text-sm" />
-                                    <div className="flex justify-end mt-2">
-                                        <Button size="sm" onClick={postComment} disabled={postingComment || !newComment.trim()}>{postingComment ? 'Posting...' : 'Add Comment'}</Button>
+
+                                {/* New Comment Textarea */}
+                                {!isCcOnly && (
+                                    <div className="mt-4">
+                                        <textarea
+                                            value={newComment}
+                                            onChange={(e) => setNewComment(e.target.value)}
+                                            rows={3}
+                                            placeholder="Add a comment..."
+                                            className="w-full border rounded-md p-2 text-sm"
+                                        />
+                                        <div className="flex justify-end mt-2">
+                                            <Button
+                                                size="sm"
+                                                onClick={postComment}
+                                                disabled={postingComment || !newComment.trim()}
+                                            >
+                                                {postingComment ? 'Posting...' : 'Add Comment'}
+                                            </Button>
+                                        </div>
                                     </div>
-                                </div>
+                                )}
                             </CardContent>
                         </Card>
 
