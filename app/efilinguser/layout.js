@@ -57,7 +57,8 @@ function EFileLayoutShell({ children }) {
     let mappedId = efilingUserId || null;
     let intervalId;
 
-    async function fetchNotifications(targetId) {
+    async function fetchNotifications() {
+      let targetId = session?.user?.id;
       try {
         const res = await fetch(`/api/efiling/notifications?user_id=${targetId}`);
         if (!active) return;
@@ -222,18 +223,20 @@ function EFileLayoutShell({ children }) {
                 <div className="absolute right-0 mt-2 w-80 bg-white border rounded shadow-lg z-50">
                   <div className="p-2 font-semibold border-b text-black">E-Filing Notifications</div>
                   <ul>
-                    {notifications.map((n) => (
-                      <li
-                        key={n.id}
-                        className="p-2 hover:bg-gray-100 border-b last:border-b-0 cursor-pointer"
-                        onClick={() => handleNotificationClick(n)}
-                      >
-                        <div className="font-medium text-black">{n.message || "No message"}</div>
-                        <div className="text-xs text-gray-400">
-                          {n.created_at ? new Date(n.created_at).toLocaleString() : ""}
-                        </div>
-                      </li>
-                    ))}
+                    {notifications
+                      .filter((n) => !n.is_read && !n.is_dismissed)
+                      .map((n) => (
+                        <li
+                          key={n.id}
+                          className="p-2 hover:bg-gray-100 border-b last:border-b-0 cursor-pointer"
+                          onClick={() => handleNotificationClick(n)}
+                        >
+                          <div className="font-medium text-black">{n.message || "No message"}</div>
+                          <div className="text-xs text-gray-400">
+                            {n.created_at ? new Date(n.created_at).toLocaleString() : ""}
+                          </div>
+                        </li>
+                      ))}
                   </ul>
                 </div>
               )}
