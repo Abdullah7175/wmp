@@ -56,8 +56,7 @@ export async function DELETE(request, { params }) {
         
         // Soft delete the attachment (mark as inactive)
         await client.query(`
-            UPDATE efiling_file_attachments 
-            SET is_active = false, deleted_at = NOW()
+            DELETE FROM efiling_file_attachments
             WHERE id = $1
         `, [id]);
         

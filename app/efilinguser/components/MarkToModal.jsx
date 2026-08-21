@@ -376,7 +376,7 @@ export default function MarkToModal({ showMarkToModal, onClose, fileId, fileNumb
                                 {recipient.role_name && (
                                   <span className="flex items-center gap-1">
                                     <Shield className="w-3 h-3" />
-                                    {recipient.role_name} ({recipient.role_code})
+                                    {recipient.role_name}
                                   </span>
                                 )}
                                 {recipient.department_name && (
@@ -487,7 +487,7 @@ export default function MarkToModal({ showMarkToModal, onClose, fileId, fileNumb
                               <div className="text-xs text-gray-600 flex flex-wrap gap-2 mt-0.5">
                                 {user.role_name && (
                                   <span>
-                                    {user.role_name} ({user.role_code})
+                                    {user.role_name}
                                   </span>
                                 )}
                                 {user.department_name && <span>{user.department_name}</span>}

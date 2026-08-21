@@ -66,6 +66,13 @@ export default function FileDetail() {
     const [timeLeft, setTimeLeft] = useState("");
     const [isAllAttachmentsModalOpen, setIsAllAttachmentsModalOpen] = useState(false); // <--- ADD THIS LINE
 
+    // Page-by-page images rendered from PDF attachments, keyed by attachment id:
+    // { [attachmentId]: { status: 'loading' | 'ready' | 'error', pages: string[] } }
+    // Used so PDF attachments print/export exactly like image attachments do -
+    // one real page per PDF page - instead of the browser's embedded PDF
+    // viewer, which cannot paginate across print pages.
+    const [pdfPreviews, setPdfPreviews] = useState({});
+
     // Note sheet modal states
     const [editingPage, setEditingPage] = useState(null);
     const [editPageTitle, setEditPageTitle] = useState("");
@@ -104,6 +111,132 @@ export default function FileDetail() {
             fetchBeforeContent();
         }
     }, [file?.work_request_id]);
+
+    // Resolves the correct downloadable URL for an attachment's file. Mirrors
+    // the same normalization logic already used in the print/preview markup.
+    const resolveAttachmentFileUrl = (fileUrl) => {
+        if (!fileUrl) return '';
+        if (fileUrl.startsWith('/api/uploads/')) return fileUrl;
+        if (fileUrl.startsWith('/uploads/')) return fileUrl.replace('/uploads/', '/api/uploads/');
+        if (fileUrl.startsWith('http://') || fileUrl.startsWith('https://')) {
+            try {
+                const url = new URL(fileUrl);
+                return url.pathname.startsWith('/uploads/')
+                    ? url.pathname.replace('/uploads/', '/api/uploads/')
+                    : url.pathname;
+            } catch {
+                return fileUrl;
+            }
+        }
+        return `/api/uploads${fileUrl.startsWith('/') ? '' : '/'}${fileUrl}`;
+    };
+
+    const isPdfAttachment = (a) =>
+        a?.file_type === 'application/pdf' || a?.file_name?.toLowerCase().endsWith('.pdf');
+
+    // Render every PDF attachment into one image per page. This is what makes
+    // PDFs show up in the print/PDF view exactly like images do - full size,
+    // one page at a time - instead of the tiny, non-paginating embedded PDF
+    // viewer the browser normally renders for <object>/<iframe>.
+    //
+    // Cached/keyed by the attachment's index in the `attachments` array
+    // (not attachment.id) since some attachments come back without a
+    // stable id, which previously caused different PDFs to collide on the
+    // same cache entry and overwrite each other's status.
+    useEffect(() => {
+        const pdfAttachmentEntries = attachments
+            .map((a, idx) => ({ attachment: a, idx }))
+            .filter(({ attachment, idx }) => isPdfAttachment(attachment) && !pdfPreviews[idx]);
+
+        if (pdfAttachmentEntries.length === 0) return;
+
+        let cancelled = false;
+
+        const renderAttachments = async () => {
+            let pdfjsLib;
+            try {
+                pdfjsLib = await import('pdfjs-dist/build/pdf');
+                pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+                    'pdfjs-dist/build/pdf.worker.min.mjs',
+                    import.meta.url
+                ).toString();
+            } catch (error) {
+                console.error('Failed to load PDF renderer:', error);
+                if (!cancelled) {
+                    setPdfPreviews((prev) => {
+                        const next = { ...prev };
+                        pdfAttachmentEntries.forEach(({ idx }) => {
+                            next[idx] = { status: 'error', pages: [] };
+                        });
+                        return next;
+                    });
+                }
+                return;
+            }
+
+            for (const { attachment, idx } of pdfAttachmentEntries) {
+                if (cancelled) return;
+
+                setPdfPreviews((prev) => ({
+                    ...prev,
+                    [idx]: { status: 'loading', pages: [] }
+                }));
+
+                try {
+                    const fileUrl = resolveAttachmentFileUrl(attachment.file_url);
+                    if (!fileUrl) {
+                        throw new Error('Attachment is missing a file URL');
+                    }
+
+                    // Safety timeout so a hung/stuck render (e.g. a worker
+                    // that never resolves) can never leave Print/Export
+                    // permanently disabled.
+                    const pdfDoc = await Promise.race([
+                        pdfjsLib.getDocument({ url: fileUrl }).promise,
+                        new Promise((_, reject) =>
+                            setTimeout(() => reject(new Error('PDF render timed out')), 15000)
+                        )
+                    ]);
+                    const pageImages = [];
+
+                    for (let pageNumber = 1; pageNumber <= pdfDoc.numPages; pageNumber++) {
+                        const page = await pdfDoc.getPage(pageNumber);
+                        // scale 2 keeps text/images crisp at print resolution
+                        const viewport = page.getViewport({ scale: 2 });
+                        const canvas = document.createElement('canvas');
+                        canvas.width = viewport.width;
+                        canvas.height = viewport.height;
+                        const context = canvas.getContext('2d');
+                        await page.render({ canvasContext: context, viewport }).promise;
+                        pageImages.push(canvas.toDataURL('image/jpeg', 0.92));
+                        canvas.width = 0;
+                        canvas.height = 0;
+                    }
+
+                    if (!cancelled) {
+                        setPdfPreviews((prev) => ({
+                            ...prev,
+                            [idx]: { status: 'ready', pages: pageImages }
+                        }));
+                    }
+                } catch (error) {
+                    console.error(`Failed to render PDF preview for "${attachment.attachment_name || attachment.file_name}":`, error);
+                    if (!cancelled) {
+                        setPdfPreviews((prev) => ({
+                            ...prev,
+                            [idx]: { status: 'error', pages: [] }
+                        }));
+                    }
+                }
+            }
+        };
+
+        renderAttachments();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [attachments]);
 
     useEffect(() => {
         if (!file?.sla_deadline || file?.sla_status === 'PAUSED') {
@@ -722,10 +855,26 @@ export default function FileDetail() {
                 )}
 
                 {matter && (
-                    <div
-                        className="prose text-sm"
-                        dangerouslySetInnerHTML={{ __html: sanitizeHtml(matter) }}
-                    />
+                    <>
+                        <div
+                            className="prose document-matter text-sm"
+                            dangerouslySetInnerHTML={{ __html: sanitizeHtml(matter) }}
+                        />
+                        <style jsx global>{`
+                            /* Tailwind's "prose" gives <p> top/bottom margins, and adjacent
+                               margins between empty <p></p> tags collapse into a single gap
+                               instead of stacking - so multiple blank lines from the editor
+                               shrink into one. Overriding with line-height (which never
+                               collapses) makes every <p>, empty or not, occupy exactly one
+                               line, matching the editor's behavior 1:1. */
+                            .document-matter p {
+                                margin-top: 0 !important;
+                                margin-bottom: 0 !important;
+                                min-height: 1.6em;
+                                line-height: 1.6em;
+                            }
+                        `}</style>
+                    </>
                 )}
 
                 {footer && (
@@ -1082,6 +1231,16 @@ export default function FileDetail() {
                         color: #000 !important;
                         text-align: center;
                     }
+
+                    .print-section h3 {
+                        font-size: 10pt;
+                        font-weight: bold;
+                        margin-bottom: 2mm;
+                        border-bottom: 1px solid #333;
+                        padding-bottom: 1mm;
+                        color: #000 !important;
+                        text-align: center;
+                    }
                     
                     /* Grid layout for signatures and comments */
                     .print-signatures-grid {
@@ -1180,6 +1339,33 @@ export default function FileDetail() {
                         height: 270mm !important; /* Standard A4 printable height */
                         border: none !important;
                         display: block !important;
+                    }
+
+                    /* Each PDF page is rendered as its own image so it prints
+                       at full, readable size - one PDF page per print page,
+                       exactly like image attachments already do. */
+                    .print-pdf-page {
+                        page-break-inside: avoid !important;
+                        break-inside: avoid !important;
+                        margin-bottom: 3mm;
+                    }
+
+                    .print-pdf-page img {
+                        width: 100% !important;
+                        max-width: 100% !important;
+                        height: auto !important;
+                        max-height: 250mm !important;
+                        object-fit: contain;
+                        display: block;
+                        margin: 0 auto;
+                    }
+
+                    /* Break to a new page between PDF pages (not after the
+                       last one - the parent .print-attachment-item already
+                       breaks after the whole attachment finishes). */
+                    .print-pdf-page-break {
+                        page-break-after: always !important;
+                        break-after: page !important;
                     }
 
                     .print-comment-item {
@@ -1617,26 +1803,70 @@ export default function FileDetail() {
                         {/* Print-only Attachments Section */}
                         {attachments.length > 0 && (
                             <div className="print-only print-section attachments-section">
-                                <h3>Attachments ({attachments.length})</h3>
-                                {attachments.map((a, idx) => (
-                                    <div key={a.id || idx} className="print-attachment-item">
-                                        {a.file_url && a.file_type?.startsWith('image/') ? (
-                                            // eslint-disable-next-line @next/next/no-img-element
-                                            <img src={a.file_url} alt={a.attachment_name || a.file_name} />
-                                        ) : (
-                                            <div style={{ padding: '10mm', backgroundColor: '#f0f0f0', textAlign: 'center', border: '1px solid #ccc', marginBottom: '3mm' }}>
-                                                <div style={{ fontSize: '11pt', color: '#666' }}>{a.file_type || 'Document'}</div>
+                                <h6 style={{ color: '#000', fontSize: '10pt', textAlign: 'center', borderBottom: '0.5px solid #333', marginBottom: '5px' }}>Attachments ({attachments.length})</h6>
+                                {attachments.map((a, idx) => {
+                                    const isPdf = a.file_type === 'application/pdf' || a.file_name?.toLowerCase().endsWith('.pdf');
+                                    const isImage = a.file_url && (a.file_type?.startsWith('image/') || /\.(jpg|jpeg|png|webp|gif|svg)$/i.test(a.file_name || ''));
+                                    const pdfPreview = isPdf ? pdfPreviews[idx] : null;
+
+                                    return (
+                                        <div key={a.id || idx} className="print-attachment-item">
+                                            <div style={{ fontWeight: 'bold', fontSize: '11pt', marginBottom: '2mm' }}>
+                                                {a.attachment_name || a.file_name}
                                             </div>
-                                        )}
-                                        <div style={{ fontWeight: 'bold', fontSize: '11pt', marginBottom: '2mm' }}>{a.attachment_name || a.file_name}</div>
-                                        {a.attachment_name ? (
-                                            <div style={{ color: '#666', fontSize: '9pt', marginBottom: '1mm' }}>{a.file_name}</div>
-                                        ) : null}
-                                        <div style={{ color: '#666', fontSize: '9pt' }}>
-                                            Size: {Math.round((a.file_size || 0) / 1024)} KB | Uploaded: {formatDate(a.uploaded_at)}
+                                            {a.attachment_name && (
+                                                <div style={{ color: '#666', fontSize: '9pt', marginBottom: '2mm' }}>{a.file_name}</div>
+                                            )}
+
+                                            {isImage ? (
+                                                // eslint-disable-next-line @next/next/no-img-element
+                                                <img src={a.file_url} alt={a.attachment_name || a.file_name} />
+                                            ) : isPdf ? (
+                                                pdfPreview?.status === 'ready' && pdfPreview.pages.length > 0 ? (
+                                                    // Render each PDF page as its own full-size image, one per
+                                                    // print page - same treatment as image attachments get.
+                                                    pdfPreview.pages.map((pageImage, pageIdx) => (
+                                                        <div
+                                                            key={pageIdx}
+                                                            className={
+                                                                pageIdx < pdfPreview.pages.length - 1
+                                                                    ? 'print-pdf-page print-pdf-page-break'
+                                                                    : 'print-pdf-page'
+                                                            }
+                                                        >
+                                                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                                                            <img
+                                                                src={pageImage}
+                                                                alt={`${a.attachment_name || a.file_name} - page ${pageIdx + 1}`}
+                                                            />
+                                                            {pdfPreview.pages.length > 1 && (
+                                                                <div style={{ color: '#666', fontSize: '8pt', textAlign: 'center', marginTop: '1mm' }}>
+                                                                    Page {pageIdx + 1} of {pdfPreview.pages.length}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    ))
+                                                ) : pdfPreview?.status === 'error' ? (
+                                                    <div style={{ padding: '10mm', backgroundColor: '#f0f0f0', textAlign: 'center', border: '1px solid #ccc', marginBottom: '3mm' }}>
+                                                        <div style={{ fontSize: '11pt', color: '#666' }}>Unable to preview this PDF ({a.file_type || 'Document'})</div>
+                                                    </div>
+                                                ) : (
+                                                    <div style={{ padding: '10mm', backgroundColor: '#f0f0f0', textAlign: 'center', border: '1px solid #ccc', marginBottom: '3mm' }}>
+                                                        <div style={{ fontSize: '11pt', color: '#666' }}>Preparing preview...</div>
+                                                    </div>
+                                                )
+                                            ) : (
+                                                <div style={{ padding: '10mm', backgroundColor: '#f0f0f0', textAlign: 'center', border: '1px solid #ccc', marginBottom: '3mm' }}>
+                                                    <div style={{ fontSize: '11pt', color: '#666' }}>{a.file_type || 'Document'}</div>
+                                                </div>
+                                            )}
+
+                                            <div style={{ color: '#666', fontSize: '9pt', marginTop: '2mm' }}>
+                                                Size: {Math.round((a.file_size || 0) / 1024)} KB | Uploaded: {formatDate(a.uploaded_at)}
+                                            </div>
                                         </div>
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         )}
 
@@ -2565,4 +2795,4 @@ export default function FileDetail() {
 
         </>
     );
-} 
+}

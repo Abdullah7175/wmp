@@ -94,6 +94,7 @@
     "next-auth": "^5.0.0-beta.25",
     "nodemailer": "^7.0.13",
     "pdf-lib": "^1.17.1",
+    "pdfjs-dist": "^6.2.108",
     "pdfkit": "^0.17.2",
     "pdfkit-table": "^0.1.99",
     "pg": "^8.13.1",
