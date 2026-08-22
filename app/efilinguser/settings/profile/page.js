@@ -532,8 +532,8 @@ export default function ProfileSettings() {
                                         id="email"
                                         type="email"
                                         value={profile.email}
-                                        onChange={(e) => handleInputChange('email', e.target.value)}
                                         placeholder="Enter your email"
+                                        disabled
                                     />
                                 </div>
                             </div>
@@ -546,6 +546,7 @@ export default function ProfileSettings() {
                                     value={profile.google_email}
                                     onChange={(e) => handleInputChange('google_email', e.target.value)}
                                     placeholder="Enter your Google email address"
+                                    disabled
                                 />
                                 <p className="text-sm text-gray-500 mt-1">
                                     This email will be used for OTP verification via email. Leave empty if you prefer WhatsApp OTP.
@@ -589,8 +590,8 @@ export default function ProfileSettings() {
                                     <Input
                                         id="phone"
                                         value={profile.phone}
-                                        onChange={(e) => handleInputChange('phone', e.target.value)}
                                         placeholder="Enter phone number"
+                                        disabled
                                     />
                                 </div>
                                 <div>
