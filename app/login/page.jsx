@@ -195,11 +195,10 @@ export default function LoginPage() {
             try {
               const sessionRes = await fetch("/api/auth/session");
               const session = await sessionRes.json();
-              const userType = session?.user?.userType;
-              const userRole = session?.user?.role;
+              const userIsDualPortal = Boolean(session?.user?.isDualPortal);
               
-              // Block e-filing users (role 4) from accessing video archiving system
-              if ((userType === "user" && parseInt(userRole) === 4 ) || (parseInt(userRole) === 5 ) ) {
+              // Block e-filing users (role 4) from accessing video archiving system unless authorized for dual portal
+              if (!userIsDualPortal && ((userType === "user" && parseInt(userRole) === 4 ) || (parseInt(userRole) === 5 ) )) {
                 toast({
                   title: "Access Denied",
                   description: "E-filing users are not allowed to access the video archiving system. Please use the e-filing portal instead.",
@@ -214,10 +213,10 @@ export default function LoginPage() {
               // Check role-based redirects first (for users with specific roles)
               if (userType === "user") {
                 const role = parseInt(userRole);
-                if (role === 8) {
+                if (role === 8 || role === 24) {
                   window.location.href = "/ceo";
                   return;
-                } else if (role === 6) {
+                } else if (role === 6 || role === 26) {
                   window.location.href = "/coo";
                   return;
                 } else if (role === 7) {

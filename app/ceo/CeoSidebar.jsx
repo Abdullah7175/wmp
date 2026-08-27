@@ -211,8 +211,19 @@ export default function CeoSidebar({ isOpen, onClose }) {
           })}
         </nav>
 
+      {/* Switch to E-Filing Button */}
+      <div className="px-6 py-2">
+        <Link
+          href="/efilinguser"
+          className="flex items-center w-full px-3 py-2.5 text-sm font-medium bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white rounded-lg shadow-sm transition-all duration-200"
+        >
+          <FileText className="w-5 h-5 mr-3 text-white" />
+          Switch to E-Filing
+        </Link>
+      </div>
+
       {/* Logout Button */}
-      <div className="mt-auto px-6 py-4">
+      <div className="mt-auto px-6 py-2">
         <button
           onClick={() => signOut({ callbackUrl: '/login' })}
           className="flex items-center w-full px-3 py-2 text-sm font-medium text-gray-700 hover:bg-red-50 hover:text-red-700 rounded-md transition-colors duration-200"

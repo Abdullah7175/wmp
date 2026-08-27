@@ -33,11 +33,14 @@ export default async function CeoLayout({ children }) {
   const userRole = session?.user?.role;
   const roleNumber = typeof userRole === 'number' ? userRole : parseInt(userRole);
   
-  if (!session?.user || roleNumber !== 8 || session.user.userType !== 'user') {
+  const isDual = session?.user?.isDualPortal;
+  const isAllowedCeo = roleNumber === 8 || roleNumber === 24 || isDual;
+  
+  if (!session?.user || !isAllowedCeo || session.user.userType !== 'user') {
     console.log('CEO Layout - Access DENIED:', {
       hasUser: !!session?.user,
       roleNumber,
-      expectedRole: 8,
+      expectedRole: '8 or 24',
       userType: session?.user?.userType,
       expectedUserType: 'user'
     });
