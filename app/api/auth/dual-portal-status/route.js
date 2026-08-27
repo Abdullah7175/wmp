@@ -8,24 +8,25 @@ export const dynamic = 'force-dynamic';
 export async function GET(request) {
     try {
         const session = await auth();
-        const userEmail = session?.user?.email || null;
-        const isDual = userEmail ? isDualPortalUser(userEmail) : false;
+        const user = session?.user || null;
+        const isDual = user ? isDualPortalUser(user) : false;
         const isInternal = isInternalNetwork(request);
 
         return NextResponse.json({
-            authenticated: Boolean(session?.user),
-            user: session?.user ? {
-                id: session.user.id,
-                name: session.user.name,
-                email: session.user.email,
-                role: session.user.role,
-                userType: session.user.userType,
+            authenticated: Boolean(user),
+            user: user ? {
+                id: user.id,
+                name: user.name,
+                email: user.email,
+                role: user.role,
+                userType: user.userType,
                 isDualPortal: isDual
             } : null,
             isDualPortalUser: isDual,
             isInternalNetwork: isInternal,
-            canAccessWMP: Boolean(session?.user),
-            canAccessEfiling: isDual || isInternal,
+            canAccessWMP: Boolean(user),
+            canAccessEfiling: isInternal,
+            showBothPortals: Boolean(isInternal && isDual),
             dualPortalUsersCount: getDualPortalUsers().length
         });
     } catch (error) {
@@ -33,7 +34,11 @@ export async function GET(request) {
         return NextResponse.json({
             error: 'Failed to verify dual portal status',
             isDualPortalUser: false,
-            isInternalNetwork: false
+            isInternalNetwork: false,
+            canAccessWMP: false,
+            canAccessEfiling: false,
+            showBothPortals: false
         }, { status: 500 });
     }
 }
+

@@ -237,7 +237,19 @@ export async function middleware(req) {
         // Always set origin header early for POST requests (Server Actions need this)
         ensureOriginHeader();
 
-        // Skip middleware for static files, API routes, and Server Action paths
+        // For /api/efiling routes, enforce strict IP whitelist validation
+        if (pathname.startsWith('/api/efiling')) {
+            const { isInternalNetwork } = await import("./middleware/validateNetwork");
+            if (!isInternalNetwork(req)) {
+                console.warn(`[API Security] Blocked external request to ${pathname}`);
+                return NextResponse.json(
+                    { error: "Access Denied: E-Filing API is restricted to authorized office networks.", code: "IP_NOT_ALLOWED" },
+                    { status: 403 }
+                );
+            }
+        }
+
+        // Skip middleware for other static files, API routes, and Server Action paths
         // Server Actions can be POST requests to page routes or use special Next.js paths
         if (pathname.startsWith('/_next') ||
             pathname.startsWith('/api') ||
@@ -322,5 +334,5 @@ export async function middleware(req) {
 }
 
 export const config = {
-    matcher: ["/smagent/:path*", "/agent/:path*", "/dashboard/:path*", "/efiling/:path*", "/efilinguser/:path*", "/elogin", "/ceo/:path*"],
+    matcher: ["/smagent/:path*", "/agent/:path*", "/dashboard/:path*", "/efiling/:path*", "/efilinguser/:path*", "/api/efiling/:path*", "/elogin", "/ceo/:path*"],
 }; 

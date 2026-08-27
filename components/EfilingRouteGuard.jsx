@@ -57,30 +57,28 @@ export function EfilingRouteGuard({ children, allowedRoles = [] }) {
     const isDualPortal = Boolean(session?.user?.isDualPortal || roleNumber === 1);
 
     const checkAccessAndNetwork = async () => {
-      // 1. If not a dual-portal user, verify that access is from an allowed internal network
-      if (!isDualPortal) {
-        try {
-          const netRes = await fetch("/api/auth/dual-portal-status");
-          if (netRes.ok) {
-            const netData = await netRes.json();
-            if (!netData.isInternalNetwork && !netData.isDualPortalUser) {
-              if (!toastShownRef.current) {
-                toastShownRef.current = true;
-                toast({
-                  title: "Access Restricted",
-                  description: "E-Filing can only be accessed from the internal office network. You are not authorized for remote access.",
-                  variant: "destructive",
-                });
-              }
-              router.push("/login");
-              setAuthorized(false);
-              setChecking(false);
-              return;
+      // 1. Mandatory IP verification: E-Filing is strictly restricted to allowed IP ranges in .env
+      try {
+        const netRes = await fetch("/api/auth/dual-portal-status");
+        if (netRes.ok) {
+          const netData = await netRes.json();
+          if (!netData.isInternalNetwork) {
+            if (!toastShownRef.current) {
+              toastShownRef.current = true;
+              toast({
+                title: "Access Restricted",
+                description: "E-Filing can only be accessed from the authorized office network. Redirecting to Works Portal...",
+                variant: "destructive",
+              });
             }
+            router.replace("/dashboard");
+            setAuthorized(false);
+            setChecking(false);
+            return;
           }
-        } catch (err) {
-          console.error("Network check failed:", err);
         }
+      } catch (err) {
+        console.error("Network check failed:", err);
       }
 
       // 2. For efilinguser routes, check if user has efiling profile or dual-portal authorization
@@ -104,7 +102,7 @@ export function EfilingRouteGuard({ children, allowedRoles = [] }) {
             description: "E-filing profile could not be found for your account.",
             variant: "destructive",
           });
-          router.push("/login");
+          router.push("/dashboard");
           setAuthorized(false);
           setChecking(false);
           return;
@@ -134,7 +132,7 @@ export function EfilingRouteGuard({ children, allowedRoles = [] }) {
             variant: "destructive",
           });
         }
-        router.push("/login");
+        router.push("/dashboard");
         setAuthorized(false);
         setChecking(false);
         return;

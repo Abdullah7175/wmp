@@ -63,6 +63,30 @@ export function AppSidebar() {
     const { user, loading } = useUserContext();
     const { data: session } = useSession();
     const isDualPortal = Boolean(session?.user?.isDualPortal || user?.isDualPortal || user?.role === 1);
+    const [canShowEfiling, setCanShowEfiling] = React.useState(false);
+
+    React.useEffect(() => {
+        let isMounted = true;
+        const checkNetworkStatus = async () => {
+            try {
+                const res = await fetch('/api/auth/dual-portal-status');
+                if (res.ok) {
+                    const data = await res.json();
+                    if (isMounted) {
+                        setCanShowEfiling(Boolean(data.isInternalNetwork && (data.isDualPortalUser || isDualPortal)));
+                    }
+                }
+            } catch (err) {
+                console.error("Sidebar network check failed:", err);
+            }
+        };
+        if (isDualPortal) {
+            checkNetworkStatus();
+        }
+        return () => {
+            isMounted = false;
+        };
+    }, [isDualPortal, session?.user]);
 
     if (loading) {
         return (
@@ -92,19 +116,6 @@ export function AppSidebar() {
                             {/* User Profile Section */}
                             <Card className="mb-1 bg-transparent bg-white py-1 mt-1">
                                 <CardContent className="p-0 flex items-center gap-3 px-4 py-2">
-                                    {/* <Image src="/avatar.png" className="rounded-xl" width="40" height="40" alt="profile" />
-                                    <p className="text-muted-foreground">User Name</p> */}
-                                     {/* <Image 
-                                        src={user?.image  || '/avatar.png'} 
-                                        className="rounded-xl" 
-                                        width="40" 
-                                        height="40" 
-                                        alt="profile"
-                                        onError={(e) => {
-                                            e.target.onerror = null;
-                                            e.target.src = "/avatar.png";
-                                        }}
-                                    /> */}
                                     <img
                                         src={user?.image || "/avatar.png"}
                                         alt="profile"
@@ -143,8 +154,8 @@ export function AppSidebar() {
                                 return null;
                             })}
 
-                            {/* Dual Portal Switch Button */}
-                            {isDualPortal && (
+                            {/* Dual Portal Switch Button - ONLY shown when IP is in allowed EFILING_ALLOWED_IPS */}
+                            {canShowEfiling && (
                                 <SidebarMenuItem className="my-1">
                                     <SidebarMenuButton
                                         asChild

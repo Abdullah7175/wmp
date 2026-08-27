@@ -1,5 +1,5 @@
 /**
- * Convert an IPv4 address string to a 32-bit integer
+ * Convert an IPv4 address string to a 32-bit unsigned integer
  */
 function ipToLong(ip) {
     const parts = ip.split('.').map(Number);
@@ -7,20 +7,30 @@ function ipToLong(ip) {
     return ((parts[0] << 24) | (parts[1] << 16) | (parts[2] << 8) | parts[3]) >>> 0;
 }
 
-
-function ipMatchesRule(ip, rule) {
-    if (!rule || typeof rule !== 'string') return false;
+/**
+ * Check if a client IP address matches a given rule
+ * Supported rule formats:
+ * 1. Exact match: "192.168.50.2", "::1", "127.0.0.1"
+ * 2. CIDR notation: "172.16.10.0/24", "10.0.0.0/8"
+ * 3. Hyphen range: "192.168.20.0-192.168.20.20"
+ * 4. Wildcard notation: "192.168.50.*"
+ */
+export function ipMatchesRule(ip, rule) {
+    if (!ip || !rule || typeof rule !== 'string') return false;
 
     rule = rule.trim();
+    ip = ip.trim();
 
     // Normalize IPv6 addresses (remove spaces)
     rule = rule.replace(/:\s+/g, ':');
     ip = ip.replace(/:\s+/g, ':');
 
-    // --- IPv6 exact match ---
-    if (ip === rule) return true;
+    // 1. Exact Match (handles IPv4 and IPv6)
+    if (ip.toLowerCase() === rule.toLowerCase()) {
+        return true;
+    }
 
-    // --- CIDR notation (e.g. 192.168.50.0/24) ---
+    // 2. CIDR Notation (e.g. 172.16.10.0/24)
     if (rule.includes('/') && !rule.startsWith('[')) {
         const [subnet, bits] = rule.split('/').map(s => s.trim());
         const maskBits = parseInt(bits, 10);
@@ -31,20 +41,18 @@ function ipMatchesRule(ip, rule) {
         const ipLong = ipToLong(ip);
         const subnetLong = ipToLong(subnet);
         if (ipLong === null || subnetLong === null) {
-            // CIDR may be IPv6, just skip
             return false;
         }
         const mask = maskBits === 0 ? 0 : (~0 << (32 - maskBits)) >>> 0;
         return (ipLong & mask) === (subnetLong & mask);
     }
 
-    // --- Hyphen range (e.g. 192.168.50.1-192.168.50.254) ---
+    // 3. Hyphen Range (e.g. 192.168.20.0-192.168.20.20)
     if (rule.includes('-') && !rule.startsWith('-') && !rule.includes(':')) {
-        // Split carefully to handle ranges (but not IPv6 addresses)
-        const parts = rule.split('-').filter(p => p.trim());
+        const parts = rule.split('-').map(p => p.trim()).filter(Boolean);
         if (parts.length === 2) {
-            const startIp = parts[0].trim();
-            const endIp = parts[1].trim();
+            const startIp = parts[0];
+            const endIp = parts[1];
             const ipLong = ipToLong(ip);
             const startLong = ipToLong(startIp);
             const endLong = ipToLong(endIp);
@@ -55,35 +63,69 @@ function ipMatchesRule(ip, rule) {
         }
     }
 
-    // --- Wildcard notation (e.g. 192.168.50.*) ---
+    // 4. Wildcard Notation (e.g. 192.168.50.*)
     if (rule.includes('*')) {
-        const regex = new RegExp('^' + rule.replace(/\./g, '\\.').replace(/\*/g, '[0-9]{1,3}') + '$');
+        const regexPattern = '^' + rule
+            .replace(/\./g, '\\.')
+            .replace(/\*/g, '([0-9]{1,3})') + '$';
+        const regex = new RegExp(regexPattern);
         return regex.test(ip);
     }
 
-    // --- Prefix match ---
-    return ip.startsWith(rule);
+    return false;
 }
 
+/**
+ * Extract the client's real IP address from request headers or socket
+ */
+export function getClientIp(request) {
+    if (!request) return '';
+
+    // Handle NextRequest, Standard Request, or Express-like req
+    const getHeader = (name) => {
+        if (request.headers?.get) {
+            return request.headers.get(name);
+        }
+        if (request.headers) {
+            return request.headers[name] || request.headers[name.toLowerCase()];
+        }
+        return null;
+    };
+
+    const xForwardedFor = getHeader('x-forwarded-for');
+    const xRealIp = getHeader('x-real-ip');
+    const cfConnectingIp = getHeader('cf-connecting-ip');
+
+    const rawIp =
+        (xForwardedFor ? xForwardedFor.split(',')[0].trim() : null) ||
+        xRealIp?.trim() ||
+        cfConnectingIp?.trim() ||
+        request.ip ||
+        request.socket?.remoteAddress ||
+        '';
+
+    // Remove IPv6-mapped IPv4 prefix (e.g., ::ffff:192.168.1.1)
+    let cleanIp = rawIp.replace(/^::ffff:/, '').trim();
+
+    // Map localhost strings
+    if (cleanIp === 'localhost') {
+        cleanIp = '127.0.0.1';
+    }
+
+    return cleanIp;
+}
+
+/**
+ * Check if the request originates from an authorized internal network for E-Filing
+ */
 export function isInternalNetwork(request) {
     try {
-        // Get client IP (works behind proxy, nginx, cloudflare)
-        const xForwardedFor = request.headers.get('x-forwarded-for');
-        const ip =
-            xForwardedFor?.split(',')[0]?.trim() ||
-            request.headers.get('x-real-ip')?.trim() ||
-            request.socket?.remoteAddress ||
-            request.ip ||
-            '';
+        const cleanIp = getClientIp(request);
 
-        if (!ip) {
+        if (!cleanIp) {
             console.warn('No IP address found in request');
             return false;
         }
-
-        // Remove IPv6 prefix if present (e.g., ::ffff:192.168.1.1)
-        const cleanIp = ip.replace('::ffff:', '');
-        console.log('Client IP:', cleanIp, '(original:', ip + ')');
 
         const envAllowedIPs = process.env.EFILING_ALLOWED_IPS?.trim();
         if (!envAllowedIPs) {
@@ -101,31 +143,23 @@ export function isInternalNetwork(request) {
             return false;
         }
 
-        console.log('Allowed IP ranges:', allowedRanges);
-
-        // Check IPv6 loopback first
-        if (cleanIp === '::1' && allowedRanges.includes('::1')) {
-            console.log('IPv6 loopback allowed');
+        // Check IPv6 loopback
+        if (cleanIp === '::1' && (allowedRanges.includes('::1') || allowedRanges.includes('127.0.0.1'))) {
             return true;
         }
 
         // Check IPv4 loopback
-        if (cleanIp === '127.0.0.1' && allowedRanges.includes('127.0.0.1')) {
-            console.log('IPv4 loopback allowed');
+        if (cleanIp === '127.0.0.1' && (allowedRanges.includes('127.0.0.1') || allowedRanges.includes('::1'))) {
             return true;
         }
 
-        // Check all ranges
-        const isAllowed = allowedRanges.some(rule => {
-            const matches = ipMatchesRule(cleanIp, rule);
-            if (matches) {
-                console.log(`IP ${cleanIp} matched rule: ${rule}`);
-            }
-            return matches;
-        });
+        // Check against all configured rules
+        const isAllowed = allowedRanges.some(rule => ipMatchesRule(cleanIp, rule));
 
         if (!isAllowed) {
-            console.warn(`IP ${cleanIp} not in allowed ranges:`, allowedRanges);
+            console.warn(`[Network Validation] Client IP ${cleanIp} rejected (not in allowed EFILING_ALLOWED_IPS)`);
+        } else {
+            console.log(`[Network Validation] Client IP ${cleanIp} matched allowed E-Filing network`);
         }
 
         return isAllowed;

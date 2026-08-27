@@ -66,30 +66,39 @@ export default function LoginPage() {
     const userRole = parseInt(user.role || 0);
     const isDualPortal = Boolean(user.isDualPortal || userRole === 1);
 
-    // Case 1: Dual Portal User (or Admin) -> Show Portal Choice Modal
+    // Check client network authorization against EFILING_ALLOWED_IPS in .env
+    let isInternal = false;
+    try {
+      const netRes = await fetch("/api/auth/dual-portal-status");
+      if (netRes.ok) {
+        const netData = await netRes.json();
+        isInternal = Boolean(netData.isInternalNetwork);
+      }
+    } catch (err) {
+      console.error("Network verification error:", err);
+    }
+
+    // Case 1: Dual Portal User (or Admin)
     if (isDualPortal) {
-      setTargetUser(user);
-      setShowPortalModal(true);
+      if (isInternal) {
+        // Inside allowed office network -> Show Dual Portal Selection Modal
+        setTargetUser(user);
+        setShowPortalModal(true);
+        return;
+      }
+      // Outside allowed network -> Automatically route to Works Management Portal only
+      navigateToWMP(user);
       return;
     }
 
     // Case 2: E-Filing Role Users (Role 4 or 5)
     if (userType === "user" && (userRole === 4 || userRole === 5)) {
-      try {
-        const netRes = await fetch("/api/auth/dual-portal-status");
-        if (netRes.ok) {
-          const netData = await netRes.json();
-          if (netData.isInternalNetwork || netData.isDualPortalUser) {
-            // Inside internal office network or authorized dual user -> go to E-Filing
-            window.location.href = "/efilinguser";
-            return;
-          }
-        }
-      } catch (err) {
-        console.error("Network verification error:", err);
+      if (isInternal) {
+        // Inside allowed network -> Route to E-Filing User Portal
+        window.location.href = "/efilinguser";
+        return;
       }
-
-      // Outside office network: Works Management Portal (/dashboard) is open to all
+      // Outside office network: Works Management Portal is open to all
       window.location.href = "/dashboard";
       return;
     }
@@ -250,8 +259,9 @@ export default function LoginPage() {
     },
   });
 
-  const navigateToWMP = () => {
-    const userRole = parseInt(targetUser?.role || session?.user?.role || 0);
+  const navigateToWMP = (userOverride) => {
+    const usr = userOverride || targetUser || session?.user;
+    const userRole = parseInt(usr?.role || 0);
     if (userRole === 8 || userRole === 24) {
       window.location.href = "/ceo";
     } else if (userRole === 6 || userRole === 26) {

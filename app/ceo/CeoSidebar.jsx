@@ -71,6 +71,30 @@ export default function CeoSidebar({ isOpen, onClose }) {
     }
   }, [session?.user?.id]);
 
+  const [canShowEfiling, setCanShowEfiling] = useState(false);
+
+  // Check network authorization for E-Filing
+  useEffect(() => {
+    let isMounted = true;
+    const checkNetwork = async () => {
+      try {
+        const res = await fetch('/api/auth/dual-portal-status');
+        if (res.ok) {
+          const data = await res.json();
+          if (isMounted) {
+            setCanShowEfiling(Boolean(data.isInternalNetwork && (data.isDualPortalUser || session?.user?.isDualPortal || session?.user?.role === 1 || session?.user?.role === 8 || session?.user?.role === 24)));
+          }
+        }
+      } catch (err) {
+        console.error('Error checking network for CEO sidebar:', err);
+      }
+    };
+    checkNetwork();
+    return () => {
+      isMounted = false;
+    };
+  }, [session?.user]);
+
   const refreshSession = async () => {
     setIsRefreshing(true);
     try {
@@ -211,16 +235,18 @@ export default function CeoSidebar({ isOpen, onClose }) {
           })}
         </nav>
 
-      {/* Switch to E-Filing Button */}
-      <div className="px-6 py-2">
-        <Link
-          href="/efilinguser"
-          className="flex items-center w-full px-3 py-2.5 text-sm font-medium bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white rounded-lg shadow-sm transition-all duration-200"
-        >
-          <FileText className="w-5 h-5 mr-3 text-white" />
-          Switch to E-Filing
-        </Link>
-      </div>
+      {/* Switch to E-Filing Button - ONLY shown when IP is in allowed EFILING_ALLOWED_IPS */}
+      {canShowEfiling && (
+        <div className="px-6 py-2">
+          <Link
+            href="/efilinguser"
+            className="flex items-center w-full px-3 py-2.5 text-sm font-medium bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white rounded-lg shadow-sm transition-all duration-200"
+          >
+            <FileText className="w-5 h-5 mr-3 text-white" />
+            Switch to E-Filing
+          </Link>
+        </div>
+      )}
 
       {/* Logout Button */}
       <div className="mt-auto px-6 py-2">

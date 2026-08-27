@@ -1,6 +1,4 @@
 import { NextResponse } from 'next/server';
-// Note: getToken from next-auth/jwt uses Node.js crypto which isn't available in Edge runtime
-// We'll check for session cookies directly instead
 import { isInternalNetwork } from './validateNetwork';
 
 export async function efilingAuthMiddleware(request) {
@@ -22,20 +20,10 @@ export async function efilingAuthMiddleware(request) {
 
         const hasSession = Boolean(sessionCookie || nextAuthCookie);
 
-        // If trying to access protected e-filing routes from outside internal network without a session, redirect to elogin
-        if (!isInternal && (pathname.startsWith('/efiling') || pathname.startsWith('/efilinguser'))) {
-            if (!hasSession && request.method !== 'POST') {
-                return NextResponse.redirect(new URL('/elogin', request.url));
-            }
-        }
         const isDev = process.env.NODE_ENV === 'development';
         const withSecurityHeaders = (res) => {
             try {
-                // Skip setting headers for API routes that handle their own headers (like /api/uploads/)
-                // These routes set their own X-Frame-Options and CSP headers
                 if (pathname.startsWith('/api/')) {
-                    // Don't set X-Frame-Options here - let the API route handler set it
-                    // This allows /api/uploads/[...path]/route.js to set SAMEORIGIN for PDFs
                     return res;
                 }
 
@@ -44,27 +32,25 @@ export async function efilingAuthMiddleware(request) {
                 res.headers.set('X-Content-Type-Options', 'nosniff');
                 res.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
                 res.headers.set('Permissions-Policy', 'camera=(), geolocation=(), microphone=()');
-                // SECURITY: Remove X-Powered-By header to hide framework information
                 res.headers.delete('X-Powered-By');
+
                 const scriptSrc = isDev ? "script-src 'self' 'unsafe-inline' 'unsafe-eval'" : "script-src 'self' 'unsafe-inline'";
                 const origin = request.headers.get('x-forwarded-proto') && request.headers.get('x-forwarded-host')
                     ? `${request.headers.get('x-forwarded-proto')}://${request.headers.get('x-forwarded-host')}`
                     : request.nextUrl.origin;
                 const connectSrc = `connect-src 'self' ws: ${origin} ${origin}`;
-                // Use object-src 'none' for better security (PDFs use iframes, not object tags)
                 const csp = `default-src 'self'; ${scriptSrc}; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https: http:; media-src 'self' blob: https: http:; ${connectSrc}; frame-ancestors 'none'; object-src 'none'`;
                 res.headers.set('Content-Security-Policy', csp);
 
-                // Ensure origin header is set for Server Actions (POST requests)
                 if (request.method === 'POST') {
-                    const origin = request.headers.get('origin');
+                    const reqOrigin = request.headers.get('origin');
                     const forwardedHost = request.headers.get('x-forwarded-host') || request.headers.get('host');
                     const forwardedProto = request.headers.get('x-forwarded-proto') || (request.nextUrl.protocol.replace(':', ''));
                     const referer = request.headers.get('referer');
 
-                    if (origin) {
-                        res.headers.set('origin', origin);
-                        request.headers.set('origin', origin);
+                    if (reqOrigin) {
+                        res.headers.set('origin', reqOrigin);
+                        request.headers.set('origin', reqOrigin);
                     } else if (forwardedProto && forwardedHost) {
                         const reconstructedOrigin = `${forwardedProto}://${forwardedHost}`;
                         res.headers.set('origin', reconstructedOrigin);
@@ -86,38 +72,38 @@ export async function efilingAuthMiddleware(request) {
             return res;
         };
 
-        // Redirect any direct access to /elogin to the unified login page
+        // Redirect legacy /elogin to /login
         if (pathname === '/elogin') {
             return NextResponse.redirect(new URL('/login', request.url));
         }
 
-        // If no session cookie, redirect to login
-        // But allow POST requests and Server Actions to pass through
-        // (they might be part of the authentication flow or form submissions)
+        // STRICT IP ENFORCEMENT:
+        // If client IP is outside the whitelisted ranges in .env, block E-Filing completely
+        if (!isInternal) {
+            console.warn(`[E-Filing Auth Middleware] Access BLOCKED for external IP on ${pathname}`);
+            if (hasSession) {
+                // Logged-in user trying to access /efiling or /efilinguser from outside allowed network
+                // Redirect them to the publicly accessible Works Management Portal (/dashboard)
+                return withSecurityHeaders(NextResponse.redirect(new URL('/dashboard', request.url)));
+            }
+            // Unauthenticated external user -> redirect to /login
+            return withSecurityHeaders(NextResponse.redirect(new URL('/login', request.url)));
+        }
+
+        // Internal Network (IP allowed):
+        // If no session cookie, redirect to /login
         if (!hasSession) {
-            // Allow POST requests to pass through (might be Server Actions or form submissions)
             if (request.method === 'POST') {
                 return withSecurityHeaders(NextResponse.next());
             }
-
-            return withSecurityHeaders(NextResponse.redirect(new URL('/elogin', request.url)));
+            return withSecurityHeaders(NextResponse.redirect(new URL('/login', request.url)));
         }
 
-        // Basic path-based routing without role checking in middleware
-        // Role checking will be done in the page components since we can't decode JWT in Edge runtime
-        if (pathname.startsWith('/efilinguser')) {
-            return withSecurityHeaders(NextResponse.next());
-        }
-
-        if (pathname.startsWith('/efiling')) {
-            return withSecurityHeaders(NextResponse.next());
-        }
-
+        // Authenticated user on authorized internal IP -> allow request through
         return withSecurityHeaders(NextResponse.next());
     } catch (error) {
         console.error('Error in efilingAuthMiddleware:', error);
-        // On error, allow the request through and let the page component handle auth
-        // This prevents 502 errors from middleware failures
         return NextResponse.next();
     }
 }
+
