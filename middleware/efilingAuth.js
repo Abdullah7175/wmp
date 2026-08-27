@@ -86,9 +86,9 @@ export async function efilingAuthMiddleware(request) {
             return res;
         };
 
-        // Allow access to elogin page without authentication
+        // Redirect any direct access to /elogin to the unified login page
         if (pathname === '/elogin') {
-            return withSecurityHeaders(NextResponse.next());
+            return NextResponse.redirect(new URL('/login', request.url));
         }
 
         // If no session cookie, redirect to login
