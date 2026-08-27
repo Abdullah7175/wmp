@@ -77,16 +77,9 @@ export async function efilingAuthMiddleware(request) {
             return NextResponse.redirect(new URL('/login', request.url));
         }
 
-        // STRICT IP ENFORCEMENT:
-        // If client IP is outside the whitelisted ranges in .env, block E-Filing completely
         if (!isInternal) {
             console.warn(`[E-Filing Auth Middleware] Access BLOCKED for external IP on ${pathname}`);
-            if (hasSession) {
-                // Logged-in user trying to access /efiling or /efilinguser from outside allowed network
-                // Redirect them to the publicly accessible Works Management Portal (/dashboard)
-                return withSecurityHeaders(NextResponse.redirect(new URL('/dashboard', request.url)));
-            }
-            // Unauthenticated external user -> redirect to /login
+            // Redirect external requests attempting to access E-Filing directly to /login
             return withSecurityHeaders(NextResponse.redirect(new URL('/login', request.url)));
         }
 

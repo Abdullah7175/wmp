@@ -26,7 +26,6 @@ import {
     CardContent,
 } from "@/components/ui/card";
 import Link from "next/link";
-import { role } from "@/lib/utils";
 import React from "react";
 
 const items = [
@@ -34,27 +33,19 @@ const items = [
         title: "Home",
         url: "/dashboard",
         icon: Home,
-        visible: [1, 2, 3, 4]
+        visible: [1, 2, 3]
     },
-    // {
-    //     title: "Add Request",
-    //     url: "/dashboard/requests/new",
-    //     icon: PlusCircle,
-    //     visible: [1, 2, 3, 4]
-    // },
-    
     {
         title: "Reports",
         url: "/dashboard/reports",
         icon: ChartPie,
-        visible: [1, 2, 3, 4]
+        visible: [1, 2, 3]
     },
-
     {
         title: "Generate Reports",
         url: "/dashboard/generate-reports",
-        icon: NotebookText, // You already have this imported
-        visible: [1, 2] // Adjust based on which roles should see this
+        icon: NotebookText,
+        visible: [1, 2]
     },
 ];
 
@@ -62,7 +53,8 @@ export function AppSidebar() {
     const pathname = usePathname();
     const { user, loading } = useUserContext();
     const { data: session } = useSession();
-    const isDualPortal = Boolean(session?.user?.isDualPortal || user?.isDualPortal || user?.role === 1);
+    const userRole = parseInt(session?.user?.role || user?.role || 0);
+    const isDualPortal = Boolean(session?.user?.isDualPortal || user?.isDualPortal || userRole === 1);
     const [canShowEfiling, setCanShowEfiling] = React.useState(false);
 
     React.useEffect(() => {
@@ -101,8 +93,10 @@ export function AppSidebar() {
         );
     }
 
+    // Only render dashboard controls for valid dashboard roles (1: Super Admin, 2: Manager/Admin, 3: Operator) or dual portal users
+    const hasDashboardAccess = [1, 2, 3].includes(userRole) || isDualPortal;
+
     return (
-    
         <Sidebar>
             <SidebarContent>
                 <SidebarGroup>
@@ -126,22 +120,21 @@ export function AppSidebar() {
                                             e.target.onerror = null;
                                             e.target.src = "/avatar.png";
                                         }}
-                                        />
+                                    />
                                     <p className="text-muted-foreground">
-                                        {user?.name || 'Guest'}
+                                        {user?.name || session?.user?.name || 'Guest'}
                                     </p>
                                 </CardContent>
                             </Card>
 
                             {/* Home Section */}
                             {items.map((item, index) => {
-                                if (index === 0 && item.visible.includes(role)) {
+                                if (index === 0 && (item.visible.includes(userRole) || isDualPortal)) {
                                     return (
                                         <SidebarMenuItem key={item.title}>
                                             <SidebarMenuButton
                                                 asChild
-                                                className={`text-base gap-2 py-6 px-2 ${pathname === item.url ? "font-bold text-blue-950" : ""
-                                                    }`}
+                                                className={`text-base gap-2 py-6 px-2 ${pathname === item.url ? "font-bold text-blue-950" : ""}`}
                                             >
                                                 <Link href={item.url}>
                                                     <item.icon className="w-5 h-5" />
@@ -169,51 +162,8 @@ export function AppSidebar() {
                                 </SidebarMenuItem>
                             )}
 
-                            {/* Town Control Section
-                            {role && (
-                                <Collapsible className="group/collapsible">
-                                    <SidebarMenuItem>
-                                        <CollapsibleTrigger asChild>
-                                            <SidebarMenuButton className={`text-base gap-2 py-6`}>
-                                                <Map className="w-5 h-5" />
-                                                <span>E-Filling</span>
-                                                <ChevronDown />
-                                            </SidebarMenuButton>
-                                        </CollapsibleTrigger>
-                                        <CollapsibleContent>
-                                            <SidebarMenuSub>
-                                                <SidebarMenuSubItem
-                                                    className={`py-2 text-base ml-2 text-gray-500 underline ${pathname === "/efiling" ? "font-bold text-blue-950" : ""
-                                                        }`}
-                                                >
-                                                    <Link href="/efiling">
-                                                        <span>Dashboard</span>
-                                                    </Link>
-                                                </SidebarMenuSubItem>
-                                                <SidebarMenuSubItem
-                                                    className={`py-2 text-base ml-2 text-gray-500 underline ${pathname === "/efiling/files" ? "font-bold text-blue-950" : ""
-                                                        }`}
-                                                >
-                                                    <Link href="/efiling/files">
-                                                        <span>Manage Files</span>
-                                                    </Link>
-                                                </SidebarMenuSubItem>
-                                                <SidebarMenuSubItem
-                                                    className={`py-2 text-base ml-2 text-gray-500 underline ${pathname === "/efiling/new" ? "font-bold text-blue-950" : ""
-                                                        }`}
-                                                >
-                                                    <Link href="/efiling/new">
-                                                        <span>Create New File</span>
-                                                    </Link>
-                                                </SidebarMenuSubItem>
-                                            </SidebarMenuSub>
-                                        </CollapsibleContent>
-                                    </SidebarMenuItem>
-                                </Collapsible>
-                            )} */}
-
-
-                            {role && (
+                            {/* Location Control Section (Admin / Manager) */}
+                            {hasDashboardAccess && [1, 2].includes(userRole) && (
                                 <Collapsible className="group/collapsible">
                                     <SidebarMenuItem>
                                         <CollapsibleTrigger asChild>
@@ -226,24 +176,21 @@ export function AppSidebar() {
                                         <CollapsibleContent>
                                             <SidebarMenuSub>
                                                 <SidebarMenuSubItem
-                                                    className={`py-2 text-base ml-2 text-gray-500 underline ${pathname === "/dashboard/districts" ? "font-bold text-blue-950" : ""
-                                                        }`}
+                                                    className={`py-2 text-base ml-2 text-gray-500 underline ${pathname === "/dashboard/districts" ? "font-bold text-blue-950" : ""}`}
                                                 >
                                                     <Link href="/dashboard/districts">
                                                         <span>Manage Districts</span>
                                                     </Link>
                                                 </SidebarMenuSubItem>
                                                 <SidebarMenuSubItem
-                                                    className={`py-2 text-base ml-2 text-gray-500 underline ${pathname === "/dashboard/towns" ? "font-bold text-blue-950" : ""
-                                                        }`}
+                                                    className={`py-2 text-base ml-2 text-gray-500 underline ${pathname === "/dashboard/towns" ? "font-bold text-blue-950" : ""}`}
                                                 >
                                                     <Link href="/dashboard/towns">
                                                         <span>Manage Towns</span>
                                                     </Link>
                                                 </SidebarMenuSubItem>
                                                 <SidebarMenuSubItem
-                                                    className={`py-2 text-base ml-2 text-gray-500 underline ${pathname === "/dashboard/subtowns" ? "font-bold text-blue-950" : ""
-                                                        }`}
+                                                    className={`py-2 text-base ml-2 text-gray-500 underline ${pathname === "/dashboard/subtowns" ? "font-bold text-blue-950" : ""}`}
                                                 >
                                                     <Link href="/dashboard/subtowns">
                                                         <span>Manage Subtowns</span>
@@ -254,11 +201,9 @@ export function AppSidebar() {
                                     </SidebarMenuItem>
                                 </Collapsible>
                             )}
-                            
-                            
 
-                            {/* Complaint Control Section */}
-                            {role && (
+                            {/* Department Control Section (Admin / Manager) */}
+                            {hasDashboardAccess && [1, 2].includes(userRole) && (
                                 <Collapsible className="group/collapsible">
                                     <SidebarMenuItem>
                                         <CollapsibleTrigger asChild>
@@ -270,18 +215,15 @@ export function AppSidebar() {
                                         </CollapsibleTrigger>
                                         <CollapsibleContent>
                                             <SidebarMenuSub>
-                                                
                                                 <SidebarMenuSubItem
-                                                    className={`py-2 text-base ml-2 text-gray-500 underline ${pathname === "/dashboard/complaint-types" ? "font-bold text-blue-950" : ""
-                                                        }`}
+                                                    className={`py-2 text-base ml-2 text-gray-500 underline ${pathname === "/dashboard/complaint-types" ? "font-bold text-blue-950" : ""}`}
                                                 >
                                                     <Link href="/dashboard/complaint-types">
                                                         <span>Departments</span>
                                                     </Link>
                                                 </SidebarMenuSubItem>
                                                 <SidebarMenuSubItem
-                                                    className={`py-2 text-base ml-2 text-gray-500 underline ${pathname === "/dashboard/complaints/sub-types" ? "font-bold text-blue-950" : ""
-                                                        }`}
+                                                    className={`py-2 text-base ml-2 text-gray-500 underline ${pathname === "/dashboard/complaints/sub-types" ? "font-bold text-blue-950" : ""}`}
                                                 >
                                                     <Link href="/dashboard/complaints/sub-types">
                                                         <span>Works</span>
@@ -292,8 +234,9 @@ export function AppSidebar() {
                                     </SidebarMenuItem>
                                 </Collapsible>
                             )}
-                            {/* Request Control Section */}
-                            {role && (
+
+                            {/* Request Control Section (Admin, Manager, Operator) */}
+                            {hasDashboardAccess && [1, 2, 3].includes(userRole) && (
                                 <Collapsible className="group/collapsible">
                                     <SidebarMenuItem>
                                         <CollapsibleTrigger asChild> 
@@ -306,66 +249,60 @@ export function AppSidebar() {
                                         <CollapsibleContent>
                                             <SidebarMenuSub>
                                                 <SidebarMenuSubItem
-                                                    className={`py-2 text-base ml-2 text-gray-500 underline ${pathname === "/dashboard/requests" ? "font-bold text-blue-950" : ""
-                                                        }`}
+                                                    className={`py-2 text-base ml-2 text-gray-500 underline ${pathname === "/dashboard/requests" ? "font-bold text-blue-950" : ""}`}
                                                 >
                                                     <Link href="/dashboard/requests">
                                                         <span>Requests</span>
                                                     </Link>
                                                 </SidebarMenuSubItem>
+                                                {[1, 2].includes(userRole) && (
+                                                    <SidebarMenuSubItem
+                                                        className={`py-2 text-base ml-2 text-gray-500 underline ${pathname === "/dashboard/requests/new" ? "font-bold text-blue-950" : ""}`}
+                                                    >
+                                                        <Link href="/dashboard/requests/new">
+                                                            <span>Add Requests</span>
+                                                        </Link>
+                                                    </SidebarMenuSubItem>
+                                                )}
                                                 <SidebarMenuSubItem
-                                                    className={`py-2 text-base ml-2 text-gray-500 underline ${pathname === "/dashboard/requests" ? "font-bold text-blue-950" : ""
-                                                        }`}
-                                                >
-                                                    <Link href="/dashboard/requests/new">
-                                                        <span>Add Requests</span>
-                                                    </Link>
-                                                </SidebarMenuSubItem>
-                                                <SidebarMenuSubItem
-                                                    className={`py-2 text-base ml-2 text-gray-500 underline ${pathname === "/dashboard/videos" ? "font-bold text-blue-950" : ""
-                                                        }`}
+                                                    className={`py-2 text-base ml-2 text-gray-500 underline ${pathname === "/dashboard/videos" ? "font-bold text-blue-950" : ""}`}
                                                 >
                                                     <Link href="/dashboard/videos">
-                                                        <span>videos</span>
+                                                        <span>Videos</span>
                                                     </Link>
                                                 </SidebarMenuSubItem>
-
                                                 <SidebarMenuSubItem
-                                                    className={`py-2 text-base ml-2 text-gray-500 underline ${pathname === "/dashboard/milestone-content" ? "font-bold text-blue-950" : ""
-                                                        }`}
+                                                    className={`py-2 text-base ml-2 text-gray-500 underline ${pathname === "/dashboard/milestone-content" ? "font-bold text-blue-950" : ""}`}
                                                 >
                                                     <Link href="/dashboard/milestone-content">
                                                         <span>Milestone Progress</span>
                                                     </Link>
                                                 </SidebarMenuSubItem>
+                                                {[1, 2].includes(userRole) && (
+                                                    <SidebarMenuSubItem
+                                                        className={`py-2 text-base ml-2 text-gray-500 underline ${pathname === "/dashboard/milestone-content/add" ? "font-bold text-blue-950" : ""}`}
+                                                    >
+                                                        <Link href="/dashboard/milestone-content/add">
+                                                            <span>Add Milestones</span>
+                                                        </Link>
+                                                    </SidebarMenuSubItem>
+                                                )}
                                                 <SidebarMenuSubItem
-                                                    className={`py-2 text-base ml-2 text-gray-500 underline ${pathname === "/dashboard/milestone-content/add" ? "font-bold text-blue-950" : ""
-                                                        }`}
-                                                >
-                                                    <Link href="/dashboard/milestone-content/add">
-                                                        <span>Add Milestones</span>
-                                                    </Link>
-                                                </SidebarMenuSubItem>
-                                                <SidebarMenuSubItem
-                                                    className={`py-2 text-base ml-2 text-gray-500 underline ${pathname === "/dashboard/final-videos" ? "font-bold text-blue-950" : ""
-                                                        }`}
+                                                    className={`py-2 text-base ml-2 text-gray-500 underline ${pathname === "/dashboard/final-videos" ? "font-bold text-blue-950" : ""}`}
                                                 >
                                                     <Link href="/dashboard/final-videos">
-                                                        <span>final videos</span>
+                                                        <span>Final Videos</span>
                                                     </Link>
                                                 </SidebarMenuSubItem>
-                                                
                                                 <SidebarMenuSubItem
-                                                    className={`py-2 text-base ml-2 text-gray-500 underline ${pathname === "/dashboard/images" ? "font-bold text-blue-950" : ""
-                                                        }`}
+                                                    className={`py-2 text-base ml-2 text-gray-500 underline ${pathname === "/dashboard/images" ? "font-bold text-blue-950" : ""}`}
                                                 >
                                                     <Link href="/dashboard/images">
                                                         <span>Images</span>
                                                     </Link>
                                                 </SidebarMenuSubItem>
                                                 <SidebarMenuSubItem
-                                                    className={`py-2 text-base ml-2 text-gray-500 underline ${pathname === "/dashboard/before-images" ? "font-bold text-blue-950" : ""
-                                                        }`}
+                                                    className={`py-2 text-base ml-2 text-gray-500 underline ${pathname === "/dashboard/before-images" ? "font-bold text-blue-950" : ""}`}
                                                 >
                                                     <Link href="/dashboard/before-images">
                                                         <span>Before Content</span>
@@ -377,7 +314,8 @@ export function AppSidebar() {
                                 </Collapsible>
                             )}
 
-                            {role && (
+                            {/* User Control Section (Admin / Manager) */}
+                            {hasDashboardAccess && [1, 2].includes(userRole) && (
                                 <Collapsible className="group/collapsible">
                                     <SidebarMenuItem>
                                         <CollapsibleTrigger asChild>
@@ -390,63 +328,47 @@ export function AppSidebar() {
                                         <CollapsibleContent>
                                             <SidebarMenuSub>
                                                 <SidebarMenuSubItem
-                                                    className={`py-2 text-base ml-2 text-gray-500 underline ${pathname === "/dashboard/users" ? "font-bold text-blue-950" : ""
-                                                        }`}
+                                                    className={`py-2 text-base ml-2 text-gray-500 underline ${pathname === "/dashboard/users" ? "font-bold text-blue-950" : ""}`}
                                                 >
                                                     <Link href="/dashboard/users">
                                                         <span>Users</span>
                                                     </Link>
                                                 </SidebarMenuSubItem>
                                                 <SidebarMenuSubItem
-                                                    className={`py-2 text-base ml-2 text-gray-500 underline ${pathname === "/dashboard/agents" ? "font-bold text-blue-950" : ""
-                                                        }`}
+                                                    className={`py-2 text-base ml-2 text-gray-500 underline ${pathname === "/dashboard/agents" ? "font-bold text-blue-950" : ""}`}
                                                 >
                                                     <Link href="/dashboard/agents">
                                                         <span>Engineers/Contractors</span>
                                                     </Link>
                                                 </SidebarMenuSubItem>
                                                 <SidebarMenuSubItem
-                                                    className={`py-2 text-base ml-2 text-gray-500 underline ${pathname === "/dashboard/socialmediaagent" ? "font-bold text-blue-950" : ""
-                                                        }`}
+                                                    className={`py-2 text-base ml-2 text-gray-500 underline ${pathname === "/dashboard/socialmediaagent" ? "font-bold text-blue-950" : ""}`}
                                                 >
                                                     <Link href="/dashboard/socialmediaagent">
                                                         <span>Media Cell Agents</span>
                                                     </Link>
                                                 </SidebarMenuSubItem>
-                                                {role === 1 && (
+                                                {userRole === 1 && (
                                                     <SidebarMenuSubItem
-                                                        className={`py-2 text-base ml-2 text-gray-500 underline ${pathname === "/dashboard/ceo-users" ? "font-bold text-blue-950" : ""
-                                                            }`}
+                                                        className={`py-2 text-base ml-2 text-gray-500 underline ${pathname === "/dashboard/ceo-users" ? "font-bold text-blue-950" : ""}`}
                                                     >
                                                         <Link href="/dashboard/ceo-users">
                                                             <span>CEO Users</span>
                                                         </Link>
                                                     </SidebarMenuSubItem>
                                                 )}
-                                                {role === 1 && (
+                                                {userRole === 1 && (
                                                     <SidebarMenuSubItem
-                                                        className={`py-2 text-base ml-2 text-gray-500 underline ${pathname === "/dashboard/ce-users" ? "font-bold text-blue-950" : ""
-                                                            }`}
+                                                        className={`py-2 text-base ml-2 text-gray-500 underline ${pathname === "/dashboard/ce-users" ? "font-bold text-blue-950" : ""}`}
                                                     >
                                                         <Link href="/dashboard/ce-users">
                                                             <span>CE Users</span>
                                                         </Link>
                                                     </SidebarMenuSubItem>
                                                 )}
-                                                {/* {role === 1 && (
+                                                {userRole === 1 && (
                                                     <SidebarMenuSubItem
-                                                        className={`py-2 text-base ml-2 text-gray-500 underline ${pathname === "/dashboard/complaint-types" ? "font-bold text-blue-950" : ""
-                                                            }`}
-                                                    >
-                                                        <Link href="/dashboard/complaint-types">
-                                                            <span>CE Departments</span>
-                                                        </Link>
-                                                    </SidebarMenuSubItem>
-                                                )} */}
-                                                {role === 1 && (
-                                                    <SidebarMenuSubItem
-                                                        className={`py-2 text-base ml-2 text-gray-500 underline ${pathname === "/dashboard/user-actions" ? "font-bold text-blue-950" : ""
-                                                            }`}
+                                                        className={`py-2 text-base ml-2 text-gray-500 underline ${pathname === "/dashboard/user-actions" ? "font-bold text-blue-950" : ""}`}
                                                     >
                                                         <Link href="/dashboard/user-actions">
                                                             <span>User Actions</span>
@@ -459,8 +381,8 @@ export function AppSidebar() {
                                 </Collapsible>
                             )}
 
-                            {/* Milestone Control Section */}
-                            {role && (
+                            {/* Milestone Control Section (Admin / Manager) */}
+                            {hasDashboardAccess && [1, 2].includes(userRole) && (
                                 <Collapsible className="group/collapsible">
                                     <SidebarMenuItem>
                                         <CollapsibleTrigger asChild>
@@ -473,8 +395,7 @@ export function AppSidebar() {
                                         <CollapsibleContent>
                                             <SidebarMenuSub>
                                                 <SidebarMenuSubItem
-                                                    className={`py-2 text-base ml-2 text-gray-500 underline ${pathname === "/dashboard/milestones" ? "font-bold text-blue-950" : ""
-                                                        }`}
+                                                    className={`py-2 text-base ml-2 text-gray-500 underline ${pathname === "/dashboard/milestones" ? "font-bold text-blue-950" : ""}`}
                                                 >
                                                     <Link href="/dashboard/milestones">
                                                         <span>Manage Milestones</span>
@@ -486,15 +407,14 @@ export function AppSidebar() {
                                 </Collapsible>
                             )}
 
-                            {/* Render Remaining Items */}
+                            {/* Render Remaining Items (Reports etc) */}
                             {items.slice(1).map((item) => {
-                                if (item.visible.includes(role)) {
+                                if (item.visible.includes(userRole) || isDualPortal) {
                                     return (
                                         <SidebarMenuItem key={item.title}>
                                             <SidebarMenuButton
                                                 asChild
-                                                className={`text-base gap-2 py-6 px-2 ${pathname === item.url ? "font-bold text-blue-950" : ""
-                                                    }`}
+                                                className={`text-base gap-2 py-6 px-2 ${pathname === item.url ? "font-bold text-blue-950" : ""}`}
                                             >
                                                 <Link href={item.url}>
                                                     <item.icon className="w-5 h-5" />
@@ -512,7 +432,5 @@ export function AppSidebar() {
             </SidebarContent>
             <SidebarFooter className="text-sm p-4 text-gray-400">&copy; copyright 2025</SidebarFooter>
         </Sidebar>
-        // </UserProvider>
     );
-
 }

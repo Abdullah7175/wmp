@@ -91,19 +91,22 @@ export default function LoginPage() {
       return;
     }
 
-    // Case 2: E-Filing Role Users (Role 4 or 5)
+    // Case 2: E-Filing Only Users (Role 4 or 5)
     if (userType === "user" && (userRole === 4 || userRole === 5)) {
       if (isInternal) {
         // Inside allowed network -> Route to E-Filing User Portal
         window.location.href = "/efilinguser";
         return;
       }
-      // Outside office network: Works Management Portal is open to all
-      window.location.href = "/dashboard";
+      // Outside allowed network: User has NO access to dashboard and is not allowed efiling in public
+      // Silently disallow login without showing any error
+      await signOut({ redirect: false });
+      localStorage.removeItem('jwtToken');
+      document.cookie = "jwtToken=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC;";
       return;
     }
 
-    // Case 3: Specific WMP Roles
+    // Case 3: Specific WMP Executive and Operational Roles
     if (userType === "user") {
       if (userRole === 8 || userRole === 24) {
         window.location.href = "/ceo";
@@ -114,23 +117,29 @@ export default function LoginPage() {
       } else if (userRole === 7) {
         window.location.href = "/ce";
         return;
+      } else if ([1, 2, 3].includes(userRole)) {
+        // Valid Dashboard users (1: Super Admin, 2: Manager/Admin, 3: Operator)
+        window.location.href = "/dashboard";
+        return;
       }
     }
 
     // Case 4: Other userTypes
-    switch (userType) {
-      case "agent":
-        window.location.href = "/agent";
-        break;
-      case "socialmedia":
-      case "socialmediaperson":
-        window.location.href = "/smagent";
-        break;
-      case "user":
-      default:
-        window.location.href = "/dashboard";
-        break;
+    if (userType === "agent") {
+      window.location.href = "/agent";
+      return;
     }
+    if (userType === "socialmedia" || userType === "socialmediaperson") {
+      window.location.href = "/smagent";
+      return;
+    }
+
+    // Case 5: No authorized portal for user on this network
+    // Silently disallow without showing error
+    await signOut({ redirect: false });
+    localStorage.removeItem('jwtToken');
+    document.cookie = "jwtToken=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC;";
+    return;
   };
 
   // Check already authenticated users

@@ -63,15 +63,12 @@ export function EfilingRouteGuard({ children, allowedRoles = [] }) {
         if (netRes.ok) {
           const netData = await netRes.json();
           if (!netData.isInternalNetwork) {
-            if (!toastShownRef.current) {
-              toastShownRef.current = true;
-              toast({
-                title: "Access Restricted",
-                description: "E-Filing can only be accessed from the authorized office network. Redirecting to Works Portal...",
-                variant: "destructive",
-              });
+            const hasDashboard = isDualPortal || [1, 2, 3].includes(roleNumber);
+            if (hasDashboard) {
+              router.replace("/dashboard");
+            } else {
+              router.replace("/login");
             }
-            router.replace("/dashboard");
             setAuthorized(false);
             setChecking(false);
             return;
@@ -102,7 +99,12 @@ export function EfilingRouteGuard({ children, allowedRoles = [] }) {
             description: "E-filing profile could not be found for your account.",
             variant: "destructive",
           });
-          router.push("/dashboard");
+          const hasDashboard = isDualPortal || [1, 2, 3].includes(roleNumber);
+          if (hasDashboard) {
+            router.push("/dashboard");
+          } else {
+            router.push("/login");
+          }
           setAuthorized(false);
           setChecking(false);
           return;
@@ -132,7 +134,12 @@ export function EfilingRouteGuard({ children, allowedRoles = [] }) {
             variant: "destructive",
           });
         }
-        router.push("/dashboard");
+        const hasDashboard = isDualPortal || [1, 2, 3].includes(roleNumber);
+        if (hasDashboard) {
+          router.push("/dashboard");
+        } else {
+          router.push("/login");
+        }
         setAuthorized(false);
         setChecking(false);
         return;

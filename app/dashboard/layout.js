@@ -13,9 +13,69 @@ import { useSession } from "next-auth/react";
 export default function Layout({ children }) {
     const router = useRouter();
     const { setUser } = useUserContext();
-    const { data: session } = useSession();
+    const { data: session, status } = useSession();
     const [notifications, setNotifications] = useState([]);
     const [showDropdown, setShowDropdown] = useState(false);
+    const [isAuthorized, setIsAuthorized] = useState(false);
+
+    useEffect(() => {
+      if (status === 'loading') return;
+
+      if (status === 'unauthenticated') {
+        router.replace('/login');
+        return;
+      }
+
+      if (session?.user) {
+        const userRole = parseInt(session.user.role || 0);
+        const userType = session.user.userType;
+        const isDual = Boolean(session.user.isDualPortal || userRole === 1);
+
+        // Check if user belongs to other specialized portals
+        if (userType === 'agent') {
+          router.replace('/agent');
+          return;
+        }
+        if (userType === 'socialmedia' || userType === 'socialmediaperson') {
+          router.replace('/smagent');
+          return;
+        }
+        if (userRole === 8 || userRole === 24) {
+          router.replace('/ceo');
+          return;
+        }
+        if (userRole === 6 || userRole === 26) {
+          router.replace('/coo');
+          return;
+        }
+        if (userRole === 7) {
+          router.replace('/ce');
+          return;
+        }
+
+        // Check dashboard access: only roles 1, 2, 3, or dual portal users have access to Works Management Portal
+        const hasDashboardAccess = [1, 2, 3].includes(userRole) || isDual;
+        if (hasDashboardAccess) {
+          setIsAuthorized(true);
+          return;
+        }
+
+        // If user is e-filing only (roles 4, 5) or has no dashboard access:
+        // DO NOT allow them to see or open the dashboard!
+        fetch('/api/auth/dual-portal-status')
+          .then((res) => res.json())
+          .then((data) => {
+            if (data.isInternalNetwork && (userRole === 4 || userRole === 5)) {
+              router.replace('/efilinguser');
+            } else {
+              router.replace('/unauthorized');
+            }
+          })
+          .catch(() => {
+            router.replace('/unauthorized');
+          });
+      }
+    }, [session, status, router]);
 
     useEffect(() => {
       const userId = session?.user?.id || (typeof window !== 'undefined' && JSON.parse(localStorage.getItem('user') || '{}').id);
@@ -117,6 +177,17 @@ export default function Layout({ children }) {
       if (setUser) setUser(null);
       router.push('/login');
     };
+
+    if (status === 'loading' || !isAuthorized) {
+        return (
+            <div className="flex items-center justify-center min-h-screen bg-slate-50">
+                <div className="text-center">
+                    <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                    <p className="text-gray-600 font-medium text-sm">Verifying authorization...</p>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <SidebarProvider>
