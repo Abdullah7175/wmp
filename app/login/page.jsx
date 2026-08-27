@@ -80,34 +80,42 @@ export default function LoginPage() {
       console.error("Network verification error:", err);
     }
 
-    const isDualPortal = Boolean(
+    // ONLY emails explicitly configured in DUAL_PORTAL_USERS in .env have remote dual-portal access
+    const isEnvDualUser = Boolean(
       user.isDualPortal ||
       isDualFromApi ||
-      userRole === 1 ||
       email === 'e-ceo@kwsc.gos.pk'
     );
 
-    // Case 1: Dual Portal User (or Admin)
-    if (isDualPortal) {
+    // Case 1: Configured Dual-Portal User in .env (e.g. e-ceo@kwsc.gos.pk)
+    if (isEnvDualUser) {
+      // User in DUAL_PORTAL_USERS can access both portals from ANY network (office, home, mobile)
+      setTargetUser(user);
+      setShowPortalModal(true);
+      return;
+    }
+
+    // Case 2: Super Admin (Role 1)
+    if (userRole === 1) {
       if (isInternal) {
-        // Inside allowed office network -> Show Dual Portal Selection Modal
+        // Super admin inside office network -> Show Dual Portal Selection Modal
         setTargetUser(user);
         setShowPortalModal(true);
         return;
       }
-      // Outside allowed network -> Automatically route to Works Management Portal
+      // Super admin outside office network -> Route to Works Management Dashboard ONLY
       navigateToWMP(user);
       return;
     }
 
-    // Case 2: E-Filing Only Users (Role 4 or 5)
+    // Case 3: E-Filing Only Users (Role 4 or 5)
     if (userType === "user" && (userRole === 4 || userRole === 5)) {
       if (isInternal) {
-        // Inside allowed network -> Route to E-Filing User Portal
+        // Inside allowed office network -> Route to E-Filing User Portal
         window.location.href = "/efilinguser";
         return;
       }
-      // Outside allowed network: User has NO access to dashboard and is not allowed efiling in public
+      // Outside office network: User has NO access to dashboard and is not allowed efiling in public
       // Silently disallow login without showing any error
       await signOut({ redirect: false });
       localStorage.removeItem('jwtToken');

@@ -57,18 +57,15 @@ export function EfilingRouteGuard({ children, allowedRoles = [] }) {
     const isDualPortal = Boolean(session?.user?.isDualPortal || roleNumber === 1);
 
     const checkAccessAndNetwork = async () => {
-      // 1. Mandatory IP verification: E-Filing is strictly restricted to allowed IP ranges in .env
+      // 1. Mandatory IP verification: E-Filing is restricted to allowed IP ranges, EXCEPT for dual-portal users configured in DUAL_PORTAL_USERS
       try {
         const netRes = await fetch("/api/auth/dual-portal-status");
         if (netRes.ok) {
           const netData = await netRes.json();
-          if (!netData.isInternalNetwork) {
-            const hasDashboard = isDualPortal || [1, 2, 3].includes(roleNumber);
-            if (hasDashboard) {
-              router.replace("/dashboard");
-            } else {
-              router.replace("/login");
-            }
+          const isDual = Boolean(netData.isDualPortalUser || isDualPortal);
+          if (!netData.isInternalNetwork && !isDual) {
+            // User is on external network and is NOT a dual portal user -> block access
+            router.replace("/login");
             setAuthorized(false);
             setChecking(false);
             return;

@@ -25,8 +25,8 @@ export async function GET(request) {
             isDualPortalUser: isDual,
             isInternalNetwork: isInternal,
             canAccessWMP: Boolean(user),
-            canAccessEfiling: isInternal,
-            showBothPortals: Boolean(isInternal && isDual),
+            canAccessEfiling: Boolean(isInternal || isDual),
+            showBothPortals: Boolean(isDual || (isInternal && user?.role === 1)),
             dualPortalUsersCount: getDualPortalUsers().length
         });
     } catch (error) {

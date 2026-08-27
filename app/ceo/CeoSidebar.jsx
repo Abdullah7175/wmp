@@ -82,7 +82,7 @@ export default function CeoSidebar({ isOpen, onClose }) {
         if (res.ok) {
           const data = await res.json();
           if (isMounted) {
-            setCanShowEfiling(Boolean(data.isInternalNetwork && (data.isDualPortalUser || session?.user?.isDualPortal || session?.user?.role === 1 || session?.user?.role === 8 || session?.user?.role === 24)));
+            setCanShowEfiling(Boolean(data.showBothPortals || data.isDualPortalUser || session?.user?.isDualPortal || (data.isInternalNetwork && (session?.user?.role === 1 || session?.user?.role === 8 || session?.user?.role === 24))));
           }
         }
       } catch (err) {

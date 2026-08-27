@@ -77,13 +77,16 @@ export async function efilingAuthMiddleware(request) {
             return NextResponse.redirect(new URL('/login', request.url));
         }
 
+        // STRICT IP ENFORCEMENT: E-Filing is strictly restricted to allowed office networks
         if (!isInternal) {
             console.warn(`[E-Filing Auth Middleware] Access BLOCKED for external IP on ${pathname}`);
-            // Redirect external requests attempting to access E-Filing directly to /login
+            if (hasSession) {
+                // Logged-in user on external network is redirected to public dashboard
+                return withSecurityHeaders(NextResponse.redirect(new URL('/dashboard', request.url)));
+            }
             return withSecurityHeaders(NextResponse.redirect(new URL('/login', request.url)));
         }
 
-        // Internal Network (IP allowed):
         // If no session cookie, redirect to /login
         if (!hasSession) {
             if (request.method === 'POST') {

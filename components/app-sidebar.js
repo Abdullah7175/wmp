@@ -65,7 +65,7 @@ export function AppSidebar() {
                 if (res.ok) {
                     const data = await res.json();
                     if (isMounted) {
-                        setCanShowEfiling(Boolean(data.isInternalNetwork && (data.isDualPortalUser || isDualPortal)));
+                        setCanShowEfiling(Boolean(data.showBothPortals || isDualPortal || data.isDualPortalUser || (data.isInternalNetwork && userRole === 1)));
                     }
                 }
             } catch (err) {
