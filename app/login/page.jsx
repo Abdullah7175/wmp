@@ -59,7 +59,7 @@ export default function LoginPage() {
   }, []);
 
   // Determine user destination & handle dual-portal choice
-  const handleUserRouting = (user) => {
+  const handleUserRouting = async (user) => {
     if (!user) return;
 
     const userType = user.userType || "user";
