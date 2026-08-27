@@ -6,6 +6,8 @@ import bcrypt from "bcryptjs";
 import { connectToDatabase } from '@/lib/db';
 import { eFileActionLogger } from '@/lib/efilingActionLogger';
 
+import { isDualPortalUser } from '@/lib/dualPortalAuth';
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
   trustHost: true, // Allow localhost and other hosts in development
   basePath: "/api/auth", // Explicitly set the base path
@@ -258,13 +260,22 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   callbacks: {
     async jwt({ token, user, account }) {
       if (user) {
-        token.user = user;
+        token.user = {
+          ...user,
+          isDualPortal: isDualPortalUser(user.email)
+        };
+      } else if (token.user) {
+        // Keep isDualPortal updated in case .env changes dynamically
+        token.user.isDualPortal = isDualPortalUser(token.user.email);
       }
       return token;
     },
     async session({ session, token }) {
       if (token.user) {
-        session.user = token.user;
+        session.user = {
+          ...token.user,
+          isDualPortal: isDualPortalUser(token.user.email)
+        };
       }
       return session;
     },

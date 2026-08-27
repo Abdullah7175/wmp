@@ -1,7 +1,8 @@
 "use client"
 import { UserProvider, useUserContext } from "@/context/UserContext";
 import { usePathname } from "next/navigation";
-import { Users, Home, Signature, LogOut, ChevronDown, Map, ChartPie, Archive, CircleCheck, Bolt, UserIcon, GalleryThumbnails, NotebookText, Activity, PlusCircle } from "lucide-react";
+import { useSession } from "next-auth/react";
+import { Users, Home, Signature, LogOut, ChevronDown, Map, ChartPie, Archive, CircleCheck, Bolt, UserIcon, GalleryThumbnails, NotebookText, Activity, PlusCircle, FileText } from "lucide-react";
 import Image from "next/image";
 import {
     Sidebar,
@@ -60,7 +61,8 @@ const items = [
 export function AppSidebar() {
     const pathname = usePathname();
     const { user, loading } = useUserContext();
-    
+    const { data: session } = useSession();
+    const isDualPortal = Boolean(session?.user?.isDualPortal || user?.isDualPortal || user?.role === 1);
 
     if (loading) {
         return (
@@ -140,6 +142,21 @@ export function AppSidebar() {
                                 }
                                 return null;
                             })}
+
+                            {/* Dual Portal Switch Button */}
+                            {isDualPortal && (
+                                <SidebarMenuItem className="my-1">
+                                    <SidebarMenuButton
+                                        asChild
+                                        className="text-sm gap-2 py-5 px-3 bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white rounded-lg shadow-sm transition-all font-medium"
+                                    >
+                                        <Link href="/efilinguser">
+                                            <FileText className="w-4 h-4 text-white" />
+                                            <span>Switch to E-Filing</span>
+                                        </Link>
+                                    </SidebarMenuButton>
+                                </SidebarMenuItem>
+                            )}
 
                             {/* Town Control Section
                             {role && (

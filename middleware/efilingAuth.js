@@ -6,17 +6,19 @@ import { isInternalNetwork } from './validateNetwork';
 export async function efilingAuthMiddleware(request) {
     try {
         const pathname = request.nextUrl.pathname;
-        if (
-            pathname === '/elogin' ||
-            pathname.startsWith('/efiling') ||
-            pathname.startsWith('/efilinguser')
-        ) {
-            const allowed = isInternalNetwork(request);
+        const isInternal = isInternalNetwork(request);
 
-            if (!allowed) {
-                return NextResponse.redirect(
-                    new URL('/login', request.url)
-                );
+        // Check for session cookies (Edge runtime compatible)
+        const sessionCookie = request.cookies.get(
+            process.env.NODE_ENV === 'production'
+                ? '__Secure-next-auth.session-token'
+                : 'next-auth.session-token'
+        ) || request.cookies.get('authjs.session-token') || request.cookies.get('__Secure-authjs.session-token');
+
+        // If trying to access protected e-filing routes from outside internal network without a session, redirect to elogin
+        if (!isInternal && (pathname.startsWith('/efiling') || pathname.startsWith('/efilinguser'))) {
+            if (!sessionCookie && request.method !== 'POST') {
+                return NextResponse.redirect(new URL('/elogin', request.url));
             }
         }
         const isDev = process.env.NODE_ENV === 'development';

@@ -66,7 +66,7 @@ export default function EFileLoginPage() {
     }
   }, [session, status, hasRedirected]);
 
-  const resolveDestination = (profile, fallbackRole) => {
+  const resolveDestination = (profile, fallbackRole, isDualPortal) => {
     const roleNumber = Number(profile?.role ?? fallbackRole ?? 0);
     const roleCode = (profile?.role_code || "").toUpperCase();
     const hasEfilingProfile = Boolean(profile?.efiling_user_id);
@@ -89,6 +89,11 @@ export default function EFileLoginPage() {
 
     // Regular users with efiling profile go to efilinguser
     if (hasEfilingProfile) {
+      return "/efilinguser";
+    }
+
+    // Dual portal users default to /efilinguser
+    if (isDualPortal) {
       return "/efilinguser";
     }
 
@@ -116,7 +121,7 @@ export default function EFileLoginPage() {
         const data = await res.json();
         // Handle both response formats: { success: true, user: {...} } or direct user object
         const profile = data.success ? data.user : data;
-        const destination = resolveDestination(profile, user.role);
+        const destination = resolveDestination(profile, user.role, user.isDualPortal);
 
         if (destination) {
           // Use router.push instead of window.location.href for better Next.js navigation
@@ -143,6 +148,12 @@ export default function EFileLoginPage() {
         if (roleNumber === 1) {
           setTimeout(() => {
             router.push("/efiling");
+          }, 100);
+          return;
+        }
+        if (user.isDualPortal) {
+          setTimeout(() => {
+            router.push("/efilinguser");
           }, 100);
           return;
         }

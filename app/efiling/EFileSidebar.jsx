@@ -30,6 +30,7 @@ import {
 import { useSidebar } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { performLogout } from "@/lib/logoutUtils";
+import { useSession } from "next-auth/react";
 import React from "react";
 
 const links = [
@@ -214,6 +215,8 @@ export function EFileSidebar() {
     const pathname = usePathname();
     const router = useRouter();
     const { state, toggleSidebar } = useSidebar();
+    const { data: session } = useSession();
+    const isDualPortal = Boolean(session?.user?.isDualPortal || session?.user?.role === 1);
     const collapsed = state === "collapsed";
     const [expandedItems, setExpandedItems] = React.useState(new Set());
 
@@ -300,15 +303,23 @@ export function EFileSidebar() {
                 })}
             </nav>
             
+            {/* Dual Portal Switch Button */}
+            {isDualPortal && (
+                <div className="px-2 py-2 border-t border-blue-800">
+                    <Link
+                        href="/dashboard"
+                        className={`flex items-center px-3 py-2.5 rounded-lg transition-all font-medium text-sm bg-gradient-to-r from-blue-700 to-indigo-700 hover:from-blue-600 hover:to-indigo-600 text-white shadow-sm gap-2 ${
+                            collapsed ? "justify-center" : ""
+                        }`}
+                        title="Switch to Works Management Portal"
+                    >
+                        <Archive className="w-5 h-5 flex-shrink-0" />
+                        {!collapsed && <span>Switch to Works Portal</span>}
+                    </Link>
+                </div>
+            )}
+            
             <div className="mt-auto p-2 border-t border-blue-800">
-                {/* <Button 
-                    variant="ghost" 
-                    onClick={handleLogout}
-                    className="w-full text-blue-300 hover:text-white hover:bg-blue-800 mb-2"
-                >
-                    <LogOut className="w-4 h-4 mr-2" />
-                    {!collapsed && <span>Logout</span>}
-                </Button> */}
                 <Button variant="ghost" size="icon" onClick={toggleSidebar} className="text-blue-300 hover:text-white w-full">
                     {collapsed ? <ChevronRight /> : <ChevronLeft />}
                 </Button>

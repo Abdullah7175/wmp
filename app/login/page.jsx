@@ -63,8 +63,10 @@ export default function LoginPage() {
       const userType = session.user.userType;
       const userRole = session.user.role;
 
-      // Block e-filing users (role 4) from accessing video archiving system
-      if ((userType === "user" && parseInt(userRole) === 4) || parseInt(userRole) === 5) {
+      const isDualPortal = Boolean(session.user.isDualPortal);
+
+      // Block e-filing users (role 4) from accessing video archiving system unless they are authorized for dual-portal access
+      if (!isDualPortal && ((userType === "user" && parseInt(userRole) === 4) || parseInt(userRole) === 5)) {
         toast({
           title: "Access Denied",
           description: "E-filing users are not allowed to access the video archiving system. Please use the e-filing portal instead.",

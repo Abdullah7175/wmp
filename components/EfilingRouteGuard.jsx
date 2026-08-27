@@ -54,10 +54,12 @@ export function EfilingRouteGuard({ children, allowedRoles = [] }) {
       normalizedAllowedRoles.length === 0 ||
       (roleNumber !== null && normalizedAllowedRoles.includes(roleNumber));
 
-    // For efilinguser routes, check if user has efiling profile
+    const isDualPortal = Boolean(session?.user?.isDualPortal);
+
+    // For efilinguser routes, check if user has efiling profile or dual-portal authorization
     if (pathname?.startsWith("/efilinguser")) {
-      // If user is global or has efilingUserId, allow access
-      if (isGlobal || efilingUserId) {
+      // If user is dual portal, global, or has efilingUserId, allow access
+      if (isDualPortal || isGlobal || efilingUserId) {
         setAuthorized(true);
         setChecking(false);
         toastShownRef.current = false;
@@ -92,8 +94,8 @@ export function EfilingRouteGuard({ children, allowedRoles = [] }) {
       }
     }
 
-    // For other routes, check global access
-    if (isGlobal) {
+    // For other routes, check global access or dual portal access
+    if (isGlobal || isDualPortal) {
       setAuthorized(true);
       setChecking(false);
       toastShownRef.current = false;
