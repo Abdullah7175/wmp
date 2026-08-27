@@ -64,19 +64,28 @@ export default function LoginPage() {
 
     const userType = user.userType || "user";
     const userRole = parseInt(user.role || 0);
-    const isDualPortal = Boolean(user.isDualPortal || userRole === 1);
+    const email = (user.email || '').toLowerCase();
 
-    // Check client network authorization against EFILING_ALLOWED_IPS in .env
+    // Check client network authorization & dual portal status against .env
     let isInternal = false;
+    let isDualFromApi = false;
     try {
       const netRes = await fetch("/api/auth/dual-portal-status");
       if (netRes.ok) {
         const netData = await netRes.json();
         isInternal = Boolean(netData.isInternalNetwork);
+        isDualFromApi = Boolean(netData.isDualPortalUser);
       }
     } catch (err) {
       console.error("Network verification error:", err);
     }
+
+    const isDualPortal = Boolean(
+      user.isDualPortal ||
+      isDualFromApi ||
+      userRole === 1 ||
+      email === 'e-ceo@kwsc.gos.pk'
+    );
 
     // Case 1: Dual Portal User (or Admin)
     if (isDualPortal) {
@@ -86,7 +95,7 @@ export default function LoginPage() {
         setShowPortalModal(true);
         return;
       }
-      // Outside allowed network -> Automatically route to Works Management Portal only
+      // Outside allowed network -> Automatically route to Works Management Portal
       navigateToWMP(user);
       return;
     }
@@ -108,13 +117,13 @@ export default function LoginPage() {
 
     // Case 3: Specific WMP Executive and Operational Roles
     if (userType === "user") {
-      if (userRole === 8 || userRole === 24) {
+      if (userRole === 8 || userRole === 24 || email === 'e-ceo@kwsc.gos.pk' || email.includes('ceo')) {
         window.location.href = "/ceo";
         return;
-      } else if (userRole === 6 || userRole === 26) {
+      } else if (userRole === 6 || userRole === 26 || email.includes('coo')) {
         window.location.href = "/coo";
         return;
-      } else if (userRole === 7) {
+      } else if (userRole === 7 || email.includes('ce@')) {
         window.location.href = "/ce";
         return;
       } else if ([1, 2, 3].includes(userRole)) {
@@ -250,12 +259,12 @@ export default function LoginPage() {
               if (userSession?.user) {
                 handleUserRouting(userSession.user);
               } else {
-                window.location.href = "/dashboard";
+                handleUserRouting({ email: values.email });
               }
             } catch (error) {
-              window.location.href = "/dashboard";
+              handleUserRouting({ email: values.email });
             }
-          }, 600);
+          }, 300);
         }
       } catch (error) {
         console.error("Login error:", error);
@@ -271,11 +280,13 @@ export default function LoginPage() {
   const navigateToWMP = (userOverride) => {
     const usr = userOverride || targetUser || session?.user;
     const userRole = parseInt(usr?.role || 0);
-    if (userRole === 8 || userRole === 24) {
+    const email = (usr?.email || '').toLowerCase();
+
+    if (userRole === 8 || userRole === 24 || email === 'e-ceo@kwsc.gos.pk' || email.includes('ceo')) {
       window.location.href = "/ceo";
-    } else if (userRole === 6 || userRole === 26) {
+    } else if (userRole === 6 || userRole === 26 || email.includes('coo')) {
       window.location.href = "/coo";
-    } else if (userRole === 7) {
+    } else if (userRole === 7 || email.includes('ce@')) {
       window.location.href = "/ce";
     } else {
       window.location.href = "/dashboard";
@@ -283,7 +294,8 @@ export default function LoginPage() {
   };
 
   const navigateToEfiling = () => {
-    const userRole = parseInt(targetUser?.role || session?.user?.role || 0);
+    const usr = targetUser || session?.user;
+    const userRole = parseInt(usr?.role || 0);
     if (userRole === 1) {
       window.location.href = "/efiling";
     } else {
