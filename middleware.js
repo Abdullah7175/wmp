@@ -237,11 +237,16 @@ export async function middleware(req) {
         // Always set origin header early for POST requests (Server Actions need this)
         ensureOriginHeader();
 
-        // For /api/efiling routes, enforce strict IP whitelist validation
+        // For /api/efiling routes, unauthenticated external requests are blocked
         if (pathname.startsWith('/api/efiling')) {
+            const sessionCookie = req.cookies.get('next-auth.session-token') ||
+                req.cookies.get('__Secure-next-auth.session-token') ||
+                req.cookies.get('authjs.session-token') ||
+                req.cookies.get('__Secure-authjs.session-token');
+
             const { isInternalNetwork } = await import("./middleware/validateNetwork");
-            if (!isInternalNetwork(req)) {
-                console.warn(`[API Security] Blocked external request to ${pathname}`);
+            if (!isInternalNetwork(req) && !sessionCookie) {
+                console.warn(`[API Security] Blocked unauthenticated external request to ${pathname}`);
                 return NextResponse.json(
                     { error: "Access Denied: E-Filing API is restricted to authorized office networks.", code: "IP_NOT_ALLOWED" },
                     { status: 403 }

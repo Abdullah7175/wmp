@@ -154,7 +154,7 @@ export function AppSidebar() {
                                         asChild
                                         className="text-sm gap-2 py-5 px-3 bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white rounded-lg shadow-sm transition-all font-medium"
                                     >
-                                        <Link href="/efilinguser">
+                                        <Link href={userRole === 1 ? "/efiling" : "/efilinguser"}>
                                             <FileText className="w-4 h-4 text-white" />
                                             <span>Switch to E-Filing</span>
                                         </Link>

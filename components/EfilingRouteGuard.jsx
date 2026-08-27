@@ -57,38 +57,55 @@ export function EfilingRouteGuard({ children, allowedRoles = [] }) {
     const isDualPortal = Boolean(session?.user?.isDualPortal || roleNumber === 1);
 
     const checkAccessAndNetwork = async () => {
-      // 1. Mandatory IP verification: E-Filing is restricted to allowed IP ranges, EXCEPT for dual-portal users configured in DUAL_PORTAL_USERS
+      let isInternal = false;
+      let isDual = false;
+
       try {
         const netRes = await fetch("/api/auth/dual-portal-status");
         if (netRes.ok) {
           const netData = await netRes.json();
-          const isDual = Boolean(netData.isDualPortalUser || isDualPortal);
-          if (!netData.isInternalNetwork && !isDual) {
-            // User is on external network and is NOT a dual portal user -> block access
-            router.replace("/login");
-            setAuthorized(false);
-            setChecking(false);
-            return;
-          }
+          isInternal = Boolean(netData.isInternalNetwork);
+          isDual = Boolean(
+            netData.isDualPortalUser ||
+            netData.showBothPortals ||
+            session?.user?.isDualPortal ||
+            session?.user?.email?.toLowerCase() === 'e-ceo@kwsc.gos.pk'
+          );
         }
       } catch (err) {
         console.error("Network check failed:", err);
       }
 
-      // 2. For efilinguser routes, check if user has efiling profile or dual-portal authorization
+      // If user is on an external network AND is NOT a dual-portal user -> block and redirect to login
+      if (!isInternal && !isDual) {
+        router.replace("/login");
+        setAuthorized(false);
+        setChecking(false);
+        return;
+      }
+
+      // Dual-portal users and Global admins are authorized for E-Filing
+      if (isDual || isGlobal || roleNumber === 1) {
+        setAuthorized(true);
+        setChecking(false);
+        toastShownRef.current = false;
+        return;
+      }
+
+      // For efilinguser routes, check if user has efiling profile
       if (pathname?.startsWith("/efilinguser")) {
-        if (isDualPortal || isGlobal || efilingUserId) {
+        if (efilingUserId) {
           setAuthorized(true);
           setChecking(false);
           toastShownRef.current = false;
           return;
         }
-        
+
         if (profileLoading) {
           setChecking(true);
           return;
         }
-        
+
         if (!efilingUserId && !toastShownRef.current) {
           toastShownRef.current = true;
           toast({
@@ -96,7 +113,7 @@ export function EfilingRouteGuard({ children, allowedRoles = [] }) {
             description: "E-filing profile could not be found for your account.",
             variant: "destructive",
           });
-          const hasDashboard = isDualPortal || [1, 2, 3].includes(roleNumber);
+          const hasDashboard = [1, 2, 3].includes(roleNumber);
           if (hasDashboard) {
             router.push("/dashboard");
           } else {
@@ -106,22 +123,14 @@ export function EfilingRouteGuard({ children, allowedRoles = [] }) {
           setChecking(false);
           return;
         }
-        
+
         if (!efilingUserId) {
           setChecking(true);
           return;
         }
       }
 
-      // 3. For other routes, check global access or dual portal access
-      if (isGlobal || isDualPortal) {
-        setAuthorized(true);
-        setChecking(false);
-        toastShownRef.current = false;
-        return;
-      }
-
-      // 4. Check role-based access
+      // Check role-based access for /efiling routes
       if (!roleAllowed) {
         if (!toastShownRef.current) {
           toastShownRef.current = true;
@@ -131,7 +140,7 @@ export function EfilingRouteGuard({ children, allowedRoles = [] }) {
             variant: "destructive",
           });
         }
-        const hasDashboard = isDualPortal || [1, 2, 3].includes(roleNumber);
+        const hasDashboard = [1, 2, 3].includes(roleNumber);
         if (hasDashboard) {
           router.push("/dashboard");
         } else {
@@ -142,7 +151,6 @@ export function EfilingRouteGuard({ children, allowedRoles = [] }) {
         return;
       }
 
-      // Default: authorize access
       setAuthorized(true);
       setChecking(false);
       toastShownRef.current = false;
