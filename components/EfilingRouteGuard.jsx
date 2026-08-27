@@ -43,7 +43,7 @@ export function EfilingRouteGuard({ children, allowedRoles = [] }) {
 
     // If no session, redirect to login
     if (!session?.user?.id) {
-      router.push("/elogin");
+      router.push("/login");
       setChecking(false);
       setAuthorized(false);
       return;
@@ -54,76 +54,102 @@ export function EfilingRouteGuard({ children, allowedRoles = [] }) {
       normalizedAllowedRoles.length === 0 ||
       (roleNumber !== null && normalizedAllowedRoles.includes(roleNumber));
 
-    const isDualPortal = Boolean(session?.user?.isDualPortal);
+    const isDualPortal = Boolean(session?.user?.isDualPortal || roleNumber === 1);
 
-    // For efilinguser routes, check if user has efiling profile or dual-portal authorization
-    if (pathname?.startsWith("/efilinguser")) {
-      // If user is dual portal, global, or has efilingUserId, allow access
-      if (isDualPortal || isGlobal || efilingUserId) {
+    const checkAccessAndNetwork = async () => {
+      // 1. If not a dual-portal user, verify that access is from an allowed internal network
+      if (!isDualPortal) {
+        try {
+          const netRes = await fetch("/api/auth/dual-portal-status");
+          if (netRes.ok) {
+            const netData = await netRes.json();
+            if (!netData.isInternalNetwork && !netData.isDualPortalUser) {
+              if (!toastShownRef.current) {
+                toastShownRef.current = true;
+                toast({
+                  title: "Access Restricted",
+                  description: "E-Filing can only be accessed from the internal office network. You are not authorized for remote access.",
+                  variant: "destructive",
+                });
+              }
+              router.push("/login");
+              setAuthorized(false);
+              setChecking(false);
+              return;
+            }
+          }
+        } catch (err) {
+          console.error("Network check failed:", err);
+        }
+      }
+
+      // 2. For efilinguser routes, check if user has efiling profile or dual-portal authorization
+      if (pathname?.startsWith("/efilinguser")) {
+        if (isDualPortal || isGlobal || efilingUserId) {
+          setAuthorized(true);
+          setChecking(false);
+          toastShownRef.current = false;
+          return;
+        }
+        
+        if (profileLoading) {
+          setChecking(true);
+          return;
+        }
+        
+        if (!efilingUserId && !toastShownRef.current) {
+          toastShownRef.current = true;
+          toast({
+            title: "Access Unavailable",
+            description: "E-filing profile could not be found for your account.",
+            variant: "destructive",
+          });
+          router.push("/login");
+          setAuthorized(false);
+          setChecking(false);
+          return;
+        }
+        
+        if (!efilingUserId) {
+          setChecking(true);
+          return;
+        }
+      }
+
+      // 3. For other routes, check global access or dual portal access
+      if (isGlobal || isDualPortal) {
         setAuthorized(true);
         setChecking(false);
         toastShownRef.current = false;
         return;
       }
-      
-      // If profile is still loading, wait (don't redirect yet)
-      if (profileLoading) {
-        setChecking(true);
-        return;
-      }
-      
-      // If profile finished loading but no efilingUserId, redirect to login
-      // Only redirect once to prevent loops
-      if (!efilingUserId && !toastShownRef.current) {
-        toastShownRef.current = true;
-        toast({
-          title: "Access Unavailable",
-          description: "E-filing profile could not be found for your account.",
-          variant: "destructive",
-        });
-        router.push("/elogin");
+
+      // 4. Check role-based access
+      if (!roleAllowed) {
+        if (!toastShownRef.current) {
+          toastShownRef.current = true;
+          toast({
+            title: "Access Denied",
+            description: "You don't have permission to access this page.",
+            variant: "destructive",
+          });
+        }
+        router.push("/login");
         setAuthorized(false);
         setChecking(false);
         return;
       }
-      
-      // If we already showed toast, just keep checking
-      if (!efilingUserId) {
-        setChecking(true);
-        return;
-      }
-    }
 
-    // For other routes, check global access or dual portal access
-    if (isGlobal || isDualPortal) {
+      // Default: authorize access
       setAuthorized(true);
       setChecking(false);
       toastShownRef.current = false;
-      return;
-    }
+    };
 
-    // Check role-based access
-    if (!roleAllowed) {
-      if (!toastShownRef.current) {
-        toastShownRef.current = true;
-        toast({
-          title: "Access Denied",
-          description: "You don't have permission to access this page.",
-          variant: "destructive",
-        });
-      }
-      router.push("/elogin");
-      setAuthorized(false);
-      setChecking(false);
-      return;
-    }
-
-    // Default: authorize access
-    setAuthorized(true);
-    setChecking(false);
-    toastShownRef.current = false;
+    checkAccessAndNetwork();
   }, [
     session?.user?.id,
+    session?.user?.isDualPortal,
     roleNumber,
     allowedRoles,
     profileLoading,
@@ -132,7 +158,6 @@ export function EfilingRouteGuard({ children, allowedRoles = [] }) {
     pathname,
     efilingUserId,
     isGlobal,
-    // Removed 'toast' from dependencies to prevent infinite loop
   ]);
 
   if (status === "loading" || profileLoading || checking) {
@@ -140,7 +165,7 @@ export function EfilingRouteGuard({ children, allowedRoles = [] }) {
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Checking permissions...</p>
+          <p className="text-gray-600">Verifying access & network permissions...</p>
         </div>
       </div>
     );
@@ -151,8 +176,8 @@ export function EfilingRouteGuard({ children, allowedRoles = [] }) {
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
           <div className="text-red-500 text-6xl mb-4">🚫</div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h1>
-          <p className="text-gray-600">You don&apos;t have permission to access this page.</p>
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">Access Restricted</h1>
+          <p className="text-gray-600">You don&apos;t have permission to access this page from this network.</p>
         </div>
       </div>
     );

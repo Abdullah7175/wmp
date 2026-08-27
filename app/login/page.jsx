@@ -73,8 +73,26 @@ export default function LoginPage() {
       return;
     }
 
-    // Case 2: E-Filing Only User (Role 4 or 5) -> Send straight to E-Filing
+    // Case 2: E-Filing Only User (Role 4 or 5)
     if (userType === "user" && (userRole === 4 || userRole === 5)) {
+      // Check if user is on internal network or has remote authorization
+      try {
+        const netRes = await fetch("/api/auth/dual-portal-status");
+        if (netRes.ok) {
+          const netData = await netRes.json();
+          if (!netData.isInternalNetwork && !netData.isDualPortalUser) {
+            toast({
+              title: "Network Access Denied",
+              description: "E-Filing is restricted to the internal office network. You are not authorized for remote access.",
+              variant: "destructive",
+            });
+            return;
+          }
+        }
+      } catch (err) {
+        console.error("Network verification error:", err);
+      }
+
       window.location.href = "/efilinguser";
       return;
     }
