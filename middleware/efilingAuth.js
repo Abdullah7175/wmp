@@ -15,9 +15,16 @@ export async function efilingAuthMiddleware(request) {
                 : 'next-auth.session-token'
         ) || request.cookies.get('authjs.session-token') || request.cookies.get('__Secure-authjs.session-token');
 
+        const nextAuthCookie = request.cookies.get('next-auth.session-token') ||
+            request.cookies.get('__Secure-next-auth.session-token') ||
+            request.cookies.get('authjs.session-token') ||
+            request.cookies.get('__Secure-authjs.session-token');
+
+        const hasSession = Boolean(sessionCookie || nextAuthCookie);
+
         // If trying to access protected e-filing routes from outside internal network without a session, redirect to elogin
         if (!isInternal && (pathname.startsWith('/efiling') || pathname.startsWith('/efilinguser'))) {
-            if (!sessionCookie && request.method !== 'POST') {
+            if (!hasSession && request.method !== 'POST') {
                 return NextResponse.redirect(new URL('/elogin', request.url));
             }
         }
@@ -84,24 +91,10 @@ export async function efilingAuthMiddleware(request) {
             return withSecurityHeaders(NextResponse.next());
         }
 
-        // Check for session cookie directly (Edge runtime compatible)
-        // In Edge runtime, we can't use getToken, so we check cookies directly
-        const sessionCookie = request.cookies.get(
-            process.env.NODE_ENV === 'production'
-                ? '__Secure-next-auth.session-token'
-                : 'next-auth.session-token'
-        ) || request.cookies.get('authjs.session-token') || request.cookies.get('__Secure-authjs.session-token');
-
-        // For next-auth v5, also check for the new cookie names
-        const nextAuthCookie = request.cookies.get('next-auth.session-token') ||
-            request.cookies.get('__Secure-next-auth.session-token') ||
-            request.cookies.get('authjs.session-token') ||
-            request.cookies.get('__Secure-authjs.session-token');
-
         // If no session cookie, redirect to login
         // But allow POST requests and Server Actions to pass through
         // (they might be part of the authentication flow or form submissions)
-        if (!sessionCookie && !nextAuthCookie) {
+        if (!hasSession) {
             // Allow POST requests to pass through (might be Server Actions or form submissions)
             if (request.method === 'POST') {
                 return withSecurityHeaders(NextResponse.next());
