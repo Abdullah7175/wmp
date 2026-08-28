@@ -208,7 +208,7 @@ export async function GET(request) {
         }
 
         const { searchParams } = new URL(request.url);
-        const period = (searchParams.get('period') || 'today').toLowerCase();
+        const period = (searchParams.get('period') || 'month').toLowerCase();
         const fromParam = searchParams.get('from');
         const toParam = searchParams.get('to');
         const { from, to, fromYmd, toYmd, label } = getPeriodBounds(period, fromParam, toParam);
@@ -471,14 +471,51 @@ export async function GET(request) {
             [String(efilingUserId), String(sessionUserId), ...dateParams]
         );
 
-        const attachmentRows = attachmentRowsRaw.length > 0
-            ? attachmentRowsRaw
+        const logAttachmentIds = actionRows
+            .filter((row) => ['DOCUMENT_UPLOADED', 'document_uploaded'].includes(row.action_type))
+            .map((row) => {
+                const details = parseDetails(row.details);
+                return details.attachmentId || details.attachment_id || null;
+            })
+            .filter(Boolean)
+            .map(String);
+
+        const extraAttachmentRows = logAttachmentIds.length
+            ? await safeQuery(
+                client,
+                `
+                SELECT
+                    a.id,
+                    a.file_id,
+                    a.file_name,
+                    a.file_type,
+                    a.file_url,
+                    a.uploaded_at AS created_at,
+                    f.file_number,
+                    f.subject,
+                    f.assigned_to
+                FROM efiling_file_attachments a
+                LEFT JOIN efiling_files f ON f.id::text = a.file_id::text
+                WHERE a.id = ANY($1::varchar[])
+                  AND COALESCE(a.is_active, true) = true
+                `,
+                [logAttachmentIds]
+            )
+            : [];
+
+        const attachmentById = new Map();
+        for (const row of [...attachmentRowsRaw, ...extraAttachmentRows]) {
+            attachmentById.set(String(row.id), row);
+        }
+
+        const attachmentRows = attachmentById.size > 0
+            ? Array.from(attachmentById.values()).sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
             : actionRows
                 .filter((row) => ['DOCUMENT_UPLOADED', 'document_uploaded'].includes(row.action_type))
                 .map((row) => {
                     const details = parseDetails(row.details);
                     return {
-                        id: row.id,
+                        id: details.attachmentId || details.attachment_id || row.id,
                         file_id: row.file_id || details.fileId || details.file_id,
                         file_name: details.fileName || details.attachmentName || 'attachment',
                         file_type: details.fileType || '',
@@ -626,25 +663,28 @@ export async function GET(request) {
             })),
             ...attachmentRows.map((row) => {
                 const displayName = row.file_name || 'attachment';
-                const fileLabel = row.file_number && row.file_number !== 'N/A' ? row.file_number : (row.file_id ? `file ${row.file_id}` : 'a file');
-                const ext = String(row.file_name || '').includes('.') ? String(row.file_name).split('.').pop() : null;
-                const storedName = row.id && ext ? `${row.id}.${ext}` : null;
-                const fileUrl = normalizeUploadUrl(row.file_url, storedName);
+                const fileLabel = row.file_number && row.file_number !== 'N/A'
+                    ? row.file_number
+                    : (row.subject ? row.subject : (row.file_id ? `file ${row.file_id}` : 'a file'));
                 const isImage = isImageAttachment(row.file_type, row.file_name);
+                const previewUrl = row.id ? `/api/efiling/my-attachments/${row.id}` : normalizeUploadUrl(row.file_url);
+                const canOpenFile = row.assigned_to != null && String(row.assigned_to) === String(efilingUserId);
                 return {
                     id: `attachment-${row.id}`,
                     type: 'attachment',
                     title: 'Uploaded an attachment',
-                    description: `Uploaded "${displayName}" to ${fileLabel}`,
-                    file_id: row.file_id,
-                    file_number: row.file_number,
-                    file_subject: row.subject,
-                    still_assigned: row.assigned_to != null && String(row.assigned_to) === String(efilingUserId),
+                    description: `Uploaded "${displayName}"`,
+                    file_id: canOpenFile ? row.file_id : null,
+                    file_number: canOpenFile ? row.file_number : null,
+                    file_subject: canOpenFile ? (row.subject || null) : null,
+                    still_assigned: canOpenFile,
+                    can_open_file: canOpenFile,
                     attachment_name: displayName,
                     is_image: isImage,
-                    thumbnail_url: isImage ? fileUrl : null,
-                    file_url: fileUrl,
+                    thumbnail_url: isImage ? previewUrl : null,
+                    file_url: previewUrl,
                     timestamp: row.created_at,
+                    uploaded_to_label: canOpenFile ? fileLabel : null,
                 };
             }),
             ...otherRows.map((row) => {

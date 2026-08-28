@@ -72,16 +72,6 @@ const ACTION_CARDS = [
         text: 'text-amber-700',
         badge: 'bg-amber-100 text-amber-800',
     },
-    {
-        key: 'completed',
-        title: 'Completed',
-        hint: 'Files you completed',
-        icon: CheckCircle2,
-        accent: 'from-violet-500 to-purple-600',
-        ring: 'ring-violet-200',
-        text: 'text-violet-700',
-        badge: 'bg-violet-100 text-violet-800',
-    },
 ];
 
 const TYPE_STYLES = {
@@ -150,7 +140,7 @@ function eventDay(timestamp) {
 
 export default function MyActionsTab() {
     const router = useRouter();
-    const [period, setPeriod] = useState('today');
+    const [period, setPeriod] = useState('month');
     const [customFrom, setCustomFrom] = useState('');
     const [customTo, setCustomTo] = useState('');
     const [loading, setLoading] = useState(true);
@@ -183,7 +173,7 @@ export default function MyActionsTab() {
     };
 
     useEffect(() => {
-        loadActions('today');
+        loadActions('month');
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
@@ -235,7 +225,7 @@ export default function MyActionsTab() {
                                 <h2 className="text-xl font-semibold tracking-tight">My Actions</h2>
                             </div>
                             <p className="mt-1 text-sm text-slate-300">
-                                Your personal diary of files you marked, signed, created, and completed.
+                                Your personal diary of files you marked, signed, and created.
                             </p>
                         </div>
                         <div className="rounded-lg bg-white/10 px-4 py-2 text-right backdrop-blur-sm">
@@ -295,7 +285,7 @@ export default function MyActionsTab() {
                 </Card>
             ) : (
                 <>
-                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
                         {ACTION_CARDS.map((card) => {
                             const Icon = card.icon;
                             const stats = summary?.[card.key] || { files: 0, events: 0 };
@@ -457,7 +447,13 @@ export default function MyActionsTab() {
                                                 {group.events.map((event) => {
                                                     const style = TYPE_STYLES[event.type] || TYPE_STYLES.other;
                                                     const Icon = style.icon;
-                                                    const fileHref = event.file_id ? `/efilinguser/files/${event.file_id}` : null;
+                                                    const canOpenFile = event.type === 'attachment'
+                                                        ? Boolean(event.can_open_file)
+                                                        : Boolean(event.file_id);
+                                                    const fileHref = canOpenFile && event.file_id
+                                                        ? `/efilinguser/files/${event.file_id}`
+                                                        : null;
+                                                    const attachmentHref = event.file_url || event.thumbnail_url;
                                                     return (
                                                         <div key={event.id} className="relative">
                                                             <span className="absolute -left-4 top-4 h-3.5 w-3.5 rounded-full border-2 border-white bg-slate-300 shadow-sm" />
@@ -466,7 +462,7 @@ export default function MyActionsTab() {
                                                                     <div className="flex min-w-0 flex-1 gap-3">
                                                                         {event.type === 'attachment' && event.thumbnail_url && (
                                                                             <a
-                                                                                href={event.file_url || event.thumbnail_url}
+                                                                                href={attachmentHref}
                                                                                 target="_blank"
                                                                                 rel="noreferrer"
                                                                                 className="shrink-0"
@@ -476,11 +472,22 @@ export default function MyActionsTab() {
                                                                                 <img
                                                                                     src={event.thumbnail_url}
                                                                                     alt={event.attachment_name || 'Attachment'}
-                                                                                    className="h-14 w-14 rounded-md border border-slate-200 object-cover bg-slate-50"
+                                                                                    className="h-16 w-16 rounded-md border border-slate-200 object-cover bg-slate-50"
                                                                                     onError={(e) => {
                                                                                         e.currentTarget.style.display = 'none';
                                                                                     }}
                                                                                 />
+                                                                            </a>
+                                                                        )}
+                                                                        {event.type === 'attachment' && !event.thumbnail_url && attachmentHref && (
+                                                                            <a
+                                                                                href={attachmentHref}
+                                                                                target="_blank"
+                                                                                rel="noreferrer"
+                                                                                className="flex h-16 w-16 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-slate-50 text-slate-500"
+                                                                                title="Open uploaded file"
+                                                                            >
+                                                                                <Paperclip className="h-5 w-5" />
                                                                             </a>
                                                                         )}
                                                                         <div className="min-w-0 flex-1">
@@ -494,8 +501,11 @@ export default function MyActionsTab() {
                                                                                     <Badge className="bg-emerald-100 text-emerald-800">Still with you</Badge>
                                                                                 )}
                                                                             </div>
-                                                                            <p className="mt-2 text-sm font-medium text-slate-900">{event.description}</p>
-                                                                            {event.file_number && event.file_number !== 'N/A' && fileHref && (
+                                                                            <p className="mt-2 text-sm font-medium text-slate-900">
+                                                                                {event.description}
+                                                                                {event.type === 'attachment' && event.uploaded_to_label ? ` · ${event.uploaded_to_label}` : ''}
+                                                                            </p>
+                                                                            {canOpenFile && event.file_number && event.file_number !== 'N/A' && fileHref && (
                                                                                 <button
                                                                                     type="button"
                                                                                     className="mt-1 text-sm font-semibold text-blue-700 hover:underline"
@@ -509,7 +519,7 @@ export default function MyActionsTab() {
                                                                             )}
                                                                         </div>
                                                                     </div>
-                                                                    {fileHref && (
+                                                                    {fileHref ? (
                                                                         <Button
                                                                             variant="outline"
                                                                             size="sm"
@@ -518,7 +528,16 @@ export default function MyActionsTab() {
                                                                         >
                                                                             Open
                                                                         </Button>
-                                                                    )}
+                                                                    ) : event.type === 'attachment' && attachmentHref ? (
+                                                                        <Button
+                                                                            variant="outline"
+                                                                            size="sm"
+                                                                            className="shrink-0"
+                                                                            onClick={() => window.open(attachmentHref, '_blank', 'noopener,noreferrer')}
+                                                                        >
+                                                                            View file
+                                                                        </Button>
+                                                                    ) : null}
                                                                 </div>
                                                             </div>
                                                         </div>
