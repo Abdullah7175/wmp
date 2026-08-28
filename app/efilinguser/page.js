@@ -23,6 +23,8 @@ import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { useEfilingUser } from '@/context/EfilingUserContext';
 import { isExternalUser } from '@/lib/efilingRoleHelpers';
+import { Pagination } from '@/components/ui/pagination';
+import MyActionsTab from './components/MyActionsTab';
 
 export default function EFileUserDashboard() {
     const { data: session } = useSession();
@@ -43,6 +45,8 @@ export default function EFileUserDashboard() {
     const [createdCount, setCreatedCount] = useState(0);
     const [assignedCount, setAssignedCount] = useState(0);
     const [nowTick, setNowTick] = useState(Date.now());
+    const [filesPage, setFilesPage] = useState(1);
+    const filesPerPage = 5;
 
     // Redirect external users (ADLFA/CON) to files page
     useEffect(() => {
@@ -162,6 +166,7 @@ const loadDashboardData = async () => {
             const allFiles = [...filteredMyFiles, ...filteredAssignedFiles];
             const uniqueFiles = allFiles.filter((file, index, self) => index === self.findIndex(f => f.id === file.id));
             setAssignedFiles(uniqueFiles);
+            setFilesPage(1);
 
             const pending = uniqueFiles.filter(f => f.status_code === 'PENDING' || f.status_code === 'DRAFT').length;
             const completed = uniqueFiles.filter(f => f.status_code === 'COMPLETED' || f.status_code === 'APPROVED').length;
@@ -509,9 +514,10 @@ const loadDashboardData = async () => {
 
             {/* Main Content Tabs */}
             <Tabs defaultValue="assigned" className="space-y-4">
-                <TabsList>
+                <TabsList className="h-auto flex-wrap">
                     <TabsTrigger value="assigned">My Files</TabsTrigger>
                     <TabsTrigger value="pending">Pending Actions</TabsTrigger>
+                    <TabsTrigger value="actions">My Actions</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="assigned" className="space-y-4">
@@ -531,7 +537,9 @@ const loadDashboardData = async () => {
                                 </div>
                             ) : (
                                 <div className="space-y-4">
-                                    {assignedFiles.map((file) => (
+                                    {assignedFiles
+                                        .slice((filesPage - 1) * filesPerPage, filesPage * filesPerPage)
+                                        .map((file) => (
                                         <div key={file.id} className="flex items-center justify-between p-4 border rounded-lg">
                                             <div className="flex-1">
                                                 <div className="flex items-center space-x-2 mb-2">
@@ -570,6 +578,14 @@ const loadDashboardData = async () => {
                                             </div>
                                         </div>
                                     ))}
+                                    <Pagination
+                                        currentPage={filesPage}
+                                        totalPages={Math.max(1, Math.ceil(assignedFiles.length / filesPerPage))}
+                                        totalItems={assignedFiles.length}
+                                        itemsPerPage={filesPerPage}
+                                        onPageChange={setFilesPage}
+                                        showItemsPerPageSelector={false}
+                                    />
                                 </div>
                             )}
                         </CardContent>
@@ -633,6 +649,10 @@ const loadDashboardData = async () => {
                             )}
                         </CardContent>
                     </Card>
+                </TabsContent>
+
+                <TabsContent value="actions" className="space-y-4">
+                    <MyActionsTab />
                 </TabsContent>
 
                 {/* Remove activities tab */}
