@@ -615,39 +615,6 @@ export default function DocumentViewer() {
                                     </div>
                                 </CardContent>
                             </Card>
-
-                            <Card>
-								<CardHeader><CardTitle className="text-lg flex items-center"><MessageSquare className="w-4 h-4 mr-2"/>Comments ({comments.length})</CardTitle></CardHeader>
-                                <CardContent>
-                                    <div className="space-y-3 max-h-80 overflow-auto pr-2">
-                                        {comments.length > 0 ? (
-                                            comments.map((c) => (
-                                                <div key={c.id} className="border-l-4 border-blue-500 pl-3">
-                                                    <div className="text-sm font-medium text-gray-900">{c.user_name}</div>
-                                                    <div className="text-xs text-gray-500">{formatDate(c.timestamp)}</div>
-                                                    <div className="text-sm text-gray-700 mt-1 break-words">{c.text}</div>
-                                                </div>
-                                            ))
-                                        ) : (
-                                            <p className="text-sm text-gray-500">No comments yet</p>
-                                        )}
-                                    </div>
-                                    <div className="mt-4">
-                                        <textarea
-                                            value={newComment}
-                                            onChange={(e) => setNewComment(e.target.value)}
-                                            rows={3}
-                                            placeholder="Add a comment..."
-                                            className="w-full border rounded-md p-2 text-sm"
-                                        />
-                                        <div className="flex justify-end mt-2">
-                                            <Button size="sm" onClick={postComment} disabled={posting || !newComment.trim()}>
-                                                {posting ? 'Posting...' : 'Add Comment'}
-                                            </Button>
-                                        </div>
-                                    </div>
-                                </CardContent>
-                            </Card>
                         </div>
                     </div>
                 </div>

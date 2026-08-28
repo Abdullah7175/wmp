@@ -11,6 +11,7 @@ import { useEfilingUser } from "@/context/EfilingUserContext";
 import { Pen, MessageSquare, User, Calendar, X, Edit, Trash2, Shield, Settings, Eye, EyeOff, CheckCircle, AlertCircle } from "lucide-react";
 import SignatureCanvas from "react-signature-canvas";
 import { useSession } from "next-auth/react";
+import { buildSignatureCommentTimeline } from "@/lib/efilingSignatureCommentTimeline";
 
 export default function DocumentSignatureSystem({
     fileId,
@@ -626,6 +627,194 @@ export default function DocumentSignatureSystem({
             ['superadmin', 'CEO', 'Chief IT Officer'].includes(userRole);
     };
 
+    const getSignatureImageUrl = (content) => {
+        if (!content) return null;
+        if (content.startsWith('data:image/')) return content;
+
+        let path = content;
+        if (path.startsWith('http')) {
+            try {
+                const url = new URL(path);
+                path = url.pathname;
+            } catch (e) {
+                console.error('URL parse error', e);
+            }
+        }
+        if (path.startsWith('/uploads/')) {
+            path = path.replace('/uploads/', '/api/uploads/');
+        } else if (!path.startsWith('/api/')) {
+            path = `/api/uploads${path.startsWith('/') ? '' : '/'}${path}`;
+        }
+        return path;
+    };
+
+    const timelineEntries = buildSignatureCommentTimeline(signatures, comments);
+
+    const renderSignatureImage = (signature) => {
+        const imageUrl = signature.type === 'image' || (signature.type && signature.type.toLowerCase().includes('image'))
+            ? getSignatureImageUrl(signature.content)
+            : null;
+
+        return (
+            <div className="w-12 h-8 border rounded bg-white flex items-center justify-center flex-shrink-0">
+                {signature.type === 'text' ? (
+                    <span
+                        className="text-sm font-bold"
+                        style={{
+                            fontFamily: signature.font || signatureFont,
+                            color: signature.color === 'blue' ? '#2563eb' :
+                                signature.color === 'red' ? '#dc2626' :
+                                    signature.color === 'green' ? '#16a34a' : '#000000'
+                        }}
+                    >
+                        {signature.content}
+                    </span>
+                ) : imageUrl ? (
+                    <img
+                        src={imageUrl}
+                        alt="Signature"
+                        className="w-10 h-6 object-contain"
+                        loading="lazy"
+                        onError={(e) => {
+                            const img = e.target;
+                            const currentSrc = img.src;
+                            if (img.dataset.retryStatus === 'failed') return;
+                            if (!img.dataset.triedPathSwap) {
+                                img.dataset.triedPathSwap = 'true';
+                                if (currentSrc.includes('/api/uploads/')) {
+                                    img.src = currentSrc.replace('/api/uploads/', '/uploads/');
+                                    return;
+                                }
+                                if (currentSrc.includes('/uploads/') && !currentSrc.includes('/api/')) {
+                                    img.src = currentSrc.replace('/uploads/', '/api/uploads/');
+                                    return;
+                                }
+                            }
+                            if (!img.dataset.triedRaw && signature.content) {
+                                img.dataset.triedRaw = 'true';
+                                img.src = signature.content;
+                                return;
+                            }
+                            img.dataset.retryStatus = 'failed';
+                            img.style.display = 'none';
+                        }}
+                    />
+                ) : (
+                    <span className="text-xs text-gray-400">No image</span>
+                )}
+            </div>
+        );
+    };
+
+    const renderCommentBody = (comment) => (
+        editingCommentId === comment.id ? (
+            <div className="space-y-2">
+                <Input
+                    value={editCommentText}
+                    onChange={(e) => setEditCommentText(e.target.value)}
+                    placeholder="Edit your comment..."
+                />
+                <div className="flex gap-2">
+                    <Button size="sm" onClick={() => handleEditComment(comment.id)}>Save</Button>
+                    <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                            setEditingCommentId(null);
+                            setEditCommentText("");
+                        }}
+                    >
+                        Cancel
+                    </Button>
+                </div>
+            </div>
+        ) : (
+            <div className="text-sm text-gray-700">{comment.text}</div>
+        )
+    );
+
+    const renderCommentActions = (comment) => (
+        canEditComment(comment) && editingCommentId !== comment.id ? (
+            <div className="flex gap-1 ml-2">
+                <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                        setEditingCommentId(comment.id);
+                        setEditCommentText(comment.text);
+                    }}
+                >
+                    <Edit className="w-3 h-3" />
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => handleDeleteComment(comment.id)}>
+                    <Trash2 className="w-3 h-3" />
+                </Button>
+            </div>
+        ) : null
+    );
+
+    const renderTimelineEntry = (entry) => {
+        const { signature, comment } = entry;
+
+        if (signature) {
+            return (
+                <div key={entry.key} className="p-3 bg-gray-50 rounded-lg border-l-4 border-blue-500">
+                    <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-3 min-w-0">
+                            {renderSignatureImage(signature)}
+                            <div className="min-w-0">
+                                <div className="font-medium">{signature.user_name}</div>
+                                <div className="text-sm text-gray-500">
+                                    {signature.user_role} • {new Date(signature.timestamp).toLocaleString()}
+                                </div>
+                            </div>
+                        </div>
+                        {comment ? renderCommentActions(comment) : null}
+                    </div>
+                    {comment ? (
+                        <div className="mt-3 pt-2 border-t border-gray-200">
+                            {comment.edited && (
+                                <span className="text-xs text-gray-400 mb-1 block">(edited)</span>
+                            )}
+                            {renderCommentBody(comment)}
+                        </div>
+                    ) : null}
+                </div>
+            );
+        }
+
+        if (comment) {
+            return (
+                <div key={entry.key} className="border-l-4 border-blue-500 pl-4 py-2">
+                    <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-2">
+                                <span className="font-medium">{comment.user_name}</span>
+                                {comment.user_role ? (
+                                    <>
+                                        <span className="text-sm text-gray-500">•</span>
+                                        <span className="text-sm text-gray-500">{comment.user_role}</span>
+                                    </>
+                                ) : null}
+                                <span className="text-sm text-gray-500">•</span>
+                                <span className="text-sm text-gray-500">
+                                    {new Date(comment.timestamp).toLocaleString()}
+                                </span>
+                                {comment.edited && (
+                                    <span className="text-xs text-gray-400">(edited)</span>
+                                )}
+                            </div>
+                            {renderCommentBody(comment)}
+                        </div>
+                        {renderCommentActions(comment)}
+                    </div>
+                </div>
+            );
+        }
+
+        return null;
+    };
+
     return (
         <div className="space-y-6">
             {/* Signature and Comment Controls - Hide in viewOnly mode */}
@@ -669,332 +858,27 @@ export default function DocumentSignatureSystem({
                 </div>
             )}
 
-            {/* Signatures Display */}
-            {signatures.length > 0 && (
+            {/* Signatures & Comments (merged timeline) */}
+            {timelineEntries.length > 0 && (
                 viewOnly ? (
                     <div className="space-y-3">
-                        {signatures.map((signature) => {
-                            // Helper function to get the correct image URL
-                            const getSignatureImageUrl = (content) => {
-                                if (!content) return null;
-
-                                // 1. If it's already a base64/Data URL, it's perfect.
-                                if (content.startsWith('data:image/')) return content;
-
-                                let path = content;
-
-                                // 2. If it's a full URL (http://localhost:3000/...), extract just the path
-                                if (path.startsWith('http')) {
-                                    try {
-                                        const url = new URL(path);
-                                        path = url.pathname;
-                                    } catch (e) {
-                                        console.error('URL parse error', e);
-                                    }
-                                }
-
-                                // 3. Preserve original format - no conversion needed
-
-                                // 4. Fix the prefix: ensure it uses /api/uploads/
-                                // This handles cases where the DB has "/uploads/..." or just "filename.png"
-                                if (path.startsWith('/uploads/')) {
-                                    path = path.replace('/uploads/', '/api/uploads/');
-                                } else if (!path.startsWith('/api/')) {
-                                    path = `/api/uploads${path.startsWith('/') ? '' : '/'}${path}`;
-                                }
-
-                                return path;
-                            };
-
-                            // Use the helper function for proper URL conversion
-                            const imageUrl = signature.type === 'image' || (signature.type && signature.type.toLowerCase().includes('image'))
-                                ? getSignatureImageUrl(signature.content)
-                                : null;
-
-                            return (
-                                <div key={signature.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-12 h-8 border rounded bg-white flex items-center justify-center">
-                                            {signature.type === 'text' ? (
-                                                <span
-                                                    className="text-sm font-bold"
-                                                    style={{
-                                                        fontFamily: signature.font || signatureFont,
-                                                        color: signature.color === 'blue' ? '#2563eb' :
-                                                            signature.color === 'red' ? '#dc2626' :
-                                                                signature.color === 'green' ? '#16a34a' : '#000000'
-                                                    }}
-                                                >
-                                                    {signature.content}
-                                                </span>
-                                            ) : imageUrl ? (
-                                                <img
-                                                    src={imageUrl}
-                                                    alt="Signature"
-                                                    className="w-10 h-6 object-contain"
-                                                    loading="lazy"
-                                                    onLoad={(e) => {
-                                                        // Image loaded successfully, mark it
-                                                        const img = e.target;
-                                                        img.dataset.loaded = 'true';
-                                                    }}
-                                                    onError={(e) => {
-                                                        const img = e.target;
-                                                        const currentSrc = img.src;
-
-                                                        // Check if image actually loaded (sometimes onError fires even on success)
-                                                        if (img.dataset.loaded === 'true') {
-                                                            return; // Image actually loaded, ignore error
-                                                        }
-
-                                                        // Stop if we've already tried everything
-                                                        if (img.dataset.retryStatus === 'failed') return;
-
-                                                        // POSSIBILITY 1: Try path swap first (more common issue)
-                                                        if (!img.dataset.triedPathSwap) {
-                                                            img.dataset.triedPathSwap = 'true';
-                                                            // If the /api/ route failed, try the direct /uploads/ route
-                                                            if (currentSrc.includes('/api/uploads/')) {
-                                                                img.src = currentSrc.replace('/api/uploads/', '/uploads/');
-                                                                return;
-                                                            } else if (currentSrc.includes('/uploads/') && !currentSrc.includes('/api/')) {
-                                                                img.src = currentSrc.replace('/uploads/', '/api/uploads/');
-                                                                return;
-                                                            }
-                                                        }
-
-                                                        // POSSIBILITY 2: Final attempt with the raw database content
-                                                        if (!img.dataset.triedRaw && signature.content) {
-                                                            img.dataset.triedRaw = 'true';
-                                                            img.src = signature.content;
-                                                            return;
-                                                        }
-
-                                                        // ALL FAILED: Hide the broken image icon
-                                                        img.dataset.retryStatus = 'failed';
-                                                        img.style.display = 'none';
-                                                        console.error('All signature load attempts failed for:', currentSrc);
-                                                    }}
-                                                />
-                                            ) : (
-                                                <span className="text-xs text-gray-400">No image</span>
-                                            )}
-                                        </div>
-                                        <div>
-                                            <div className="font-medium">{signature.user_name}</div>
-                                            <div className="text-sm text-gray-500">
-                                                {signature.user_role} • {new Date(signature.timestamp).toLocaleString()}
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            );
-                        })}
+                        {timelineEntries.map(renderTimelineEntry)}
                     </div>
                 ) : (
                     <Card>
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2">
                                 <Shield className="w-5 h-5" />
-                                Document Signatures ({signatures.length})
+                                Document Signatures ({timelineEntries.length})
                             </CardTitle>
                         </CardHeader>
                         <CardContent>
-                            <div className="space-y-3">
-                                {signatures.map((signature) => {
-                                    // Helper function to get the correct image URL
-                                    const getSignatureImageUrl = (content) => {
-                                        if (!content) return null;
-
-                                        // 1. If it's already a base64/Data URL, it's perfect.
-                                        if (content.startsWith('data:image/')) return content;
-
-                                        let path = content;
-
-                                        // 2. If it's a full URL (http://localhost:3000/...), extract just the path
-                                        if (path.startsWith('http')) {
-                                            try {
-                                                const url = new URL(path);
-                                                path = url.pathname;
-                                            } catch (e) {
-                                                console.error('URL parse error', e);
-                                            }
-                                        }
-
-                                        // 3. Fix the prefix: ensure it uses /api/uploads/
-                                        // This handles cases where the DB has "/uploads/..." or just "filename.png"
-                                        if (path.startsWith('/uploads/')) {
-                                            path = path.replace('/uploads/', '/api/uploads/');
-                                        } else if (!path.startsWith('/api/')) {
-                                            path = `/api/uploads${path.startsWith('/') ? '' : '/'}${path}`;
-                                        }
-
-                                        return path;
-                                    };
-
-                                    // Use the helper function for proper URL conversion
-                                    const imageUrl = signature.type === 'image' || (signature.type && signature.type.toLowerCase().includes('image'))
-                                        ? getSignatureImageUrl(signature.content)
-                                        : null;
-
-                                    return (
-                                        <div key={signature.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-12 h-8 border rounded bg-white flex items-center justify-center">
-                                                    {signature.type === 'text' ? (
-                                                        <span
-                                                            className="text-sm font-bold"
-                                                            style={{
-                                                                fontFamily: signature.font || signatureFont,
-                                                                color: signature.color === 'blue' ? '#2563eb' :
-                                                                    signature.color === 'red' ? '#dc2626' :
-                                                                        signature.color === 'green' ? '#16a34a' : '#000000'
-                                                            }}
-                                                        >
-                                                            {signature.content}
-                                                        </span>
-                                                    ) : imageUrl ? (
-                                                        <img
-                                                            src={imageUrl}
-                                                            alt="Signature"
-                                                            className="w-10 h-6 object-contain"
-                                                            loading="lazy"
-                                                            onError={(e) => {
-                                                                const img = e.target;
-                                                                const currentSrc = img.src;
-
-                                                                // Stop if we've already tried everything
-                                                                if (img.dataset.retryStatus === 'failed') return;
-
-                                                                // POSSIBILITY 1: Proxy vs Direct Path (/api/uploads vs /uploads)
-                                                                if (!img.dataset.triedPathSwap) {
-                                                                    img.dataset.triedPathSwap = 'true';
-                                                                    // If the /api/ route failed, try the direct /uploads/ route
-                                                                    if (currentSrc.includes('/api/uploads/')) {
-                                                                        img.src = currentSrc.replace('/api/uploads/', '/uploads/');
-                                                                        return;
-                                                                    }
-                                                                }
-
-                                                                // POSSIBILITY 3: Final attempt with the raw database content
-                                                                if (!img.dataset.triedRaw && signature.content) {
-                                                                    img.dataset.triedRaw = 'true';
-                                                                    img.src = signature.content;
-                                                                    return;
-                                                                }
-
-                                                                // ALL FAILED: Hide the broken image icon
-                                                                img.dataset.retryStatus = 'failed';
-                                                                img.style.display = 'none';
-                                                                console.error('All signature load attempts failed for:', currentSrc);
-                                                            }}
-                                                        />
-                                                    ) : (
-                                                        <span className="text-xs text-gray-400">No image</span>
-                                                    )}
-                                                </div>
-                                                <div>
-                                                    <div className="font-medium">{signature.user_name}</div>
-                                                    <div className="text-sm text-gray-500">
-                                                        {signature.user_role} • {new Date(signature.timestamp).toLocaleString()}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    );
-                                })}
+                            <div className="space-y-4">
+                                {timelineEntries.map(renderTimelineEntry)}
                             </div>
                         </CardContent>
                     </Card>
                 )
-            )}
-
-            {/* Comments Display */}
-            {comments.length > 0 && (
-                <Card>
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                            <MessageSquare className="w-5 h-4" />
-                            Document Comments ({comments.length})
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="space-y-4">
-                            {comments.map((comment) => (
-                                <div key={comment.id} className="border-l-4 border-blue-500 pl-4">
-                                    <div className="flex items-start justify-between">
-                                        <div className="flex-1">
-                                            <div className="flex items-center gap-2 mb-2">
-                                                <User className="w-4 h-4 text-gray-500" />
-                                                <span className="font-medium">{comment.user_name}</span>
-                                                <span className="text-sm text-gray-500">•</span>
-                                                <span className="text-sm text-gray-500">{comment.user_role}</span>
-                                                <span className="text-sm text-gray-500">•</span>
-                                                <Calendar className="w-4 h-4 text-gray-500" />
-                                                <span className="text-sm text-gray-500">
-                                                    {new Date(comment.timestamp).toLocaleString()}
-                                                </span>
-                                                {comment.edited && (
-                                                    <span className="text-xs text-gray-400">(edited)</span>
-                                                )}
-                                            </div>
-                                            {editingCommentId === comment.id ? (
-                                                <div className="space-y-2">
-                                                    <Input
-                                                        value={editCommentText}
-                                                        onChange={(e) => setEditCommentText(e.target.value)}
-                                                        placeholder="Edit your comment..."
-                                                    />
-                                                    <div className="flex gap-2">
-                                                        <Button
-                                                            size="sm"
-                                                            onClick={() => handleEditComment(comment.id)}
-                                                        >
-                                                            Save
-                                                        </Button>
-                                                        <Button
-                                                            size="sm"
-                                                            variant="outline"
-                                                            onClick={() => {
-                                                                setEditingCommentId(null);
-                                                                setEditCommentText("");
-                                                            }}
-                                                        >
-                                                            Cancel
-                                                        </Button>
-                                                    </div>
-                                                </div>
-                                            ) : (
-                                                <div className="text-gray-700">{comment.text}</div>
-                                            )}
-                                        </div>
-                                        {canEditComment(comment) && (
-                                            <div className="flex gap-1 ml-4">
-                                                <Button
-                                                    size="sm"
-                                                    variant="ghost"
-                                                    onClick={() => {
-                                                        setEditingCommentId(comment.id);
-                                                        setEditCommentText(comment.text);
-                                                    }}
-                                                >
-                                                    <Edit className="w-3 h-3" />
-                                                </Button>
-                                                <Button
-                                                    size="sm"
-                                                    variant="ghost"
-                                                    onClick={() => handleDeleteComment(comment.id)}
-                                                >
-                                                    <Trash2 className="w-3 h-3" />
-                                                </Button>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </CardContent>
-                </Card>
             )}
 
             {/* Signature Selection/Creation Modal */}

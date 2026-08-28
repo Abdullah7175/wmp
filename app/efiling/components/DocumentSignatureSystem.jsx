@@ -10,6 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Pen, MessageSquare, User, Calendar, X, Edit, Trash2, Shield, Settings, Eye, EyeOff, CheckCircle, AlertCircle } from "lucide-react";
 import SignatureCanvas from "react-signature-canvas";
 import { useSession } from "next-auth/react";
+import { buildSignatureCommentTimeline } from "@/lib/efilingSignatureCommentTimeline";
 
 export default function DocumentSignatureSystem({ 
     fileId, 
@@ -472,6 +473,175 @@ export default function DocumentSignatureSystem({
                ['superadmin', 'CEO', 'Chief IT Officer'].includes(userRole);
     };
 
+    const getSignatureImageUrl = (content) => {
+        if (!content) return null;
+        if (content.startsWith('data:image/')) return content;
+        if (content.startsWith('/api/')) return content;
+        if (content.startsWith('/uploads/')) return content.replace('/uploads/', '/api/uploads/');
+        if (content.startsWith('http://') || content.startsWith('https://')) {
+            try {
+                const url = new URL(content);
+                const path = url.pathname;
+                if (path.startsWith('/api/uploads/')) return path;
+                if (path.startsWith('/uploads/')) return path.replace('/uploads/', '/api/uploads/');
+                return `/api/uploads${path.startsWith('/') ? '' : '/'}${path}`;
+            } catch (e) {
+                console.error('Error parsing signature URL:', e);
+                return content;
+            }
+        }
+        return `/api/uploads${content.startsWith('/') ? '' : '/'}${content}`;
+    };
+
+    const timelineEntries = buildSignatureCommentTimeline(signatures, comments);
+
+    const renderSignatureImage = (signature) => {
+        const imageUrl = signature.type === 'image' || (signature.type && signature.type.toLowerCase().includes('image'))
+            ? getSignatureImageUrl(signature.content)
+            : null;
+
+        return (
+            <div className="w-12 h-8 border rounded bg-white flex items-center justify-center flex-shrink-0">
+                {signature.type === 'text' ? (
+                    <span className="text-sm font-bold text-blue-600" style={{ fontFamily: signature.font }}>
+                        {signature.content}
+                    </span>
+                ) : imageUrl ? (
+                    <img
+                        src={imageUrl}
+                        alt="Signature"
+                        className="w-10 h-6 object-contain"
+                        loading="lazy"
+                        onError={(e) => {
+                            const img = e.target;
+                            if (img.dataset.retryCount === '1') {
+                                img.style.display = 'none';
+                                return;
+                            }
+                            img.dataset.retryCount = '1';
+                            if (imageUrl !== signature.content && signature.content) {
+                                setTimeout(() => { img.src = signature.content; }, 100);
+                            } else {
+                                img.style.display = 'none';
+                            }
+                        }}
+                    />
+                ) : (
+                    <span className="text-xs text-gray-400">No image</span>
+                )}
+            </div>
+        );
+    };
+
+    const renderCommentBody = (comment) => (
+        editingCommentId === comment.id ? (
+            <div className="space-y-2">
+                <Input
+                    value={editCommentText}
+                    onChange={(e) => setEditCommentText(e.target.value)}
+                    placeholder="Edit your comment..."
+                />
+                <div className="flex gap-2">
+                    <Button size="sm" onClick={() => handleEditComment(comment.id)}>Save</Button>
+                    <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                            setEditingCommentId(null);
+                            setEditCommentText("");
+                        }}
+                    >
+                        Cancel
+                    </Button>
+                </div>
+            </div>
+        ) : (
+            <div className="text-sm text-gray-700">{comment.text}</div>
+        )
+    );
+
+    const renderCommentActions = (comment) => (
+        canEditComment(comment) && editingCommentId !== comment.id ? (
+            <div className="flex gap-1 ml-2">
+                <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                        setEditingCommentId(comment.id);
+                        setEditCommentText(comment.text);
+                    }}
+                >
+                    <Edit className="w-3 h-3" />
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => handleDeleteComment(comment.id)}>
+                    <Trash2 className="w-3 h-3" />
+                </Button>
+            </div>
+        ) : null
+    );
+
+    const renderTimelineEntry = (entry) => {
+        const { signature, comment } = entry;
+
+        if (signature) {
+            return (
+                <div key={entry.key} className="p-3 bg-gray-50 rounded-lg border-l-4 border-blue-500">
+                    <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-3 min-w-0">
+                            {renderSignatureImage(signature)}
+                            <div className="min-w-0">
+                                <div className="font-medium">{signature.user_name}</div>
+                                <div className="text-sm text-gray-500">
+                                    {signature.user_role} • {new Date(signature.timestamp).toLocaleString()}
+                                </div>
+                            </div>
+                        </div>
+                        {comment ? renderCommentActions(comment) : null}
+                    </div>
+                    {comment ? (
+                        <div className="mt-3 pt-2 border-t border-gray-200">
+                            {comment.edited && (
+                                <span className="text-xs text-gray-400 mb-1 block">(edited)</span>
+                            )}
+                            {renderCommentBody(comment)}
+                        </div>
+                    ) : null}
+                </div>
+            );
+        }
+
+        if (comment) {
+            return (
+                <div key={entry.key} className="border-l-4 border-blue-500 pl-4 py-2">
+                    <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-2">
+                                <span className="font-medium">{comment.user_name}</span>
+                                {comment.user_role ? (
+                                    <>
+                                        <span className="text-sm text-gray-500">•</span>
+                                        <span className="text-sm text-gray-500">{comment.user_role}</span>
+                                    </>
+                                ) : null}
+                                <span className="text-sm text-gray-500">•</span>
+                                <span className="text-sm text-gray-500">
+                                    {new Date(comment.timestamp).toLocaleString()}
+                                </span>
+                                {comment.edited && (
+                                    <span className="text-xs text-gray-400">(edited)</span>
+                                )}
+                            </div>
+                            {renderCommentBody(comment)}
+                        </div>
+                        {renderCommentActions(comment)}
+                    </div>
+                </div>
+            );
+        }
+
+        return null;
+    };
+
     return (
         <div className="space-y-6">
             {/* Signature and Comment Controls */}
@@ -502,201 +672,18 @@ export default function DocumentSignatureSystem({
                 </Button>
             </div>
 
-            {/* Signatures Display */}
-            {signatures.length > 0 && (
+            {/* Signatures & Comments (merged timeline) */}
+            {timelineEntries.length > 0 && (
                 <Card>
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2">
                             <Shield className="w-5 h-5" />
-                            Document Signatures ({signatures.length})
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="space-y-3">
-                            {signatures.map((signature) => {
-                                // Helper function to get the correct image URL
-                                // Use the same logic as profile page - convert /uploads/ to /api/uploads/
-                                const getSignatureImageUrl = (content) => {
-                                    if (!content) return null;
-                                    // If it's a base64 data URL, return as is
-                                    if (content.startsWith('data:image/')) {
-                                        return content;
-                                    }
-                                    // Use same logic as profile page
-                                    if (content.startsWith('/api/')) {
-                                        return content; // Already correct
-                                    }
-                                    if (content.startsWith('/uploads/')) {
-                                        return content.replace('/uploads/', '/api/uploads/');
-                                    }
-                                    // If it starts with http/https, extract path and convert to /api/uploads/
-                                    if (content.startsWith('http://') || content.startsWith('https://')) {
-                                        try {
-                                            const url = new URL(content);
-                                            const path = url.pathname;
-                                            if (path.startsWith('/api/uploads/')) {
-                                                return path; // Already correct
-                                            }
-                                            if (path.startsWith('/uploads/')) {
-                                                return path.replace('/uploads/', '/api/uploads/');
-                                            }
-                                            // Try to construct API path
-                                            return `/api/uploads${path.startsWith('/') ? '' : '/'}${path}`;
-                                        } catch (e) {
-                                            console.error('Error parsing signature URL:', e);
-                                            return content;
-                                        }
-                                    }
-                                    // Otherwise, assume it's a relative path and prepend /api/uploads/
-                                    return `/api/uploads${content.startsWith('/') ? '' : '/'}${content}`;
-                                };
-                                
-                                const imageUrl = signature.type === 'image' || (signature.type && signature.type.toLowerCase().includes('image'))
-                                    ? getSignatureImageUrl(signature.content)
-                                    : null;
-                                
-                                return (
-                                    <div key={signature.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-12 h-8 border rounded bg-white flex items-center justify-center">
-                                                {signature.type === 'text' ? (
-                                                    <span 
-                                                        className="text-sm font-bold text-blue-600"
-                                                        style={{ fontFamily: signature.font }}
-                                                    >
-                                                        {signature.content}
-                                                    </span>
-                                                ) : imageUrl ? (
-                                                    <img
-                                                        src={imageUrl}
-                                                        alt="Signature"
-                                                        className="w-10 h-6 object-contain"
-                                                        loading="lazy"
-                                                        onError={(e) => {
-                                                            // Prevent infinite retries that cause flickering
-                                                            const img = e.target;
-                                                            if (img.dataset.retryCount === '1') {
-                                                                img.style.display = 'none';
-                                                                console.error('Failed to load signature image after retry:', imageUrl);
-                                                                return;
-                                                            }
-                                                            img.dataset.retryCount = '1';
-                                                            // Try original content if different
-                                                            if (imageUrl !== signature.content && signature.content) {
-                                                                setTimeout(() => {
-                                                                    img.src = signature.content;
-                                                                }, 100);
-                                                            } else {
-                                                                img.style.display = 'none';
-                                                                console.error('Failed to load signature image:', imageUrl);
-                                                            }
-                                                        }}
-                                                    />
-                                                ) : (
-                                                    <span className="text-xs text-gray-400">No image</span>
-                                                )}
-                                            </div>
-                                            <div>
-                                            <div className="font-medium">{signature.user_name}</div>
-                                            <div className="text-sm text-gray-500">
-                                                {signature.user_role} • {new Date(signature.timestamp).toLocaleString()}
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div className="text-xs text-gray-400">
-                                        Position: ({Math.round(signature.position.x)}, {Math.round(signature.position.y)})
-                                    </div>
-                                </div>
-                                );
-                            })}
-                        </div>
-                    </CardContent>
-                </Card>
-            )}
-
-            {/* Comments Display */}
-            {comments.length > 0 && (
-                <Card>
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                            <MessageSquare className="w-5 h-4" />
-                            Document Comments ({comments.length})
+                            Document Signatures ({timelineEntries.length})
                         </CardTitle>
                     </CardHeader>
                     <CardContent>
                         <div className="space-y-4">
-                            {comments.map((comment) => (
-                                <div key={comment.id} className="border-l-4 border-blue-500 pl-4">
-                                    <div className="flex items-start justify-between">
-                                        <div className="flex-1">
-                                            <div className="flex items-center gap-2 mb-2">
-                                                <User className="w-4 h-4 text-gray-500" />
-                                                <span className="font-medium">{comment.user_name}</span>
-                                                <span className="text-sm text-gray-500">•</span>
-                                                <span className="text-sm text-gray-500">{comment.user_role}</span>
-                                                <span className="text-sm text-gray-500">•</span>
-                                                <Calendar className="w-4 h-4 text-gray-500" />
-                                                <span className="text-sm text-gray-500">
-                                                    {new Date(comment.timestamp).toLocaleString()}
-                                                </span>
-                                                {comment.edited && (
-                                                    <span className="text-xs text-gray-400">(edited)</span>
-                                                )}
-                                            </div>
-                                            {editingCommentId === comment.id ? (
-                                                <div className="space-y-2">
-                                                    <Input
-                                                        value={editCommentText}
-                                                        onChange={(e) => setEditCommentText(e.target.value)}
-                                                        placeholder="Edit your comment..."
-                                                    />
-                                                    <div className="flex gap-2">
-                                                        <Button 
-                                                            size="sm" 
-                                                            onClick={() => handleEditComment(comment.id)}
-                                                        >
-                                                            Save
-                                                        </Button>
-                                                        <Button 
-                                                            size="sm" 
-                                                            variant="outline"
-                                                            onClick={() => {
-                                                                setEditingCommentId(null);
-                                                                setEditCommentText("");
-                                                            }}
-                                                        >
-                                                            Cancel
-                                                        </Button>
-                                                    </div>
-                                                </div>
-                                            ) : (
-                                                <div className="text-gray-700">{comment.text}</div>
-                                            )}
-                                        </div>
-                                        {canEditComment(comment) && (
-                                            <div className="flex gap-1 ml-4">
-                                                <Button
-                                                    size="sm"
-                                                    variant="ghost"
-                                                    onClick={() => {
-                                                        setEditingCommentId(comment.id);
-                                                        setEditCommentText(comment.text);
-                                                    }}
-                                                >
-                                                    <Edit className="w-3 h-3" />
-                                                </Button>
-                                                <Button
-                                                    size="sm"
-                                                    variant="ghost"
-                                                    onClick={() => handleDeleteComment(comment.id)}
-                                                >
-                                                    <Trash2 className="w-3 h-3" />
-                                                </Button>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                            ))}
+                            {timelineEntries.map(renderTimelineEntry)}
                         </div>
                     </CardContent>
                 </Card>
