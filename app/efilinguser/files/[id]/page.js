@@ -15,8 +15,10 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import DocumentSignatureSystem from "../../components/DocumentSignatureSystem";
 import MarkToModal from "../../components/MarkToModal";
+import SecurePdfFrame from "../../components/SecurePdfFrame";
 import { useEfilingUser } from "@/context/EfilingUserContext";
 import { sanitizeHtml } from "@/lib/sanitizeHtml";
+import { loadPdfJs, fetchPdfArrayBuffer } from "@/lib/setupPdfJs";
 
 export default function FileDetail() {
     const { data: session } = useSession();
@@ -138,62 +140,6 @@ export default function FileDetail() {
     const isPdfAttachment = (a) =>
         a?.file_type === 'application/pdf' || a?.file_name?.toLowerCase().endsWith('.pdf');
 
-    const findAttachmentIndex = (attachment) =>
-        attachments.findIndex(
-            (item) =>
-                (attachment?.id && item.id === attachment.id) ||
-                item.file_url === attachment?.file_url
-        );
-
-    const renderPdfAttachmentPreview = (attachment, index) => {
-        const pdfPreview = pdfPreviews[index];
-        const pdfUrl = resolveAttachmentFileUrl(attachment?.file_url);
-
-        if (pdfPreview?.status === 'ready' && pdfPreview.pages.length > 0) {
-            return (
-                <div className="w-full bg-gray-50 p-2 space-y-4">
-                    {pdfPreview.pages.map((pageImage, pageIdx) => (
-                        <div key={pageIdx} className="flex flex-col items-center">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
-                                src={pageImage}
-                                alt={`${attachment.attachment_name || attachment.file_name} - page ${pageIdx + 1}`}
-                                className="max-w-full h-auto object-contain shadow-sm border bg-white"
-                            />
-                            {pdfPreview.pages.length > 1 && (
-                                <p className="text-xs text-gray-500 mt-1">
-                                    Page {pageIdx + 1} of {pdfPreview.pages.length}
-                                </p>
-                            )}
-                        </div>
-                    ))}
-                </div>
-            );
-        }
-
-        if (pdfPreview?.status === 'error') {
-            return (
-                <div className="p-8 text-center text-red-600 bg-gray-50">
-                    <FileText className="w-12 h-12 mx-auto text-gray-400 mb-2" />
-                    <p className="mb-3">Unable to preview this PDF in the browser.</p>
-                    {pdfUrl ? (
-                        <Button variant="outline" size="sm" onClick={() => window.open(pdfUrl, '_blank')}>
-                            <Eye className="w-4 h-4 mr-2" />
-                            Open in New Tab
-                        </Button>
-                    ) : null}
-                </div>
-            );
-        }
-
-        return (
-            <div className="p-8 text-center text-gray-500 bg-gray-50 min-h-[200px] flex flex-col items-center justify-center">
-                <FileText className="w-12 h-12 mx-auto text-gray-400 mb-2 animate-pulse" />
-                <p>Loading PDF preview...</p>
-            </div>
-        );
-    };
-
     // Render every PDF attachment into one image per page. This is what makes
     // PDFs show up in the print/PDF view exactly like images do - full size,
     // one page at a time - instead of the tiny, non-paginating embedded PDF
@@ -215,11 +161,7 @@ export default function FileDetail() {
         const renderAttachments = async () => {
             let pdfjsLib;
             try {
-                pdfjsLib = await import('pdfjs-dist/build/pdf');
-                pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-                    'pdfjs-dist/build/pdf.worker.min.mjs',
-                    import.meta.url
-                ).toString();
+                pdfjsLib = await loadPdfJs();
             } catch (error) {
                 console.error('Failed to load PDF renderer:', error);
                 if (!cancelled) {
@@ -248,11 +190,13 @@ export default function FileDetail() {
                         throw new Error('Attachment is missing a file URL');
                     }
 
+                    const pdfData = await fetchPdfArrayBuffer(fileUrl);
+
                     // Safety timeout so a hung/stuck render (e.g. a worker
                     // that never resolves) can never leave Print/Export
                     // permanently disabled.
                     const pdfDoc = await Promise.race([
-                        pdfjsLib.getDocument({ url: fileUrl, withCredentials: true }).promise,
+                        pdfjsLib.getDocument({ data: pdfData }).promise,
                         new Promise((_, reject) =>
                             setTimeout(() => reject(new Error('PDF render timed out')), 15000)
                         )
@@ -2515,8 +2459,13 @@ const handleDeleteComment = async (commentId) => {
                                                     );
                                                 }
 
-                                                const selectedIndex = findAttachmentIndex(selectedAttachment);
-                                                return renderPdfAttachmentPreview(selectedAttachment, selectedIndex);
+                                                return (
+                                                    <SecurePdfFrame
+                                                        pdfUrl={pdfUrl}
+                                                        title={selectedAttachment.file_name}
+                                                        className="w-full h-[70vh] min-h-[500px]"
+                                                    />
+                                                );
                                             })()}
                                         </div>
                                         <div className="flex justify-end gap-2">
@@ -2731,7 +2680,13 @@ const handleDeleteComment = async (commentId) => {
                                                     </div>
                                                 )}
 
-                                                {isPdf && renderPdfAttachmentPreview(a, index)}
+                                                {isPdf && (
+                                                    <SecurePdfFrame
+                                                        pdfUrl={resolveAttachmentFileUrl(a.file_url)}
+                                                        title={a.file_name || `PDF-${index}`}
+                                                        className="w-full h-[85vh]"
+                                                    />
+                                                )}
 
                                                 {isWord && (
                                                     <div className="p-8 text-center bg-gray-50 border-t border-b">
