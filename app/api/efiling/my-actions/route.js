@@ -24,7 +24,20 @@ const NOISY_ACTION_TYPES = new Set([
     'WORKFLOW_VIEWED',
     'DOCUMENT_VIEWED',
     'NOTIFICATION_READ',
+    'notification_read',
     'NOTIFICATION_DISMISSED',
+    'notification_dismissed',
+    'REPORT_GENERATED',
+    'report_generated',
+    'REPORT_EXPORTED',
+    'report_exported',
+    'FILE_TYPES_LISTED',
+    'USER_CREATED',
+    'USER_UPDATED',
+    'USER_DELETED',
+    'CREATE',
+    'PROFILE_UPDATED',
+    'profile_updated',
     'login',
     'LOGIN',
     'USER_LOGIN',
@@ -48,6 +61,8 @@ const COVERED_ACTION_TYPES = new Set([
     'file_created',
     'COMMENT_ADDED',
     'comment_added',
+    'DOCUMENT_UPLOADED',
+    'document_uploaded',
 ]);
 
 function ymdInKarachi(date = new Date()) {
@@ -146,6 +161,42 @@ function parseDetails(details) {
     } catch {
         return {};
     }
+}
+
+function actionText(row) {
+    const details = parseDetails(row.details);
+    const raw = row.description && !String(row.description).startsWith('{')
+        ? String(row.description)
+        : String(details.description || '');
+    return raw.trim();
+}
+
+function isNoisyDiaryEntry(row) {
+    const type = row.action_type || '';
+    if (NOISY_ACTION_TYPES.has(type) || NOISY_ACTION_TYPES.has(type.toUpperCase())) return true;
+    const text = actionText(row).toLowerCase();
+    if (!text) return false;
+    if (text.startsWith('accessed ')) return true;
+    if (text.includes('file types list viewed')) return true;
+    if (/e-filing (user|consultant) .+ created/.test(text)) return true;
+    return false;
+}
+
+function isImageAttachment(fileType, fileName) {
+    const type = String(fileType || '').toLowerCase();
+    if (type.startsWith('image/')) return true;
+    return /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(String(fileName || ''));
+}
+
+function normalizeUploadUrl(url, fileName) {
+    if (url) {
+        if (url.startsWith('/uploads/')) return `/api${url}`;
+        return url;
+    }
+    if (fileName && /^\d+\.[a-z0-9]+$/i.test(fileName)) {
+        return `/api/uploads/efiling/attachments/${fileName}`;
+    }
+    return null;
 }
 
 export async function GET(request) {
@@ -396,9 +447,72 @@ export async function GET(request) {
             [String(efilingUserId), String(sessionUserId), ...dateParams]
         );
 
+        const attachmentRowsRaw = await safeQuery(
+            client,
+            `
+            SELECT
+                a.id,
+                a.file_id,
+                a.file_name,
+                a.file_type,
+                a.file_url,
+                a.uploaded_at AS created_at,
+                f.file_number,
+                f.subject,
+                f.assigned_to
+            FROM efiling_file_attachments a
+            LEFT JOIN efiling_files f ON f.id::text = a.file_id::text
+            WHERE a.uploaded_by IN ($1, $2)
+              AND COALESCE(a.is_active, true) = true
+              AND a.uploaded_at >= $3
+              AND a.uploaded_at < $4
+            ORDER BY a.uploaded_at DESC
+            `,
+            [String(efilingUserId), String(sessionUserId), ...dateParams]
+        );
+
+        const attachmentRows = attachmentRowsRaw.length > 0
+            ? attachmentRowsRaw
+            : actionRows
+                .filter((row) => ['DOCUMENT_UPLOADED', 'document_uploaded'].includes(row.action_type))
+                .map((row) => {
+                    const details = parseDetails(row.details);
+                    return {
+                        id: row.id,
+                        file_id: row.file_id || details.fileId || details.file_id,
+                        file_name: details.fileName || details.attachmentName || 'attachment',
+                        file_type: details.fileType || '',
+                        file_url: details.fileUrl || details.file_url || null,
+                        created_at: row.created_at,
+                        file_number: row.file_number,
+                        subject: row.subject,
+                        assigned_to: null,
+                    };
+                });
+
+        const missingFileIds = [...new Set(
+            attachmentRows.filter((row) => row.file_id && !row.subject).map((row) => String(row.file_id))
+        )];
+        if (missingFileIds.length > 0) {
+            const extraFiles = await safeQuery(
+                client,
+                `SELECT id, file_number, subject, assigned_to FROM efiling_files WHERE id::text = ANY($1::text[])`,
+                [missingFileIds]
+            );
+            const extraMap = new Map(extraFiles.map((file) => [String(file.id), file]));
+            for (const row of attachmentRows) {
+                const extra = extraMap.get(String(row.file_id));
+                if (!extra) continue;
+                row.file_number = row.file_number || extra.file_number;
+                row.subject = row.subject || extra.subject;
+                if (row.assigned_to == null) row.assigned_to = extra.assigned_to;
+            }
+        }
+
         const otherRows = actionRows.filter((row) => {
             const type = row.action_type || '';
-            return !NOISY_ACTION_TYPES.has(type) && !COVERED_ACTION_TYPES.has(type);
+            if (NOISY_ACTION_TYPES.has(type) || COVERED_ACTION_TYPES.has(type)) return false;
+            return !isNoisyDiaryEntry(row);
         });
 
         const markedFiles = uniqueByFile(markedRows);
@@ -510,6 +624,29 @@ export async function GET(request) {
                 remarks: row.remarks,
                 timestamp: row.created_at,
             })),
+            ...attachmentRows.map((row) => {
+                const displayName = row.file_name || 'attachment';
+                const fileLabel = row.file_number && row.file_number !== 'N/A' ? row.file_number : (row.file_id ? `file ${row.file_id}` : 'a file');
+                const ext = String(row.file_name || '').includes('.') ? String(row.file_name).split('.').pop() : null;
+                const storedName = row.id && ext ? `${row.id}.${ext}` : null;
+                const fileUrl = normalizeUploadUrl(row.file_url, storedName);
+                const isImage = isImageAttachment(row.file_type, row.file_name);
+                return {
+                    id: `attachment-${row.id}`,
+                    type: 'attachment',
+                    title: 'Uploaded an attachment',
+                    description: `Uploaded "${displayName}" to ${fileLabel}`,
+                    file_id: row.file_id,
+                    file_number: row.file_number,
+                    file_subject: row.subject,
+                    still_assigned: row.assigned_to != null && String(row.assigned_to) === String(efilingUserId),
+                    attachment_name: displayName,
+                    is_image: isImage,
+                    thumbnail_url: isImage ? fileUrl : null,
+                    file_url: fileUrl,
+                    timestamp: row.created_at,
+                };
+            }),
             ...otherRows.map((row) => {
                 const details = parseDetails(row.details);
                 const readableType = String(row.action_type || 'Action').replace(/_/g, ' ');
@@ -518,10 +655,8 @@ export async function GET(request) {
                     type: 'other',
                     title: readableType,
                     description:
-                        row.description && !String(row.description).startsWith('{')
-                            ? row.description
-                            : details.description || `Performed ${readableType.toLowerCase()}`,
-                    file_id: row.file_id,
+                        actionText(row) || `Performed ${readableType.toLowerCase()}`,
+                    file_id: row.file_id || details.fileId || details.file_id || null,
                     file_number: row.file_number,
                     file_subject: row.subject,
                     timestamp: row.created_at,
@@ -535,7 +670,7 @@ export async function GET(request) {
         for (const event of timeline) {
             const day = ymdInKarachi(new Date(event.timestamp));
             if (!dailyMap.has(day)) {
-                dailyMap.set(day, { date: day, marked: 0, signed: 0, created: 0, commented: 0, completed: 0, other: 0, total: 0 });
+                dailyMap.set(day, { date: day, marked: 0, signed: 0, created: 0, commented: 0, completed: 0, attachment: 0, other: 0, total: 0 });
             }
             const bucket = dailyMap.get(day);
             const key = event.type === 'commented' ? 'commented' : event.type;

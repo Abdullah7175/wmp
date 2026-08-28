@@ -20,6 +20,7 @@ import {
     BookOpen,
     X,
     Loader2,
+    Paperclip,
 } from 'lucide-react';
 
 const PERIODS = [
@@ -89,6 +90,7 @@ const TYPE_STYLES = {
     created: { label: 'Created', className: 'bg-sky-100 text-sky-800', icon: FilePlus },
     commented: { label: 'Comment', className: 'bg-amber-100 text-amber-800', icon: MessageSquare },
     completed: { label: 'Completed', className: 'bg-violet-100 text-violet-800', icon: CheckCircle2 },
+    attachment: { label: 'Attachment', className: 'bg-rose-100 text-rose-800', icon: Paperclip },
     other: { label: 'Action', className: 'bg-slate-100 text-slate-700', icon: Activity },
 };
 
@@ -455,30 +457,64 @@ export default function MyActionsTab() {
                                                 {group.events.map((event) => {
                                                     const style = TYPE_STYLES[event.type] || TYPE_STYLES.other;
                                                     const Icon = style.icon;
+                                                    const fileHref = event.file_id ? `/efilinguser/files/${event.file_id}` : null;
                                                     return (
                                                         <div key={event.id} className="relative">
                                                             <span className="absolute -left-4 top-4 h-3.5 w-3.5 rounded-full border-2 border-white bg-slate-300 shadow-sm" />
                                                             <div className="rounded-lg border border-slate-200 bg-white p-3.5 transition-colors hover:border-slate-300 hover:bg-slate-50/70">
                                                                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                                                                    <div className="min-w-0 flex-1">
-                                                                        <div className="flex flex-wrap items-center gap-2">
-                                                                            <Badge className={style.className}>
-                                                                                <Icon className="mr-1 h-3 w-3" />
-                                                                                {style.label}
-                                                                            </Badge>
-                                                                            <span className="text-xs text-slate-400">{formatTime(event.timestamp)}</span>
-                                                                        </div>
-                                                                        <p className="mt-2 text-sm font-medium text-slate-900">{event.description}</p>
-                                                                        {event.file_subject && event.file_subject !== 'N/A' && (
-                                                                            <p className="mt-1 truncate text-xs text-slate-500">{event.file_subject}</p>
+                                                                    <div className="flex min-w-0 flex-1 gap-3">
+                                                                        {event.type === 'attachment' && event.thumbnail_url && (
+                                                                            <a
+                                                                                href={event.file_url || event.thumbnail_url}
+                                                                                target="_blank"
+                                                                                rel="noreferrer"
+                                                                                className="shrink-0"
+                                                                                title={event.attachment_name || 'Preview attachment'}
+                                                                            >
+                                                                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                                                                <img
+                                                                                    src={event.thumbnail_url}
+                                                                                    alt={event.attachment_name || 'Attachment'}
+                                                                                    className="h-14 w-14 rounded-md border border-slate-200 object-cover bg-slate-50"
+                                                                                    onError={(e) => {
+                                                                                        e.currentTarget.style.display = 'none';
+                                                                                    }}
+                                                                                />
+                                                                            </a>
                                                                         )}
+                                                                        <div className="min-w-0 flex-1">
+                                                                            <div className="flex flex-wrap items-center gap-2">
+                                                                                <Badge className={style.className}>
+                                                                                    <Icon className="mr-1 h-3 w-3" />
+                                                                                    {style.label}
+                                                                                </Badge>
+                                                                                <span className="text-xs text-slate-400">{formatTime(event.timestamp)}</span>
+                                                                                {event.still_assigned && (
+                                                                                    <Badge className="bg-emerald-100 text-emerald-800">Still with you</Badge>
+                                                                                )}
+                                                                            </div>
+                                                                            <p className="mt-2 text-sm font-medium text-slate-900">{event.description}</p>
+                                                                            {event.file_number && event.file_number !== 'N/A' && fileHref && (
+                                                                                <button
+                                                                                    type="button"
+                                                                                    className="mt-1 text-sm font-semibold text-blue-700 hover:underline"
+                                                                                    onClick={() => router.push(fileHref)}
+                                                                                >
+                                                                                    {event.file_number}
+                                                                                </button>
+                                                                            )}
+                                                                            {event.file_subject && event.file_subject !== 'N/A' && (
+                                                                                <p className="mt-1 truncate text-xs text-slate-500">{event.file_subject}</p>
+                                                                            )}
+                                                                        </div>
                                                                     </div>
-                                                                    {event.file_id && (
+                                                                    {fileHref && (
                                                                         <Button
                                                                             variant="outline"
                                                                             size="sm"
                                                                             className="shrink-0"
-                                                                            onClick={() => router.push(`/efilinguser/files/${event.file_id}`)}
+                                                                            onClick={() => router.push(fileHref)}
                                                                         >
                                                                             Open
                                                                         </Button>
