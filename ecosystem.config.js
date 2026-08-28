@@ -5,8 +5,8 @@ module.exports = {
       script: 'node',
       args: '-r dotenv/config .next/standalone/server.js',
       cwd: '/opt/wmp16',
-      instances: 3,
-      exec_mode: 'cluster',
+      instances: 1,
+      exec_mode: 'fork',
       env: {
         NODE_ENV: 'production',
         PORT: 3000,
