@@ -39,7 +39,7 @@ export async function efilingAuthMiddleware(request) {
                     ? `${request.headers.get('x-forwarded-proto')}://${request.headers.get('x-forwarded-host')}`
                     : request.nextUrl.origin;
                 const connectSrc = `connect-src 'self' ws: ${origin} ${origin}`;
-                const csp = `default-src 'self'; ${scriptSrc}; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https: http:; media-src 'self' blob: https: http:; ${connectSrc}; frame-ancestors 'none'; object-src 'none'`;
+                const csp = `default-src 'self'; ${scriptSrc}; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https: http:; media-src 'self' blob: https: http:; ${connectSrc}; frame-src 'self' blob:; frame-ancestors 'none'; object-src 'none'`;
                 res.headers.set('Content-Security-Policy', csp);
 
                 if (request.method === 'POST') {
