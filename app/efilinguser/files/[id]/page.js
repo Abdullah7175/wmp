@@ -138,6 +138,62 @@ export default function FileDetail() {
     const isPdfAttachment = (a) =>
         a?.file_type === 'application/pdf' || a?.file_name?.toLowerCase().endsWith('.pdf');
 
+    const findAttachmentIndex = (attachment) =>
+        attachments.findIndex(
+            (item) =>
+                (attachment?.id && item.id === attachment.id) ||
+                item.file_url === attachment?.file_url
+        );
+
+    const renderPdfAttachmentPreview = (attachment, index) => {
+        const pdfPreview = pdfPreviews[index];
+        const pdfUrl = resolveAttachmentFileUrl(attachment?.file_url);
+
+        if (pdfPreview?.status === 'ready' && pdfPreview.pages.length > 0) {
+            return (
+                <div className="w-full bg-gray-50 p-2 space-y-4">
+                    {pdfPreview.pages.map((pageImage, pageIdx) => (
+                        <div key={pageIdx} className="flex flex-col items-center">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                                src={pageImage}
+                                alt={`${attachment.attachment_name || attachment.file_name} - page ${pageIdx + 1}`}
+                                className="max-w-full h-auto object-contain shadow-sm border bg-white"
+                            />
+                            {pdfPreview.pages.length > 1 && (
+                                <p className="text-xs text-gray-500 mt-1">
+                                    Page {pageIdx + 1} of {pdfPreview.pages.length}
+                                </p>
+                            )}
+                        </div>
+                    ))}
+                </div>
+            );
+        }
+
+        if (pdfPreview?.status === 'error') {
+            return (
+                <div className="p-8 text-center text-red-600 bg-gray-50">
+                    <FileText className="w-12 h-12 mx-auto text-gray-400 mb-2" />
+                    <p className="mb-3">Unable to preview this PDF in the browser.</p>
+                    {pdfUrl ? (
+                        <Button variant="outline" size="sm" onClick={() => window.open(pdfUrl, '_blank')}>
+                            <Eye className="w-4 h-4 mr-2" />
+                            Open in New Tab
+                        </Button>
+                    ) : null}
+                </div>
+            );
+        }
+
+        return (
+            <div className="p-8 text-center text-gray-500 bg-gray-50 min-h-[200px] flex flex-col items-center justify-center">
+                <FileText className="w-12 h-12 mx-auto text-gray-400 mb-2 animate-pulse" />
+                <p>Loading PDF preview...</p>
+            </div>
+        );
+    };
+
     // Render every PDF attachment into one image per page. This is what makes
     // PDFs show up in the print/PDF view exactly like images do - full size,
     // one page at a time - instead of the tiny, non-paginating embedded PDF
@@ -196,7 +252,7 @@ export default function FileDetail() {
                     // that never resolves) can never leave Print/Export
                     // permanently disabled.
                     const pdfDoc = await Promise.race([
-                        pdfjsLib.getDocument({ url: fileUrl }).promise,
+                        pdfjsLib.getDocument({ url: fileUrl, withCredentials: true }).promise,
                         new Promise((_, reject) =>
                             setTimeout(() => reject(new Error('PDF render timed out')), 15000)
                         )
@@ -2459,26 +2515,8 @@ const handleDeleteComment = async (commentId) => {
                                                     );
                                                 }
 
-                                                return (
-                                                    <iframe
-                                                        src={pdfUrl}
-                                                        className="w-full h-[70vh] min-h-[500px] border-0"
-                                                        title={selectedAttachment.file_name}
-                                                        style={{ display: 'block' }}
-                                                        onError={(e) => {
-                                                            console.error('Iframe failed to load PDF:', pdfUrl, e);
-                                                            const container = e.target.parentElement;
-                                                            if (container) {
-                                                                container.innerHTML = `
-                                                                <div class="p-8 text-center text-red-600">
-                                                                    <p class="mb-2">Failed to load PDF preview</p>
-                                                                    <p class="text-sm text-gray-500">Please use "Open in New Tab" or "Download" buttons below</p>
-                                                                </div>
-                                                            `;
-                                                            }
-                                                        }}
-                                                    />
-                                                );
+                                                const selectedIndex = findAttachmentIndex(selectedAttachment);
+                                                return renderPdfAttachmentPreview(selectedAttachment, selectedIndex);
                                             })()}
                                         </div>
                                         <div className="flex justify-end gap-2">
@@ -2639,23 +2677,6 @@ const handleDeleteComment = async (commentId) => {
                                         return url;
                                     };
 
-                                    const getPdfUrl = (fileUrl) => {
-                                        if (!fileUrl) return null;
-                                        if (fileUrl.startsWith('/api/uploads/')) return fileUrl;
-                                        if (fileUrl.startsWith('/uploads/')) return fileUrl.replace('/uploads/', '/api/uploads/');
-                                        if (fileUrl.startsWith('http://') || fileUrl.startsWith('https://')) {
-                                            try {
-                                                const url = new URL(fileUrl);
-                                                const path = url.pathname;
-                                                if (path.startsWith('/uploads/')) return path.replace('/uploads/', '/api/uploads/');
-                                                return path;
-                                            } catch (e) {
-                                                return fileUrl;
-                                            }
-                                        }
-                                        return `/api/uploads${fileUrl.startsWith('/') ? '' : '/'}${fileUrl}`;
-                                    };
-
                                     const isImage =
                                         a.file_type?.startsWith('image/') ||
                                         /\.(jpg|jpeg|png|webp|gif|svg)$/i.test(a.file_name || '');
@@ -2671,7 +2692,6 @@ const handleDeleteComment = async (commentId) => {
                                         a.file_name?.toLowerCase().endsWith('.docx');
 
                                     const mediaUrl = getMediaUrl(a.file_url);
-                                    const pdfUrl = getPdfUrl(a.file_url);
 
                                     return (
                                         <div
@@ -2711,15 +2731,7 @@ const handleDeleteComment = async (commentId) => {
                                                     </div>
                                                 )}
 
-                                                {isPdf && (
-                                                    <div className="w-full h-[85vh]">
-                                                        <iframe
-                                                            src={pdfUrl}
-                                                            className="w-full h-full border-0"
-                                                            title={a.file_name || `PDF-${index}`}
-                                                        />
-                                                    </div>
-                                                )}
+                                                {isPdf && renderPdfAttachmentPreview(a, index)}
 
                                                 {isWord && (
                                                     <div className="p-8 text-center bg-gray-50 border-t border-b">
