@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -22,6 +22,7 @@ import {
     Loader2,
     Paperclip,
     ChevronDown,
+    Search,
 } from 'lucide-react';
 
 const PERIODS = [
@@ -149,6 +150,7 @@ export default function MyActionsTab() {
     const [data, setData] = useState(null);
     const [selectedCategory, setSelectedCategory] = useState(null);
     const [expandedDates, setExpandedDates] = useState(() => new Set());
+    const [searchQuery, setSearchQuery] = useState('');
 
     const loadActions = async (nextPeriod = period, from = customFrom, to = customTo) => {
         try {
@@ -194,13 +196,36 @@ export default function MyActionsTab() {
         loadActions('custom', customFrom, customTo || customFrom);
     };
 
+    const matchesSearch = useCallback((item) => {
+        const query = searchQuery.trim().toLowerCase();
+        if (!query) return true;
+        const haystack = [
+            item.file_number,
+            item.search_file_number,
+            item.file_subject,
+            item.search_file_subject,
+            item.subject,
+            item.file_type_name,
+            item.file_type_code,
+            item.created_by_name,
+            item.description,
+            item.uploaded_to_label,
+            item.attachment_name,
+        ]
+            .filter(Boolean)
+            .join(' ')
+            .toLowerCase();
+        return haystack.includes(query);
+    }, [searchQuery]);
+
     const summary = data?.summary;
-    const selectedFiles = selectedCategory ? data?.filesByCategory?.[selectedCategory] || [] : [];
+    const selectedFiles = (selectedCategory ? data?.filesByCategory?.[selectedCategory] || [] : [])
+        .filter(matchesSearch);
     const selectedMeta = ACTION_CARDS.find((card) => card.key === selectedCategory);
     const SelectedIcon = selectedMeta?.icon;
 
     const groupedTimeline = useMemo(() => {
-        const events = data?.timeline || [];
+        const events = (data?.timeline || []).filter(matchesSearch);
         const groups = [];
         const index = new Map();
         for (const event of events) {
@@ -212,15 +237,15 @@ export default function MyActionsTab() {
             groups[index.get(day)].events.push(event);
         }
         return groups;
-    }, [data?.timeline]);
+    }, [data?.timeline, matchesSearch]);
 
     useEffect(() => {
-        if (groupedTimeline.length === 0) {
+        if (!searchQuery.trim()) {
             setExpandedDates(new Set());
             return;
         }
-        setExpandedDates(new Set([groupedTimeline[0].date]));
-    }, [groupedTimeline]);
+        setExpandedDates(new Set(groupedTimeline.map((group) => group.date)));
+    }, [searchQuery, groupedTimeline]);
 
     const toggleDate = (date) => {
         setExpandedDates((prev) => {
@@ -292,6 +317,30 @@ export default function MyActionsTab() {
                                 Apply
                             </Button>
                         </div>
+                    )}
+                    <div className="relative mt-4">
+                        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                        <Input
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            placeholder="Search by file number, subject, file type, or created by..."
+                            className="h-11 border-slate-200 bg-white pl-10 pr-10 shadow-sm"
+                        />
+                        {searchQuery && (
+                            <button
+                                type="button"
+                                onClick={() => setSearchQuery('')}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                                aria-label="Clear search"
+                            >
+                                <X className="h-4 w-4" />
+                            </button>
+                        )}
+                    </div>
+                    {searchQuery.trim() && (
+                        <p className="mt-2 text-xs text-slate-500">
+                            Showing matches for “{searchQuery.trim()}” across file number, subject, type, and creator.
+                        </p>
                     )}
                 </CardContent>
             </Card>
@@ -366,7 +415,9 @@ export default function MyActionsTab() {
                             <CardContent>
                                 {selectedFiles.length === 0 ? (
                                     <div className="py-8 text-center text-sm text-slate-500">
-                                        No {selectedMeta.title.toLowerCase()} files in this period.
+                                        {searchQuery.trim()
+                                            ? `No ${selectedMeta.title.toLowerCase()} files match your search.`
+                                            : `No ${selectedMeta.title.toLowerCase()} files in this period.`}
                                     </div>
                                 ) : (
                                     <div className="space-y-2">
@@ -390,7 +441,14 @@ export default function MyActionsTab() {
                                                             </Badge>
                                                         )}
                                                     </div>
-                                                    <p className="mt-1 truncate text-sm text-slate-600">{file.subject}</p>
+                                                    <p className="mt-1 truncate text-sm text-slate-600">{file.subject || file.search_file_subject}</p>
+                                                    {(file.file_type_name || file.created_by_name) && (
+                                                        <p className="mt-1 truncate text-xs text-slate-500">
+                                                            {[file.file_type_name, file.created_by_name ? `Created by ${file.created_by_name}` : null]
+                                                                .filter(Boolean)
+                                                                .join(' · ')}
+                                                        </p>
+                                                    )}
                                                     <p className="mt-1 text-xs text-slate-400">
                                                         {formatDateTime(file.timestamp)}
                                                         {file.remarks ? ` · ${file.remarks}` : ''}
@@ -450,10 +508,10 @@ export default function MyActionsTab() {
                                     Action diary
                                 </CardTitle>
                                 <CardDescription>
-                                    Press a date to expand or collapse that day. The latest day is open first.
+                                    Dates start collapsed. Press a date to open that day.
                                 </CardDescription>
                             </div>
-                            {groupedTimeline.length > 1 && (
+                            {groupedTimeline.length > 0 && (
                                 <div className="flex shrink-0 gap-2">
                                     <Button variant="outline" size="sm" onClick={expandAllDates}>
                                         Expand all
@@ -468,8 +526,14 @@ export default function MyActionsTab() {
                             {groupedTimeline.length === 0 ? (
                                 <div className="py-12 text-center text-slate-500">
                                     <FileText className="mx-auto mb-3 h-12 w-12 opacity-40" />
-                                    <p className="font-medium">No actions in this period</p>
-                                    <p className="mt-1 text-sm">Mark, sign, or create a file and it will appear here.</p>
+                                    <p className="font-medium">
+                                        {searchQuery.trim() ? 'No matching files' : 'No actions in this period'}
+                                    </p>
+                                    <p className="mt-1 text-sm">
+                                        {searchQuery.trim()
+                                            ? 'Try a different file number, subject, type, or creator name.'
+                                            : 'Mark, sign, or create a file and it will appear here.'}
+                                    </p>
                                 </div>
                             ) : (
                                 <div className="space-y-3">
@@ -531,6 +595,8 @@ export default function MyActionsTab() {
                                                         ? `/efilinguser/files/${event.file_id}`
                                                         : null;
                                                     const attachmentHref = event.file_url || event.thumbnail_url;
+                                                    const displayNumber = event.file_number || event.search_file_number;
+                                                    const displaySubject = event.file_subject || event.search_file_subject;
                                                     return (
                                                         <div key={event.id} className="relative">
                                                             <span className="absolute -left-4 top-4 h-3.5 w-3.5 rounded-full border-2 border-white bg-slate-300 shadow-sm" />
@@ -582,17 +648,31 @@ export default function MyActionsTab() {
                                                                                 {event.description}
                                                                                 {event.type === 'attachment' && event.uploaded_to_label ? ` · ${event.uploaded_to_label}` : ''}
                                                                             </p>
-                                                                            {canOpenFile && event.file_number && event.file_number !== 'N/A' && fileHref && (
-                                                                                <button
-                                                                                    type="button"
-                                                                                    className="mt-1 text-sm font-semibold text-blue-700 hover:underline"
-                                                                                    onClick={() => router.push(fileHref)}
-                                                                                >
-                                                                                    {event.file_number}
-                                                                                </button>
+                                                                            {displayNumber && displayNumber !== 'N/A' && (
+                                                                                canOpenFile && fileHref ? (
+                                                                                    <button
+                                                                                        type="button"
+                                                                                        className="mt-1 text-sm font-semibold text-blue-700 hover:underline"
+                                                                                        onClick={() => router.push(fileHref)}
+                                                                                    >
+                                                                                        {displayNumber}
+                                                                                    </button>
+                                                                                ) : (
+                                                                                    <p className="mt-1 text-sm font-semibold text-slate-700">{displayNumber}</p>
+                                                                                )
                                                                             )}
-                                                                            {event.file_subject && event.file_subject !== 'N/A' && (
-                                                                                <p className="mt-1 truncate text-xs text-slate-500">{event.file_subject}</p>
+                                                                            {displaySubject && displaySubject !== 'N/A' && (
+                                                                                <p className="mt-1 truncate text-xs text-slate-500">{displaySubject}</p>
+                                                                            )}
+                                                                            {(event.file_type_name || event.created_by_name) && (
+                                                                                <p className="mt-1 truncate text-xs text-slate-400">
+                                                                                    {[
+                                                                                        event.file_type_name,
+                                                                                        event.created_by_name ? `Created by ${event.created_by_name}` : null,
+                                                                                    ]
+                                                                                        .filter(Boolean)
+                                                                                        .join(' · ')}
+                                                                                </p>
                                                                             )}
                                                                         </div>
                                                                     </div>

@@ -153,6 +153,18 @@ function uniqueByFile(rows) {
     return unique;
 }
 
+function applyFileMeta(item, meta) {
+    if (!meta) return item;
+    if (!item.file_number) item.file_number = meta.file_number;
+    if (!item.file_subject && !item.subject) item.file_subject = meta.subject;
+    if (!item.search_file_number) item.search_file_number = meta.file_number;
+    if (!item.search_file_subject) item.search_file_subject = meta.subject;
+    item.file_type_name = meta.file_type_name || item.file_type_name || null;
+    item.file_type_code = meta.file_type_code || item.file_type_code || null;
+    item.created_by_name = meta.created_by_name || item.created_by_name || null;
+    return item;
+}
+
 function parseDetails(details) {
     if (!details) return {};
     if (typeof details === 'object') return details;
@@ -615,6 +627,8 @@ export async function GET(request) {
                 file_id: row.file_id,
                 file_number: row.file_number,
                 file_subject: row.subject,
+                search_file_number: row.file_number,
+                search_file_subject: row.subject,
                 remarks: row.remarks,
                 timestamp: row.created_at,
             })),
@@ -626,6 +640,8 @@ export async function GET(request) {
                 file_id: row.file_id,
                 file_number: row.file_number,
                 file_subject: row.subject,
+                search_file_number: row.file_number,
+                search_file_subject: row.subject,
                 timestamp: row.created_at,
             })),
             ...createdRows.map((row) => ({
@@ -636,6 +652,8 @@ export async function GET(request) {
                 file_id: row.file_id,
                 file_number: row.file_number,
                 file_subject: row.subject,
+                search_file_number: row.file_number,
+                search_file_subject: row.subject,
                 timestamp: row.created_at,
             })),
             ...commentRows.map((row) => ({
@@ -648,6 +666,8 @@ export async function GET(request) {
                 file_id: row.file_id,
                 file_number: row.file_number,
                 file_subject: row.subject,
+                search_file_number: row.file_number,
+                search_file_subject: row.subject,
                 timestamp: row.created_at,
             })),
             ...completedRows.map((row) => ({
@@ -658,6 +678,8 @@ export async function GET(request) {
                 file_id: row.file_id,
                 file_number: row.file_number,
                 file_subject: row.subject,
+                search_file_number: row.file_number,
+                search_file_subject: row.subject,
                 remarks: row.remarks,
                 timestamp: row.created_at,
             })),
@@ -675,8 +697,11 @@ export async function GET(request) {
                     title: 'Uploaded an attachment',
                     description: `Uploaded "${displayName}"`,
                     file_id: canOpenFile ? row.file_id : null,
+                    source_file_id: row.file_id,
                     file_number: canOpenFile ? row.file_number : null,
                     file_subject: canOpenFile ? (row.subject || null) : null,
+                    search_file_number: row.file_number,
+                    search_file_subject: row.subject,
                     still_assigned: canOpenFile,
                     can_open_file: canOpenFile,
                     attachment_name: displayName,
@@ -699,12 +724,70 @@ export async function GET(request) {
                     file_id: row.file_id || details.fileId || details.file_id || null,
                     file_number: row.file_number,
                     file_subject: row.subject,
+                    search_file_number: row.file_number,
+                    search_file_subject: row.subject,
                     timestamp: row.created_at,
                 };
             }),
         ]
             .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
             .slice(0, 400);
+
+        const fileIdsForMeta = [...new Set([
+            ...timeline.map((event) => event.source_file_id || event.file_id),
+            ...Object.values(filesByCategory).flat().map((file) => file.file_id),
+        ].filter(Boolean).map((id) => String(id)))];
+
+        let fileMeta = new Map();
+        if (fileIdsForMeta.length > 0) {
+            let metaRows = await safeQuery(
+                client,
+                `
+                SELECT
+                    f.id::text AS id,
+                    f.file_number,
+                    f.subject,
+                    ft.name AS file_type_name,
+                    ft.code AS file_type_code,
+                    u.name AS created_by_name
+                FROM efiling_files f
+                LEFT JOIN efiling_file_types ft ON f.file_type_id = ft.id
+                LEFT JOIN efiling_users eu ON eu.id = f.created_by
+                LEFT JOIN users u ON u.id = eu.user_id
+                WHERE f.id::text = ANY($1::text[])
+                `,
+                [fileIdsForMeta]
+            );
+            if (metaRows.length === 0) {
+                metaRows = await safeQuery(
+                    client,
+                    `
+                    SELECT
+                        f.id::text AS id,
+                        f.file_number,
+                        f.subject,
+                        NULL AS file_type_name,
+                        NULL AS file_type_code,
+                        u.name AS created_by_name
+                    FROM efiling_files f
+                    LEFT JOIN efiling_users eu ON eu.id = f.created_by
+                    LEFT JOIN users u ON u.id = eu.user_id
+                    WHERE f.id::text = ANY($1::text[])
+                    `,
+                    [fileIdsForMeta]
+                );
+            }
+            fileMeta = new Map(metaRows.map((row) => [String(row.id), row]));
+        }
+
+        for (const event of timeline) {
+            applyFileMeta(event, fileMeta.get(String(event.source_file_id || event.file_id)));
+        }
+        for (const list of Object.values(filesByCategory)) {
+            for (const file of list) {
+                applyFileMeta(file, fileMeta.get(String(file.file_id)));
+            }
+        }
 
         const dailyMap = new Map();
         for (const event of timeline) {
