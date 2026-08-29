@@ -21,6 +21,7 @@ import {
     X,
     Loader2,
     Paperclip,
+    ChevronDown,
 } from 'lucide-react';
 
 const PERIODS = [
@@ -147,6 +148,7 @@ export default function MyActionsTab() {
     const [error, setError] = useState(null);
     const [data, setData] = useState(null);
     const [selectedCategory, setSelectedCategory] = useState(null);
+    const [expandedDates, setExpandedDates] = useState(() => new Set());
 
     const loadActions = async (nextPeriod = period, from = customFrom, to = customTo) => {
         try {
@@ -211,6 +213,31 @@ export default function MyActionsTab() {
         }
         return groups;
     }, [data?.timeline]);
+
+    useEffect(() => {
+        if (groupedTimeline.length === 0) {
+            setExpandedDates(new Set());
+            return;
+        }
+        setExpandedDates(new Set([groupedTimeline[0].date]));
+    }, [groupedTimeline]);
+
+    const toggleDate = (date) => {
+        setExpandedDates((prev) => {
+            const next = new Set(prev);
+            if (next.has(date)) next.delete(date);
+            else next.add(date);
+            return next;
+        });
+    };
+
+    const expandAllDates = () => {
+        setExpandedDates(new Set(groupedTimeline.map((group) => group.date)));
+    };
+
+    const collapseAllDates = () => {
+        setExpandedDates(new Set());
+    };
 
     const maxDaily = Math.max(1, ...(data?.dailyBreakdown || []).map((d) => d.total));
 
@@ -416,14 +443,26 @@ export default function MyActionsTab() {
                     )}
 
                     <Card className="border-slate-200 shadow-sm">
-                        <CardHeader>
-                            <CardTitle className="flex items-center gap-2">
-                                <Clock className="h-5 w-5 text-slate-500" />
-                                Action diary
-                            </CardTitle>
-                            <CardDescription>
-                                Latest actions appear first. This is a notebook of what you have done.
-                            </CardDescription>
+                        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between space-y-0">
+                            <div>
+                                <CardTitle className="flex items-center gap-2">
+                                    <Clock className="h-5 w-5 text-slate-500" />
+                                    Action diary
+                                </CardTitle>
+                                <CardDescription>
+                                    Press a date to expand or collapse that day. The latest day is open first.
+                                </CardDescription>
+                            </div>
+                            {groupedTimeline.length > 1 && (
+                                <div className="flex shrink-0 gap-2">
+                                    <Button variant="outline" size="sm" onClick={expandAllDates}>
+                                        Expand all
+                                    </Button>
+                                    <Button variant="outline" size="sm" onClick={collapseAllDates}>
+                                        Collapse all
+                                    </Button>
+                                </div>
+                            )}
                         </CardHeader>
                         <CardContent>
                             {groupedTimeline.length === 0 ? (
@@ -433,17 +472,55 @@ export default function MyActionsTab() {
                                     <p className="mt-1 text-sm">Mark, sign, or create a file and it will appear here.</p>
                                 </div>
                             ) : (
-                                <div className="space-y-8">
-                                    {groupedTimeline.map((group) => (
-                                        <div key={group.date}>
-                                            <div className="sticky top-0 z-10 mb-3 flex items-center gap-3 bg-white/90 py-1 backdrop-blur-sm">
-                                                <div className="h-px flex-1 bg-slate-200" />
-                                                <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-600">
-                                                    {formatDayHeading(group.date)}
+                                <div className="space-y-3">
+                                    {groupedTimeline.map((group) => {
+                                        const isOpen = expandedDates.has(group.date);
+                                        const typeCounts = group.events.reduce((acc, event) => {
+                                            const key = event.type || 'other';
+                                            acc[key] = (acc[key] || 0) + 1;
+                                            return acc;
+                                        }, {});
+                                        return (
+                                        <div key={group.date} className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+                                            <button
+                                                type="button"
+                                                onClick={() => toggleDate(group.date)}
+                                                aria-expanded={isOpen}
+                                                className={`flex w-full items-center gap-3 px-4 py-3 text-left transition-colors ${
+                                                    isOpen ? 'bg-slate-50' : 'bg-white hover:bg-slate-50'
+                                                }`}
+                                            >
+                                                <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition-transform duration-200 ${isOpen ? 'rotate-0' : '-rotate-90'}`}>
+                                                    <ChevronDown className="h-4 w-4" />
                                                 </span>
-                                                <div className="h-px flex-1 bg-slate-200" />
-                                            </div>
-                                            <div className="relative space-y-3 pl-4 before:absolute before:bottom-2 before:left-[7px] before:top-2 before:w-px before:bg-slate-200">
+                                                <div className="min-w-0 flex-1">
+                                                    <div className="flex flex-wrap items-center gap-2">
+                                                        <span className="text-sm font-semibold tracking-wide text-slate-800">
+                                                            {formatDayHeading(group.date)}
+                                                        </span>
+                                                        <span className="rounded-full bg-slate-900 px-2 py-0.5 text-[11px] font-semibold text-white">
+                                                            {group.events.length} {group.events.length === 1 ? 'action' : 'actions'}
+                                                        </span>
+                                                    </div>
+                                                    {!isOpen && (
+                                                        <p className="mt-1 truncate text-xs text-slate-500">
+                                                            {Object.entries(typeCounts)
+                                                                .map(([type, count]) => `${count} ${(TYPE_STYLES[type]?.label || type).toLowerCase()}`)
+                                                                .join(' · ')}
+                                                        </p>
+                                                    )}
+                                                </div>
+                                                <span className="hidden text-xs font-medium text-slate-400 sm:inline">
+                                                    {isOpen ? 'Hide' : 'Show'}
+                                                </span>
+                                            </button>
+                                            <div
+                                                className={`grid transition-[grid-template-rows] duration-300 ease-out ${
+                                                    isOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
+                                                }`}
+                                            >
+                                                <div className="overflow-hidden">
+                                            <div className="relative space-y-3 border-t border-slate-100 px-4 py-4 pl-8 before:absolute before:bottom-5 before:left-[27px] before:top-5 before:w-px before:bg-slate-200">
                                                 {group.events.map((event) => {
                                                     const style = TYPE_STYLES[event.type] || TYPE_STYLES.other;
                                                     const Icon = style.icon;
@@ -544,8 +621,11 @@ export default function MyActionsTab() {
                                                     );
                                                 })}
                                             </div>
+                                                </div>
+                                            </div>
                                         </div>
-                                    ))}
+                                        );
+                                    })}
                                 </div>
                             )}
                         </CardContent>

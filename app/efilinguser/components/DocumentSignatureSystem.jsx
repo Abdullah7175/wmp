@@ -656,10 +656,10 @@ export default function DocumentSignatureSystem({
             : null;
 
         return (
-            <div className="w-12 h-8 border rounded bg-white flex items-center justify-center flex-shrink-0">
+            <div className="w-24 h-14 border rounded bg-white flex items-center justify-center flex-shrink-0 px-1">
                 {signature.type === 'text' ? (
                     <span
-                        className="text-sm font-bold"
+                        className="text-base font-bold"
                         style={{
                             fontFamily: signature.font || signatureFont,
                             color: signature.color === 'blue' ? '#2563eb' :
@@ -673,7 +673,7 @@ export default function DocumentSignatureSystem({
                     <img
                         src={imageUrl}
                         alt="Signature"
-                        className="w-10 h-6 object-contain"
+                        className="max-h-12 max-w-[88px] w-auto h-auto object-contain"
                         loading="lazy"
                         onError={(e) => {
                             const img = e.target;
@@ -869,7 +869,7 @@ export default function DocumentSignatureSystem({
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2">
                                 <Shield className="w-5 h-5" />
-                                Document Signatures ({timelineEntries.length})
+                                Document Signature and Comments ({timelineEntries.length})
                             </CardTitle>
                         </CardHeader>
                         <CardContent>

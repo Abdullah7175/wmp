@@ -2072,7 +2072,7 @@ const handleDeleteComment = async (commentId) => {
                             <CardHeader>
                                 <CardTitle className="flex items-center gap-2">
                                     <Shield className="w-5 h-5" />
-                                    Document Signatures
+                                    Document Signature and Comments
                                 </CardTitle>
                             </CardHeader>
                             <CardContent>
