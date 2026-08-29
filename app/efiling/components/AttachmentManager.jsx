@@ -359,7 +359,7 @@ export default function AttachmentManager({ fileId, canEdit = true }) {
                                     className="mt-1"
                                 />
                                 <p className="text-sm text-gray-500 mt-1">
-                                    Allowed types: PDF, DOC, DOCX, JPG, JPEG, PNG (Max 15MB each)
+                                    Allowed types: PDF, DOC, DOCX, JPG, JPEG, PNG (Max 10MB each)
                                 </p>
                             </div>
 

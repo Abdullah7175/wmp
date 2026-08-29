@@ -33,10 +33,10 @@ export async function POST(request) {
         const fileSize = file.size;
         const fileType = file.type;
         
-        // Validate file size (5MB max for attachments)
-        if (fileSize > 5 * 1024 * 1024) {
+        // Validate file size (10MB max for attachments)
+        if (fileSize > 10 * 1024 * 1024) {
             return NextResponse.json(
-                { error: 'File size exceeds limit. Maximum allowed: 5MB' },
+                { error: 'File size exceeds limit. Maximum allowed: 10MB' },
                 { status: 400 }
             );
         }
@@ -116,7 +116,7 @@ export async function POST(request) {
                 SELECT eu.id as efiling_id, u.id as user_id, u.name
                 FROM efiling_users eu
                 JOIN users u ON eu.user_id = u.id
-                WHERE eu.id = $1 OR u.id = $1
+                WHERE eu.id = $1
                 LIMIT 1
             `, [userId]);
             if (userRes.rows.length > 0) {

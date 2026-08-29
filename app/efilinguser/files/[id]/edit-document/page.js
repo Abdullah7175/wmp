@@ -370,6 +370,11 @@ export default function DocumentEditor() {
         setShowMarkToModal(true);
     };
 
+    const handleMarkToSuccess = async () => {
+        // Route to All Files
+        router.replace("/efilinguser/files");
+    };
+
     const fetchTemplates = async () => {
         try {
             setLoadingTemplates(true);
@@ -1604,6 +1609,7 @@ export default function DocumentEditor() {
                     showMarkToModal={showMarkToModal}
                     fileId={params.id}
                     onClose={() => setShowMarkToModal(false)}
+                    onSuccess={handleMarkToSuccess}
                 />
             )}
 

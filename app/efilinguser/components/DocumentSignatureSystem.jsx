@@ -1294,12 +1294,13 @@ export default function DocumentSignatureSystem({
                         <CardContent className="space-y-4">
                             <div>
                                 <Label htmlFor="commentText">Comment</Label>
-                                <Input
+                                <textarea
                                     id="commentText"
                                     value={commentText}
+                                    rows={10}
                                     onChange={(e) => setCommentText(e.target.value)}
                                     placeholder="Enter your comment..."
-                                    className="mt-1"
+                                    className="w-full border rounded-md p-2 text-sm"
                                 />
                             </div>
                             <div className="flex justify-end gap-2">
