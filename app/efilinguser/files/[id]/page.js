@@ -607,35 +607,22 @@ export default function FileDetail() {
         }
     };
 
-    const handleDeleteAttachment = async (attachmentId, e) => {
-        // Stop modal from opening when clicking the delete button
-        e.stopPropagation();
+const handleDeleteAttachment = async (attachmentId, e) => {
+    e.stopPropagation(); 
+    if (!confirm("Are you sure you want to delete this attachment?")) return;
 
-        if (!confirm("Are you sure you want to delete this attachment?")) {
-            return;
+    try {
+        const response = await fetch(`/api/efiling/files/delete-attachment/${attachmentId}`, {
+            method: 'DELETE',
+        });
+        const data = await response.json();
+
+        if (response.ok && data.success) {
+            toast({ title: "Success", description: "Attachment deleted successfully" });
+            fetchExtras();
+        } else {
+            toast({ title: "Error", description: data.error || "Failed to delete attachment", variant: "destructive" });
         }
-
-        try {
-            const response = await fetch(`/api/efiling/files/delete-attachment/${attachmentId}`, {
-                method: 'DELETE',
-            });
-
-            const data = await response.json();
-
-            if (response.ok && data.success) {
-                toast({
-                    title: "Success",
-                    description: "Attachment deleted successfully",
-                });
-                // Refresh attachments list
-                fetchExtras();
-            } else {
-                toast({
-                    title: "Error",
-                    description: data.error || "Failed to delete attachment",
-                    variant: "destructive",
-                });
-            }
         } catch (error) {
             console.error('Error deleting attachment:', error);
             toast({
