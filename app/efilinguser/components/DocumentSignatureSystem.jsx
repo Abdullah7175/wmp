@@ -48,7 +48,7 @@ export default function DocumentSignatureSystem({
     const [activeSignatureTab, setActiveSignatureTab] = useState("draw");
     const [editingSignatureId, setEditingSignatureId] = useState(null);
     const [activeSignature, setActiveSignature] = useState(null);
-
+    const [fileData, setFileData] = useState(null);
     const sigCanvasRef = useRef(null);
     const documentRef = useRef(null);
     const fileInputRef = useRef(null);
@@ -78,11 +78,111 @@ export default function DocumentSignatureSystem({
     // Load existing signatures and comments
     useEffect(() => {
         if (fileId) {
+            loadFileDetails();
             loadSignatures();
             loadComments();
             loadUserSignatures();
         }
     }, [fileId, efilingUserId]);
+
+    const loadFileDetails = async () => {
+    try {
+        const response = await fetch(`/api/efiling/files/${fileId}`);
+        if (response.ok) {
+            const data = await response.json();
+            setFileData(data);
+        }
+    } catch (error) {
+        console.error('Error loading file details:', error);
+    }
+};
+
+// Ensure canEditComment evaluates both session user id and efilingUserId
+const canEditComment = (comment) => {
+    if (['superadmin', 'CEO', 'Chief IT Officer'].includes(userRole || actualUserRole)) {
+        return true;
+    }
+
+    if (!comment || !fileData) return false;
+
+    const currentIds = [
+        session?.user?.id ? String(session.user.id) : null,
+        efilingUserId ? String(efilingUserId) : null
+    ].filter(Boolean);
+
+    if (currentIds.length === 0) return false;
+
+    // 1. Is user the comment owner?
+    const isCommentOwner = currentIds.includes(String(comment.user_id));
+    if (!isCommentOwner) return false;
+
+    // 2. Is file currently with user or newly created by user (assigned_to === null)?
+    const isAssignedToUser = fileData.assigned_to !== null && fileData.assigned_to !== undefined && currentIds.includes(String(fileData.assigned_to));
+    const isCreatorAtInitialState = (fileData.assigned_to === null || fileData.assigned_to === undefined) && currentIds.includes(String(fileData.created_by));
+
+    return isAssignedToUser || isCreatorAtInitialState;
+};
+
+const handleEditComment = async (commentId) => {
+    try {
+        const userIdToPass = efilingUserId || session?.user?.id;
+        const response = await fetch(`/api/efiling/files/${fileId}/comments/${commentId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                text: editCommentText,
+                user_id: userIdToPass 
+            })
+        });
+
+        if (response.ok) {
+            setComments(prev => prev.map(comment =>
+                comment.id === commentId
+                    ? { ...comment, text: editCommentText, edited: true, edited_at: new Date().toISOString() }
+                    : comment
+            ));
+            setEditingCommentId(null);
+            setEditCommentText("");
+            toast({
+                title: "Comment Updated",
+                description: "Your comment has been updated.",
+            });
+        } else {
+            throw new Error('Failed to update comment');
+        }
+    } catch (error) {
+        toast({
+            title: "Error",
+            description: "Failed to update comment. Please try again.",
+            variant: "destructive",
+        });
+    }
+};
+
+const handleDeleteComment = async (commentId) => {
+    try {
+        const userIdToPass = efilingUserId || session?.user?.id;
+        const response = await fetch(`/api/efiling/files/${fileId}/comments/${commentId}?userId=${userIdToPass}`, {
+            method: 'DELETE'
+        });
+
+        if (response.ok) {
+            setComments(prev => prev.filter(comment => comment.id !== commentId));
+            toast({
+                title: "Comment Deleted",
+                description: "Your comment has been deleted.",
+            });
+        } else {
+            throw new Error('Failed to delete comment');
+        }
+    } catch (error) {
+        toast({
+            title: "Error",
+            description: "Failed to delete comment. Please try again.",
+            variant: "destructive",
+        });
+    }
+};
 
     const fetchUserRole = async () => {
         if (!efilingUserId || !session?.user?.id) return;
@@ -563,69 +663,11 @@ export default function DocumentSignatureSystem({
         await addCommentToDocument();
     };
 
-    // Edit comment
-    const handleEditComment = async (commentId) => {
-        try {
-            const response = await fetch(`/api/efiling/files/${fileId}/comments/${commentId}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ text: editCommentText })
-            });
+ 
 
-            if (response.ok) {
-                setComments(prev => prev.map(comment =>
-                    comment.id === commentId
-                        ? { ...comment, text: editCommentText, edited: true, edited_at: new Date().toISOString() }
-                        : comment
-                ));
-                setEditingCommentId(null);
-                setEditCommentText("");
-                toast({
-                    title: "Comment Updated",
-                    description: "Your comment has been updated.",
-                });
-            } else {
-                throw new Error('Failed to update comment');
-            }
-        } catch (error) {
-            toast({
-                title: "Error",
-                description: "Failed to update comment. Please try again.",
-                variant: "destructive",
-            });
-        }
-    };
 
-    // Delete comment
-    const handleDeleteComment = async (commentId) => {
-        try {
-            const response = await fetch(`/api/efiling/files/${fileId}/comments/${commentId}`, {
-                method: 'DELETE'
-            });
 
-            if (response.ok) {
-                setComments(prev => prev.filter(comment => comment.id !== commentId));
-                toast({
-                    title: "Comment Deleted",
-                    description: "Your comment has been deleted.",
-                });
-            } else {
-                throw new Error('Failed to delete comment');
-            }
-        } catch (error) {
-            toast({
-                title: "Error",
-                description: "Failed to delete comment. Please try again.",
-                variant: "destructive",
-            });
-        }
-    };
 
-    // Check if user can edit comment
-    const canEditComment = (comment) => {
-        return (comment.user_id && efilingUserId && Number(comment.user_id) === Number(efilingUserId)) ||
-            ['superadmin', 'CEO', 'Chief IT Officer'].includes(userRole);
-    };
 
     const getSignatureImageUrl = (content) => {
         if (!content) return null;
