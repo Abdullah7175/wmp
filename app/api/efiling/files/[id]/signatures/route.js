@@ -179,7 +179,7 @@ export async function POST(request, { params }) {
                 
                 if (userRoleRes.rows.length > 0) {
                     const userRoleCode = (userRoleRes.rows[0].role_code || '').toUpperCase();
-                    isHigherAuthority = userRoleCode === 'SE' || 
+                    isHigherAuthority = userRoleCode === 'SE' || userRoleCode.startsWith('XEN_')||
                                        userRoleCode === 'CE' || 
                                        userRoleCode === 'CEO' || 
                                        userRoleCode === 'COO' || 

@@ -225,7 +225,7 @@ const handleDeleteComment = async (commentId) => {
             if (response.ok) {
                 const data = await response.json();
                 setSignatures(data);
-            }
+            } 
         } catch (error) {
             console.error('Error loading signatures:', error);
         }
