@@ -145,9 +145,20 @@ export async function GET(request, { params }) {
             LEFT JOIN efiling_roles ar ON assigned_efiling.efiling_role_id = ar.id
             LEFT JOIN efiling_users creator_efiling ON f.created_by = creator_efiling.id
             LEFT JOIN users creator_users ON creator_efiling.user_id = creator_users.id
+            LEFT JOIN users creator_users ON creator_efiling.user_id = creator_users.id
             WHERE f.id = $1
         `, [id]);
 
+
+        // Add before return NextResponse.json(...)
+        // console.log("--- DEBUG CREATOR QUERY RESULT ---");
+        // console.log("Sample Raw File Record:", {
+        //     file_id: result.rows[0]?.id,
+        //     created_by_raw: result.rows[0]?.created_by,
+        //     creator_user_name: result.rows[0]?.creator_user_name,
+        //     created_by_name: result.rows[0]?.created_by_name,
+        //     created_by_name_with_designation: result.rows[0]?.created_by_name_with_designation
+        // });
         if (result.rows.length === 0) {
             return NextResponse.json({ error: 'File not found' }, { status: 404 });
         }

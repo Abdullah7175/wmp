@@ -596,7 +596,8 @@ export default function FilesPage() {
                                         <TableHead>Department</TableHead>
                                         <TableHead>Status</TableHead>
                                         <TableHead>TAT</TableHead>
-                                        <TableHead>Created</TableHead>
+                                        <TableHead>Created By</TableHead>
+                                        <TableHead>Created at</TableHead>
                                         <TableHead>File Aging</TableHead>
                                         <TableHead>Actions</TableHead>
                                     </TableRow>
@@ -640,6 +641,14 @@ export default function FilesPage() {
                                                 <div className="flex items-center space-x-2">
                                                     <Calendar className="w-4 h-4 text-gray-500" />
                                                     <span className="text-sm">
+                                                        {file.creator_user_name ||'Unknown'}                                                    
+                                                    </span>
+                                                </div>
+                                            </TableCell>
+                                            <TableCell>
+                                                <div className="flex items-center space-x-2">
+                                                    <Calendar className="w-4 h-4 text-gray-500" />
+                                                    <span className="text-sm">
                                                         {new Date(file.created_at).toLocaleDateString()}
                                                     </span>
                                                 </div>
@@ -654,58 +663,39 @@ export default function FilesPage() {
                                             </TableCell>
                                             <TableCell>
                                                 <div className="flex items-center space-x-2">
-                                                    {file.status_code === 'DRAFT' ? (
-                                                        <>
-                                                            <Button
-                                                                variant="outline"
-                                                                size="sm"
-                                                                onClick={() => handleEditDocument(file.id)}
-                                                                className="text-blue-600 hover:text-blue-700"
-                                                            >
-                                                                <FileEdit className="w-4 h-4 mr-1" />
-                                                                Edit Document
-                                                            </Button>
-                                                            {isAdmin && (
-                                                                <Button
-                                                                    variant="outline"
-                                                                    size="sm"
-                                                                    onClick={() => handleDeleteFile(file)}
-                                                                    className="text-red-600 hover:text-red-700"
-                                                                >
-                                                                    Delete
-                                                                </Button>
-                                                            )}
-                                                        </>
-                                                    ) : (
-                                                        <>
-                                                            <Button
-                                                                variant="outline"
-                                                                size="sm"
-                                                                onClick={() => handleViewFile(file.id)}
-                                                            >
-                                                                <Eye className="w-4 h-4 mr-1" />
-                                                                View
-                                                            </Button>
-                                                            <Button
-                                                                variant="outline"
-                                                                size="sm"
-                                                                onClick={() => handleMarkTo(file.id)}
-                                                                className="text-green-600 hover:text-green-700"
-                                                            >
-                                                                <Send className="w-4 h-4 mr-1" />
-                                                                Mark To
-                                                            </Button>
-                                                            {isAdmin && (
-                                                                <Button
-                                                                    variant="outline"
-                                                                    size="sm"
-                                                                    onClick={() => handleDeleteFile(file)}
-                                                                    className="text-red-600 hover:text-red-700"
-                                                                >
-                                                                    Delete
-                                                                </Button>
-                                                            )}
-                                                        </>
+                                                    {/* View button rendered for ALL files */}
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() => handleViewFile(file.id)}
+                                                    >
+                                                        <Eye className="w-4 h-4 mr-1" />
+                                                        View
+                                                    </Button>
+
+                                                    {/* Mark To button rendered ONLY when NOT draft */}
+                                                    {file.status_code !== 'DRAFT' && (
+                                                        <Button
+                                                            variant="outline"
+                                                            size="sm"
+                                                            onClick={() => handleMarkTo(file.id)}
+                                                            className="text-green-600 hover:text-green-700"
+                                                        >
+                                                            <Send className="w-4 h-4 mr-1" />
+                                                            Mark To
+                                                        </Button>
+                                                    )}
+
+                                                    {/* Delete button rendered ONLY for Admins */}
+                                                    {isAdmin && (
+                                                        <Button
+                                                            variant="outline"
+                                                            size="sm"
+                                                            onClick={() => handleDeleteFile(file)}
+                                                            className="text-red-600 hover:text-red-700"
+                                                        >
+                                                            Delete
+                                                        </Button>
                                                     )}
                                                 </div>
                                             </TableCell>
