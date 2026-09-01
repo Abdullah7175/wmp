@@ -33,7 +33,13 @@ export default function FileDetail() {
     const [savingFileInfo, setSavingFileInfo] = useState(false);
     const [canMarkTo, setCanMarkTo] = useState(true);
     const [isCcOnly, setIsCcOnly] = useState(false);
+    // Add with existing state variables around line 28
+    const [isEditingSubject, setIsEditingSubject] = useState(false);
+    const [editedSubject, setEditedSubject] = useState("");
+    const [savingSubject, setSavingSubject] = useState(false);
 
+    // Add admin check helper (Role IDs 1 and 2 represent admins based on your API middleware)
+    const isAdmin = [1, 2].includes(parseInt(session?.user?.role));
     useEffect(() => {
         if (!session?.user?.id || !params.id) return;
         const loadData = async () => {
@@ -92,7 +98,50 @@ export default function FileDetail() {
             console.error('Error fetching work requests:', error);
         }
     };
+const handleSaveSubject = async () => {
+    if (!editedSubject.trim()) {
+        toast({
+            title: "Validation Error",
+            description: "Subject cannot be empty.",
+            variant: "destructive"
+        });
+        return;
+    }
 
+    setSavingSubject(true);
+    try {
+        const res = await fetch(`/api/efiling/files/${file.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ subject: editedSubject })
+        });
+
+        if (res.ok) {
+            setFile((prev) => ({ ...prev, subject: editedSubject }));
+            setIsEditingSubject(false);
+            toast({
+                title: "Success",
+                description: "Subject updated successfully"
+            });
+        } else {
+            const error = await res.json();
+            toast({
+                title: "Error",
+                description: error.error || "Failed to update subject",
+                variant: "destructive"
+            });
+        }
+    } catch (error) {
+        console.error('Error updating subject:', error);
+        toast({
+            title: "Error",
+            description: "Failed to update subject",
+            variant: "destructive"
+        });
+    } finally {
+        setSavingSubject(false);
+    }
+};
     const handleSaveFileInfo = async () => {
         if (!file) return;
 
@@ -821,9 +870,59 @@ export default function FileDetail() {
                                     </div>
                                 </div>
 
+                                {/* WITH THIS UPDATED BLOCK */}
                                 <div>
-                                    <label className="text-sm font-medium text-gray-600">Subject</label>
-                                    <p className="text-lg">{file.subject}</p>
+                                    <div className="flex items-center justify-between">
+                                        <label className="text-sm font-medium text-gray-600">Subject</label>
+                                        {isAdmin && !isEditingSubject && (
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => {
+                                                    setEditedSubject(file.subject || "");
+                                                    setIsEditingSubject(true);
+                                                }}
+                                                className="h-7 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                            >
+                                                <Edit className="w-3.5 h-3.5 mr-1" />
+                                                Edit Subject
+                                            </Button>
+                                        )}
+                                    </div>
+
+                                    {isEditingSubject ? (
+                                        <div className="mt-2 space-y-2">
+                                            <input
+                                                type="text"
+                                                value={editedSubject}
+                                                onChange={(e) => setEditedSubject(e.target.value)}
+                                                className="w-full p-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                placeholder="Enter subject..."
+                                                autoFocus
+                                            />
+                                            <div className="flex space-x-2">
+                                                <Button
+                                                    size="sm"
+                                                    onClick={handleSaveSubject}
+                                                    disabled={savingSubject}
+                                                    className="h-8 text-xs bg-blue-600 hover:bg-blue-700"
+                                                >
+                                                    {savingSubject ? 'Saving...' : 'Save'}
+                                                </Button>
+                                                <Button
+                                                    size="sm"
+                                                    variant="outline"
+                                                    onClick={() => setIsEditingSubject(false)}
+                                                    disabled={savingSubject}
+                                                    className="h-8 text-xs"
+                                                >
+                                                    Cancel
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <p className="text-lg mt-1">{file.subject}</p>
+                                    )}
                                 </div>
 
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

@@ -145,7 +145,6 @@ export async function GET(request, { params }) {
             LEFT JOIN efiling_roles ar ON assigned_efiling.efiling_role_id = ar.id
             LEFT JOIN efiling_users creator_efiling ON f.created_by = creator_efiling.id
             LEFT JOIN users creator_users ON creator_efiling.user_id = creator_users.id
-            LEFT JOIN users creator_users ON creator_efiling.user_id = creator_users.id
             WHERE f.id = $1
         `, [id]);
 
