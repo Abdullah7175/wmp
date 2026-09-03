@@ -306,45 +306,50 @@ const handleDeleteComment = async (commentId) => {
         }
     };
 
-    // Add comment to document
-    const addCommentToDocument = async () => {
-        try {
-            const newComment = {
-                id: Date.now(),
-                user_id: session?.user?.id,
-                user_name: session?.user?.name,
-                user_role: actualUserRole || userRole || 'Unknown',
-                text: commentText,
-                timestamp: new Date().toISOString(),
-                file_id: fileId
-            };
+// Add comment to document
+const addCommentToDocument = async () => {
+    try {
+        const payload = {
+            user_id: session?.user?.id,
+            user_name: session?.user?.name,
+            user_role: actualUserRole || userRole || 'Unknown',
+            text: commentText,
+            timestamp: new Date().toISOString(),
+            file_id: fileId
+        };
 
-            const response = await fetch(`/api/efiling/files/${fileId}/comments`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(newComment)
-            });
+        const response = await fetch(`/api/efiling/files/${fileId}/comments`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
 
-            if (response.ok) {
-                setComments(prev => [...prev, newComment]);
-                onCommentAdded && onCommentAdded(newComment);
-                setCommentText("");
-                setShowCommentModal(false);
-                toast({
-                    title: "Comment Added",
-                    description: "Your comment has been added to the document.",
-                });
-            } else {
-                throw new Error('Failed to add comment');
-            }
-        } catch (error) {
+        if (response.ok) {
+            // Retrieve the full saved comment row returned from PostgreSQL
+            const savedComment = await response.json(); 
+
+            // Fallback to local structure with DB id if API returns direct object or wrapped object
+            const commentToAdd = savedComment.id ? savedComment : { ...payload, id: savedComment.comment_id || savedComment.id };
+
+            setComments(prev => [...prev, commentToAdd]);
+            onCommentAdded && onCommentAdded(commentToAdd);
+            setCommentText("");
+            setShowCommentModal(false);
             toast({
-                title: "Error",
-                description: "Failed to add comment. Please try again.",
-                variant: "destructive",
+                title: "Comment Added",
+                description: "Your comment has been added to the document.",
             });
+        } else {
+            throw new Error('Failed to add comment');
         }
-    };
+    } catch (error) {
+        toast({
+            title: "Error",
+            description: "Failed to add comment. Please try again.",
+            variant: "destructive",
+        });
+    }
+};
 
     // Handle signature creation
     const handleCreateSignature = (signatureData) => {

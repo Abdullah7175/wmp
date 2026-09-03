@@ -6,10 +6,10 @@ async function verifyPermissions(client, fileId, commentId, requestUserId) {
     console.log('\n--- VERIFY PERMISSIONS START ---');
     console.log('Incoming Params:', { fileId, commentId, requestUserId });
 
-    // Validate that commentId is numeric (prevents timestamp string lookup bugs)
-    if (isNaN(Number(commentId)) || Number(commentId) > 2147483647) {
-        console.log('FAIL: Invalid or temporary comment ID passed:', commentId);
-        return { status: 404, error: 'Invalid or temporary comment ID' };
+    // Validate that commentId consists strictly of digits (supports INT & BIGINT)
+    if (!commentId || !/^\d+$/.test(String(commentId))) { 
+        console.log('FAIL: Invalid comment ID format passed:', commentId);
+        return { status: 400, error: 'Invalid comment ID format' };
     }
 
     // 1. Fetch comment details
