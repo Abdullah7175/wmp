@@ -1516,49 +1516,56 @@ export async function POST(request, { params }) {
                     const fromUserDisplay = fromUserDesignation ? `${fromUserName} (${fromUserDesignation})` : fromUserName;
                     console.log('[MARK-TO] Step 13c: From user:', { fromUserName, fromUserDesignation, fromUserRole, fromUserDisplay });
                     
-                    // Step 13d: Get SLA deadline info if available
+                    // Step 13d: Get SLA deadline info
                     let tatMessage = '';
-                    if (hasSlaDeadline) {
+                    let currentSlaDeadline = finalSlaDeadline;
+
+                    // If finalSlaDeadline wasn't freshly calculated during this request, fetch from file table
+                    if (!currentSlaDeadline && hasSlaDeadline) {
                         const finalDeadlineRes = await client.query(`
                             SELECT sla_deadline FROM efiling_files WHERE id = $1
                         `, [fileId]);
-                        const finalSlaDeadline = finalDeadlineRes.rows[0]?.sla_deadline || slaDeadline;
-                        console.log('[MARK-TO] Step 13d: SLA deadline:', finalSlaDeadline);
-                        
-                        if (finalSlaDeadline) {
-                            const deadline = new Date(finalSlaDeadline);
-                            const now = new Date();
-                            const timeRemaining = deadline.getTime() - now.getTime();
-                            
-                            if (timeRemaining > 0) {
-                                const days = Math.floor(timeRemaining / (1000 * 60 * 60 * 24));
-                                const hours = Math.floor((timeRemaining % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-                                const minutes = Math.floor((timeRemaining % (1000 * 60 * 60)) / (1000 * 60));
-                                
-                                let timeStr = '';
-                                if (days > 0) {
-                                    timeStr = `${days} day${days > 1 ? 's' : ''} ${hours} hour${hours !== 1 ? 's' : ''}`;
-                                } else if (hours > 0) {
-                                    timeStr = `${hours} hour${hours > 1 ? 's' : ''} ${minutes} minute${minutes !== 1 ? 's' : ''}`;
-                                } else {
-                                    timeStr = `${minutes} minute${minutes !== 1 ? 's' : ''}`;
-                                }
-                                
-                                const deadlineStr = deadline.toLocaleString('en-PK', {
-                                    year: 'numeric',
-                                    month: 'short',
-                                    day: 'numeric',
-                                    hour: '2-digit',
-                                    minute: '2-digit'
-                                });
-                                
-                                tatMessage = `\n\n⏰ TAT Deadline: ${deadlineStr}\n⏳ Time Remaining: ${timeStr}`;
-                            } else {
-                                tatMessage = `\n\n⚠️ TAT Deadline has passed. Please complete this file urgently.`;
-                            }
-                        }
+                        currentSlaDeadline = finalDeadlineRes.rows[0]?.sla_deadline || null;
                     }
-                    
+
+                    console.log('[MARK-TO] Step 13d: SLA deadline:', currentSlaDeadline);
+
+                    if (currentSlaDeadline) {
+                        const deadline = new Date(currentSlaDeadline);
+                        const now = new Date();
+                        const timeRemaining = deadline.getTime() - now.getTime();
+
+                        if (timeRemaining > 0) {
+                            const days = Math.floor(timeRemaining / (1000 * 60 * 60 * 24));
+                            const hours = Math.floor((timeRemaining % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                            const minutes = Math.floor((timeRemaining % (1000 * 60 * 60)) / (1000 * 60));
+
+                            let timeStr = '';
+                            if (days > 0) {
+                                timeStr = `${days} day${days > 1 ? 's' : ''} ${hours} hour${hours !== 1 ? 's' : ''}`;
+                            } else if (hours > 0) {
+                                timeStr = `${hours} hour${hours > 1 ? 's' : ''} ${minutes} minute${minutes !== 1 ? 's' : ''}`;
+                            } else {
+                                timeStr = `${minutes} minute${minutes !== 1 ? 's' : ''}`;
+                            }
+
+                            const deadlineStr = deadline.toLocaleString('en-PK', {
+                                year: 'numeric',
+                                month: 'short',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                            });
+
+                            tatMessage = `\n\n⏰ TAT Deadline: ${deadlineStr}\n⏳ Time Remaining: ${timeStr}`;
+                        } else {
+                            tatMessage = `\n\n⚠️ TAT Deadline has passed. Please complete this file urgently.`;
+                        }
+                    } else {
+                        // Fallback message when SLA is not defined or is null
+                        tatMessage = `\n\n⏰ TAT Deadline: Tat not defined.`;
+                    }
+
                     // Step 13e: Build WhatsApp message
                     const whatsappMessage = `📋 *File Assigned to You*\n\n` +
                         `File Number: ${fileNumber}\n` +
@@ -1566,7 +1573,7 @@ export async function POST(request, { params }) {
                         `Marked by: ${fromUserDisplay} (${fromUserRole})${tatMessage}\n\n` +
                         `Please review and take necessary action on this file.\n\n` +
                         `Thank you,\nE-Filing System`;
-                    
+
                     console.log('[MARK-TO] Step 13e: WhatsApp message prepared, length:', whatsappMessage.length);
                     
                     // Step 13f: Send WhatsApp message
