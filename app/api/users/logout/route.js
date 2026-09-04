@@ -18,7 +18,7 @@ export async function POST(request) {
     // NextAuth session token (multiple possible names)
     response.cookies.set("next-auth.session-token", "", {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
+      secure: false,
       path: "/",
       maxAge: 0,
     });
@@ -32,7 +32,7 @@ export async function POST(request) {
 
     response.cookies.set("authjs.session-token", "", {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
+      secure: false,
       path: "/",
       maxAge: 0,
     });
@@ -47,7 +47,7 @@ export async function POST(request) {
     // Clear legacy JWT token if present
     response.cookies.set("jwtToken", "", {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
+      secure: false,
       path: "/",
       maxAge: 0,
     });

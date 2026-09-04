@@ -12,6 +12,8 @@ module.exports = {
         PORT: 3000,
         HOSTNAME: '0.0.0.0',
         NEXTAUTH_URL: process.env.NEXTAUTH_URL || 'https://wmp.kwsc.gos.pk',
+        AUTH_TRUST_HOST: 'true',
+        ALLOW_HTTP_LOGIN: 'true',
         APP_BASE_DIR: '/opt/wmp16'
       },
       env_production: {
@@ -19,6 +21,8 @@ module.exports = {
         PORT: 3000,
         HOSTNAME: '0.0.0.0',
         NEXTAUTH_URL: process.env.NEXTAUTH_URL || 'https://wmp.kwsc.gos.pk',
+        AUTH_TRUST_HOST: 'true',
+        ALLOW_HTTP_LOGIN: 'true',
         APP_BASE_DIR: '/opt/wmp16'
       },
       error_file: './logs/wmp-error.log',

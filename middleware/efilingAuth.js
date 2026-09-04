@@ -8,12 +8,11 @@ export async function efilingAuthMiddleware(request) {
         const pathname = request.nextUrl.pathname;
         const isInternal = isInternalNetwork(request);
 
-        // Check for session cookies (Edge runtime compatible)
-        const sessionCookie = request.cookies.get(
-            process.env.NODE_ENV === 'production'
-                ? '__Secure-next-auth.session-token'
-                : 'next-auth.session-token'
-        ) || request.cookies.get('authjs.session-token') || request.cookies.get('__Secure-authjs.session-token');
+        // Check for session cookies (Edge runtime compatible - supports both HTTP & HTTPS)
+        const sessionCookie = request.cookies.get('next-auth.session-token') ||
+            request.cookies.get('__Secure-next-auth.session-token') ||
+            request.cookies.get('authjs.session-token') ||
+            request.cookies.get('__Secure-authjs.session-token');
 
         const hasSession = Boolean(sessionCookie);
 

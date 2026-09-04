@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { efilingAuthMiddleware } from "./middleware/efilingAuth";
+import { isLocalOrPrivateIp, getClientIp } from "./middleware/validateNetwork";
 
 const PUBLIC_PATHS = ["/elogin", "/login", "/unauthorized", "/_next", "/api/auth", "/favicon.ico", "/public"];
 
@@ -151,18 +152,31 @@ function applySecurityHeaders(response, pathname, request) {
     response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
     response.headers.delete('X-Powered-By');
 
+    // Detect client IP and host to support HTTP login across local/private IPs and LAN
+    const clientIp = request ? getClientIp(request) : '';
+    const hostHeader = request?.headers?.get('x-forwarded-host') || request?.headers?.get('host') || request?.nextUrl?.hostname || '';
+    const hostWithoutPort = hostHeader.split(':')[0].toLowerCase();
+    const isLocal = isLocalOrPrivateIp(clientIp) || isLocalOrPrivateIp(hostWithoutPort);
+
+    const forwardedProto = request?.headers?.get('x-forwarded-proto');
+    const proto = forwardedProto || request?.nextUrl?.protocol?.replace(':', '') || 'http';
+    const isPlainHttp = proto === 'http' || isLocal;
+
     // Content Security Policy - use request origin so it works behind firewall/new IP (not hardcoded old IP)
     const isDev = process.env.NODE_ENV === 'development';
     const scriptSrc = isDev ? "script-src 'self' 'unsafe-inline' 'unsafe-eval'" : "script-src 'self' 'unsafe-inline'";
-    const origin = request?.headers.get('x-forwarded-proto') && request?.headers.get('x-forwarded-host')
-        ? `${request.headers.get('x-forwarded-proto')}://${request.headers.get('x-forwarded-host')}`
+    const origin = forwardedProto && request?.headers?.get('x-forwarded-host')
+        ? `${forwardedProto}://${request.headers.get('x-forwarded-host')}`
         : request?.nextUrl?.origin;
     const connectSrc = origin ? `connect-src 'self' ws: ${origin} ${origin}` : "connect-src 'self'";
-    const csp = `default-src 'self'; ${scriptSrc}; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https: http:; font-src 'self' data:; ${connectSrc}; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests; block-all-mixed-content;`;
+
+    // Do NOT enforce upgrade-insecure-requests or block-all-mixed-content on plain HTTP or local subnets
+    const upgradeDirective = (!isPlainHttp && !isDev && proto === 'https') ? 'upgrade-insecure-requests; block-all-mixed-content;' : '';
+    const csp = `default-src 'self'; ${scriptSrc}; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https: http:; font-src 'self' data:; ${connectSrc}; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; ${upgradeDirective}`.replace(/\s+/g, ' ').trim();
     response.headers.set('Content-Security-Policy', csp);
 
-    // HSTS (only in production)
-    if (!isDev) {
+    // HSTS (only in production when served over genuine HTTPS, never over HTTP or local private networks)
+    if (!isDev && !isPlainHttp && proto === 'https') {
         response.headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
     }
 }

@@ -8,14 +8,27 @@ import { eFileActionLogger } from '@/lib/efilingActionLogger';
 
 import { isDualPortalUser } from '@/lib/dualPortalAuth';
 
+// Ensure Auth.js trusts incoming Host headers for local IPs, LAN & multi-host setups
+if (!process.env.AUTH_TRUST_HOST) {
+  process.env.AUTH_TRUST_HOST = 'true';
+}
+
+// Allow HTTP login on local IPs / LAN:
+// Browsers strictly reject cookies with the "Secure" attribute or "__Secure-" / "__Host-" prefix when accessed over plain HTTP.
+// When ALLOW_HTTP_LOGIN is enabled (default: true unless FORCE_SECURE_COOKIES=true), use standard non-prefixed cookies with secure: false.
+// This allows authentication to work seamlessly over both HTTPS (production) and plain HTTP (local IPs / LAN / dev).
+const isProduction = process.env.NODE_ENV === 'production';
+const forceSecureCookies = process.env.FORCE_SECURE_COOKIES === 'true';
+const allowHttpLogin = process.env.ALLOW_HTTP_LOGIN !== 'false';
+const useSecure = forceSecureCookies || (!allowHttpLogin && isProduction && process.env.NEXTAUTH_URL?.startsWith('https://'));
+
+const cookiePrefix = useSecure ? '__Secure-' : '';
+const csrfPrefix = useSecure && !process.env.BEHIND_PROXY ? '__Host-' : useSecure ? '__Secure-' : '';
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  trustHost: true, // Allow localhost and other hosts in development
+  trustHost: true, // Allow localhost and local IP hosts dynamically
   basePath: "/api/auth", // Explicitly set the base path
-  // Use NEXTAUTH_URL from environment or default to localhost
-  // For production with SSL, ensure this is set to https://wmp.kwsc.gos.pk
-  url: process.env.NEXTAUTH_URL || process.env.AUTH_URL || "http://localhost:3000",
-  // Explicitly trust the host for CSRF token validation
-  useSecureCookies: process.env.NODE_ENV === 'production' || process.env.NEXTAUTH_URL?.startsWith('https://'),
+  useSecureCookies: useSecure,
   providers: [
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID,
@@ -225,35 +238,31 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   },
   cookies: {
     sessionToken: {
-      name: `${process.env.NODE_ENV === 'production' ? '__Secure-' : ''}next-auth.session-token`,
+      name: `${cookiePrefix}next-auth.session-token`,
       options: {
         httpOnly: true,
         sameSite: 'lax',
         path: '/',
-        secure: process.env.NODE_ENV === 'production' || process.env.NEXTAUTH_URL?.startsWith('https://'),
+        secure: useSecure,
       },
     },
     callbackUrl: {
-      name: `${process.env.NODE_ENV === 'production' ? '__Secure-' : ''}next-auth.callback-url`,
+      name: `${cookiePrefix}next-auth.callback-url`,
       options: {
         httpOnly: true,
         sameSite: 'lax',
         path: '/',
-        secure: process.env.NODE_ENV === 'production' || process.env.NEXTAUTH_URL?.startsWith('https://'),
+        secure: useSecure,
       },
     },
     csrfToken: {
-      // Use __Secure- instead of __Host- if behind a reverse proxy
-      // __Host- requires exact host match and no domain, which can fail behind proxies
-      name: `${process.env.NODE_ENV === 'production' && !process.env.BEHIND_PROXY ? '__Host-' : process.env.NODE_ENV === 'production' ? '__Secure-' : ''}next-auth.csrf-token`,
+      name: `${csrfPrefix}next-auth.csrf-token`,
       options: {
         httpOnly: true,
         sameSite: 'lax',
         path: '/',
-        secure: process.env.NODE_ENV === 'production' || process.env.NEXTAUTH_URL?.startsWith('https://'),
-        // __Host- prefix requires no domain attribute
-        // If behind proxy, you might need to set domain explicitly
-        ...(process.env.NODE_ENV === 'production' && process.env.BEHIND_PROXY && process.env.COOKIE_DOMAIN ? { domain: process.env.COOKIE_DOMAIN } : {}),
+        secure: useSecure,
+        ...(useSecure && process.env.BEHIND_PROXY && process.env.COOKIE_DOMAIN ? { domain: process.env.COOKIE_DOMAIN } : {}),
       },
     },
   },

@@ -129,6 +129,47 @@ export function getClientIp(request) {
 }
 
 /**
+ * Check if an IP is a local, loopback, or RFC 1918 private network address (e.g. 192.168.x.x, 10.x.x.x, 172.16-31.x.x, localhost)
+ */
+export function isLocalOrPrivateIp(ip) {
+    if (!ip || typeof ip !== 'string') return false;
+    const clean = ip.replace(/^::ffff:/, '').trim().toLowerCase();
+
+    // Loopback IPv4 & IPv6 & localhost
+    if (clean === '127.0.0.1' || clean === '::1' || clean === 'localhost' || clean.startsWith('127.')) {
+        return true;
+    }
+
+    // Class A Private (10.0.0.0/8)
+    if (clean.startsWith('10.')) {
+        return true;
+    }
+
+    // Class C Private (192.168.0.0/16)
+    if (clean.startsWith('192.168.')) {
+        return true;
+    }
+
+    // Class B Private (172.16.0.0/12: 172.16.x.x - 172.31.x.x)
+    if (clean.startsWith('172.')) {
+        const parts = clean.split('.');
+        if (parts.length === 4) {
+            const secondOctet = parseInt(parts[1], 10);
+            if (!isNaN(secondOctet) && secondOctet >= 16 && secondOctet <= 31) {
+                return true;
+            }
+        }
+    }
+
+    // Link-local (169.254.0.0/16 or fe80::/10)
+    if (clean.startsWith('169.254.') || clean.startsWith('fe80:')) {
+        return true;
+    }
+
+    return false;
+}
+
+/**
  * Check if the request originates from an authorized internal network for E-Filing
  */
 export function isInternalNetwork(request) {
@@ -138,6 +179,12 @@ export function isInternalNetwork(request) {
         if (!cleanIp) {
             console.warn('No IP address found in request');
             return false;
+        }
+
+        // Automatically allow local/private network IPs (localhost, 127.0.0.1, 192.168.x.x, 10.x.x.x, 172.16-31.x.x)
+        if (isLocalOrPrivateIp(cleanIp)) {
+            console.log(`[Network Validation] Client IP ${cleanIp} recognized and allowed as local/private network`);
+            return true;
         }
 
         const envAllowedIPs = process.env.EFILING_ALLOWED_IPS?.trim();

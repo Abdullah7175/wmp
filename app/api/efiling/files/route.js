@@ -60,11 +60,10 @@ export async function GET(request) {
         // Log request details for debugging
         const cookieHeader = request.headers.get('cookie');
         const cookieStore = await cookies();
-        const sessionCookie = cookieStore.get(
-            process.env.NODE_ENV === 'production' 
-                ? '__Secure-next-auth.session-token' 
-                : 'next-auth.session-token'
-        ) || cookieStore.get('authjs.session-token') || cookieStore.get('__Secure-authjs.session-token');
+        const sessionCookie = cookieStore.get('next-auth.session-token') ||
+            cookieStore.get('__Secure-next-auth.session-token') ||
+            cookieStore.get('authjs.session-token') ||
+            cookieStore.get('__Secure-authjs.session-token');
         
         console.log('Files route - Cookie header present:', !!cookieHeader);
         console.log('Files route - Session cookie present:', !!sessionCookie);
