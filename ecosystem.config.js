@@ -14,6 +14,8 @@ module.exports = {
         NEXTAUTH_URL: process.env.NEXTAUTH_URL || 'https://wmp.kwsc.gos.pk',
         AUTH_TRUST_HOST: 'true',
         ALLOW_HTTP_LOGIN: 'true',
+        WHATSAPP_API_URL: 'http://erp.bizintel.co:8005/api/send-json',
+        WHATSAPP_SECRET_KEY: 'kw$0126001',
         APP_BASE_DIR: '/opt/wmp16'
       },
       env_production: {
@@ -23,6 +25,8 @@ module.exports = {
         NEXTAUTH_URL: process.env.NEXTAUTH_URL || 'https://wmp.kwsc.gos.pk',
         AUTH_TRUST_HOST: 'true',
         ALLOW_HTTP_LOGIN: 'true',
+        WHATSAPP_API_URL: 'http://erp.bizintel.co:8005/api/send-json',
+        WHATSAPP_SECRET_KEY: 'kw$0126001',
         APP_BASE_DIR: '/opt/wmp16'
       },
       error_file: './logs/wmp-error.log',
