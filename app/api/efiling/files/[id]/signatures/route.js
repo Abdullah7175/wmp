@@ -91,17 +91,39 @@ export async function POST(request, { params }) {
         }
 
         const body = await request.json();
-        const { user_id, user_name, user_role, type, content, position, font } = body;
+        const { type, content, position, font, color } = body;
 
         // Validate required fields
-        if (!user_id || !user_name || !user_role || !type || !content || !position) {
+        if (!type || !content || !position) {
             return NextResponse.json(
-                { error: 'Missing required fields' },
+                { error: 'Missing required signature fields: type, content, position' },
                 { status: 400 }
             );
         }
 
         client = await connectToDatabase();
+
+        // SECURITY: Resolve verified signer identity from database strictly using authenticated session
+        const sessionUserId = parseInt(session.user.id);
+        const verifiedUserRes = await client.query(`
+            SELECT u.id, u.name, u.role, eu.id as efiling_user_id, eu.designation, r.code as role_code, r.name as role_name
+            FROM users u
+            LEFT JOIN efiling_users eu ON eu.user_id = u.id AND eu.is_active = true
+            LEFT JOIN efiling_roles r ON eu.efiling_role_id = r.id
+            WHERE u.id = $1
+            ORDER BY eu.id DESC
+            LIMIT 1
+        `, [sessionUserId]);
+
+        if (verifiedUserRes.rows.length === 0) {
+            return NextResponse.json({ error: 'User profile not found' }, { status: 404 });
+        }
+
+        const verified = verifiedUserRes.rows[0];
+        // Immutable identity binding - prevent spoofing of other users or senior officers
+        const user_id = verified.id;
+        const user_name = verified.name;
+        const user_role = verified.role_code || verified.designation || (session.user.role === 1 ? 'SUPER_ADMIN' : 'OFFICER');
 
         const { rejectCcOnlyMutation } = await import('@/lib/authMiddleware');
         const isAdmin = [1, 2].includes(parseInt(session.user.role));
@@ -134,7 +156,6 @@ export async function POST(request, { params }) {
             ADD COLUMN IF NOT EXISTS color VARCHAR(20) DEFAULT 'black'
         `);
 
-        const { color } = body;
         const signatureColor = color || 'black';
 
         // Step 1: Check if user has already signed this file

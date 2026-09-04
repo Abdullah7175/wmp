@@ -328,6 +328,18 @@ export async function POST(request) {
 }
 
 export async function PUT(request) {
+    // SECURITY: Require administrator authentication
+    const { auth } = await import('@/auth');
+    const session = await auth();
+    if (!session?.user) {
+        return NextResponse.json({ error: 'Unauthorized: Authentication required' }, { status: 401 });
+    }
+    const sessionUserRole = parseInt(session.user.role);
+    const isAdmin = [1, 2].includes(sessionUserRole);
+    if (!isAdmin) {
+        return NextResponse.json({ error: 'Forbidden: Admin access required' }, { status: 403 });
+    }
+
     let client;
     try {
         client = await connectToDatabase();
@@ -436,6 +448,18 @@ export async function PUT(request) {
 }
 
 export async function DELETE(request) {
+    // SECURITY: Require administrator authentication
+    const { auth } = await import('@/auth');
+    const session = await auth();
+    if (!session?.user) {
+        return NextResponse.json({ error: 'Unauthorized: Authentication required' }, { status: 401 });
+    }
+    const sessionUserRole = parseInt(session.user.role);
+    const isAdmin = [1, 2].includes(sessionUserRole);
+    if (!isAdmin) {
+        return NextResponse.json({ error: 'Forbidden: Admin access required' }, { status: 403 });
+    }
+
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
     

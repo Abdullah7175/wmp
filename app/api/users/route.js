@@ -249,8 +249,8 @@ export async function PUT(req) {
 
         const client = await connectToDatabase();
 
-        // First get current user to check if we have an existing image
-        const currentUserQuery = 'SELECT id, image FROM users WHERE id = $1';
+        // First get current user to check if we have an existing image and role
+        const currentUserQuery = 'SELECT id, role, image FROM users WHERE id = $1';
         const currentUserResult = await client.query(currentUserQuery, [id]);
         
         if (currentUserResult.rows.length === 0) {
@@ -260,13 +260,35 @@ export async function PUT(req) {
         // SECURITY: IDOR Fix - Check ownership or admin role
         const userId = parseInt(id);
         const sessionUserId = parseInt(session.user.id);
-        const isAdmin = [1, 2].includes(parseInt(session.user.role));
+        const sessionUserRole = parseInt(session.user.role);
+        const isAdmin = [1, 2].includes(sessionUserRole);
         
         if (sessionUserId !== userId && !isAdmin) {
             return NextResponse.json(
                 { error: 'Forbidden - You can only modify your own data' },
                 { status: 403 }
             );
+        }
+
+        // SECURITY: Privilege Escalation Prevention - Only admins can change roles
+        const existingRole = parseInt(currentUserResult.rows[0].role);
+        let finalRole = existingRole;
+
+        if (role !== null && role !== undefined && role !== '') {
+            const requestedRole = parseInt(role);
+            if (!isAdmin) {
+                // Non-admins can NEVER change their own role
+                finalRole = existingRole;
+            } else {
+                // Only Super Admin (role 1) can grant administrative roles (1 or 2)
+                if ([1, 2].includes(requestedRole) && sessionUserRole !== 1 && requestedRole !== existingRole) {
+                    return NextResponse.json(
+                        { error: 'Forbidden - Only Super Admin can assign administrative roles' },
+                        { status: 403 }
+                    );
+                }
+                finalRole = requestedRole;
+            }
         }
         
         let imageUrl = currentUserResult.rows[0]?.image || null;
@@ -294,7 +316,7 @@ export async function PUT(req) {
                 WHERE id = $7
                 RETURNING *;
             `;
-            params = [name, email, contact, role, imageUrl, hashedPassword, id];
+            params = [name, email, contact, finalRole, imageUrl, hashedPassword, id];
         } else {
             query = `
                 UPDATE users 
@@ -304,7 +326,7 @@ export async function PUT(req) {
                 WHERE id = $6
                 RETURNING *;
             `;
-            params = [name, email, contact, role, imageUrl, id];
+            params = [name, email, contact, finalRole, imageUrl, id];
         }
 
         const { rows: updatedUser } = await client.query(query, params);
@@ -322,9 +344,13 @@ export async function PUT(req) {
             passwordChanged: !!password
         });
 
+        // SECURITY: Strip password hash from response
+        const safeUser = { ...updatedUser[0] };
+        delete safeUser.password;
+
         return NextResponse.json({ 
             message: 'User updated successfully', 
-            user: updatedUser[0] 
+            user: safeUser 
         }, { status: 200 });
 
     } catch (error) {

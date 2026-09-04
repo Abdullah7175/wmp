@@ -269,6 +269,18 @@ export async function POST(req) {
 }
 
 export async function PUT(req) {
+    // SECURITY: Require administrator authentication
+    const { auth } = await import('@/auth');
+    const session = await auth();
+    if (!session?.user) {
+        return NextResponse.json({ error: 'Unauthorized: Authentication required' }, { status: 401 });
+    }
+    const sessionUserRole = parseInt(session.user.role);
+    const isAdmin = [1, 2].includes(sessionUserRole);
+    if (!isAdmin) {
+        return NextResponse.json({ error: 'Forbidden: Admin access required' }, { status: 403 });
+    }
+
     let client;
     try {
         const formData = await req.formData();
@@ -356,7 +368,11 @@ export async function PUT(req) {
             passwordChanged: !!password
         });
         
-        return NextResponse.json({ message: 'Agent updated successfully', agent: updatedAgent[0] }, { status: 200 });
+        // SECURITY: Strip password before returning
+        const safeAgent = { ...updatedAgent[0] };
+        delete safeAgent.password;
+
+        return NextResponse.json({ message: 'Agent updated successfully', agent: safeAgent }, { status: 200 });
     } catch (error) {
         console.error('Error updating agent:', error);
         return NextResponse.json({ error: 'Error updating agent', details: error.message }, { status: 500 });
@@ -368,6 +384,18 @@ export async function PUT(req) {
 }
 
 export async function DELETE(req) {
+    // SECURITY: Require administrator authentication
+    const { auth } = await import('@/auth');
+    const session = await auth();
+    if (!session?.user) {
+        return NextResponse.json({ error: 'Unauthorized: Authentication required' }, { status: 401 });
+    }
+    const sessionUserRole = parseInt(session.user.role);
+    const isAdmin = [1, 2].includes(sessionUserRole);
+    if (!isAdmin) {
+        return NextResponse.json({ error: 'Forbidden: Admin access required' }, { status: 403 });
+    }
+
     let client;
     try {
         const body = await req.json();
@@ -401,7 +429,11 @@ export async function DELETE(req) {
             complaint_type_id: deletedAgent[0].complaint_type_id
         });
 
-        return NextResponse.json({ message: 'Agent deleted successfully', user: deletedAgent[0] }, { status: 200 });
+        // SECURITY: Strip password before returning
+        const safeDeleted = { ...deletedAgent[0] };
+        delete safeDeleted.password;
+
+        return NextResponse.json({ message: 'Agent deleted successfully', user: safeDeleted }, { status: 200 });
 
     } catch (error) {
         console.error('Error deleting agent:', error);

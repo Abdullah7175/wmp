@@ -2,10 +2,26 @@ import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/db';
 import bcrypt from 'bcryptjs';
 import { eFileActionLogger, EFILING_ACTION_TYPES, EFILING_ENTITY_TYPES } from '@/lib/efilingActionLogger';
+import { auth } from '@/auth';
 
 export async function POST(request) {
     let client;
     try {
+        // SECURITY: Require administrator authentication
+        const session = await auth();
+        if (!session?.user) {
+            return NextResponse.json(
+                { error: 'Unauthorized: Authentication required' },
+                { status: 401 }
+            );
+        }
+        const isAdmin = [1, 2].includes(parseInt(session.user.role));
+        if (!isAdmin) {
+            return NextResponse.json(
+                { error: 'Forbidden: Administrator privileges required' },
+                { status: 403 }
+            );
+        }
         const {
             name,
             email,
