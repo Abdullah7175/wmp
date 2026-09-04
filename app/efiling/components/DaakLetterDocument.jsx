@@ -1,6 +1,7 @@
 "use client";
 
 import "@/app/efiling/components/TipTapEditor.css";
+import { sanitizeHtml } from "@/lib/sanitizeHtml";
 
 const KWSC_ADDRESS =
     "Chairman Secretariat 1st Floor, Block-F, 9th Mile Karsaz, Shahrah-e-Faisal, Karachi";
@@ -105,7 +106,7 @@ export default function DaakLetterDocument({ daak }) {
 
                 <div
                     className="daak-display-content text-[14px] md:text-[15px] leading-relaxed text-justify"
-                    dangerouslySetInnerHTML={{ __html: daak.content || "" }}
+                    dangerouslySetInnerHTML={{ __html: sanitizeHtml(daak.content || "") }}
                 />
             </article>
         </div>

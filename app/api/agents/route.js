@@ -24,6 +24,13 @@ async function saveUploadedFile(file) {
 }
 
 export async function GET(request) {
+    // SECURITY: Require authentication
+    const { auth } = await import('@/auth');
+    const session = await auth();
+    if (!session?.user) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
     const role = searchParams.get('role');
@@ -40,14 +47,20 @@ export async function GET(request) {
     let client;
     try {
         client = await connectToDatabase();
+        // Safe columns excluding password
+        const safeColumns = `
+            a.id, a.name, a.designation, a.contact_number, a.address, a.department,
+            a.email, a.company_name, a.town_id, a.division_id, a.complaint_type_id,
+            a.role, a.image, a.created_date,
+            t.town AS town_name,
+            d.title AS district_name,
+            divs.name AS division_name,
+            ct.type_name AS complaint_type_name
+        `;
+
         if (id) {
             const query = `
-                SELECT 
-                    a.*,
-                    t.town AS town_name,
-                    d.title AS district_name,
-                    divs.name AS division_name,
-                    ct.type_name AS complaint_type_name
+                SELECT ${safeColumns}
                 FROM agents a
                 LEFT JOIN town t ON a.town_id = t.id
                 LEFT JOIN district d ON t.district_id = d.id
@@ -63,12 +76,7 @@ export async function GET(request) {
         } else if (work_request_id) {
             // Fetch agents assigned to a specific work request
             const query = `
-                SELECT DISTINCT 
-                    a.*,
-                    t.town AS town_name,
-                    d.title AS district_name,
-                    divs.name AS division_name,
-                    ct.type_name AS complaint_type_name
+                SELECT DISTINCT ${safeColumns}
                 FROM agents a
                 LEFT JOIN work_requests wr ON (wr.executive_engineer_id = a.id OR wr.contractor_id = a.id)
                 LEFT JOIN town t ON a.town_id = t.id
@@ -90,12 +98,7 @@ export async function GET(request) {
             `;
             let countQuery = `SELECT COUNT(*) ${baseFromClause}`;
             let dataQuery = `
-                SELECT 
-                    a.*,
-                    t.town AS town_name,
-                    d.title AS district_name,
-                    divs.name AS division_name,
-                    ct.type_name AS complaint_type_name
+                SELECT ${safeColumns}
                 ${baseFromClause}
             `;
             let params = [];
@@ -159,6 +162,17 @@ export async function GET(request) {
 }
 
 export async function POST(req) {
+    // SECURITY: Require admin authentication
+    const { auth } = await import('@/auth');
+    const session = await auth();
+    if (!session?.user) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    const isAdmin = [1, 2].includes(parseInt(session.user.role));
+    if (!isAdmin) {
+        return NextResponse.json({ error: 'Forbidden - Admin access required' }, { status: 403 });
+    }
+
     let client;
     try {
         const formData = await req.formData();
@@ -240,7 +254,10 @@ export async function POST(req) {
             hasImage: !!imageUrl
         });
         
-        return NextResponse.json({ message: 'Agent added successfully', agent: newAgent[0] }, { status: 201 });
+        // SECURITY: Strip password before returning
+        const agentData = { ...newAgent[0] };
+        delete agentData.password;
+        return NextResponse.json({ message: 'Agent added successfully', agent: agentData }, { status: 201 });
     } catch (error) {
         console.error('Error saving agent:', error);
         return NextResponse.json({ error: 'Error saving agent', details: error.message }, { status: 500 });

@@ -12,7 +12,7 @@ export async function POST(request) {
     const body = await request.json();
     const method = body.method || 'whatsapp'; // Default to whatsapp, but allow email
     try {
-        // Call auth first before reading request body to avoid "body already consumed" error
+        // SECURITY: Require valid authenticated session
         let session;
         let sessionUserId;
         try {
@@ -20,44 +20,27 @@ export async function POST(request) {
             sessionUserId = session?.user?.id; // This is users.id
         } catch (authError) {
             console.error('Auth error in send-otp:', authError);
-            // Continue without session if auth fails - might be using userId directly
         }
         
-        userId = body.userId;
-        
-        if (!sessionUserId && !userId) {
+        if (!sessionUserId) {
             return NextResponse.json(
-                { error: 'User authentication required' },
+                { error: 'Authentication required. Please log in to request an OTP.' },
                 { status: 401 }
             );
         }
 
         client = await connectToDatabase();
         
-        // Get user's phone number and name from database
-        // session.user.id is users.id, so we need to find efiling_users by user_id
-        // OR if userId is provided and it's an efiling_users.id, use that
-        let userResult;
-        if (userId && !sessionUserId) {
-            // If userId is provided and no session, assume it's efiling_users.id
-            userResult = await client.query(`
-                SELECT eu.id, u.name, u.contact_number, u.email, eu.google_email
-                FROM efiling_users eu
-                LEFT JOIN users u ON eu.user_id = u.id
-                WHERE eu.id = $1
-            `, [userId]);
-        } else {
-            // Use session user.id (which is users.id) to find efiling_users
-            // Get the most recent active efiling_users record for this user
-            userResult = await client.query(`
-                SELECT eu.id, u.name, u.contact_number, u.email, eu.google_email
-                FROM efiling_users eu
-                LEFT JOIN users u ON eu.user_id = u.id
-                WHERE eu.user_id = $1 AND eu.is_active = true
-                ORDER BY eu.id DESC
-                LIMIT 1
-            `, [sessionUserId]);
-        }
+        // SECURITY: Bind OTP strictly to the authenticated session's user
+        // session.user.id is users.id, so query efiling_users by user_id and active status
+        const userResult = await client.query(`
+            SELECT eu.id, u.name, u.contact_number, u.email, eu.google_email
+            FROM efiling_users eu
+            LEFT JOIN users u ON eu.user_id = u.id
+            WHERE eu.user_id = $1 AND eu.is_active = true
+            ORDER BY eu.id DESC
+            LIMIT 1
+        `, [sessionUserId]);
 
         if (userResult.rows.length === 0) {
             return NextResponse.json(

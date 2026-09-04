@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { isInternalNetwork } from './validateNetwork';
+import { isDualPortalUser } from '@/lib/dualPortalAuth';
+import { getToken } from 'next-auth/jwt';
 
 export async function efilingAuthMiddleware(request) {
     try {
@@ -13,12 +15,7 @@ export async function efilingAuthMiddleware(request) {
                 : 'next-auth.session-token'
         ) || request.cookies.get('authjs.session-token') || request.cookies.get('__Secure-authjs.session-token');
 
-        const nextAuthCookie = request.cookies.get('next-auth.session-token') ||
-            request.cookies.get('__Secure-next-auth.session-token') ||
-            request.cookies.get('authjs.session-token') ||
-            request.cookies.get('__Secure-authjs.session-token');
-
-        const hasSession = Boolean(sessionCookie || nextAuthCookie);
+        const hasSession = Boolean(sessionCookie);
 
         const isDev = process.env.NODE_ENV === 'development';
         const withSecurityHeaders = (res) => {
@@ -77,15 +74,44 @@ export async function efilingAuthMiddleware(request) {
             return NextResponse.redirect(new URL('/login', request.url));
         }
 
-        // Unauthenticated requests are immediately redirected to /login
+        // Unauthenticated requests: 401 for API, redirect to /login for pages
         if (!hasSession) {
-            if (request.method === 'POST') {
-                return withSecurityHeaders(NextResponse.next());
+            if (pathname.startsWith('/api/')) {
+                return NextResponse.json(
+                    { error: 'Unauthorized: E-Filing session required', code: 'UNAUTHORIZED' },
+                    { status: 401 }
+                );
             }
             return withSecurityHeaders(NextResponse.redirect(new URL('/login', request.url)));
         }
 
-        // Authenticated sessions proceed to EfilingRouteGuard where internal network & dual-portal status in .env are verified
+        // Authenticated sessions off-network must be configured in DUAL_PORTAL_USERS
+        if (!isInternal) {
+            let isDual = false;
+            try {
+                const token = await getToken({
+                    req: request,
+                    secret: process.env.NEXTAUTH_SECRET,
+                    cookieName: sessionCookie?.name,
+                });
+                const email = token?.email || token?.user?.email;
+                isDual = Boolean(isDualPortalUser(email));
+            } catch (tokenErr) {
+                console.warn('[efilingAuthMiddleware] Could not decode session token off-network:', tokenErr.message);
+            }
+
+            if (!isDual) {
+                if (pathname.startsWith('/api/')) {
+                    return NextResponse.json(
+                        { error: 'Access Denied: E-Filing is restricted to authorized office networks.', code: 'IP_NOT_ALLOWED' },
+                        { status: 403 }
+                    );
+                }
+                return withSecurityHeaders(NextResponse.redirect(new URL('/login', request.url)));
+            }
+        }
+
+        // Authenticated session with authorized network or dual-portal status
         return withSecurityHeaders(NextResponse.next());
     } catch (error) {
         console.error('Error in efilingAuthMiddleware:', error);

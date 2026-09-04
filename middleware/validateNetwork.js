@@ -92,23 +92,36 @@ export function getClientIp(request) {
         return null;
     };
 
-    const xForwardedFor = getHeader('x-forwarded-for');
+    const isBehindProxy = process.env.BEHIND_PROXY === 'true';
     const xRealIp = getHeader('x-real-ip');
     const cfConnectingIp = getHeader('cf-connecting-ip');
+    const xForwardedFor = getHeader('x-forwarded-for');
 
-    const rawIp =
-        (xForwardedFor ? xForwardedFor.split(',')[0].trim() : null) ||
-        xRealIp?.trim() ||
-        cfConnectingIp?.trim() ||
-        request.ip ||
-        request.socket?.remoteAddress ||
-        '';
+    let rawIp = '';
+
+    if (isBehindProxy) {
+        // When behind trusted proxy (Nginx), prefer X-Real-IP set by the proxy from TCP connection,
+        // or take the last entry in X-Forwarded-For (appended by the trusted proxy).
+        if (xRealIp?.trim()) {
+            rawIp = xRealIp.trim();
+        } else if (cfConnectingIp?.trim()) {
+            rawIp = cfConnectingIp.trim();
+        } else if (xForwardedFor) {
+            const ips = xForwardedFor.split(',').map(ip => ip.trim()).filter(Boolean);
+            rawIp = ips.length > 0 ? ips[ips.length - 1] : '';
+        } else {
+            rawIp = request.ip || request.socket?.remoteAddress || '';
+        }
+    } else {
+        // Direct connection - use socket / request IP
+        rawIp = request.ip || request.socket?.remoteAddress || xRealIp?.trim() || '';
+    }
 
     // Remove IPv6-mapped IPv4 prefix (e.g., ::ffff:192.168.1.1)
     let cleanIp = rawIp.replace(/^::ffff:/, '').trim();
 
     // Map localhost strings
-    if (cleanIp === 'localhost') {
+    if (cleanIp === 'localhost' || cleanIp === '::1') {
         cleanIp = '127.0.0.1';
     }
 

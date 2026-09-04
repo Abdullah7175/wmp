@@ -83,8 +83,7 @@ export default function LoginPage() {
     // ONLY emails explicitly configured in DUAL_PORTAL_USERS in .env have remote dual-portal access
     const isEnvDualUser = Boolean(
       user.isDualPortal ||
-      isDualFromApi ||
-      email === 'e-ceo@kwsc.gos.pk'
+      isDualFromApi
     );
 
     // Case 1: Configured Dual-Portal User in .env (e.g. e-ceo@kwsc.gos.pk)
@@ -125,7 +124,7 @@ export default function LoginPage() {
 
     // Case 3: Specific WMP Executive and Operational Roles
     if (userType === "user") {
-      if (userRole === 8 || userRole === 24 || email === 'e-ceo@kwsc.gos.pk' || email.includes('ceo')) {
+      if (userRole === 8 || userRole === 24 || email.includes('ceo')) {
         window.location.href = "/ceo";
         return;
       } else if (userRole === 6 || userRole === 26 || email.includes('coo')) {
@@ -290,7 +289,7 @@ export default function LoginPage() {
     const userRole = parseInt(usr?.role || 0);
     const email = (usr?.email || '').toLowerCase();
 
-    if (userRole === 8 || userRole === 24 || email === 'e-ceo@kwsc.gos.pk' || email.includes('ceo')) {
+    if (userRole === 8 || userRole === 24 || email.includes('ceo')) {
       window.location.href = "/ceo";
     } else if (userRole === 6 || userRole === 26 || email.includes('coo')) {
       window.location.href = "/coo";

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { efilingAuthMiddleware } from "./middleware/efilingAuth";
 
-const PUBLIC_PATHS = ["/elogin", "/login", "/unauthorized", "/_next", "/api", "/favicon.ico", "/public"];
+const PUBLIC_PATHS = ["/elogin", "/login", "/unauthorized", "/_next", "/api/auth", "/favicon.ico", "/public"];
 
 // Allowed roles for smagent
 const smagentRolesA = [1, 2, 3, 6]; // CAMERA MAN, ASSISTANT, PHOTOGRAPHER, CONTENT CREATOR
@@ -237,27 +237,18 @@ export async function middleware(req) {
         // Always set origin header early for POST requests (Server Actions need this)
         ensureOriginHeader();
 
-        // For /api/efiling routes, unauthenticated external requests are blocked
+        // For /api/efiling routes, enforce authentication and network security through efilingAuthMiddleware
         if (pathname.startsWith('/api/efiling')) {
-            const sessionCookie = req.cookies.get('next-auth.session-token') ||
-                req.cookies.get('__Secure-next-auth.session-token') ||
-                req.cookies.get('authjs.session-token') ||
-                req.cookies.get('__Secure-authjs.session-token');
-
-            const { isInternalNetwork } = await import("./middleware/validateNetwork");
-            if (!isInternalNetwork(req) && !sessionCookie) {
-                console.warn(`[API Security] Blocked unauthenticated external request to ${pathname}`);
-                return NextResponse.json(
-                    { error: "Access Denied: E-Filing API is restricted to authorized office networks.", code: "IP_NOT_ALLOWED" },
-                    { status: 403 }
-                );
-            }
+            const authResponse = await efilingAuthMiddleware(req);
+            ensureOriginHeader();
+            setOriginHeader(req, authResponse);
+            return authResponse;
         }
 
         // Skip middleware for other static files, API routes, and Server Action paths
         // Server Actions can be POST requests to page routes or use special Next.js paths
         if (pathname.startsWith('/_next') ||
-            pathname.startsWith('/api') ||
+            (pathname.startsWith('/api') && !pathname.startsWith('/api/efiling')) ||
             pathname.includes('.') ||
             pathname.startsWith('/_action')) {
             const response = NextResponse.next();
@@ -339,5 +330,5 @@ export async function middleware(req) {
 }
 
 export const config = {
-    matcher: ["/smagent/:path*", "/agent/:path*", "/dashboard/:path*", "/efiling/:path*", "/efilinguser/:path*", "/api/efiling/:path*", "/elogin", "/ceo/:path*"],
+    matcher: ["/smagent/:path*", "/agent/:path*", "/dashboard/:path*", "/efiling/:path*", "/efilinguser/:path*", "/api/efiling/:path*", "/elogin", "/ceo/:path*", "/coo/:path*", "/ce/:path*"],
 }; 

@@ -326,14 +326,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             user.role = dbUser.role;
             user.userType = 'socialmedia';
           } else {
-            // Create new user in users table if not found
-            const newUserResult = await client.query(
-              'INSERT INTO users (name, email, role, userType) VALUES ($1, $2, $3, $4) RETURNING *',
-              [user.name, user.email, 'user', 'user']
-            );
-            user.id = newUserResult.rows[0].id.toString();
-            user.role = 'user';
-            user.userType = 'user';
+            // SECURITY: Reject unauthorized Google sign-ins; do NOT auto-create users
+            console.warn(`[Google Sign-In Rejected] Email ${user.email} not found in pre-provisioned user tables.`);
+            return false;
           }
           
           return true;

@@ -24,6 +24,13 @@ async function saveUploadedFile(file) {
 }
 
 export async function GET(request) {
+    // SECURITY: Require authentication
+    const { auth } = await import('@/auth');
+    const session = await auth();
+    if (!session?.user) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
     const work_request_id = searchParams.get('work_request_id');
@@ -36,8 +43,11 @@ export async function GET(request) {
     let client;
     try {
         client = await connectToDatabase();
+        // Safe columns excluding password
+        const safeColumns = 'id, name, email, contact_number, address, role, image, created_at';
+
         if (id) {
-            const query = 'SELECT * FROM socialmediaperson WHERE id = $1';
+            const query = `SELECT ${safeColumns} FROM socialmediaperson WHERE id = $1`;
             const result = await client.query(query, [id]);
             if (result.rows.length === 0) {
                 return NextResponse.json({ error: 'Videographer not found' }, { status: 404 });
@@ -46,7 +56,7 @@ export async function GET(request) {
         } else if (work_request_id) {
             // Fetch social media agents assigned to a specific work request
             const query = `
-                SELECT DISTINCT sm.*
+                SELECT DISTINCT sm.id, sm.name, sm.email, sm.contact_number, sm.address, sm.role, sm.image, sm.created_at
                 FROM socialmediaperson sm
                 JOIN request_assign_smagent ras ON sm.id = ras.socialmedia_agent_id
                 WHERE ras.work_requests_id = $1
@@ -56,7 +66,7 @@ export async function GET(request) {
             return NextResponse.json({ data: result.rows }, { status: 200 });
         } else {
             let countQuery = 'SELECT COUNT(*) FROM socialmediaperson';
-            let dataQuery = 'SELECT * FROM socialmediaperson';
+            let dataQuery = `SELECT ${safeColumns} FROM socialmediaperson`;
             let params = [];
             let whereClauses = [];
             if (filter) {
@@ -100,6 +110,17 @@ export async function GET(request) {
 }
 
 export async function POST(req) {
+    // SECURITY: Require admin authentication
+    const { auth } = await import('@/auth');
+    const session = await auth();
+    if (!session?.user) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    const isAdmin = [1, 2].includes(parseInt(session.user.role));
+    if (!isAdmin) {
+        return NextResponse.json({ error: 'Forbidden - Admin access required' }, { status: 403 });
+    }
+
     let client;
     try {
         const formData = await req.formData();
@@ -142,7 +163,10 @@ export async function POST(req) {
             hasImage: !!imageUrl
         });
         
-        return NextResponse.json({ message: 'Videographer added successfully', agent: newAgent[0] }, { status: 201 });
+        // SECURITY: Strip password before returning
+        const agentData = { ...newAgent[0] };
+        delete agentData.password;
+        return NextResponse.json({ message: 'Videographer added successfully', agent: agentData }, { status: 201 });
     } catch (error) {
         console.error('Error saving Videographer:', error);
         return NextResponse.json({ error: 'Error saving Videographer', details: error.message }, { status: 500 });

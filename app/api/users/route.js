@@ -57,8 +57,27 @@ async function deleteFile(filePath) {
 }
 
 export async function GET(request) {
+    // SECURITY: Require authentication (admin for user list; self or admin for single record)
+    const { auth } = await import('@/auth');
+    const session = await auth();
+    if (!session?.user) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    const sessionUserRole = parseInt(session.user.role);
+    const sessionUserId = parseInt(session.user.id);
+    const isAdmin = [1, 2].includes(sessionUserRole);
+
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
+
+    // Non-admin users can only view their own user record
+    if (id && !isAdmin && parseInt(id) !== sessionUserId) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+    if (!id && !isAdmin) {
+        return NextResponse.json({ error: 'Forbidden - Admin access required' }, { status: 403 });
+    }
+
     const role = searchParams.get('role');
     const page = parseInt(searchParams.get('page') || '1', 10);
     const limit = parseInt(searchParams.get('limit') || '0', 10);
@@ -69,7 +88,8 @@ export async function GET(request) {
     const client = await connectToDatabase();
     try {
         if (id) {
-            const query = 'SELECT * FROM users WHERE id = $1';
+            // SECURITY: Never select or return the password hash
+            const query = 'SELECT id, name, email, contact_number, role, image, created_date FROM users WHERE id = $1';
             const result = await client.query(query, [id]);
             if (result.rows.length === 0) {
                 return NextResponse.json({ error: 'User not found' }, { status: 404 });
@@ -129,8 +149,19 @@ export async function GET(request) {
 }
 
 export async function POST(req) {
-    const JWT_SECRET = process.env.JWT_SECRET;
     try {
+        // SECURITY: Require admin authentication
+        const { auth } = await import('@/auth');
+        const session = await auth();
+        if (!session?.user) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+        const sessionUserRole = parseInt(session.user.role);
+        const isAdmin = [1, 2].includes(sessionUserRole);
+        if (!isAdmin) {
+            return NextResponse.json({ error: 'Forbidden - Admin access required' }, { status: 403 });
+        }
+
         const formData = await req.formData();
         
         const name = formData.get('name');
@@ -139,6 +170,16 @@ export async function POST(req) {
         const contact = formData.get('contact');
         const role = formData.get('role');
         const imageFile = formData.get('image');
+
+        if (!name || !email || !password || !role) {
+            return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+        }
+
+        // Only super-admin (role 1) can assign administrative roles (role 1 or 2)
+        const targetRole = parseInt(role);
+        if ([1, 2].includes(targetRole) && sessionUserRole !== 1) {
+            return NextResponse.json({ error: 'Forbidden - Only Super Admin can assign administrative roles' }, { status: 403 });
+        }
 
         let imageUrl = null;
         
@@ -151,7 +192,8 @@ export async function POST(req) {
 
         const query = `
             INSERT INTO users (name, email, password, contact_number, role, image)
-            VALUES ($1, $2, $3, $4, $5, $6) RETURNING *;
+            VALUES ($1, $2, $3, $4, $5, $6)
+            RETURNING id, name, email, contact_number, role, image, created_date;
         `;
         
         const hashedPassword = await bcrypt.hash(password, 10);
@@ -163,14 +205,6 @@ export async function POST(req) {
             role,
             imageUrl
         ]);
-
-        const payload = {
-            userId: newUser[0].id,
-            email: newUser[0].email,
-            role: newUser[0].role
-        };
-        
-        const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '1h' });
         
         // Log the user creation action
         await actionLogger.create(req, ENTITY_TYPES.USER, newUser[0].id, newUser[0].name, {
@@ -180,10 +214,10 @@ export async function POST(req) {
             hasImage: !!imageUrl
         });
         
+        // SECURITY: Return sanitized user object; do NOT return password hash or auto-login JWT
         return NextResponse.json({
             message: 'User added successfully',
             user: newUser[0],
-            token,
         }, { status: 201 });
    
     } catch (error) {

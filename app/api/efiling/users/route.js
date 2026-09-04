@@ -3,6 +3,15 @@ import { connectToDatabase } from '@/lib/db';
 import { eFileActionLogger, EFILING_ACTION_TYPES, EFILING_ENTITY_TYPES } from '@/lib/efilingActionLogger';
 
 export async function GET(request) {
+    // SECURITY: Require authenticated session
+    const { auth } = await import('@/auth');
+    const session = await auth();
+    if (!session?.user) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    const sessionUserRole = parseInt(session.user.role);
+    const isAdmin = [1, 2].includes(sessionUserRole);
+
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
     const department_id = searchParams.get('department_id');
@@ -42,7 +51,7 @@ export async function GET(request) {
                     u.name,
                     u.email,
                     u.contact_number,
-                    u.cnic,
+                    ${isAdmin ? 'u.cnic,' : "'' as cnic,"}
                     d.name as department_name, 
                     d.department_type,
                     r.name as role_name, 
@@ -72,13 +81,14 @@ export async function GET(request) {
                 user: result.rows[0]
             });
         } else {
+            // SECURITY: Never include CNIC in list responses
             let query = `
                 SELECT 
                     eu.*,
                     u.name,
                     u.email,
                     u.contact_number,
-                    u.cnic,
+                    '' as cnic,
                     d.name as department_name, 
                     d.department_type, 
                     r.name as role_name, 
@@ -145,6 +155,17 @@ export async function GET(request) {
 }
 
 export async function POST(request) {
+    // SECURITY: Require admin authentication
+    const { auth } = await import('@/auth');
+    const session = await auth();
+    if (!session?.user) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    const isAdmin = [1, 2].includes(parseInt(session.user.role));
+    if (!isAdmin) {
+        return NextResponse.json({ error: 'Forbidden - Admin access required' }, { status: 403 });
+    }
+
     let client;
     try {
         client = await connectToDatabase();

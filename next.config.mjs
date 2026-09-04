@@ -18,19 +18,6 @@ const nextConfig = {
   env: {
     // Use HTTPS in production, HTTP only for local development
     NEXTAUTH_URL: process.env.NEXTAUTH_URL || (process.env.NODE_ENV === 'production' ? 'https://wmp.kwsc.gos.pk' : 'http://wmp.kwsc.gos.pk:3000'),
-    // SECURITY: No default secrets - must be set in environment variables
-    NEXTAUTH_SECRET: (() => {
-      if (!process.env.NEXTAUTH_SECRET) {
-        throw new Error('NEXTAUTH_SECRET must be set in environment variables');
-      }
-      return process.env.NEXTAUTH_SECRET;
-    })(),
-    JWT_SECRET: (() => {
-      if (!process.env.JWT_SECRET) {
-        throw new Error('JWT_SECRET must be set in environment variables');
-      }
-      return process.env.JWT_SECRET;
-    })(),
   },
   images: {
     remotePatterns: [
@@ -54,7 +41,7 @@ const nextConfig = {
         port: '3000',
       },
     ],
-    dangerouslyAllowSVG: true,
+    dangerouslyAllowSVG: false,
     // Disable image optimization if sharp is not available (fallback)
     unoptimized: process.env.DISABLE_IMAGE_OPTIMIZATION === 'true',
   },

@@ -54,7 +54,7 @@ export function EfilingRouteGuard({ children, allowedRoles = [] }) {
       normalizedAllowedRoles.length === 0 ||
       (roleNumber !== null && normalizedAllowedRoles.includes(roleNumber));
 
-    const isDualPortal = Boolean(session?.user?.isDualPortal || roleNumber === 1);
+    const isDualPortal = Boolean(session?.user?.isDualPortal);
 
     const checkAccessAndNetwork = async () => {
       let isInternal = false;
@@ -67,9 +67,7 @@ export function EfilingRouteGuard({ children, allowedRoles = [] }) {
           isInternal = Boolean(netData.isInternalNetwork);
           isDual = Boolean(
             netData.isDualPortalUser ||
-            netData.showBothPortals ||
-            session?.user?.isDualPortal ||
-            session?.user?.email?.toLowerCase() === 'e-ceo@kwsc.gos.pk'
+            session?.user?.isDualPortal
           );
         }
       } catch (err) {
@@ -84,8 +82,8 @@ export function EfilingRouteGuard({ children, allowedRoles = [] }) {
         return;
       }
 
-      // Dual-portal users and Global admins are authorized for E-Filing
-      if (isDual || isGlobal || roleNumber === 1) {
+      // Dual-portal users (anywhere) or internal admins are authorized for E-Filing
+      if (isDual || (isInternal && (isGlobal || roleNumber === 1))) {
         setAuthorized(true);
         setChecking(false);
         toastShownRef.current = false;
