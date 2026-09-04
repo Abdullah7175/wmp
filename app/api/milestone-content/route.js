@@ -12,7 +12,11 @@ export const dynamic = 'force-dynamic';
 export async function GET(request) {
   let client;
   try {
+    // SECURITY: Require authentication
     const session = await auth();
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
     const { searchParams } = new URL(request.url);
     const workRequestId = searchParams.get('workRequestId');
     const milestoneId = searchParams.get('milestoneId');

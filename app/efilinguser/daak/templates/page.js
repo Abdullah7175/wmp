@@ -15,6 +15,7 @@ import { useEfilingUser } from "@/context/EfilingUserContext";
 import { isExternalUser } from "@/lib/efilingRoleHelpers";
 import TipTapEditor from "@/app/efilinguser/components/TipTapEditor";
 import "@/app/efilinguser/components/TipTapEditor.css";
+import { sanitizeHtml } from "@/lib/sanitizeHtml";
 const emptyForm = {
     name: "",
     subject: "",
@@ -276,7 +277,7 @@ export default function MyDaakTemplatesPage() {
                             <p><strong>Subject:</strong> {preview.subject || "—"}</p>
                             <div
                                 className="border rounded p-3 prose prose-sm max-w-none tiptap-editor"
-                                dangerouslySetInnerHTML={{ __html: preview.content || "<em>No content</em>" }}
+                                dangerouslySetInnerHTML={{ __html: sanitizeHtml(preview.content || "<em>No content</em>") }}
                             />
                         </div>
                     )}

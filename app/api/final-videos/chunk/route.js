@@ -27,7 +27,11 @@ export async function POST(req) {
     const fileSize = parseInt(formData.get('fileSize') || '0');
     const chunk = formData.get('chunk');
 
-    if (!uploadId || !fileName || !chunk) {
+    if (!uploadId || typeof uploadId !== 'string' || !/^[a-zA-Z0-9_-]{1,64}$/.test(uploadId)) {
+      return createErrorResponse('Invalid or missing upload ID format', 400);
+    }
+
+    if (!fileName || !chunk) {
       return createErrorResponse('Missing required chunk data', 400);
     }
 
@@ -50,7 +54,12 @@ export async function POST(req) {
       baseDir = path.join(baseDir, '..', '..');
     }
     
-    const tempDir = path.join(baseDir, 'temp', 'chunks', uploadId);
+    // SECURITY: Ensure tempDir is strictly contained inside temp/chunks
+    const chunksBaseDir = path.resolve(path.join(baseDir, 'temp', 'chunks'));
+    const tempDir = path.resolve(path.join(chunksBaseDir, uploadId));
+    if (!tempDir.startsWith(chunksBaseDir)) {
+      return createErrorResponse('Invalid upload path', 400);
+    }
     await ensureUploadDir(tempDir);
 
     // Read chunk data once
@@ -94,8 +103,9 @@ export async function DELETE(req) {
 
     const { uploadId } = await req.json();
     
-    if (!uploadId) {
-      return createErrorResponse('Upload ID is required', 400);
+    // SECURITY: Validate uploadId format to prevent path traversal and arbitrary directory deletion
+    if (!uploadId || typeof uploadId !== 'string' || !/^[a-zA-Z0-9_-]{1,64}$/.test(uploadId)) {
+      return createErrorResponse('Invalid or missing upload ID format', 400);
     }
 
     // In standalone mode, go up to root directory
@@ -104,7 +114,11 @@ export async function DELETE(req) {
       baseDir = path.join(baseDir, '..', '..');
     }
     
-    const tempDir = path.join(baseDir, 'temp', 'chunks', uploadId);
+    const chunksBaseDir = path.resolve(path.join(baseDir, 'temp', 'chunks'));
+    const tempDir = path.resolve(path.join(chunksBaseDir, uploadId));
+    if (!tempDir.startsWith(chunksBaseDir)) {
+      return createErrorResponse('Invalid upload path', 400);
+    }
     
     try {
       await fs.rm(tempDir, { recursive: true, force: true });

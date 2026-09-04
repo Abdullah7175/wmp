@@ -21,7 +21,12 @@ export async function POST(req) {
     const body = await req.json();
     const { uploadId, fileName, fileSize, totalChunks, workRequestId, description, latitude, longitude, creator_id, creator_type, creator_name } = body;
     
-    if (!uploadId || !fileName || !totalChunks) {
+    // SECURITY: Validate uploadId format to prevent path traversal
+    if (!uploadId || typeof uploadId !== 'string' || !/^[a-zA-Z0-9_-]{1,64}$/.test(uploadId)) {
+      return createErrorResponse('Invalid or missing upload ID format', 400);
+    }
+
+    if (!fileName || !totalChunks) {
       return createErrorResponse('Missing required finalize data', 400);
     }
 
@@ -31,7 +36,12 @@ export async function POST(req) {
       baseDir = path.join(baseDir, '..', '..');
     }
     
-    const tempDir = path.join(baseDir, 'temp', 'chunks', uploadId);
+    // SECURITY: Verify tempDir is strictly contained inside temp/chunks
+    const chunksBaseDir = path.resolve(path.join(baseDir, 'temp', 'chunks'));
+    const tempDir = path.resolve(path.join(chunksBaseDir, uploadId));
+    if (!tempDir.startsWith(chunksBaseDir)) {
+      return createErrorResponse('Invalid upload path', 400);
+    }
     
     // Check if temp directory exists
     try {

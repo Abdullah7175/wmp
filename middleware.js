@@ -256,36 +256,17 @@ export async function middleware(req) {
             return response;
         }
 
-        // For POST requests (might be Server Actions), ensure origin header is set
-        // But still run authentication checks for protected routes
-        if (req.method === 'POST') {
-            // Ensure origin is set on request before creating response
-            ensureOriginHeader();
-
-            const response = NextResponse.next();
-            setOriginHeader(req, response);
-
-            // Continue with authentication checks for efiling routes
-            if (pathname.startsWith('/efiling') || pathname.startsWith('/efilinguser') || pathname === '/elogin') {
-                const authResponse = await efilingAuthMiddleware(req);
-                // Ensure origin header is set on both request and response
-                ensureOriginHeader();
-                setOriginHeader(req, authResponse);
-                return authResponse;
-            }
-
-            // For other POST requests, return with origin header set
-            return response;
-        }
-
         // Handle e-filing authentication for efiling and efilinguser routes
         if (pathname.startsWith('/efiling') || pathname.startsWith('/efilinguser') || pathname === '/elogin') {
-            const response = await efilingAuthMiddleware(req);
-            // Ensure origin header is set for Server Actions
             if (req.method === 'POST') {
-                setOriginHeader(req, response);
+                ensureOriginHeader();
             }
-            return response;
+            const authResponse = await efilingAuthMiddleware(req);
+            if (req.method === 'POST') {
+                ensureOriginHeader();
+                setOriginHeader(req, authResponse);
+            }
+            return authResponse;
         }
 
         // Check for session cookies - handles all authentication types
@@ -304,18 +285,29 @@ export async function middleware(req) {
                 // Redirect to login for protected routes
                 const loginUrl = new URL('/login', req.url);
                 const redirectResponse = NextResponse.redirect(loginUrl);
+                if (req.method === 'POST') {
+                    setOriginHeader(req, redirectResponse);
+                }
                 applySecurityHeaders(redirectResponse, pathname, req);
                 return redirectResponse;
             }
 
             // Allow public routes to proceed
             const response = NextResponse.next();
+            if (req.method === 'POST') {
+                ensureOriginHeader();
+                setOriginHeader(req, response);
+            }
             applySecurityHeaders(response, pathname, req);
             return response;
         }
 
         // User is authenticated, allow request to proceed
         const response = NextResponse.next();
+        if (req.method === 'POST') {
+            ensureOriginHeader();
+            setOriginHeader(req, response);
+        }
         // SECURITY: Apply security headers to all pages
         applySecurityHeaders(response, pathname, req);
         return response;

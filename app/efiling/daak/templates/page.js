@@ -16,6 +16,7 @@ import { useToast } from "@/hooks/use-toast";
 import SearchableSelect from "@/components/ui/searchable-select";
 import TipTapEditor from "@/app/efiling/components/TipTapEditor";
 import "@/app/efiling/components/TipTapEditor.css";
+import { sanitizeHtml } from "@/lib/sanitizeHtml";
 
 const emptyForm = {
     name: "",
@@ -436,7 +437,7 @@ export default function AdminDaakTemplatesPage() {
                             <p><strong>Subject:</strong> {preview.subject || "—"}</p>
                             <div
                                 className="border rounded p-3 mt-2 prose prose-sm max-w-none tiptap-editor"
-                                dangerouslySetInnerHTML={{ __html: preview.content || "<p><em>No content</em></p>" }}
+                                dangerouslySetInnerHTML={{ __html: sanitizeHtml(preview.content || "<p><em>No content</em></p>") }}
                             />
                         </div>
                     )}

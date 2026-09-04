@@ -9,6 +9,12 @@ import {
 } from '@/lib/efilingGeographyFilters';
 
 export async function GET(request) {
+    // SECURITY: Require authentication
+    const session = await auth();
+    if (!session?.user) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
     const creator_id = searchParams.get('creator_id');
@@ -43,16 +49,12 @@ export async function GET(request) {
         
         // Get user ID for potential fallback filtering
         let efilingUserId = null;
-        let session = null;
-        if (scopeInfo.apply) {
-            session = await auth();
-            if (session?.user?.id) {
-                const efUserRes = await client.query(
-                    'SELECT id FROM efiling_users WHERE user_id = $1 AND is_active = true',
-                    [session.user.id]
-                );
-                efilingUserId = efUserRes.rows[0]?.id || null;
-            }
+        if (scopeInfo.apply && session?.user?.id) {
+            const efUserRes = await client.query(
+                'SELECT id FROM efiling_users WHERE user_id = $1 AND is_active = true',
+                [session.user.id]
+            );
+            efilingUserId = efUserRes.rows[0]?.id || null;
         }
 
         if (id) {
@@ -417,6 +419,12 @@ export async function GET(request) {
 }
 
 export async function POST(req) {
+    // SECURITY: Require authentication
+    const session = await auth();
+    if (!session?.user) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     let client;
     try {
         console.log('Starting database connection for POST requests API');
@@ -436,8 +444,8 @@ export async function POST(req) {
             description,
             latitude,
             longitude,
-            creator_id,
-            creator_type, // 'user', 'agent', 'socialmedia'
+            creator_id: input_creator_id,
+            creator_type: input_creator_type, // 'user', 'agent', 'socialmedia'
             executive_engineer_id,
             contractor_id,
             nature_of_work,
@@ -445,6 +453,13 @@ export async function POST(req) {
             file_type,
             additional_locations // array of additional locations
         } = body;
+
+        // SECURITY: Bind creator identity to authenticated session for non-admin users
+        const sessionUserId = parseInt(session.user.id);
+        const sessionUserType = session.user.userType || 'user';
+        const isAdmin = [1, 2].includes(parseInt(session.user.role)) && sessionUserType === 'user';
+        const creator_id = isAdmin && input_creator_id ? parseInt(input_creator_id) : sessionUserId;
+        const creator_type = isAdmin && input_creator_type ? input_creator_type : sessionUserType;
         console.log('[POST /api/requests] Raw location inputs', {
             town_id,
             division_id,

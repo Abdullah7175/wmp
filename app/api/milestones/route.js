@@ -1,11 +1,18 @@
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/db';
 import { actionLogger, ENTITY_TYPES } from '@/lib/actionLogger';
+import { auth } from '@/auth';
 
 export const dynamic = 'force-dynamic';
 
 // GET: Fetch all definitions or a specific one
 export async function GET(request) {
+    // SECURITY: Require authentication
+    const session = await auth();
+    if (!session?.user) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
     const natureOfWork = searchParams.get('nature_of_work');

@@ -36,11 +36,12 @@ export async function GET(request, { params }) {
 
     const client = await connectToDatabase();
     try {
-        const query = 'SELECT * FROM socialmediaperson WHERE id = $1';
+        const query = 'SELECT id, name, email, contact_number, address, role, image, created_at FROM socialmediaperson WHERE id = $1';
         const result = await client.query(query, [id]);
         if (result.rows.length === 0) {
             return NextResponse.json({ error: 'Videographer not found' }, { status: 404 });
         }
+        delete result.rows[0].password;
         return NextResponse.json(result.rows[0], { status: 200 });
     } catch (error) {
         console.error('Error fetching videographer:', error);
@@ -107,6 +108,7 @@ export async function PUT(req, { params }) {
         if (updatedAgent.length === 0) {
             return NextResponse.json({ error: 'Videographer not found' }, { status: 404 });
         }
+        delete updatedAgent[0].password;
         return NextResponse.json({ message: 'Videographer updated successfully', agent: updatedAgent[0] }, { status: 200 });
     } catch (error) {
         console.error('Error updating videographer:', error);
@@ -116,9 +118,21 @@ export async function PUT(req, { params }) {
 
 export async function DELETE(req, { params }) {
     const { id } = await params;
+    
+    // SECURITY: Require authentication & admin role
+    const { auth } = await import('@/auth');
+    const session = await auth();
+    if (!session?.user) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    const isAdmin = [1, 2].includes(parseInt(session.user.role));
+    if (!isAdmin) {
+        return NextResponse.json({ error: 'Forbidden - Admin access required' }, { status: 403 });
+    }
+
     try {
         const client = await connectToDatabase();
-        const query = 'DELETE FROM socialmediaperson WHERE id = $1 RETURNING *;';
+        const query = 'DELETE FROM socialmediaperson WHERE id = $1 RETURNING id, name, email, role;';
         const { rows: deletedAgent } = await client.query(query, [id]);
         if (deletedAgent.length === 0) {
             return NextResponse.json({ error: 'Videographer not found' }, { status: 404 });
