@@ -30,8 +30,14 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# env files (can opt-in for commiting if needed)
+# Environment files (CRITICAL: NEVER commit secrets/env to GitHub)
+.env
 .env*
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+!.env.example
 
 # vercel
 .vercel
@@ -40,9 +46,14 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# public assets to ignore
-/public/uploads/videos/
-/public/uploads/final-videos/
+# User uploads and media storage (Never commit to GitHub)
+/public/uploads/*
+!/public/uploads/.gitkeep
+/uploads/*
+!/uploads/.gitkeep
+temp/
+/public/uploads/**
+/uploads/**
 API_DOCUMENTATION.md
 MOBILE_APP_API_TOKENS.md
 MOBILE_APP_DEVELOPER_GUIDE.md
