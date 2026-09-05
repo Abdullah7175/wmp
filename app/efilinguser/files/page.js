@@ -464,7 +464,7 @@ export default function FilesPage() {
                         </div>
                     </div>
                     <div className="flex justify-end gap-2 mt-4">
-                        {isCEO && activeTab === 'assigned' && (
+                        {/* {isCEO && activeTab === 'assigned' && (
                             <Button 
                                 className="bg-green-600 hover:bg-green-700 text-white" 
                                 onClick={handleBulkApprove}
@@ -473,7 +473,7 @@ export default function FilesPage() {
                                 <CheckCircle className="w-4 h-4 mr-2" />
                                 {approving ? "Approving..." : `Approve Selected Files (${selectedFileIds.length})`}
                             </Button>
-                        )}
+                        )} */}
                         <Button
                             variant="outline"
                             onClick={() => {
@@ -499,7 +499,7 @@ export default function FilesPage() {
                     {!isExternal && <TabsTrigger value="mine">My Files</TabsTrigger>}
                     <TabsTrigger value="assigned">Marked To Me</TabsTrigger>
                     {!isExternal && <TabsTrigger value="cc">CC Files</TabsTrigger>}
-                    {isCEO && <TabsTrigger value="approved">Approved Files</TabsTrigger>}
+                    {/* {isCEO && <TabsTrigger value="approved">Approved Files</TabsTrigger>} */}
                 </TabsList>
 
                 <TabsContent value="mine"> 
@@ -540,7 +540,7 @@ export default function FilesPage() {
                         false,
                         selectedFileIds,
                         setSelectedFileIds,
-                        isCEO
+                        false // Set to false to hide checkboxes
                     )}
                 </TabsContent>
 
@@ -565,11 +565,11 @@ export default function FilesPage() {
                     )}
                 </TabsContent>
 
-                {isCEO && (
+                {/* {isCEO && (
                     <TabsContent value="approved">
                         {renderApprovedFilesTable(filteredApprovedFiles, getStatusBadge)}
                     </TabsContent>
-                )}
+                )} */}
             </Tabs>
 
             {markModalFile && (
