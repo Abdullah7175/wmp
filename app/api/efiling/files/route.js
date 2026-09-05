@@ -316,6 +316,7 @@ export async function GET(request) {
             let query = `
                 SELECT DISTINCT ON (f.id)
                        f.*,
+                       f.approved_at,
                        c.name as category_name,
                        d.name as department_name,
                        s.name as status_name, s.code as status_code, s.color as status_color,
@@ -1102,4 +1103,4 @@ export async function DELETE(request) {
     } finally {
         if (client) await client.release();
     }
-} 
+}  

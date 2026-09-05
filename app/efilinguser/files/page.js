@@ -49,6 +49,7 @@ export default function FilesPage() {
     const [assignedToMe, setAssignedToMe] = useState([]);
     const [ccFiles, setCcFiles] = useState([]);
     const isExternal = isExternalUser(roleCode);
+    
     // External users (ADLFA/CON) should only see "assigned" tab (marked to them)
     const [activeTab, setActiveTab] = useState(isExternal ? 'assigned' : 'mine');
     const [currentPage, setCurrentPage] = useState(1);
@@ -64,12 +65,18 @@ export default function FilesPage() {
     const [dateFrom, setDateFrom] = useState('');
     const [dateTo, setDateTo] = useState('');
 
+    const [approvedFiles, setApprovedFiles] = useState([]);
+    const [approving, setApproving] = useState(false);
+    const [selectedFileIds, setSelectedFileIds] = useState([]);
+
     // Filter options
     const [filterOptions, setFilterOptions] = useState({
         towns: [],
         zones: [],
         divisions: []
     });
+
+    const isCEO = roleCode === 'CEO';
 
     useEffect(() => {
         if (efilingUserId) {
@@ -92,11 +99,15 @@ export default function FilesPage() {
         try {
             // Build query parameters
             const params = new URLSearchParams();
-            params.append('limit', '500'); // Increased limit for better filtering
+            params.append('limit', '500');
 
-            // External users (ADLFA/CON) should only see files assigned/marked to them
-            if (isExternal) {
-                // For external users, fetch files assigned to them (which includes marked files)
+            if (activeTab === 'approved') {
+                params.append('assigned_to', efilingUserId);
+                const approvedStatus = statuses.find(s => s.code === 'APPROVED');
+                if (approvedStatus) {
+                    params.append('status_id', approvedStatus.id);
+                }
+            } else if (isExternal) {
                 params.append('assigned_to', efilingUserId);
             } else if (activeTab === 'mine') {
                 params.append('created_by', efilingUserId);
@@ -114,7 +125,7 @@ export default function FilesPage() {
             if (subjectFilter) params.append('subject_search', subjectFilter);
             if (dateFrom) params.append('date_from', dateFrom);
             if (dateTo) params.append('date_to', dateTo);
-            if (statusFilter !== 'all') params.append('status_id', statusFilter);
+            if (statusFilter !== 'all' && activeTab !== 'approved') params.append('status_id', statusFilter);
 
             const response = await fetch(`/api/efiling/files?${params.toString()}`);
             const json = response.ok ? await response.json() : { files: [] };
@@ -124,6 +135,8 @@ export default function FilesPage() {
                 setMyFiles(fileList);
             } else if (activeTab === 'cc') {
                 setCcFiles(fileList);
+            } else if (activeTab === 'approved') {
+                setApprovedFiles(fileList);
             } else {
                 setAssignedToMe(fileList);
             }
@@ -184,7 +197,6 @@ export default function FilesPage() {
 
     const filterRows = (rows) => {
         return rows.filter((file) => {
-            // General search (file number search)
             const matchesSearch = searchTerm
                 ? (file.file_number || "").toString().toLowerCase().includes(searchTerm.toLowerCase())
                 : true;
@@ -196,6 +208,45 @@ export default function FilesPage() {
     const filteredMyFiles = useMemo(() => filterRows(myFiles), [myFiles, searchTerm]);
     const filteredAssignedFiles = useMemo(() => filterRows(assignedToMe), [assignedToMe, searchTerm]);
     const filteredCcFiles = useMemo(() => filterRows(ccFiles), [ccFiles, searchTerm]);
+    const filteredApprovedFiles = useMemo(() => filterRows(approvedFiles), [approvedFiles, searchTerm]);
+
+    const handleBulkApprove = async () => {
+            if (selectedFileIds.length === 0) {
+                toast({ title: "Warning", description: "Please select at least one file to approve", variant: "destructive" });
+                return;
+            }
+
+            setApproving(true);
+            try {
+                const res = await fetch('/api/efiling/files/approve', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ file_ids: selectedFileIds })
+                });
+
+                const data = await res.json();
+
+                if (res.ok) {
+                    toast({ title: "Success", description: `${selectedFileIds.length} file(s) approved successfully` });
+                    setSelectedFileIds([]);
+                    fetchFiles();
+                } else {
+                    toast({
+                        title: "Approval Failed",
+                        description: (
+                            <div className="whitespace-pre-line text-sm mt-1">
+                                {data.error || "Failed to approve files"}
+                            </div>
+                        ),
+                        variant: "destructive"
+                    });
+                }
+            } catch (err) {
+                toast({ title: "Error", description: "Approval request failed", variant: "destructive" });
+            } finally {
+                setApproving(false);
+            }
+        };
 
     const handlePageChange = (page) => {
         setCurrentPage(page);
@@ -251,7 +302,6 @@ export default function FilesPage() {
     };
 
     const handleCreateFile = () => {
-        // Log file creation attempt
         if (session?.user?.id) {
             logEfilingUserAction({
                 user_id: session.user.id,
@@ -264,32 +314,6 @@ export default function FilesPage() {
         router.push('/efilinguser/files/new');
     };
 
-    const handleEditDocument = (fileId) => {
-        // Log document edit action
-        if (session?.user?.id) {
-            logEfilingUserAction({
-                user_id: session.user.id,
-                action_type: EFILING_ACTIONS.DOCUMENT_EDITED,
-                description: `Initiated document editing for file ${fileId}`,
-                file_id: fileId
-            });
-        }
-        router.push(`/efilinguser/files/${fileId}/edit-document`);
-    };
-
-    const handleViewFile = (fileId) => {
-        // Log file view action
-        if (session?.user?.id) {
-            logEfilingUserAction({
-                user_id: session.user.id,
-                action_type: EFILING_ACTIONS.FILE_VIEWED,
-                description: `Viewed file ${fileId}`,
-                file_id: fileId
-            });
-        }
-        router.push(`/efilinguser/files/${fileId}`);
-    };
-
     if (loading) {
         return (
             <div className="flex items-center justify-center h-96">
@@ -300,7 +324,6 @@ export default function FilesPage() {
 
     return (
         <div className="container mx-auto px-4 py-6">
-            {/* Header */}
             <div className="flex items-center justify-between mb-6">
                 <div>
                     <h1 className="text-3xl font-bold text-gray-900">My Files</h1>
@@ -440,7 +463,17 @@ export default function FilesPage() {
                             />
                         </div>
                     </div>
-                    <div className="flex justify-end mt-4">
+                    <div className="flex justify-end gap-2 mt-4">
+                        {isCEO && activeTab === 'assigned' && (
+                            <Button 
+                                className="bg-green-600 hover:bg-green-700 text-white" 
+                                onClick={handleBulkApprove}
+                                disabled={approving || selectedFileIds.length === 0}
+                            >
+                                <CheckCircle className="w-4 h-4 mr-2" />
+                                {approving ? "Approving..." : `Approve Selected Files (${selectedFileIds.length})`}
+                            </Button>
+                        )}
                         <Button
                             variant="outline"
                             onClick={() => {
@@ -461,14 +494,15 @@ export default function FilesPage() {
                 </CardContent>
             </Card>
 
-            <Tabs value={activeTab} onValueChange={(value) => { setActiveTab(value); setCurrentPage(1); }}>
+            <Tabs value={activeTab} onValueChange={(value) => { setActiveTab(value); setSelectedFileIds([]); setCurrentPage(1); }}>
                 <TabsList>
                     {!isExternal && <TabsTrigger value="mine">My Files</TabsTrigger>}
                     <TabsTrigger value="assigned">Marked To Me</TabsTrigger>
                     {!isExternal && <TabsTrigger value="cc">CC Files</TabsTrigger>}
+                    {isCEO && <TabsTrigger value="approved">Approved Files</TabsTrigger>}
                 </TabsList>
 
-                <TabsContent value="mine">
+                <TabsContent value="mine"> 
                     {renderFilesTable(
                         filteredMyFiles,
                         currentPage,
@@ -482,7 +516,10 @@ export default function FilesPage() {
                         isGlobal,
                         getStatusBadge,
                         formatTimeRemaining,
-                        false
+                        false,
+                        selectedFileIds,
+                        setSelectedFileIds,
+                        isCEO && activeTab === 'assigned'
                     )}
                 </TabsContent>
 
@@ -500,7 +537,10 @@ export default function FilesPage() {
                         isGlobal,
                         getStatusBadge,
                         formatTimeRemaining,
-                        false
+                        false,
+                        selectedFileIds,
+                        setSelectedFileIds,
+                        isCEO
                     )}
                 </TabsContent>
 
@@ -518,10 +558,20 @@ export default function FilesPage() {
                         isGlobal,
                         getStatusBadge,
                         formatTimeRemaining,
-                        true
+                        true,
+                        selectedFileIds,
+                        setSelectedFileIds,
+                        false
                     )}
                 </TabsContent>
+
+                {isCEO && (
+                    <TabsContent value="approved">
+                        {renderApprovedFilesTable(filteredApprovedFiles, getStatusBadge)}
+                    </TabsContent>
+                )}
             </Tabs>
+
             {markModalFile && (
                 <MarkToModal
                     showMarkToModal={Boolean(markModalFile)}
@@ -539,20 +589,20 @@ export default function FilesPage() {
 }
 
 const calculateFileAging = (createdAt) => {
-        const created = new Date(createdAt);
-        const now = new Date();
-        const diffTime = Math.abs(now - created);
-        const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    const created = new Date(createdAt);
+    const now = new Date();
+    const diffTime = Math.abs(now - created);
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
 
-        if (diffDays === 0) return "Today";
-        if (diffDays < 30) return `${diffDays} day${diffDays > 1 ? 's' : ''}`;
+    if (diffDays === 0) return "Today";
+    if (diffDays < 30) return `${diffDays} day${diffDays > 1 ? 's' : ''}`;
 
-        const diffMonths = Math.floor(diffDays / 30);
-        if (diffMonths < 12) return `${diffMonths} month${diffMonths > 1 ? 's' : ''}`;
+    const diffMonths = Math.floor(diffDays / 30);
+    if (diffMonths < 12) return `${diffMonths} month${diffMonths > 1 ? 's' : ''}`;
 
-        const diffYears = Math.floor(diffDays / 365);
-        return `${diffYears} year${diffYears > 1 ? 's' : ''}`;
-    };
+    const diffYears = Math.floor(diffDays / 365);
+    return `${diffYears} year${diffYears > 1 ? 's' : ''}`;
+};
 
 function renderFilesTable(
     rows,
@@ -567,9 +617,11 @@ function renderFilesTable(
     isGlobal,
     getStatusBadge,
     formatTimeRemaining,
-    isCcTab = false
+    isCcTab = false,
+    selectedFileIds = [],
+    setSelectedFileIds = () => {},
+    showCheckboxes = false
 ) {
-    // Calculate pagination for this specific table
     const totalPages = Math.ceil(rows.length / itemsPerPage);
     const startIndex = (currentPage - 1) * itemsPerPage;
     const endIndex = startIndex + itemsPerPage;
@@ -599,6 +651,27 @@ function renderFilesTable(
                         <Table>
                             <TableHeader>
                                 <TableRow>
+                                    {showCheckboxes && (
+                                        <TableHead className="w-12">
+                                            <input 
+                                                type="checkbox"
+                                                checked={
+                                                    paginatedRows.filter(f => f.status_code !== 'APPROVED').length > 0 && 
+                                                    paginatedRows.filter(f => f.status_code !== 'APPROVED').every(f => selectedFileIds.includes(f.id))
+                                                }
+                                                onChange={(e) => {
+                                                    const selectableRows = paginatedRows.filter(f => f.status_code !== 'APPROVED');
+                                                    if (e.target.checked) {
+                                                        const pageIds = selectableRows.map(f => f.id);
+                                                        setSelectedFileIds(prev => Array.from(new Set([...prev, ...pageIds])));
+                                                    } else {
+                                                        const pageIds = new Set(selectableRows.map(f => f.id));
+                                                        setSelectedFileIds(prev => prev.filter(id => !pageIds.has(id)));
+                                                    }
+                                                }} 
+                                            />
+                                        </TableHead>
+                                    )}
                                     <TableHead>File Number</TableHead>
                                     <TableHead>Subject</TableHead>
                                     <TableHead>Created By</TableHead>
@@ -619,6 +692,22 @@ function renderFilesTable(
                                     const canMark = !isCcTab && handleMark && (isCreator || isAssignee || isGlobal);
                                     return (
                                         <TableRow key={file.id} className="hover:bg-gray-50">
+                                            {showCheckboxes && (
+                                            <TableCell>
+                                                <input 
+                                                    type="checkbox" 
+                                                    disabled={file.status_code === 'APPROVED'}
+                                                    checked={selectedFileIds.includes(file.id)}
+                                                    onChange={(e) => {
+                                                        if (e.target.checked) {
+                                                            setSelectedFileIds(prev => [...prev, file.id]);
+                                                        } else {
+                                                            setSelectedFileIds(prev => prev.filter(id => id !== file.id));
+                                                        }
+                                                    }}
+                                                />
+                                            </TableCell>
+                                            )}
                                             <TableCell className="font-medium">
                                                 <div className="flex items-center space-x-2">
                                                     <FileText className="w-4 h-4 text-blue-600" />
@@ -715,4 +804,47 @@ function renderFilesTable(
             </CardContent>
         </Card>
     );
-} 
+}
+
+function renderApprovedFilesTable(rows, getStatusBadge) {
+    return (
+        <Card>
+            <CardHeader>
+                <CardTitle>Approved Files ({rows.length})</CardTitle>
+            </CardHeader>
+            <CardContent>
+                {rows.length === 0 ? (
+                    <div className="text-center py-12 text-gray-500">
+                        <FileText className="w-16 h-16 mx-auto mb-4 text-gray-300" />
+                        <h3 className="text-lg font-medium mb-2">No approved files found</h3>
+                    </div>
+                ) : (
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>File Number</TableHead>
+                                <TableHead>Subject</TableHead>
+                                <TableHead>Status</TableHead>
+                                <TableHead>Approved At</TableHead>
+                                <TableHead>Created By</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {rows.map((file) => (
+                                <TableRow key={file.id}>
+                                    <TableCell className="font-medium">{file.file_number}</TableCell>
+                                    <TableCell>{file.subject}</TableCell>
+                                    <TableCell>{getStatusBadge(file)}</TableCell>
+                                    <TableCell>
+                                        {file.approved_at ? new Date(file.approved_at).toLocaleString() : '-'}
+                                    </TableCell>
+                                    <TableCell>{file.creator_user_name || '-'}</TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                )}
+            </CardContent>
+        </Card>
+    );
+}

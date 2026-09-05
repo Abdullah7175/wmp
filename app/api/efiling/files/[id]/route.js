@@ -239,7 +239,7 @@ export async function PUT(request, { params }) {
             updateFields.push(`status_id = $${paramCount}`);
             updateValues.push(body.status_id);
             paramCount++;
-        }
+        } 
         
         if (body.priority !== undefined) {
             updateFields.push(`priority = $${paramCount}`);
