@@ -850,10 +850,12 @@ export async function POST(request, { params }) {
                     error: `User ID ${toUserId} is not allowed based on your role and department restrictions. Please select users from the allowed list.`
                 }, { status: 403 });
             }
-
+            
+            const currentUserRoleCodeUpper = (currentUser.role_code || '').toUpperCase();
+            const isTSO = currentUserRoleCodeUpper.startsWith('TSO_');
 
             // Check e-signature requirement (for non-admin)
-            if (!isAdmin) {
+            if (!isAdmin && !isTSO) {
                 const signatureCheck = await canMarkFileForward(client, fileId, currentUser.id, toUserId);
                 if (signatureCheck.requiresSignature && !signatureCheck.canMark) {
                     await client.query('ROLLBACK');
