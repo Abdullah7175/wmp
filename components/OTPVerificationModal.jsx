@@ -18,7 +18,7 @@ import { useSession } from "next-auth/react";
  * @param {function} onVerify - Callback when OTP is verified successfully
  * @param {number} efilingUserId - Optional efiling user ID (if not provided, uses session)
  */
-export function OTPVerificationModal({ show, onClose, onVerify, efilingUserId = null }) {
+export function OTPVerificationModal({ show, onClose, onVerify, efilingUserId = null, purpose = "esignature" }) {
     const { data: session } = useSession();
     const { toast } = useToast();
     const [otpCode, setOtpCode] = useState("");
@@ -123,7 +123,7 @@ export function OTPVerificationModal({ show, onClose, onVerify, efilingUserId = 
             const response = await fetch('/api/efiling/send-otp', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ method: verificationMethod })
+                body: JSON.stringify({ method: verificationMethod, purpose })
             });
 
             const data = await response.json();
@@ -205,7 +205,8 @@ export function OTPVerificationModal({ show, onClose, onVerify, efilingUserId = 
                 body: JSON.stringify({
                     userId: efilingUserId || session?.user?.id,
                     code: otpCode,
-                    method: verificationMethod
+                    method: verificationMethod,
+                    purpose
                 })
             });
 
@@ -262,10 +263,10 @@ export function OTPVerificationModal({ show, onClose, onVerify, efilingUserId = 
         >
             <Card className="w-full max-w-md relative z-[65]" onClick={(e) => e.stopPropagation()}>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
-                    <CardTitle className="flex items-center gap-2">
-                        <Shield className="w-5 h-5" />
-                        Verify Your Identity
-                    </CardTitle>
+                <CardTitle className="flex items-center gap-2">
+                    <Shield className="w-5 h-5" />
+                    {purpose === 'close_file' ? 'Verify Identity to Close File' : 'Verify Your Identity'}
+                </CardTitle>
                     <Button
                         variant="ghost"
                         size="sm"

@@ -83,7 +83,17 @@ export default function FileDetail() {
     const [editingCommentId, setEditingCommentId] = useState(null);
     const [editCommentText, setEditCommentText] = useState("");
     const [updatingComment, setUpdatingComment] = useState(false);
-
+    const checkFileClosed = () => {
+        if (file?.status_id === 7 || file?.status_name?.toLowerCase() === 'closed') {
+            toast({
+                title: "Action Restricted",
+                description: "This file is closed. No edits, additions, or modifications can be made.",
+                variant: "destructive"
+            });
+            return true; // File is closed
+        }
+        return false; // File is open
+    };
     const fetchUserRole = async () => {
         try {
             if (efilingUserId) {
@@ -339,6 +349,7 @@ export default function FileDetail() {
     };
 
     const handleOpenEditFileInfo = () => {
+        if (checkFileClosed()) return;
         setSelectedWorkRequestId(file?.work_request_id?.toString() || 'none');
         setBudgetHeadNo(file.budget_head_no || "");
         setProposedCost(file.proposed_estimated_cost || "");
@@ -350,6 +361,7 @@ export default function FileDetail() {
     };
 
     const handleSaveFileInfo = async () => {
+        if (checkFileClosed()) return;
         if (!file) return;
 
         setSavingFileInfo(true);
@@ -530,6 +542,7 @@ export default function FileDetail() {
     };
 
     const handleAttachmentUpload = async () => {
+        if (checkFileClosed()) return;
         if (!attachmentName.trim()) {
             toast({
                 title: "Error",
@@ -608,6 +621,7 @@ export default function FileDetail() {
     };
 
 const handleDeleteAttachment = async (attachmentId, e) => {
+    if (checkFileClosed()) return;
     e.stopPropagation(); 
     if (!confirm("Are you sure you want to delete this attachment?")) return;
 
@@ -696,6 +710,7 @@ const handleDeleteAttachment = async (attachmentId, e) => {
     };
 
     const postComment = async () => {
+        if (checkFileClosed()) return;
         if (!newComment.trim()) return;
         try {
             setPostingComment(true);
@@ -737,12 +752,14 @@ const canModifyComment = (comment) => {
 
 // Handle initiating comment edit mode
 const handleStartEditComment = (comment) => {
+    if (checkFileClosed()) return;
     setEditingCommentId(comment.id);
     setEditCommentText(comment.text);
 };
 
 // Handle saving edited comment (PUT)
 const handleSaveEditComment = async (commentId) => {
+    if (checkFileClosed()) return;
     if (!editCommentText.trim()) return;
 
     try {
@@ -1006,6 +1023,7 @@ const handleDeleteComment = async (commentId) => {
 
 
     const openMarkModal = () => {
+        if (checkFileClosed()) return;
         setShowMarkModal(true);
     };
 
@@ -1546,7 +1564,13 @@ const handleDeleteComment = async (commentId) => {
                     </div>
                     <div className="flex space-x-2 no-print">
                         {canEdit && isCreator && !isCcOnly && (
-                            <Button onClick={() => router.push(`/efilinguser/files/${file.id}/edit-document`)} className="bg-blue-600 hover:bg-blue-700">
+                            <Button 
+                                onClick={() => {
+                                    if (checkFileClosed()) return;
+                                    router.push(`/efilinguser/files/${file.id}/edit-document`);
+                                }} 
+                                className="bg-blue-600 hover:bg-blue-700"
+                            >
                                 <Edit className="w-4 h-4 mr-2" />
                                 Edit Document
                             </Button>
@@ -1604,7 +1628,7 @@ const handleDeleteComment = async (commentId) => {
                                             className="flex items-center"
                                         >
                                             <Edit className="w-4 h-4 mr-2" />
-                                            Edit
+                                            Edit File Information 
                                         </Button>
                                     )}
                                 </div>
@@ -2067,10 +2091,12 @@ const handleDeleteComment = async (commentId) => {
                             <CardContent>
                                 <DocumentSignatureSystem
                                     fileId={params.id}
+                                    
                                     userRole={userRole}
                                     canEditDocument={canAddSignature && !isCcOnly}
                                     hasUserSigned={hasUserSigned}
                                     onSignatureAdded={(signature) => {
+                                        if (checkFileClosed()) return;
                                         console.log('Signature added:', signature);
                                         setHasUserSigned(true);
                                         // Refresh signatures + permissions so Mark To appears after e-sign
@@ -2082,6 +2108,8 @@ const handleDeleteComment = async (commentId) => {
                                         });
                                     }}
                                     onCommentAdded={(comment) => {
+                                        if (checkFileClosed()) return;
+                                        
                                         console.log('Comment added:', comment);
                                         // Refresh comments list
                                         fetchComments();
@@ -2172,8 +2200,11 @@ const handleDeleteComment = async (commentId) => {
                                             <Button
                                                 variant="outline"
                                                 size="sm"
-                                                onClick={() => setShowAttachmentUpload(true)}
-                                                className="flex items-center gap-2 w-full justify-center"
+                                                onClick={() => {
+                                                        if (checkFileClosed()) return;
+                                                        setShowAttachmentUpload(true);
+                                                    }}                                                
+                                                    className="flex items-center gap-2 w-full justify-center"
                                             >
                                                 <Plus className="w-4 h-4" />
                                                 Add Attachment

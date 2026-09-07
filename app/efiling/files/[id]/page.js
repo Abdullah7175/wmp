@@ -51,7 +51,17 @@ export default function FileDetail() {
         };
         loadData();
     }, [session?.user?.id, params.id]);
-
+    const checkFileClosed = () => {
+        if (file?.status_id === 7 || file?.status_name?.toLowerCase() === 'closed') {
+            toast({
+                title: "Action Restricted",
+                description: "This file is closed. No edits, additions, or modifications can be made.",
+                variant: "destructive"
+            });
+            return true; // File is closed
+        }
+        return false; // File is open
+    };
     const fetchPermissions = async () => {
         try {
             const permRes = await fetch(`/api/efiling/files/${params.id}/permissions`);
@@ -822,7 +832,11 @@ const handleSaveSubject = async () => {
                     </div>
                     <div className="flex space-x-2 no-print">
                         <Button
-                            onClick={() => router.push(`/efiling/files/${file.id}/edit`)}
+                            onClick={() => {                                    
+                                
+                                
+                                if (checkFileClosed()) return;
+                                router.push(`/efiling/files/${file.id}/edit`)}}
                             className="bg-blue-600 hover:bg-blue-700"
                         >
                             <Edit className="w-4 h-4 mr-2" />
@@ -879,6 +893,8 @@ const handleSaveSubject = async () => {
                                                 variant="ghost"
                                                 size="sm"
                                                 onClick={() => {
+                                                    if (checkFileClosed()) return;
+
                                                     setEditedSubject(file.subject || "");
                                                     setIsEditingSubject(true);
                                                 }}
@@ -1035,6 +1051,8 @@ const handleSaveSubject = async () => {
                                         variant="outline"
                                         size="sm"
                                         onClick={() => {
+                                            if (checkFileClosed()) return;
+
                                             setSelectedWorkRequestId(file?.work_request_id?.toString() || 'none');
                                             fetchWorkRequests();
                                             setShowEditFileInfo(true);
@@ -1208,7 +1226,12 @@ const handleSaveSubject = async () => {
                             </CardHeader>
                             <CardContent className="space-y-2">
                                 {canMarkTo && !isCcOnly ? (
-                                <Button variant="outline" className="w-full justify-start" onClick={() => setShowMarkModal(true)}>
+                                <Button variant="outline" className="w-full justify-start" 
+                                onClick={() => {if (checkFileClosed()) return;
+
+                                
+                                
+                                setShowMarkModal(true)}}>
                                     <Forward className="w-4 h-4 mr-2" />
                                     Mark / Forward File
                                 </Button>

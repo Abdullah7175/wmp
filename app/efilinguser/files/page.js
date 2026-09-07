@@ -14,12 +14,13 @@ import {
     Search,
     FileText,
     Eye,
-    CheckCircle,
     Clock,
     AlertCircle,
     Calendar,
     FileEdit,
-    Send
+    Send,
+    Lock,
+    CheckCircle
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { logEfilingUserAction, EFILING_ACTIONS } from '@/lib/efilingUserActionLogger';
@@ -33,6 +34,7 @@ import {
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Pagination } from "@/components/ui/pagination";
 import MarkToModal from "../components/MarkToModal";
+import { OTPVerificationModal } from "@/components/OTPVerificationModal";
 import { useEfilingUser } from "@/context/EfilingUserContext";
 import { isExternalUser } from "@/lib/efilingRoleHelpers";
 
@@ -49,7 +51,6 @@ export default function FilesPage() {
     const [assignedToMe, setAssignedToMe] = useState([]);
     const [ccFiles, setCcFiles] = useState([]);
     const isExternal = isExternalUser(roleCode);
-    
     // External users (ADLFA/CON) should only see "assigned" tab (marked to them)
     const [activeTab, setActiveTab] = useState(isExternal ? 'assigned' : 'mine');
     const [currentPage, setCurrentPage] = useState(1);
@@ -65,18 +66,22 @@ export default function FilesPage() {
     const [dateFrom, setDateFrom] = useState('');
     const [dateTo, setDateTo] = useState('');
 
-    const [approvedFiles, setApprovedFiles] = useState([]);
-    const [approving, setApproving] = useState(false);
-    const [selectedFileIds, setSelectedFileIds] = useState([]);
 
+    
     // Filter options
     const [filterOptions, setFilterOptions] = useState({
         towns: [],
         zones: [],
         divisions: []
     });
-
-    const isCEO = roleCode === 'CEO';
+  
+    const [closedFiles, setClosedFiles] = useState([]);
+    const [closingId, setClosingId] = useState(null);
+   
+    
+    // State for OTP Close Modal
+    const [showCloseOtpModal, setShowCloseOtpModal] = useState(false);
+    const [fileToClose, setFileToClose] = useState(null);
 
     useEffect(() => {
         if (efilingUserId) {
@@ -99,14 +104,11 @@ export default function FilesPage() {
         try {
             // Build query parameters
             const params = new URLSearchParams();
-            params.append('limit', '500');
+            params.append('limit', '500'); // Increased limit for better filtering
 
-            if (activeTab === 'approved') {
-                params.append('assigned_to', efilingUserId);
-                const approvedStatus = statuses.find(s => s.code === 'APPROVED');
-                if (approvedStatus) {
-                    params.append('status_id', approvedStatus.id);
-                }
+            if (activeTab === 'closed') {
+                params.append('created_by', efilingUserId);
+                params.append('status_id', '7');
             } else if (isExternal) {
                 params.append('assigned_to', efilingUserId);
             } else if (activeTab === 'mine') {
@@ -125,7 +127,7 @@ export default function FilesPage() {
             if (subjectFilter) params.append('subject_search', subjectFilter);
             if (dateFrom) params.append('date_from', dateFrom);
             if (dateTo) params.append('date_to', dateTo);
-            if (statusFilter !== 'all' && activeTab !== 'approved') params.append('status_id', statusFilter);
+            if (statusFilter !== 'all') params.append('status_id', statusFilter);
 
             const response = await fetch(`/api/efiling/files?${params.toString()}`);
             const json = response.ok ? await response.json() : { files: [] };
@@ -135,8 +137,8 @@ export default function FilesPage() {
                 setMyFiles(fileList);
             } else if (activeTab === 'cc') {
                 setCcFiles(fileList);
-            } else if (activeTab === 'approved') {
-                setApprovedFiles(fileList);
+            } else if (activeTab === 'closed') {
+                setClosedFiles(fileList);
             } else {
                 setAssignedToMe(fileList);
             }
@@ -197,6 +199,7 @@ export default function FilesPage() {
 
     const filterRows = (rows) => {
         return rows.filter((file) => {
+            // General search (file number search)
             const matchesSearch = searchTerm
                 ? (file.file_number || "").toString().toLowerCase().includes(searchTerm.toLowerCase())
                 : true;
@@ -208,45 +211,46 @@ export default function FilesPage() {
     const filteredMyFiles = useMemo(() => filterRows(myFiles), [myFiles, searchTerm]);
     const filteredAssignedFiles = useMemo(() => filterRows(assignedToMe), [assignedToMe, searchTerm]);
     const filteredCcFiles = useMemo(() => filterRows(ccFiles), [ccFiles, searchTerm]);
-    const filteredApprovedFiles = useMemo(() => filterRows(approvedFiles), [approvedFiles, searchTerm]);
+    const filteredClosedFiles = useMemo(() => filterRows(closedFiles), [closedFiles, searchTerm]);
 
-    const handleBulkApprove = async () => {
-            if (selectedFileIds.length === 0) {
-                toast({ title: "Warning", description: "Please select at least one file to approve", variant: "destructive" });
-                return;
-            }
 
-            setApproving(true);
-            try {
-                const res = await fetch('/api/efiling/files/approve', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ file_ids: selectedFileIds })
+        // Triggers OTP Modal
+    const handleInitiateCloseFile = (file) => {
+        setFileToClose(file);
+        setShowCloseOtpModal(true);
+    };
+
+    // Called after OTP Verification is successful
+    const executeCloseFile = async () => {
+        if (!fileToClose) return;
+
+        setClosingId(fileToClose.id);
+        try {
+            const res = await fetch('/api/efiling/files/close', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ file_id: fileToClose.id })
+            });
+
+            const data = await res.json();
+
+            if (res.ok) {
+                toast({ title: "Success", description: data.message });
+                fetchFiles();
+            } else {
+                toast({
+                    title: "Close Failed",
+                    description: data.error || "Failed to close file",
+                    variant: "destructive"
                 });
-
-                const data = await res.json();
-
-                if (res.ok) {
-                    toast({ title: "Success", description: `${selectedFileIds.length} file(s) approved successfully` });
-                    setSelectedFileIds([]);
-                    fetchFiles();
-                } else {
-                    toast({
-                        title: "Approval Failed",
-                        description: (
-                            <div className="whitespace-pre-line text-sm mt-1">
-                                {data.error || "Failed to approve files"}
-                            </div>
-                        ),
-                        variant: "destructive"
-                    });
-                }
-            } catch (err) {
-                toast({ title: "Error", description: "Approval request failed", variant: "destructive" });
-            } finally {
-                setApproving(false);
             }
-        };
+        } catch (err) {
+            toast({ title: "Error", description: "Close request failed", variant: "destructive" });
+        } finally {
+            setClosingId(null);
+            setFileToClose(null);
+        }
+    };
 
     const handlePageChange = (page) => {
         setCurrentPage(page);
@@ -302,6 +306,7 @@ export default function FilesPage() {
     };
 
     const handleCreateFile = () => {
+        // Log file creation attempt
         if (session?.user?.id) {
             logEfilingUserAction({
                 user_id: session.user.id,
@@ -314,6 +319,32 @@ export default function FilesPage() {
         router.push('/efilinguser/files/new');
     };
 
+    const handleEditDocument = (fileId) => {
+        // Log document edit action
+        if (session?.user?.id) {
+            logEfilingUserAction({
+                user_id: session.user.id,
+                action_type: EFILING_ACTIONS.DOCUMENT_EDITED,
+                description: `Initiated document editing for file ${fileId}`,
+                file_id: fileId
+            });
+        }
+        router.push(`/efilinguser/files/${fileId}/edit-document`);
+    };
+
+    const handleViewFile = (fileId) => {
+        // Log file view action
+        if (session?.user?.id) {
+            logEfilingUserAction({
+                user_id: session.user.id,
+                action_type: EFILING_ACTIONS.FILE_VIEWED,
+                description: `Viewed file ${fileId}`,
+                file_id: fileId
+            });
+        }
+        router.push(`/efilinguser/files/${fileId}`);
+    };
+
     if (loading) {
         return (
             <div className="flex items-center justify-center h-96">
@@ -324,6 +355,7 @@ export default function FilesPage() {
 
     return (
         <div className="container mx-auto px-4 py-6">
+            {/* Header */}
             <div className="flex items-center justify-between mb-6">
                 <div>
                     <h1 className="text-3xl font-bold text-gray-900">My Files</h1>
@@ -463,17 +495,7 @@ export default function FilesPage() {
                             />
                         </div>
                     </div>
-                    <div className="flex justify-end gap-2 mt-4">
-                        {/* {isCEO && activeTab === 'assigned' && (
-                            <Button 
-                                className="bg-green-600 hover:bg-green-700 text-white" 
-                                onClick={handleBulkApprove}
-                                disabled={approving || selectedFileIds.length === 0}
-                            >
-                                <CheckCircle className="w-4 h-4 mr-2" />
-                                {approving ? "Approving..." : `Approve Selected Files (${selectedFileIds.length})`}
-                            </Button>
-                        )} */}
+                    <div className="flex justify-end mt-4">
                         <Button
                             variant="outline"
                             onClick={() => {
@@ -494,15 +516,16 @@ export default function FilesPage() {
                 </CardContent>
             </Card>
 
-            <Tabs value={activeTab} onValueChange={(value) => { setActiveTab(value); setSelectedFileIds([]); setCurrentPage(1); }}>
+            <Tabs value={activeTab} onValueChange={(value) => { setActiveTab(value); setCurrentPage(1); }}>
                 <TabsList>
                     {!isExternal && <TabsTrigger value="mine">My Files</TabsTrigger>}
                     <TabsTrigger value="assigned">Marked To Me</TabsTrigger>
                     {!isExternal && <TabsTrigger value="cc">CC Files</TabsTrigger>}
-                    {/* {isCEO && <TabsTrigger value="approved">Approved Files</TabsTrigger>} */}
+                    {!isExternal && <TabsTrigger value="closed">Files Closed by You</TabsTrigger>}
+
                 </TabsList>
 
-                <TabsContent value="mine"> 
+                <TabsContent value="mine">
                     {renderFilesTable(
                         filteredMyFiles,
                         currentPage,
@@ -516,10 +539,7 @@ export default function FilesPage() {
                         isGlobal,
                         getStatusBadge,
                         formatTimeRemaining,
-                        false,
-                        selectedFileIds,
-                        setSelectedFileIds,
-                        isCEO && activeTab === 'assigned'
+                        false, handleInitiateCloseFile, closingId
                     )}
                 </TabsContent>
 
@@ -537,10 +557,7 @@ export default function FilesPage() {
                         isGlobal,
                         getStatusBadge,
                         formatTimeRemaining,
-                        false,
-                        selectedFileIds,
-                        setSelectedFileIds,
-                        false // Set to false to hide checkboxes
+                        false, handleInitiateCloseFile, closingId
                     )}
                 </TabsContent>
 
@@ -558,20 +575,16 @@ export default function FilesPage() {
                         isGlobal,
                         getStatusBadge,
                         formatTimeRemaining,
-                        true,
-                        selectedFileIds,
-                        setSelectedFileIds,
-                        false
+                        true, handleInitiateCloseFile, closingId
                     )}
                 </TabsContent>
-
-                {/* {isCEO && (
-                    <TabsContent value="approved">
-                        {renderApprovedFilesTable(filteredApprovedFiles, getStatusBadge)}
-                    </TabsContent>
-                )} */}
+                <TabsContent value="closed">
+                    {renderClosedFilesTable(
+                        filteredClosedFiles, currentPage, itemsPerPage, handlePageChange, handleItemsPerPageChange,
+                        (fileId) => router.push(`/efilinguser/files/${fileId}`), getStatusBadge
+                    )}
+                </TabsContent>
             </Tabs>
-
             {markModalFile && (
                 <MarkToModal
                     showMarkToModal={Boolean(markModalFile)}
@@ -584,25 +597,36 @@ export default function FilesPage() {
                     }}
                 />
             )}
+            {/* OTP Verification Modal for Closing File */}
+            <OTPVerificationModal
+                show={showCloseOtpModal}
+                onClose={() => {
+                    setShowCloseOtpModal(false);
+                    setFileToClose(null);
+                }}
+                onVerify={executeCloseFile}
+                efilingUserId={efilingUserId}
+                purpose="close_file"
+            />
         </div>
     );
 }
 
 const calculateFileAging = (createdAt) => {
-    const created = new Date(createdAt);
-    const now = new Date();
-    const diffTime = Math.abs(now - created);
-    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+        const created = new Date(createdAt);
+        const now = new Date();
+        const diffTime = Math.abs(now - created);
+        const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
 
-    if (diffDays === 0) return "Today";
-    if (diffDays < 30) return `${diffDays} day${diffDays > 1 ? 's' : ''}`;
+        if (diffDays === 0) return "Today";
+        if (diffDays < 30) return `${diffDays} day${diffDays > 1 ? 's' : ''}`;
 
-    const diffMonths = Math.floor(diffDays / 30);
-    if (diffMonths < 12) return `${diffMonths} month${diffMonths > 1 ? 's' : ''}`;
+        const diffMonths = Math.floor(diffDays / 30);
+        if (diffMonths < 12) return `${diffMonths} month${diffMonths > 1 ? 's' : ''}`;
 
-    const diffYears = Math.floor(diffDays / 365);
-    return `${diffYears} year${diffYears > 1 ? 's' : ''}`;
-};
+        const diffYears = Math.floor(diffDays / 365);
+        return `${diffYears} year${diffYears > 1 ? 's' : ''}`;
+    };
 
 function renderFilesTable(
     rows,
@@ -617,11 +641,9 @@ function renderFilesTable(
     isGlobal,
     getStatusBadge,
     formatTimeRemaining,
-    isCcTab = false,
-    selectedFileIds = [],
-    setSelectedFileIds = () => {},
-    showCheckboxes = false
+    isCcTab = false, handleCloseFile = null, closingId = null
 ) {
+    // Calculate pagination for this specific table
     const totalPages = Math.ceil(rows.length / itemsPerPage);
     const startIndex = (currentPage - 1) * itemsPerPage;
     const endIndex = startIndex + itemsPerPage;
@@ -651,27 +673,6 @@ function renderFilesTable(
                         <Table>
                             <TableHeader>
                                 <TableRow>
-                                    {showCheckboxes && (
-                                        <TableHead className="w-12">
-                                            <input 
-                                                type="checkbox"
-                                                checked={
-                                                    paginatedRows.filter(f => f.status_code !== 'APPROVED').length > 0 && 
-                                                    paginatedRows.filter(f => f.status_code !== 'APPROVED').every(f => selectedFileIds.includes(f.id))
-                                                }
-                                                onChange={(e) => {
-                                                    const selectableRows = paginatedRows.filter(f => f.status_code !== 'APPROVED');
-                                                    if (e.target.checked) {
-                                                        const pageIds = selectableRows.map(f => f.id);
-                                                        setSelectedFileIds(prev => Array.from(new Set([...prev, ...pageIds])));
-                                                    } else {
-                                                        const pageIds = new Set(selectableRows.map(f => f.id));
-                                                        setSelectedFileIds(prev => prev.filter(id => !pageIds.has(id)));
-                                                    }
-                                                }} 
-                                            />
-                                        </TableHead>
-                                    )}
                                     <TableHead>File Number</TableHead>
                                     <TableHead>Subject</TableHead>
                                     <TableHead>Created By</TableHead>
@@ -690,24 +691,10 @@ function renderFilesTable(
                                     const isAssignee = Number(file.assigned_to) === Number(efilingUserId);
                                     const canEdit = !isCcTab && (isCreator || isGlobal);
                                     const canMark = !isCcTab && handleMark && (isCreator || isAssignee || isGlobal);
+                                    const isClosed = file.status_code === 'CLOSED' || Number(file.status_id) === 7;
+                                    const isInProgress = file.status_code === 'IN_PROGRESS' || Number(file.status_id) === 3;
                                     return (
                                         <TableRow key={file.id} className="hover:bg-gray-50">
-                                            {showCheckboxes && (
-                                            <TableCell>
-                                                <input 
-                                                    type="checkbox" 
-                                                    disabled={file.status_code === 'APPROVED'}
-                                                    checked={selectedFileIds.includes(file.id)}
-                                                    onChange={(e) => {
-                                                        if (e.target.checked) {
-                                                            setSelectedFileIds(prev => [...prev, file.id]);
-                                                        } else {
-                                                            setSelectedFileIds(prev => prev.filter(id => id !== file.id));
-                                                        }
-                                                    }}
-                                                />
-                                            </TableCell>
-                                            )}
                                             <TableCell className="font-medium">
                                                 <div className="flex items-center space-x-2">
                                                     <FileText className="w-4 h-4 text-blue-600" />
@@ -767,13 +754,27 @@ function renderFilesTable(
                                                         <Eye className="w-4 h-4 mr-1" />
                                                         View
                                                     </Button>
-                                                    {canEdit && (
+
+                                                {/* Close File button for Creator when status is IN_PROGRESS and assigned to them */}
+                                                {isCreator && isAssignee && isInProgress && !isClosed && handleCloseFile && (
+                                                    <Button 
+                                                        variant="outline" 
+                                                        size="sm" 
+                                                        className="text-red-600 border-red-200 hover:bg-red-50"
+                                                        disabled={closingId === file.id}
+                                                        onClick={() => handleCloseFile(file)}
+                                                    >
+                                                        <Lock className="w-4 h-4 mr-1" />
+                                                        {closingId === file.id ? "Closing..." : "Close File"}
+                                                    </Button>
+                                                )}
+                                                    {canEdit && !isClosed && (
                                                         <Button variant="outline" size="sm" onClick={() => handleEdit(file.id)}>
                                                             <FileEdit className="w-4 h-4 mr-1" />
                                                             Edit
                                                         </Button>
                                                     )}
-                                                    {canMark && (
+                                                    {canMark && !isClosed && (
                                                         <Button variant="outline" size="sm" onClick={() => handleMark(file)}>
                                                             <Send className="w-4 h-4 mr-1" />
                                                             Mark To
@@ -804,45 +805,56 @@ function renderFilesTable(
             </CardContent>
         </Card>
     );
-}
+} 
 
-function renderApprovedFilesTable(rows, getStatusBadge) {
+function renderClosedFilesTable(rows, currentPage, itemsPerPage, handlePageChange, handleItemsPerPageChange, handleView, getStatusBadge) {
+    const totalPages = Math.ceil(rows.length / itemsPerPage);
+    const paginatedRows = rows.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
     return (
         <Card>
             <CardHeader>
-                <CardTitle>Approved Files ({rows.length})</CardTitle>
+                <CardTitle className="flex items-center">
+                    <Lock className="w-5 h-5 mr-2" />
+                    Closed Files Archive ({rows.length})
+                </CardTitle>
             </CardHeader>
             <CardContent>
                 {rows.length === 0 ? (
                     <div className="text-center py-12 text-gray-500">
-                        <FileText className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-                        <h3 className="text-lg font-medium mb-2">No approved files found</h3>
+                        <Lock className="w-16 h-16 mx-auto mb-4 text-gray-300" />
+                        <h3 className="text-lg font-medium mb-2">No closed files found</h3>
                     </div>
                 ) : (
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>File Number</TableHead>
-                                <TableHead>Subject</TableHead>
-                                <TableHead>Status</TableHead>
-                                <TableHead>Approved At</TableHead>
-                                <TableHead>Created By</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {rows.map((file) => (
-                                <TableRow key={file.id}>
-                                    <TableCell className="font-medium">{file.file_number}</TableCell>
-                                    <TableCell>{file.subject}</TableCell>
-                                    <TableCell>{getStatusBadge(file)}</TableCell>
-                                    <TableCell>
-                                        {file.approved_at ? new Date(file.approved_at).toLocaleString() : '-'}
-                                    </TableCell>
-                                    <TableCell>{file.creator_user_name || '-'}</TableCell>
+                    <div className="overflow-x-auto">
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>File Number</TableHead>
+                                    <TableHead>Subject</TableHead>
+                                    <TableHead>Status</TableHead>
+                                    <TableHead>Closed At</TableHead>
+                                    <TableHead>Actions</TableHead>
                                 </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
+                            </TableHeader>
+                            <TableBody>
+                                {paginatedRows.map((file) => (
+                                    <TableRow key={file.id} className="hover:bg-gray-50">
+                                        <TableCell className="font-medium">{file.file_number}</TableCell>
+                                        <TableCell>{file.subject || 'No subject'}</TableCell>
+                                        <TableCell>{getStatusBadge(file)}</TableCell>
+                                        <TableCell>{file.closed_at ? new Date(file.closed_at).toLocaleString() : '-'}</TableCell>
+                                        <TableCell>
+                                            <Button variant="outline" size="sm" onClick={() => handleView(file.id)}>
+                                                <Eye className="w-4 h-4 mr-1" />
+                                                View Archive
+                                            </Button>
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </div>
                 )}
             </CardContent>
         </Card>

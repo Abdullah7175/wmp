@@ -11,6 +11,7 @@ export async function POST(request) {
     let userId;
     const body = await request.json();
     const method = body.method || 'whatsapp'; // Default to whatsapp, but allow email
+    const purpose = body.purpose || 'esignature';
     try {
         // SECURITY: Require valid authenticated session
         let session;
@@ -262,7 +263,7 @@ export async function POST(request) {
             } else {
                 // Default to WhatsApp
                 console.log(`Attempting to send OTP ${otpCode} to ${phoneNumber} via WhatsApp...`);
-                sendResult = await sendOTPViaWhatsApp(phoneNumber, otpCode, userName);
+                sendResult = await sendOTPViaWhatsApp(phoneNumber, otpCode, userName, purpose);
             }
             
             if (!sendResult.success) {
@@ -339,6 +340,7 @@ export async function POST(request) {
                 entityName: `User ${efilingUserId}`,
                 details: { 
                     method, 
+                    purpose, 
                     contact: method === 'email' 
                         ? (email ? email.replace(/(.{2})(.*)(@.*)/, '$1***$3') : 'N/A')
                         : (phoneNumber ? phoneNumber.replace(/(\d{4})(\d{3})(\d{4})/, '$1***$3') : 'N/A')
