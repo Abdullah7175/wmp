@@ -166,7 +166,7 @@ export async function POST(request) {
 
         // Generate 6-digit OTP
         const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
-        const expiresAt = new Date(Date.now() + 60 * 1000); // 60 seconds
+        const expiresAt = new Date(Date.now() + 120 * 1000); // changed to 120  seconds
         
         // Store OTP in database
         try {
@@ -241,7 +241,7 @@ export async function POST(request) {
             DELETE FROM efiling_otp_codes
             WHERE user_id = $1 
               AND verified = FALSE 
-              AND created_at < NOW() - INTERVAL '60 seconds'
+              AND created_at < NOW() - INTERVAL '120 seconds'
         `, [efilingUserId]);
         
         // Check if current user is admin (for admin fallback when WhatsApp fails)
@@ -363,8 +363,8 @@ export async function POST(request) {
         return NextResponse.json({
             success: true,
             message: successMessage,
-            expiresIn: '60 seconds',
-            expiresInSeconds: 60,
+            expiresIn: '120 seconds',
+            expiresInSeconds: 120,
             method: method,
             contact: contactInfo
         });

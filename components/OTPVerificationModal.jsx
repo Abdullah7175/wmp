@@ -130,7 +130,7 @@ export function OTPVerificationModal({ show, onClose, onVerify, efilingUserId = 
 
             if (response.ok && data.success) {
                 setOtpSent(true);
-                setCountdown(60);
+                setCountdown(120);
                 setOtpCode(""); // Clear previous OTP
                 toast({
                     title: "OTP Sent",
@@ -165,7 +165,7 @@ export function OTPVerificationModal({ show, onClose, onVerify, efilingUserId = 
                         variant: "default",
                     });
                     setOtpSent(true);
-                    setCountdown(60);
+                    setCountdown(120);
                     setOtpCode(data.otpCode); // Auto-fill for testing
                 } else {
                     throw new Error(data.error || 'Failed to send OTP');
