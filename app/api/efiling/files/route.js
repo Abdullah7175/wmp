@@ -635,11 +635,11 @@ export async function POST(request) {
         
         // Department ownership check: prefer the file type's department when provided
         const effectiveDeptId = fileTypeMeta?.ft_department_id ?? parseInt(department_id);
-        if (effectiveDeptId !== userDept) {
-            return NextResponse.json({ 
-                error: `You can only create files for your department. Required: ${effectiveDeptId}, Yours: ${userDept}` 
-            }, { status: 403 });
-        }
+        // if (effectiveDeptId !== userDept) {
+        //     return NextResponse.json({ 
+        //         error: `You can only create files for your department. Required: ${effectiveDeptId}, Yours: ${userDept}` 
+        //     }, { status: 403 });
+        // }
         
         if (!createdBy) {
             return NextResponse.json({ 
@@ -685,7 +685,7 @@ export async function POST(request) {
         // Generate file number (format: DEPT/FISCAL_YEAR/SEQUENTIAL, e.g., WB/2025-26/0001)
         const now = new Date();
         const fiscalYear = getFiscalYear(now);
-        const deptToUse = effectiveDeptId;
+        const deptToUse = effectiveDeptId || parseInt(department_id) || userDept;
         const deptQuery = await client.query(
             'SELECT code FROM efiling_departments WHERE id = $1',
             [deptToUse]

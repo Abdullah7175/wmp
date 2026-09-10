@@ -80,7 +80,9 @@ export async function GET(request) {
             return NextResponse.json(result.rows[0]);
 
         } else {
-            // Fetch all categories
+            // Fetch all categories where at least one file type permits the user's role
+            const userRoleCode = userGeography?.role_code || null;
+
             let query = `
                 SELECT DISTINCT fc.*
                 FROM efiling_file_categories fc
@@ -93,6 +95,23 @@ export async function GET(request) {
             if (isActive !== null) {
                 query += ` AND fc.is_active = $${params.length + 1}`;
                 params.push(isActive === 'true');
+            }
+
+            // Role-based allowance check via child file types
+            if (!canSeeAll) {
+                if (userRoleCode) {
+                    params.push(userRoleCode);
+                    query += ` AND EXISTS (
+                        SELECT 1 FROM efiling_file_types ft 
+                        WHERE ft.category_id = fc.id 
+                          AND (
+                            ft.can_create_roles IS NULL 
+                            OR ft.can_create_roles @> JSONB_BUILD_ARRAY($${params.length}::text)
+                          )
+                    )`;
+                } else {
+                    query += ` AND 1=0`;
+                }
             }
 
             if (!canSeeAll && userGeography) {

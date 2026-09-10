@@ -95,6 +95,8 @@ export async function GET(request) {
 
         } else {
             // Fetch all file types
+            const userRoleCode = userGeography?.role_code || null;
+
             let query = `
                 SELECT DISTINCT
                     ft.*,
@@ -114,6 +116,20 @@ export async function GET(request) {
             if (categoryId) {
                 query += ` AND ft.category_id = $${params.length + 1}`;
                 params.push(categoryId);
+            }
+
+            // Role-based allowance check (can_create_roles JSONB column)
+            if (!canSeeAll) {
+                if (userRoleCode) {
+                    params.push(userRoleCode);
+                    query += ` AND (
+                        ft.can_create_roles IS NULL 
+                        OR ft.can_create_roles @> JSONB_BUILD_ARRAY($${params.length}::text)
+                    )`;
+                } else {
+                    // If not global and no role code found, block access
+                    query += ` AND 1=0`;
+                }
             }
 
             if (!canSeeAll && userGeography) {

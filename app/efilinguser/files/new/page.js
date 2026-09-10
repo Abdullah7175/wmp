@@ -163,20 +163,11 @@ export default function CreateNewFile() {
     };
 
     const filterCategoriesByUser = (rawCategories = []) => {
-        if (isGlobal) return rawCategories;
-        if (!userDepartmentId) return [];
-        return rawCategories.filter((category) => Number(category.department_id) === userDepartmentId);
+        return rawCategories;
     };
 
     const filterFileTypesByUser = (rawFileTypes = []) => {
-        if (isGlobal) return rawFileTypes;
-        if (!userDepartmentId) return [];
-        return rawFileTypes.filter((type) => {
-            if (type.department_id && Number(type.department_id) !== userDepartmentId) {
-                return false;
-            }
-            return true;
-        });
+        return rawFileTypes;
     };
 
     const profileReady = isGlobal || Boolean(userProfile);
@@ -383,24 +374,31 @@ export default function CreateNewFile() {
     const selectedDepartmentId = formik.values.department_id ? Number(formik.values.department_id) : null;
     const selectedCategoryId = formik.values.category_id ? Number(formik.values.category_id) : null;
 
-    const availableCategories = useMemo(() => {
-        return categories.filter((category) => {
-            if (!selectedDepartmentId) return true;
-            return Number(category.department_id) === selectedDepartmentId;
-        });
-    }, [categories, selectedDepartmentId]);
+// Filter available categories based on loaded file types rather than strictly home department
+const availableCategories = useMemo(() => {
+    if (!categories.length) return [];
+    
+    // Get all valid category IDs present in the fetched fileTypes list
+    const validCategoryIds = new Set(fileTypes.map(ft => Number(ft.category_id)).filter(Boolean));
+    
+    return categories.filter(category => {
+        // If a department is manually selected by the user, allow department matching
+        if (selectedDepartmentId && Number(category.department_id) === Number(selectedDepartmentId)) {
+            return true;
+        }
+        // Also allow any category tied to the file types this user is permitted to create
+        return validCategoryIds.has(Number(category.id));
+    });
+}, [categories, fileTypes, selectedDepartmentId]);
 
     const availableFileTypes = useMemo(() => {
         return fileTypes.filter((type) => {
-            if (selectedDepartmentId && type.department_id && Number(type.department_id) !== selectedDepartmentId) {
-                return false;
-            }
             if (selectedCategoryId && type.category_id && Number(type.category_id) !== selectedCategoryId) {
                 return false;
             }
             return true;
         });
-    }, [fileTypes, selectedDepartmentId, selectedCategoryId]);
+    }, [fileTypes, selectedCategoryId]);
 
     const workRequestDropdownOptions = useMemo(() => {
         const base = [{ value: 'none', label: 'No Video Request' }];
