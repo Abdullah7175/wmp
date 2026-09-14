@@ -189,20 +189,25 @@ export async function PUT(request, { params }) {
         
         client = await connectToDatabase();
         
-        // Check if file exists
-        const existingFile = await client.query(
-            'SELECT * FROM efiling_files WHERE id = $1',
-            [id]
-        );
+        // Fetch existing file alongside creator's role code
+        const existingFile = await client.query(`
+            SELECT f.*, r.code AS creator_role_code
+            FROM efiling_files f
+            LEFT JOIN efiling_users u ON f.created_by = u.id
+            LEFT JOIN efiling_roles r ON u.efiling_role_id = r.id
+            WHERE f.id = $1
+        `, [id]);
         
         if (existingFile.rows.length === 0) {
             return NextResponse.json({ error: 'File not found' }, { status: 404 });
         }
 
+        const existingRecord = existingFile.rows[0];
+
         // SECURITY: IDOR Fix - Check file access
-        const fileId = parseInt(id);
-        const userId = parseInt(sessionUser.id);
-        const isAdmin = [1, 2].includes(parseInt(sessionUser.role));
+        const fileId = parseInt(id, 10);
+        const userId = parseInt(sessionUser.id, 10);
+        const isAdmin = [1, 2].includes(parseInt(sessionUser.role, 10));
         
         const hasAccess = await checkFileAccess(client, fileId, userId, isAdmin);
         if (!hasAccess) {
@@ -210,6 +215,53 @@ export async function PUT(request, { params }) {
                 { error: 'Forbidden - You do not have access to modify this file' },
                 { status: 403 }
             );
+        }
+
+        // --- CAN_CREATE_ROLES VALIDATION FOR CREATOR ROLE ---
+        if (body.file_type_id !== undefined && body.file_type_id !== null) {
+            const targetFileTypeId = parseInt(body.file_type_id, 10);
+            
+            const ftCheck = await client.query(
+                'SELECT name, category_id, can_create_roles FROM efiling_file_types WHERE id = $1',
+                [targetFileTypeId]
+            );
+
+            if (ftCheck.rows.length > 0) {
+                const { name: fileTypeName, category_id: targetCatId, can_create_roles } = ftCheck.rows[0];
+                
+                // 1. Verify file_type belongs to category if category is being updated/passed
+                const activeCatId = body.category_id !== undefined 
+                    ? parseInt(body.category_id, 10) 
+                    : parseInt(existingRecord.category_id, 10);
+
+                if (targetCatId && activeCatId && parseInt(targetCatId, 10) !== activeCatId) {
+                    return NextResponse.json({ 
+                        error: `Selected file type "${fileTypeName}" does not belong to the selected category.` 
+                    }, { status: 400 });
+                }
+
+                // 2. Validate creator's role against can_create_roles
+                if (can_create_roles) {
+                    let allowedRoles = [];
+                    if (Array.isArray(can_create_roles)) {
+                        allowedRoles = can_create_roles;
+                    } else if (typeof can_create_roles === 'string') {
+                        try {
+                            allowedRoles = JSON.parse(can_create_roles);
+                        } catch (e) {
+                            allowedRoles = can_create_roles.split(',').map(r => r.trim());
+                        }
+                    }
+
+                    const creatorRole = existingRecord.creator_role_code;
+
+                    if (creatorRole && allowedRoles.length > 0 && !allowedRoles.includes(creatorRole)) {
+                        return NextResponse.json({ 
+                            error: `This file type (${fileTypeName}) cannot be assigned because the creator's role (${creatorRole}) is not permitted to create it.` 
+                        }, { status: 400 });
+                    }
+                }
+            }
         }
 
         await client.query('BEGIN');
