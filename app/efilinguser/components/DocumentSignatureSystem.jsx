@@ -847,7 +847,7 @@ const addCommentToDocument = async () => {
                             <div className="min-w-0">
                                 <div className="font-medium">{signature.user_name}</div>
                                 <div className="text-sm text-gray-500">
-                                    {signature.user_role} • {new Date(signature.timestamp).toLocaleString()}
+                                    {new Date(signature.timestamp).toLocaleString()}
                                 </div>
                             </div>
                         </div>
