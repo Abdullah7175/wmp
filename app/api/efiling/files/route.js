@@ -935,29 +935,23 @@ export async function POST(request) {
 
 
 
-
-
-
-
-
-
-
-
-
-
-
 // post ends here
 export async function PUT(request) {
     const client = await connectToDatabase();
     
     try {
         const body = await request.json();
+        
+        console.log("\n================ [PUT FILE UPDATE START] ================");
+        console.log("[1] Incoming Request Body:", body);
+
         const { 
-            id, subject, category_id, department_id, status_id,
+            id, subject, category_id, file_type_id, department_id, status_id,
             priority, confidentiality_level, assigned_to, remarks 
         } = body;
         
         if (!id) {
+            console.warn("❌ [PUT FILE UPDATE] Request rejected: File ID is missing");
             return NextResponse.json({ error: 'File ID is required' }, { status: 400 });
         }
         
@@ -968,31 +962,107 @@ export async function PUT(request) {
         );
         
         if (existing.rows.length === 0) {
+            console.warn(`❌ [PUT FILE UPDATE] File not found for ID: ${id}`);
             return NextResponse.json({ error: 'File not found' }, { status: 404 });
         }
+
+        const existingRecord = existing.rows[0];
+        console.log("[2] Existing DB Record:", {
+            id: existingRecord.id,
+            category_id: existingRecord.category_id,
+            file_type_id: existingRecord.file_type_id
+        });
         
+        // Normalize IDs
+        const parsedCategoryId = category_id !== undefined && category_id !== null && !isNaN(parseInt(category_id, 10)) ? parseInt(category_id, 10) : null;
+        const parsedFileTypeId = file_type_id !== undefined && file_type_id !== null && !isNaN(parseInt(file_type_id, 10)) ? parseInt(file_type_id, 10) : null;
+
+        // If category changed but file_type was not explicitly updated, reset file_type_id
+        const categoryChanged = parsedCategoryId !== null && parsedCategoryId !== parseInt(existingRecord.category_id, 10);
+
+        const effectiveCategoryId = parsedCategoryId !== null ? parsedCategoryId : parseInt(existingRecord.category_id, 10);
+
+        // Explicit check: If parsedFileTypeId is provided (even when category changes), use parsedFileTypeId
+        const effectiveFileTypeId = parsedFileTypeId !== null 
+            ? parsedFileTypeId 
+            : (categoryChanged ? null : parseInt(existingRecord.file_type_id, 10));
+
+        console.log("[3] Parsed & Effective Values:", {
+            incoming_category_id: category_id,
+            parsedCategoryId,
+            incoming_file_type_id: file_type_id,
+            parsedFileTypeId,
+            categoryChanged,
+            effectiveCategoryId,
+            effectiveFileTypeId
+        });
+
+        // Backend Validation: Ensure file_type belongs to category
+        if (effectiveFileTypeId) {
+            const ftCheck = await client.query(
+                'SELECT category_id FROM efiling_file_types WHERE id = $1',
+                [effectiveFileTypeId]
+            );
+            
+            if (ftCheck.rows.length > 0) {
+                const dbCatId = parseInt(ftCheck.rows[0].category_id, 10);
+                console.log(`[4] Validation Check: FileType ID ${effectiveFileTypeId} belongs to DB Category ID ${dbCatId}`);
+                if (dbCatId !== effectiveCategoryId) {
+                    console.error(`❌ [PUT FILE UPDATE] Mismatch error: FileType ${effectiveFileTypeId} (Cat: ${dbCatId}) != Effective Cat ${effectiveCategoryId}`);
+                    return NextResponse.json({ 
+                        error: `Selected file type (ID: ${effectiveFileTypeId}) does not belong to category (ID: ${effectiveCategoryId}).` 
+                    }, { status: 400 });
+                }
+            } else {
+                console.warn(`⚠️ [PUT FILE UPDATE] FileType ID ${effectiveFileTypeId} was not found in efiling_file_types table.`);
+            }
+        } else {
+            console.log("[4] Validation Skipped: effectiveFileTypeId is null");
+        }
+
         const query = `
             UPDATE efiling_files 
             SET subject = COALESCE($2, subject),
                 category_id = COALESCE($3, category_id),
-                department_id = COALESCE($4, department_id),
-                status_id = COALESCE($5, status_id),
-                priority = COALESCE($6, priority),
-                confidentiality_level = COALESCE($7, confidentiality_level),
-                assigned_to = COALESCE($8, assigned_to),
-                remarks = COALESCE($9, remarks),
+                file_type_id = $4, -- Allow setting NULL or updating explicitly
+                department_id = COALESCE($5, department_id),
+                status_id = COALESCE($6, status_id),
+                priority = COALESCE($7, priority),
+                confidentiality_level = COALESCE($8, confidentiality_level),
+                assigned_to = COALESCE($9, assigned_to),
+                remarks = COALESCE($10, remarks),
                 updated_at = CURRENT_TIMESTAMP
             WHERE id = $1
             RETURNING *
         `;
         
-        const result = await client.query(query, [
-            id, subject, category_id, department_id, status_id,
-            priority, confidentiality_level, assigned_to, remarks
-        ]);
-        
-        // Create notification if file is assigned to someone new
-        if (assigned_to && assigned_to !== existing.rows[0].assigned_to && assigned_to !== existing.rows[0].created_by) {
+        const queryParams = [
+            id, 
+            subject ?? null, 
+            effectiveCategoryId, 
+            effectiveFileTypeId, 
+            department_id ?? null, 
+            status_id ?? null,
+            priority ?? null, 
+            confidentiality_level ?? null, 
+            assigned_to ?? null, 
+            remarks ?? null
+        ];
+
+        console.log("[5] SQL Query Parameters Sent to DB:", queryParams);
+
+        const result = await client.query(query, queryParams);
+
+        console.log("[6] SQL Execution Result (Updated DB Row):", {
+            id: result.rows[0].id,
+            category_id: result.rows[0].category_id,
+            file_type_id: result.rows[0].file_type_id,
+            updated_at: result.rows[0].updated_at
+        });
+        console.log("================ [PUT FILE UPDATE END] ================\n");
+
+        // Notification logic
+        if (assigned_to && assigned_to !== existingRecord.assigned_to && assigned_to !== existingRecord.created_by) {
             try {
                 await client.query(`
                     INSERT INTO efiling_notifications (
@@ -1002,16 +1072,15 @@ export async function PUT(request) {
                     assigned_to,
                     id,
                     'FILE_ASSIGNED',
-                    `File "${result.rows[0].subject || existing.rows[0].subject}" has been assigned to you.`,
+                    `File "${result.rows[0].subject || existingRecord.subject}" has been assigned to you.`,
                     false
                 ]);
-                console.log('Notification created for newly assigned user:', assigned_to);
             } catch (notificationError) {
                 console.error('Error creating notification:', notificationError);
             }
         }
-        
-        // Log the action
+
+        // Logging action
         try {
             await eFileActionLogger.logAction({
                 entityId: id.toString(),
@@ -1030,7 +1099,7 @@ export async function PUT(request) {
         
         return NextResponse.json(result.rows[0]);
     } catch (error) {
-        console.error('Database error:', error);
+        console.error('Database error in PUT /api/efiling/files/[id]:', error);
         return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
     } finally {
         if (client) await client.release();

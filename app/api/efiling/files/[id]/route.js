@@ -211,64 +211,62 @@ export async function PUT(request, { params }) {
                 { status: 403 }
             );
         }
+
         await client.query('BEGIN');
-        // Update file fields
+
+        // Dynamic Update for efiling_files
         const updateFields = [];
         const updateValues = [];
         let paramCount = 1;
         
         if (body.subject !== undefined) {
-            updateFields.push(`subject = $${paramCount}`);
+            updateFields.push(`subject = $${paramCount++}`);
             updateValues.push(body.subject);
-            paramCount++;
         }
         
         if (body.category_id !== undefined) {
-            updateFields.push(`category_id = $${paramCount}`);
+            updateFields.push(`category_id = $${paramCount++}`);
             updateValues.push(body.category_id);
-            paramCount++;
+        }
+
+        if (body.file_type_id !== undefined) {
+            updateFields.push(`file_type_id = $${paramCount++}`);
+            updateValues.push(body.file_type_id);
         }
         
         if (body.department_id !== undefined) {
-            updateFields.push(`department_id = $${paramCount}`);
+            updateFields.push(`department_id = $${paramCount++}`);
             updateValues.push(body.department_id);
-            paramCount++;
         }
         
         if (body.status_id !== undefined) {
-            updateFields.push(`status_id = $${paramCount}`);
+            updateFields.push(`status_id = $${paramCount++}`);
             updateValues.push(body.status_id);
-            paramCount++;
         } 
         
         if (body.priority !== undefined) {
-            updateFields.push(`priority = $${paramCount}`);
+            updateFields.push(`priority = $${paramCount++}`);
             updateValues.push(body.priority);
-            paramCount++;
         }
         
         if (body.confidentiality_level !== undefined) {
-            updateFields.push(`confidentiality_level = $${paramCount}`);
+            updateFields.push(`confidentiality_level = $${paramCount++}`);
             updateValues.push(body.confidentiality_level);
-            paramCount++;
         }
         
         if (body.assigned_to !== undefined) {
-            updateFields.push(`assigned_to = $${paramCount}`);
+            updateFields.push(`assigned_to = $${paramCount++}`);
             updateValues.push(body.assigned_to);
-            paramCount++;
         }
         
         if (body.remarks !== undefined) {
-            updateFields.push(`remarks = $${paramCount}`);
+            updateFields.push(`remarks = $${paramCount++}`);
             updateValues.push(body.remarks);
-            paramCount++;
         }
         
         if (body.work_request_id !== undefined) {
-            updateFields.push(`work_request_id = $${paramCount}`);
+            updateFields.push(`work_request_id = $${paramCount++}`);
             updateValues.push(body.work_request_id || null);
-            paramCount++;
         }
         
         let mainFileResult;
@@ -283,7 +281,7 @@ export async function PUT(request, { params }) {
             mainFileResult = await client.query(query, finalValues);
         }
         
-// --- 2. Update efiling_files_costing (The new logic added in same style) ---
+        // Dynamic Update for efiling_files_costing
         const costFields = [];
         const costValues = [];
         let costParamCount = 1;
@@ -310,18 +308,11 @@ export async function PUT(request, { params }) {
         }
 
         if (costFields.length > 0) {
-            // Using UPSERT style to ensure it works even if the costing row was missing
-            const costQuery = `
+            await client.query(`
                 INSERT INTO efiling_files_costing (file_id, budget_head_no, proposed_estimated_cost, contractor_premium, sanctioned_amount, revised_estimate_amount)
                 VALUES ($${costParamCount}, $1, $2, $3, $4, $5)
-                ON CONFLICT (file_id) DO UPDATE SET ${costFields.join(', ')}
-            `;
-            // This is a simplified approach for the update; for a perfect dynamic query 
-            // matching your style, we just run the UPDATE if the row exists:
-            await client.query(`
-                UPDATE efiling_files_costing 
-                SET ${costFields.join(', ')} 
-                WHERE file_id = $${costParamCount}
+                ON CONFLICT (file_id) DO UPDATE 
+                SET ${costFields.map((f, i) => `${f.split('=')[0].trim()} = EXCLUDED.${f.split('=')[0].trim()}`).join(', ')}
             `, [...costValues, id]);
         }
 

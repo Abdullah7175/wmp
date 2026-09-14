@@ -38,6 +38,17 @@ export default function FileDetail() {
     const [editedSubject, setEditedSubject] = useState("");
     const [savingSubject, setSavingSubject] = useState(false);
 
+        // State variables
+    const [isEditingFileType, setIsEditingFileType] = useState(false);
+    const [selectedFileType, setSelectedFileType] = useState("");
+    const [allowedFileTypes, setAllowedFileTypes] = useState([]);
+    const [savingFileType, setSavingFileType] = useState(false);
+
+    const [isEditingCategoryType, setIsEditingCategoryType] = useState(false);
+    const [selectedCategory, setSelectedCategory] = useState("");
+    const [categories, setCategories] = useState([]);
+    const [savingCategoryType, setSavingCategoryType] = useState(false);
+
     // Add admin check helper (Role IDs 1 and 2 represent admins based on your API middleware)
     const isAdmin = [1, 2].includes(parseInt(session?.user?.role));
     useEffect(() => {
@@ -78,7 +89,7 @@ export default function FileDetail() {
 
     const fetchFile = async () => {
         setLoading(true);
-        try {
+        try { 
             const fileRes = await fetch(`/api/efiling/files/${params.id}`);
             if (!fileRes.ok) {
                 throw new Error(`File not found: ${fileRes.status}`);
@@ -108,48 +119,158 @@ export default function FileDetail() {
             console.error('Error fetching work requests:', error);
         }
     };
-const handleSaveSubject = async () => {
-    if (!editedSubject.trim()) {
-        toast({
-            title: "Validation Error",
-            description: "Subject cannot be empty.",
-            variant: "destructive"
-        });
+    const handleSaveSubject = async () => {
+        if (!editedSubject.trim()) {
+            toast({
+                title: "Validation Error",
+                description: "Subject cannot be empty.",
+                variant: "destructive"
+            });
+            return;
+        }
+
+        setSavingSubject(true);
+        try {
+            const res = await fetch(`/api/efiling/files/${file.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ subject: editedSubject })
+            });
+
+            if (res.ok) {
+                setFile((prev) => ({ ...prev, subject: editedSubject }));
+                setIsEditingSubject(false);
+                toast({
+                    title: "Success",
+                    description: "Subject updated successfully"
+                });
+            } else {
+                const error = await res.json();
+                toast({
+                    title: "Error",
+                    description: error.error || "Failed to update subject",
+                    variant: "destructive"
+                });
+            }
+        } catch (error) {
+            console.error('Error updating subject:', error);
+            toast({
+                title: "Error",
+                description: "Failed to update subject",
+                variant: "destructive"
+            });
+        } finally {
+            setSavingSubject(false);
+        }
+    };
+
+    // Fetch creator-allowed options when edit mode opens
+// Replace fetchCreatorOptions in app/efiling/files/[id]/page.js
+// Fetch categories on mount or edit init
+const fetchCategories = async () => {
+    try {
+        const res = await fetch('/api/efiling/categories');
+        if (res.ok) {
+            const data = await res.json();
+            setCategories(Array.isArray(data) ? data : (data.categories || []));
+        }
+    } catch (err) {
+        console.error("Error fetching categories:", err);
+    }
+};
+
+// Fetch file types filtered by active category ID
+const fetchFileTypesForCategory = async (categoryId) => {
+    if (!categoryId) {
+        setAllowedFileTypes([]);
+        return;
+    }
+    try {
+        const res = await fetch(`/api/efiling/file-types?categoryId=${categoryId}&is_active=true`);
+        if (res.ok) {
+            const data = await res.json();
+            const typesList = Array.isArray(data) ? data : (data.fileTypes || []);
+            setAllowedFileTypes(typesList);
+        }
+    } catch (err) {
+        console.error("Error fetching file types:", err);
+    }
+};
+
+// Handle Category selection change (Forces resetting invalid File Type)
+// Handle Category selection change (Forces resetting invalid File Type)
+const handleCategoryChange = async (newCategoryId) => {
+    console.log("=== [FRONTEND] Category Changed ===");
+    console.log("New Category ID selected:", newCategoryId);
+    
+    setSelectedCategory(newCategoryId);
+    setSelectedFileType(""); // Force re-selection when category changes
+    
+    await fetchFileTypesForCategory(newCategoryId);
+};
+
+// Save Category and/or File Type edits
+
+const handleSaveCategoryAndFileType = async () => {
+    if (!selectedCategory) {
+        toast({ title: "Validation Error", description: "Category is required.", variant: "destructive" });
+        return;
+    }
+    if (!selectedFileType) {
+        toast({ title: "Validation Error", description: "File Type must belong to the selected Category.", variant: "destructive" });
         return;
     }
 
-    setSavingSubject(true);
+    const payload = {
+        category_id: parseInt(selectedCategory, 10),
+        file_type_id: parseInt(selectedFileType, 10)
+    };
+
+    setSavingCategoryType(true);
     try {
         const res = await fetch(`/api/efiling/files/${file.id}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ subject: editedSubject })
+            body: JSON.stringify(payload)
         });
 
         if (res.ok) {
-            setFile((prev) => ({ ...prev, subject: editedSubject }));
-            setIsEditingSubject(false);
-            toast({
-                title: "Success",
-                description: "Subject updated successfully"
-            });
+            await fetchFile(); // Re-sync view data from database
+            setIsEditingCategoryType(false);
+            toast({ title: "Success", description: "Category and File Type updated successfully" });
         } else {
-            const error = await res.json();
-            toast({
-                title: "Error",
-                description: error.error || "Failed to update subject",
-                variant: "destructive"
-            });
+            const err = await res.json();
+            toast({ title: "Error", description: err.error || "Failed to update category/file type", variant: "destructive" });
         }
-    } catch (error) {
-        console.error('Error updating subject:', error);
-        toast({
-            title: "Error",
-            description: "Failed to update subject",
-            variant: "destructive"
-        });
+    } catch (err) {
+        console.error("Save error:", err);
+        toast({ title: "Error", description: "Failed to update file category/type", variant: "destructive" });
     } finally {
-        setSavingSubject(false);
+        setSavingCategoryType(false);
+    }
+};
+const handleSaveFileType = async () => {
+    if (!selectedFileType) return;
+    setSavingFileType(true);
+    try {
+        const res = await fetch(`/api/efiling/files/${file.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ file_type_id: parseInt(selectedFileType) })
+        });
+        if (res.ok) {
+            const typeObj = allowedFileTypes.find(t => t.id === parseInt(selectedFileType));
+            setFile(prev => ({ ...prev, file_type_id: parseInt(selectedFileType), file_type_name: typeObj?.name }));
+            setIsEditingFileType(false);
+            toast({ title: "Success", description: "File Type updated successfully" });
+        } else {
+            const err = await res.json();
+            toast({ title: "Error", description: err.error || "Failed to update file type", variant: "destructive" });
+        }
+    } catch (err) {
+        toast({ title: "Error", description: "Failed to update file type", variant: "destructive" });
+    } finally {
+        setSavingFileType(false);
     }
 };
     const handleSaveFileInfo = async () => {
@@ -820,14 +941,14 @@ const handleSaveSubject = async () => {
                         <Button
                             variant="ghost"
                             onClick={() => router.back()}
-                            className="flex items-center"
+                            className="flex items-center" 
                         >
                             <ArrowLeft className="w-4 h-4 mr-2" />
                             Back
                         </Button>
                         <div>
                             <h1 className="text-3xl font-bold text-gray-900">File Details</h1>
-                            <p className="text-gray-600">View comprehensive file information</p>
+                            <p className="text-gray-600">View comprehensive file informations</p>
                         </div>
                     </div>
                     <div className="flex space-x-2 no-print">
@@ -949,13 +1070,90 @@ const handleSaveSubject = async () => {
                                             {file.department_name}
                                         </p>
                                     </div>
+                                {/* Category & File Type Section with Edit Controls */}
                                     <div>
                                         <label className="text-sm font-medium text-gray-600">Category</label>
-                                        <p>{file.category_name}</p>
+                                        {isEditingCategoryType ? (
+                                            <Select value={selectedCategory} onValueChange={handleCategoryChange}>
+                                                <SelectTrigger className="w-full text-sm mt-1">
+                                                    <SelectValue placeholder="Select Category" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {categories.map((cat) => (
+                                                        <SelectItem key={cat.id} value={String(cat.id)}>
+                                                            {cat.name}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        ) : (
+                                            <p className="text-lg mt-1">{file.category_name || '-'}</p>
+                                        )}
                                     </div>
+
                                     <div>
-                                        <label className="text-sm font-medium text-gray-600">File Type</label>
-                                        <p>{file.file_type_name}</p>
+                                        <div className="flex items-center justify-between">
+                                            <label className="text-sm font-medium text-gray-600">File Type</label>
+                                            {isAdmin && !isEditingCategoryType && (
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={async () => {
+                                                        if (checkFileClosed()) return;
+                                                        await fetchCategories();
+                                                        const currentCatId = file.category_id ? String(file.category_id) : "";
+                                                        setSelectedCategory(currentCatId);
+                                                        setSelectedFileType(file.file_type_id ? String(file.file_type_id) : "");
+                                                        if (currentCatId) {
+                                                            await fetchFileTypesForCategory(currentCatId);
+                                                        }
+                                                        setIsEditingCategoryType(true);
+                                                    }}
+                                                    className="h-7 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                                >
+                                                    <Edit className="w-3.5 h-3.5 mr-1" />
+                                                    Edit Category / File Type
+                                                </Button>
+                                            )}
+                                        </div>
+
+                                        {isEditingCategoryType ? (
+                                            <div className="mt-1 space-y-2">
+                                                <Select value={selectedFileType} onValueChange={setSelectedFileType}>
+                                                    <SelectTrigger className="w-full text-sm">
+                                                        <SelectValue placeholder={selectedCategory ? "Select File Type" : "Select Category First"} />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {allowedFileTypes.map((type) => (
+                                                            <SelectItem key={type.id} value={String(type.id)}>
+                                                                {type.name} {type.code ? `(${type.code})` : ''}
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                                <div className="flex space-x-2 pt-1">
+                                                    <Button
+                                                        size="sm"
+                                                        onClick={handleSaveCategoryAndFileType}
+                                                        disabled={savingCategoryType}
+                                                        className="h-8 text-xs bg-blue-600 hover:bg-blue-700"
+                                                    >
+                                                        {savingCategoryType ? 'Saving...' : 'Save'}
+                                                    </Button>
+                                                    <Button
+                                                        size="sm"
+                                                        variant="outline"
+                                                        onClick={() => setIsEditingCategoryType(false)}
+                                                        disabled={savingCategoryType}
+                                                        className="h-8 text-xs"
+                                                    >
+                                                        Cancel
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <p className="text-lg mt-1">{file.file_type_name || '-'}</p>
+                                        )}
                                     </div>
                                 </div>
 
