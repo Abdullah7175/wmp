@@ -1,11 +1,19 @@
-/**
- * PM2 cluster config (3 workers) — use INSTEAD of ecosystem.config.js for load testing.
- *
- * Switch configs (only one at a time — both use port 3000):
- *   pm2 delete wmp
- *   pm2 start ecosystem.cluster.config.js --env production
- *   pm2 save
- *
+/**
+
+ * PM2 cluster config (3 workers) — use INSTEAD of ecosystem.config.js for load testing.
+
+ *
+
+ * Switch configs (only one at a time — both use port 3000):
+
+ *   pm2 delete wmp
+
+ *   pm2 start ecosystem.cluster.config.js --env production
+
+ *   pm2 save
+
+ *
+
 /**
  * PM2 cluster config (3 workers) — use INSTEAD of ecosystem.config.js for load testing.
  *
@@ -35,11 +43,11 @@ module.exports = {
       env: {
         NODE_ENV: 'production',
         PORT: 3000,
-        // Keep 0.0.0.0 — nginx proxies to 127.0.0.1:3000; do NOT use DB/public IP here
-        HOSTNAME: '0.0.0.0',
+        // Bind localhost only — public access must go through Nginx HTTPS, never :3000
+        HOSTNAME: '127.0.0.1',
         NEXTAUTH_URL: 'https://wmp.kwsc.gos.pk',
         AUTH_TRUST_HOST: 'true',
-        ALLOW_HTTP_LOGIN: 'true',
+        ALLOW_HTTP_LOGIN: 'false',
         WHATSAPP_API_URL: process.env.WHATSAPP_API_URL || 'http://erp.bizintel.co:8005/api/send-json',
         WHATSAPP_SECRET_KEY: process.env.WHATSAPP_SECRET_KEY || '',
         APP_BASE_DIR: process.env.APP_BASE_DIR || '/opt/wmp16'
@@ -47,10 +55,10 @@ module.exports = {
       env_production: {
         NODE_ENV: 'production',
         PORT: 3000,
-        HOSTNAME: '0.0.0.0',
+        HOSTNAME: '127.0.0.1',
         NEXTAUTH_URL: process.env.NEXTAUTH_URL || 'https://wmp.kwsc.gos.pk',
         AUTH_TRUST_HOST: 'true',
-        ALLOW_HTTP_LOGIN: 'true',
+        ALLOW_HTTP_LOGIN: 'false',
         WHATSAPP_API_URL: process.env.WHATSAPP_API_URL || 'http://erp.bizintel.co:8005/api/send-json',
         WHATSAPP_SECRET_KEY: process.env.WHATSAPP_SECRET_KEY || '',
         APP_BASE_DIR: process.env.APP_BASE_DIR || '/opt/wmp16'
