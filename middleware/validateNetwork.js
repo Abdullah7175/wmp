@@ -92,29 +92,26 @@ export function getClientIp(request) {
         return null;
     };
 
-    const isBehindProxy = process.env.BEHIND_PROXY === 'true';
     const xRealIp = getHeader('x-real-ip');
     const cfConnectingIp = getHeader('cf-connecting-ip');
     const xForwardedFor = getHeader('x-forwarded-for');
 
-    let rawIp = '';
+    // Nginx always overwrites X-Real-IP from $remote_addr. Prefer it even in Edge
+    // middleware, where BEHIND_PROXY may be missing so VPN users were treated as
+    // external and sent to WMP instead of e-filing.
+    let rawIp =
+        xRealIp?.trim() ||
+        cfConnectingIp?.trim() ||
+        '';
 
-    if (isBehindProxy) {
-        // When behind trusted proxy (Nginx), prefer X-Real-IP set by the proxy from TCP connection,
-        // or take the last entry in X-Forwarded-For (appended by the trusted proxy).
-        if (xRealIp?.trim()) {
-            rawIp = xRealIp.trim();
-        } else if (cfConnectingIp?.trim()) {
-            rawIp = cfConnectingIp.trim();
-        } else if (xForwardedFor) {
-            const ips = xForwardedFor.split(',').map(ip => ip.trim()).filter(Boolean);
-            rawIp = ips.length > 0 ? ips[ips.length - 1] : '';
-        } else {
-            rawIp = request.ip || request.socket?.remoteAddress || '';
-        }
-    } else {
-        // Direct connection - use socket / request IP
-        rawIp = request.ip || request.socket?.remoteAddress || xRealIp?.trim() || '';
+    if (!rawIp && xForwardedFor) {
+        const ips = xForwardedFor.split(',').map((ip) => ip.trim()).filter(Boolean);
+        // First hop is the original client; Nginx appends later proxies.
+        rawIp = ips[0] || '';
+    }
+
+    if (!rawIp) {
+        rawIp = request.ip || request.socket?.remoteAddress || '';
     }
 
     // Remove IPv6-mapped IPv4 prefix (e.g., ::ffff:192.168.1.1)
