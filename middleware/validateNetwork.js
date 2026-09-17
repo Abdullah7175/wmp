@@ -225,3 +225,15 @@ export function isInternalNetwork(request) {
         return false;
     }
 }
+
+/**
+ * Redirect on the same host the browser used (192.168.50.2 stays 192.168.50.2).
+ * Never use NEXTAUTH_URL here — that would send VPN users to wmp.kwsc.gos.pk.
+ */
+export function sameHostRedirect(request, path) {
+    const url = request.nextUrl.clone();
+    url.pathname = path;
+    url.search = '';
+    url.hash = '';
+    return url;
+}

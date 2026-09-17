@@ -43,7 +43,7 @@ export function EfilingRouteGuard({ children, allowedRoles = [] }) {
 
     // If no session, redirect to login
     if (!session?.user?.id) {
-      router.push("/login");
+      router.push("/elogin");
       setChecking(false);
       setAuthorized(false);
       return;
@@ -76,7 +76,7 @@ export function EfilingRouteGuard({ children, allowedRoles = [] }) {
 
       // If user is on an external network AND is NOT a dual-portal user -> block and redirect to login
       if (!isInternal && !isDual) {
-        router.replace("/login");
+        router.replace("/elogin");
         setAuthorized(false);
         setChecking(false);
         return;
@@ -115,7 +115,7 @@ export function EfilingRouteGuard({ children, allowedRoles = [] }) {
           if (hasDashboard) {
             router.push("/dashboard");
           } else {
-            router.push("/login");
+            router.push("/elogin");
           }
           setAuthorized(false);
           setChecking(false);
@@ -142,7 +142,7 @@ export function EfilingRouteGuard({ children, allowedRoles = [] }) {
         if (hasDashboard) {
           router.push("/dashboard");
         } else {
-          router.push("/login");
+          router.push("/elogin");
         }
         setAuthorized(false);
         setChecking(false);

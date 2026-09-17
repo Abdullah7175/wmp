@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { isInternalNetwork } from './validateNetwork';
+import { isInternalNetwork, sameHostRedirect } from './validateNetwork';
 import { isDualPortalUser } from '@/lib/dualPortalAuth';
 import { getToken } from 'next-auth/jwt';
 
@@ -68,12 +68,15 @@ export async function efilingAuthMiddleware(request) {
             return res;
         };
 
-        // Redirect legacy /elogin to /login
+        // /elogin is the VPN/office login only. Internet users go to public /login.
         if (pathname === '/elogin') {
-            return NextResponse.redirect(new URL('/login', request.url));
+            if (!isInternal) {
+                return NextResponse.redirect(sameHostRedirect(request, '/login'));
+            }
+            return withSecurityHeaders(NextResponse.next());
         }
 
-        // Unauthenticated requests: 401 for API, redirect to /login for pages
+        // Unauthenticated requests: 401 for API, VPN pages → /elogin, public pages → /login
         if (!hasSession) {
             if (pathname.startsWith('/api/')) {
                 return NextResponse.json(
@@ -81,7 +84,8 @@ export async function efilingAuthMiddleware(request) {
                     { status: 401 }
                 );
             }
-            return withSecurityHeaders(NextResponse.redirect(new URL('/login', request.url)));
+            const loginPath = isInternal ? '/elogin' : '/login';
+            return withSecurityHeaders(NextResponse.redirect(sameHostRedirect(request, loginPath)));
         }
 
         // Authenticated sessions off-network must be configured in DUAL_PORTAL_USERS
@@ -106,7 +110,7 @@ export async function efilingAuthMiddleware(request) {
                         { status: 403 }
                     );
                 }
-                return withSecurityHeaders(NextResponse.redirect(new URL('/login', request.url)));
+                return withSecurityHeaders(NextResponse.redirect(sameHostRedirect(request, '/login')));
             }
         }
 

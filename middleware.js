@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { efilingAuthMiddleware } from "./middleware/efilingAuth";
-import { isLocalOrPrivateIp, getClientIp } from "./middleware/validateNetwork";
+import { isLocalOrPrivateIp, getClientIp, isInternalNetwork, sameHostRedirect } from "./middleware/validateNetwork";
 
 const PUBLIC_PATHS = ["/elogin", "/login", "/unauthorized", "/_next", "/api/auth", "/favicon.ico", "/public"];
 
@@ -251,6 +251,15 @@ export async function middleware(req) {
         // Always set origin header early for POST requests (Server Actions need this)
         ensureOriginHeader();
 
+        // VPN / office IP (192.168.50.2 and EFILING_ALLOWED_IPS): land on /elogin, not public /login
+        if (pathname === '/' || pathname === '/login') {
+            if (isInternalNetwork(req)) {
+                const vpnLogin = NextResponse.redirect(sameHostRedirect(req, '/elogin'));
+                applySecurityHeaders(vpnLogin, '/elogin', req);
+                return vpnLogin;
+            }
+        }
+
         // For /api/efiling routes, enforce authentication and network security through efilingAuthMiddleware
         if (pathname.startsWith('/api/efiling')) {
             const authResponse = await efilingAuthMiddleware(req);
@@ -297,7 +306,7 @@ export async function middleware(req) {
 
             if (!isPublic) {
                 // Redirect to login for protected routes
-                const loginUrl = new URL('/login', req.url);
+                const loginUrl = sameHostRedirect(req, isInternalNetwork(req) ? '/elogin' : '/login');
                 const redirectResponse = NextResponse.redirect(loginUrl);
                 if (req.method === 'POST') {
                     setOriginHeader(req, redirectResponse);
@@ -329,12 +338,12 @@ export async function middleware(req) {
     } catch (error) {
         console.error('Middleware error:', error);
         // On middleware error, redirect to login to prevent 502 loops
-        const errorResponse = NextResponse.redirect(new URL('/login', req.url));
+        const errorResponse = NextResponse.redirect(sameHostRedirect(req, '/login'));
         applySecurityHeaders(errorResponse, pathname, req);
         return errorResponse;
     }
 }
 
 export const config = {
-    matcher: ["/smagent/:path*", "/agent/:path*", "/dashboard/:path*", "/efiling/:path*", "/efilinguser/:path*", "/api/efiling/:path*", "/elogin", "/ceo/:path*", "/coo/:path*", "/ce/:path*"],
+    matcher: ["/", "/login", "/smagent/:path*", "/agent/:path*", "/dashboard/:path*", "/efiling/:path*", "/efilinguser/:path*", "/api/efiling/:path*", "/elogin", "/ceo/:path*", "/coo/:path*", "/ce/:path*"],
 }; 
