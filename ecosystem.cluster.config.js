@@ -43,7 +43,8 @@ module.exports = {
       env: {
         NODE_ENV: 'production',
         PORT: 3000,
-        // Bind localhost only — public access must go through Nginx HTTPS, never :3000
+        // Bind localhost only. Also set HOSTNAME in /opt/wmp16/.env — env_file can override this.
+        HOST: '127.0.0.1',
         HOSTNAME: '127.0.0.1',
         NEXTAUTH_URL: 'https://wmp.kwsc.gos.pk',
         AUTH_TRUST_HOST: 'true',
@@ -55,6 +56,7 @@ module.exports = {
       env_production: {
         NODE_ENV: 'production',
         PORT: 3000,
+        HOST: '127.0.0.1',
         HOSTNAME: '127.0.0.1',
         NEXTAUTH_URL: process.env.NEXTAUTH_URL || 'https://wmp.kwsc.gos.pk',
         AUTH_TRUST_HOST: 'true',
