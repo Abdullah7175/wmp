@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { isInternalNetwork, sameHostRedirect } from './validateNetwork';
+import { isInternalNetwork, sameHostRedirect, isVpnLanHost } from './validateNetwork';
 import { isDualPortalUser } from '@/lib/dualPortalAuth';
 import { getToken } from 'next-auth/jwt';
 
@@ -7,6 +7,7 @@ export async function efilingAuthMiddleware(request) {
     try {
         const pathname = request.nextUrl.pathname;
         const isInternal = isInternalNetwork(request);
+        const isVpnHost = isVpnLanHost(request);
 
         // Check for session cookies (Edge runtime compatible - supports both HTTP & HTTPS)
         const sessionCookie = request.cookies.get('next-auth.session-token') ||
@@ -68,15 +69,15 @@ export async function efilingAuthMiddleware(request) {
             return res;
         };
 
-        // /elogin is the VPN/office login only. Internet users go to public /login.
+        // /elogin is only for http(s)://192.168.50.2. Public domain always uses /login.
         if (pathname === '/elogin') {
-            if (!isInternal) {
+            if (!isVpnHost || !isInternal) {
                 return NextResponse.redirect(sameHostRedirect(request, '/login'));
             }
             return withSecurityHeaders(NextResponse.next());
         }
 
-        // Unauthenticated requests: 401 for API, VPN pages → /elogin, public pages → /login
+        // Unauthenticated requests: 401 for API, VPN LAN host → /elogin, public domain → /login
         if (!hasSession) {
             if (pathname.startsWith('/api/')) {
                 return NextResponse.json(
@@ -84,7 +85,7 @@ export async function efilingAuthMiddleware(request) {
                     { status: 401 }
                 );
             }
-            const loginPath = isInternal ? '/elogin' : '/login';
+            const loginPath = (isVpnHost && isInternal) ? '/elogin' : '/login';
             return withSecurityHeaders(NextResponse.redirect(sameHostRedirect(request, loginPath)));
         }
 

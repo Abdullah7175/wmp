@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { efilingAuthMiddleware } from "./middleware/efilingAuth";
-import { isLocalOrPrivateIp, getClientIp, isInternalNetwork, sameHostRedirect } from "./middleware/validateNetwork";
+import { isLocalOrPrivateIp, getClientIp, isInternalNetwork, sameHostRedirect, isVpnLanHost } from "./middleware/validateNetwork";
 
 const PUBLIC_PATHS = ["/elogin", "/login", "/unauthorized", "/_next", "/api/auth", "/favicon.ico", "/public"];
 
@@ -251,13 +251,19 @@ export async function middleware(req) {
         // Always set origin header early for POST requests (Server Actions need this)
         ensureOriginHeader();
 
-        // VPN / office IP (192.168.50.2 and EFILING_ALLOWED_IPS): land on /elogin, not public /login
+        // Only http(s)://192.168.50.2 goes to /elogin.
+        // https://wmp.kwsc.gos.pk always stays on /login (internet WMP users).
         if (pathname === '/' || pathname === '/login') {
-            if (isInternalNetwork(req)) {
+            if (isVpnLanHost(req) && isInternalNetwork(req)) {
                 const vpnLogin = NextResponse.redirect(sameHostRedirect(req, '/elogin'));
                 applySecurityHeaders(vpnLogin, '/elogin', req);
                 return vpnLogin;
             }
+        }
+        if (pathname === '/elogin' && !isVpnLanHost(req)) {
+            const publicLogin = NextResponse.redirect(sameHostRedirect(req, '/login'));
+            applySecurityHeaders(publicLogin, '/login', req);
+            return publicLogin;
         }
 
         // For /api/efiling routes, enforce authentication and network security through efilingAuthMiddleware
@@ -306,7 +312,7 @@ export async function middleware(req) {
 
             if (!isPublic) {
                 // Redirect to login for protected routes
-                const loginUrl = sameHostRedirect(req, isInternalNetwork(req) ? '/elogin' : '/login');
+                const loginUrl = sameHostRedirect(req, (isVpnLanHost(req) && isInternalNetwork(req)) ? '/elogin' : '/login');
                 const redirectResponse = NextResponse.redirect(loginUrl);
                 if (req.method === 'POST') {
                     setOriginHeader(req, redirectResponse);

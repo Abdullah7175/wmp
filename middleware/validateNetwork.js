@@ -237,3 +237,16 @@ export function sameHostRedirect(request, path) {
     url.hash = '';
     return url;
 }
+
+/**
+ * True only when the browser opened the VPN/LAN IP, not wmp.kwsc.gos.pk.
+ * Public domain must always stay on /login even if the client IP is on EFILING_ALLOWED_IPS.
+ */
+export function isVpnLanHost(request) {
+    const raw = request.headers.get('host')
+        || request.headers.get('x-forwarded-host')
+        || request.nextUrl.hostname
+        || '';
+    const host = raw.split(',')[0].trim().split(':')[0].toLowerCase();
+    return host === '192.168.50.2';
+}
