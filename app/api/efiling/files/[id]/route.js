@@ -83,6 +83,7 @@ export async function GET(request, { params }) {
                 d.name AS department_name,
                 c.name AS category_name,
                 t.name AS file_type_name,
+                t.code AS file_type_code,
                 s.name AS status_name,
                 s.code AS status_code,
                 s.color AS status_color,

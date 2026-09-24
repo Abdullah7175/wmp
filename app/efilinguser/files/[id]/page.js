@@ -127,6 +127,11 @@ export default function FileDetail() {
         }
     }, [file?.work_request_id]);
 
+
+
+    const shouldHideTimestamp = Boolean(
+        file?.file_type_code?.startsWith("EMG_") 
+    );
     // Resolves the correct downloadable URL for an attachment's file. Mirrors
     // the same normalization logic already used in the print/preview markup.
     const resolveAttachmentFileUrl = (fileUrl) => {
@@ -1934,7 +1939,9 @@ const handleDeleteComment = async (commentId) => {
                                                 ) : null}
                                                 <div className="print-signature-details">
                                                     <div><strong>{s.user_name}</strong> <span style={{ color: '#666', fontWeight: 'normal' }}>({s.user_role})</span></div>
-                                                    <div>{formatDate(s.timestamp)}</div>
+                                                    {!shouldHideTimestamp && (
+                                                        <div>{formatDate(s.timestamp)}</div>
+                                                    )}
                                                 </div>
                                             </div>
                                         );
@@ -2005,7 +2012,8 @@ const handleDeleteComment = async (commentId) => {
                                             )}
 
                                             <div style={{ color: '#666', fontSize: '9pt', marginTop: '2mm' }}>
-                                                Size: {Math.round((a.file_size || 0) / 1024)} KB | Uploaded: {formatDate(a.uploaded_at)}
+                                                Size: {Math.round((a.file_size || 0) / 1024)} KB
+                                                {!shouldHideTimestamp && ` | Uploaded: ${formatDate(a.uploaded_at)}`}
                                             </div>
                                         </div>
                                     );
@@ -2021,7 +2029,9 @@ const handleDeleteComment = async (commentId) => {
                                     {comments.map((c, idx) => (
                                         <div key={c.id || idx} className="print-comment-item">
                                             <div className="print-comment-header">{c.user_name}</div>
-                                            <div style={{ color: '#666', fontSize: '7pt', marginBottom: '2mm' }}>{formatDate(c.timestamp)}</div>
+                                            {!shouldHideTimestamp && (
+                                                <div style={{ color: '#666', fontSize: '7pt', marginBottom: '2mm' }}>{formatDate(c.timestamp)}</div>
+                                            )}
                                             <div className="print-comment-content">{c.text}</div>
                                         </div>
                                     ))}
