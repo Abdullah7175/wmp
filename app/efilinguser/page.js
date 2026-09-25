@@ -49,17 +49,17 @@ export default function EFileUserDashboard() {
     const filesPerPage = 5;
 
     // Redirect external users (ADLFA/CON) to files page
-    useEffect(() => {
-        if (!profileLoading && isExternalUser(roleCode)) {
-            toast({
-                title: "Access Restricted",
-                description: "External users cannot access the dashboard. Redirecting to files...",
-                variant: "default",
-            });
-            router.push('/efilinguser/files');
-            return;
-        }
-    }, [profileLoading, roleCode, router, toast]);
+    // useEffect(() => {
+    //     if (!profileLoading && isExternalUser(roleCode)) {
+    //         toast({
+    //             title: "Access Restricted",
+    //             description: "External users cannot access the dashboard. Redirecting to files...",
+    //             variant: "default",
+    //         });
+    //         router.push('/efilinguser/files');
+    //         return;
+    //     }
+    // }, [profileLoading, roleCode, router, toast]);
 
     useEffect(() => {
         if (!profileLoading && (efilingUserId || session?.user?.id)) {

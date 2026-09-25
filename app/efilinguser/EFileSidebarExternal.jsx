@@ -7,6 +7,7 @@ import {
     Calendar,
     ChevronLeft, 
     ChevronRight,
+    Home,
     LogOut,
 } from "lucide-react";
 import { useSidebar } from "@/components/ui/sidebar";
@@ -16,6 +17,11 @@ import React from "react";
 
 // Simplified sidebar for external users (ADLFA/CON)
 const links = [
+    {
+            href: "/efilinguser",
+            label: "Dashboard",
+            icon: <Home className="w-5 h-5 mr-2" />,
+    },
     {
         href: "/efilinguser/files",
         label: "My Files",
