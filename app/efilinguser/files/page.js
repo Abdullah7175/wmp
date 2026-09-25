@@ -83,11 +83,39 @@ export default function FilesPage() {
     const [showCloseOtpModal, setShowCloseOtpModal] = useState(false);
     const [fileToClose, setFileToClose] = useState(null);
 
+    // Add debounced states for text inputs sent to API
+    const [debouncedFileId, setDebouncedFileId] = useState(fileIdFilter);
+    const [debouncedSubject, setDebouncedSubject] = useState(subjectFilter);
+
+    // Debounce fileIdFilter
+    useEffect(() => {
+        const handler = setTimeout(() => setDebouncedFileId(fileIdFilter), 500);
+        return () => clearTimeout(handler);
+    }, [fileIdFilter]);
+
+    // Debounce subjectFilter
+    useEffect(() => {
+        const handler = setTimeout(() => setDebouncedSubject(subjectFilter), 500);
+        return () => clearTimeout(handler);
+    }, [subjectFilter]);
+
+    // Trigger API fetch on debounced values or dropdown select changes
     useEffect(() => {
         if (efilingUserId) {
             fetchFiles();
         }
-    }, [efilingUserId, activeTab, fileIdFilter, townFilter, zoneFilter, divisionFilter, subjectFilter, dateFrom, dateTo, statusFilter]);
+    }, [
+        efilingUserId, 
+        activeTab, 
+        debouncedFileId, 
+        townFilter, 
+        zoneFilter, 
+        divisionFilter, 
+        debouncedSubject, 
+        dateFrom, 
+        dateTo, 
+        statusFilter
+    ]);
 
     useEffect(() => {
         fetchStatuses();
@@ -100,7 +128,6 @@ export default function FilesPage() {
 
     const fetchFiles = async () => {
         if (!efilingUserId) return;
-        setLoading(true);
         try {
             // Build query parameters
             const params = new URLSearchParams();
@@ -120,6 +147,8 @@ export default function FilesPage() {
             }
 
             // Apply filters
+            if (debouncedFileId) params.append('file_id', debouncedFileId);
+            if (debouncedSubject) params.append('subject_search', debouncedSubject);
             if (fileIdFilter) params.append('file_id', fileIdFilter);
             if (townFilter !== 'all') params.append('town_id', townFilter);
             if (zoneFilter !== 'all') params.append('zone_id', zoneFilter);

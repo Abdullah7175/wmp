@@ -95,7 +95,6 @@ export default function FilesPage() {
     }, [searchTerm, statusFilter, departmentFilter, districtFilter, townFilter, divisionFilter, zoneFilter, categoryFilter, fileTypeFilter, subjectFilter, fileIdFilter, dateFrom, dateTo]);
 
     const fetchFiles = async () => {
-        setLoading(true);
         try {
             // Build query parameters
             const params = new URLSearchParams();
