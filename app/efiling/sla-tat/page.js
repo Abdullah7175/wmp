@@ -32,6 +32,8 @@ export default function SLAMatrixPage() {
     const [searchTerm, setSearchTerm] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage, setItemsPerPage] = useState(5);
+    const [fromRoleSearch, setFromRoleSearch] = useState('');
+    const [toRoleSearch, setToRoleSearch] = useState('');
 
     const [formData, setFormData] = useState({
         from_role_code: '',
@@ -111,6 +113,8 @@ export default function SLAMatrixPage() {
 
     const handleCreate = () => {
         setEditingEntry(null);
+        setFromRoleSearch('');
+        setToRoleSearch('');
         setFormData({
             from_role_code: '',
             to_role_code: '',
@@ -125,6 +129,8 @@ export default function SLAMatrixPage() {
 
     const handleEdit = (entry) => {
         setEditingEntry(entry);
+        setFromRoleSearch('');
+        setToRoleSearch('');
         setFormData({
             from_role_code: entry.from_role_code || '',
             to_role_code: entry.to_role_code || '',
@@ -282,6 +288,16 @@ export default function SLAMatrixPage() {
         setSearchTerm(e.target.value);
         setCurrentPage(1); // Reset to first page on search
     };
+
+    const filteredFromRoles = roles.filter(role => {
+    const q = fromRoleSearch.toLowerCase();
+    return role.name?.toLowerCase().includes(q) || role.code?.toLowerCase().includes(q);
+    });
+
+    const filteredToRoles = roles.filter(role => {
+        const q = toRoleSearch.toLowerCase();
+        return role.name?.toLowerCase().includes(q) || role.code?.toLowerCase().includes(q);
+    });
 
     if (loading) {
         return (
@@ -537,15 +553,28 @@ export default function SLAMatrixPage() {
                                         <SelectValue placeholder="Select role" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        {roles.length > 0 ? (
-                                            roles.map((role) => (
-                                                <SelectItem key={role.id} value={role.code}>
-                                                    {role.name} ({role.code})
-                                                </SelectItem>
-                                            ))
-                                        ) : (
-                                            <SelectItem value="" disabled>Loading roles...</SelectItem>
-                                        )}
+                                        <div className="p-2 sticky top-0 bg-white z-10 border-b">
+                                            <Input
+                                                placeholder="Search role..."
+                                                value={fromRoleSearch}
+                                                onChange={(e) => setFromRoleSearch(e.target.value)}
+                                                onKeyDown={(e) => e.stopPropagation()}
+                                                className="h-8 text-sm"
+                                            />
+                                        </div>
+                                        <div className="max-h-60 overflow-y-auto">
+                                            {filteredFromRoles.length > 0 ? (
+                                                filteredFromRoles.map((role) => (
+                                                    <SelectItem key={role.id} value={role.code}>
+                                                        {role.name} ({role.code})
+                                                    </SelectItem>
+                                                ))
+                                            ) : (
+                                                <div className="p-3 text-xs text-center text-gray-500">
+                                                    {roles.length === 0 ? "Loading roles..." : "No roles found"}
+                                                </div>
+                                            )}
+                                        </div>
                                     </SelectContent>
                                 </Select>
                             </div>
@@ -559,15 +588,28 @@ export default function SLAMatrixPage() {
                                         <SelectValue placeholder="Select role" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        {roles.length > 0 ? (
-                                            roles.map((role) => (
-                                                <SelectItem key={role.id} value={role.code}>
-                                                    {role.name} ({role.code})
-                                                </SelectItem>
-                                            ))
-                                        ) : (
-                                            <SelectItem value="" disabled>Loading roles...</SelectItem>
-                                        )}
+                                        <div className="p-2 sticky top-0 bg-white z-10 border-b">
+                                            <Input
+                                                placeholder="Search role..."
+                                                value={toRoleSearch}
+                                                onChange={(e) => setToRoleSearch(e.target.value)}
+                                                onKeyDown={(e) => e.stopPropagation()}
+                                                className="h-8 text-sm"
+                                            />
+                                        </div>
+                                        <div className="max-h-60 overflow-y-auto">
+                                            {filteredToRoles.length > 0 ? (
+                                                filteredToRoles.map((role) => (
+                                                    <SelectItem key={role.id} value={role.code}>
+                                                        {role.name} ({role.code})
+                                                    </SelectItem>
+                                                ))
+                                            ) : (
+                                                <div className="p-3 text-xs text-center text-gray-500">
+                                                    {roles.length === 0 ? "Loading roles..." : "No roles found"}
+                                                </div>
+                                            )}
+                                        </div>
                                     </SelectContent>
                                 </Select>
                             </div>
