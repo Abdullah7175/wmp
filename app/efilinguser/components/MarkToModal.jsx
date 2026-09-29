@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
-import { Search, Users, Building2, MapPin, Shield, X, Send, Clock, UsersRound, AlertCircle, Copy } from "lucide-react";
+import { Search, Users, Building2, MapPin, Shield, X, Send, Clock, UsersRound, AlertCircle, Copy, UserCheck} from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useEfilingUser } from "@/context/EfilingUserContext";
 
@@ -327,12 +327,23 @@ export default function MarkToModal({ showMarkToModal, onClose, fileId, fileNumb
                     {error || "No recipients match your search."}
                   </div>
                 ) : (
-                  filteredRecipients.map((recipient) => {
+                  filteredRecipients
+                  .slice()
+                  .sort((a, b) => {
+                    const aIsCreator = fileCreatorId && Number(a.id) === Number(fileCreatorId);
+                    const bIsCreator = fileCreatorId && Number(b.id) === Number(fileCreatorId);
+                    
+                    if (aIsCreator && !bIsCreator) return -1;
+                    if (!aIsCreator && bIsCreator) return 1;
+                    return 0;
+                  })
+                  .map((recipient) => {
                     const selected = selectedIds.includes(recipient.id);
                     const scopeLabel =
                       SCOPE_LABELS[recipient.allowed_level_scope?.toLowerCase?.()] ||
                       recipient.allowed_level_scope;
                     const isTeamMember = recipient.is_team_member;
+                    const isCreator = fileCreatorId && Number(recipient.id) === Number(fileCreatorId);
                     const willStartTAT = ["SE", "CE", "CFO", "COO", "CEO"].includes(
                       (recipient.role_code || "").toUpperCase()
                     );
@@ -364,7 +375,13 @@ export default function MarkToModal({ showMarkToModal, onClose, fileId, fileNumb
                             />
                             <div className="flex-1">
                               <div className="flex items-center gap-2">
-                                <div className="font-medium text-sm text-gray-900">{recipient.user_name}</div>
+                                <div className="font-medium text-2sm text-gray-900">{recipient.user_name}</div>
+                                {isCreator && (
+                                    <Badge variant="secondary" className="text-xs bg-amber-100 text-amber-800 hover:bg-amber-100 border-amber-300">
+                                      <UserCheck className="w-3 h-3 mr-1" />
+                                      File Creator
+                                    </Badge>
+                                )}
                                 {isTeamMember && (
                                   <Badge variant="secondary" className="text-xs">
                                     <UsersRound className="w-3 h-3 mr-1" />
@@ -374,13 +391,13 @@ export default function MarkToModal({ showMarkToModal, onClose, fileId, fileNumb
                               </div>
                               <div className="text-xs text-gray-600 flex items-center gap-2 mt-1 flex-wrap">
                                 {recipient.role_name && (
-                                  <span className="flex items-center gap-1">
+                                  <span className="flex items-center gap-1 text-sm text-gray-900 font-bold">
                                     <Shield className="w-3 h-3" />
                                     {recipient.role_name}
                                   </span>
                                 )}
                                 {recipient.department_name && (
-                                  <span className="flex items-center gap-1">
+                                  <span className="flex items-center gap-1 text-sm text-gray-900 font-bold">
                                     <Building2 className="w-3 h-3" />
                                     {recipient.department_name}
                                   </span>
