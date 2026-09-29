@@ -46,6 +46,8 @@ export default function FilesPage() {
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
+    const [departments, setdepartments] = useState([]);
+
     const [statuses, setStatuses] = useState([]);
     const [myFiles, setMyFiles] = useState([]);
     const [assignedToMe, setAssignedToMe] = useState([]);
@@ -61,6 +63,7 @@ export default function FilesPage() {
     const [fileIdFilter, setFileIdFilter] = useState('');
     const [townFilter, setTownFilter] = useState('all');
     const [zoneFilter, setZoneFilter] = useState('all');
+    const [departmentFilter, setDepartmentFilter] = useState('all');
     const [divisionFilter, setDivisionFilter] = useState('all');
     const [subjectFilter, setSubjectFilter] = useState('');
     const [dateFrom, setDateFrom] = useState('');
@@ -72,7 +75,8 @@ export default function FilesPage() {
     const [filterOptions, setFilterOptions] = useState({
         towns: [],
         zones: [],
-        divisions: []
+        divisions: [],
+        departments: []
     });
   
     const [closedFiles, setClosedFiles] = useState([]);
@@ -111,6 +115,7 @@ export default function FilesPage() {
         townFilter, 
         zoneFilter, 
         divisionFilter, 
+        departmentFilter,
         debouncedSubject, 
         dateFrom, 
         dateTo, 
@@ -119,12 +124,13 @@ export default function FilesPage() {
 
     useEffect(() => {
         fetchStatuses();
+        fetchDepartments();
         fetchFilterOptions();
     }, []);
 
     useEffect(() => {
         setCurrentPage(1);
-    }, [searchTerm, statusFilter, fileIdFilter, townFilter, zoneFilter, divisionFilter, subjectFilter, dateFrom, dateTo, activeTab]);
+    }, [searchTerm, statusFilter, fileIdFilter, townFilter, zoneFilter, divisionFilter,departmentFilter, subjectFilter, dateFrom, dateTo, activeTab]);
 
     const fetchFiles = async () => {
         if (!efilingUserId) return;
@@ -155,6 +161,7 @@ export default function FilesPage() {
             if (divisionFilter !== 'all') params.append('division_id', divisionFilter);
             if (subjectFilter) params.append('subject_search', subjectFilter);
             if (dateFrom) params.append('date_from', dateFrom);
+            if (departmentFilter !== 'all') params.append('department_id', departmentFilter); 
             if (dateTo) params.append('date_to', dateTo);
             if (statusFilter !== 'all') params.append('status_id', statusFilter);
 
@@ -206,7 +213,8 @@ export default function FilesPage() {
                 setFilterOptions({
                     towns: Array.isArray(data.towns) ? data.towns : [],
                     zones: Array.isArray(data.zones) ? data.zones : [],
-                    divisions: Array.isArray(data.divisions) ? data.divisions : []
+                    divisions: Array.isArray(data.divisions) ? data.divisions : [],
+                    departments: Array.isArray(data.departments) ? data.departments : [] 
                 });
             }
         } catch (error) {
@@ -223,6 +231,17 @@ export default function FilesPage() {
             }
         } catch (error) {
             console.error('Error fetching statuses:', error);
+        }
+    };
+    const fetchDepartments = async () => {
+        try {
+            const response = await fetch('/api/efiling/departments');
+            if (response.ok) {
+                const data = await response.json();
+                setdepartments(Array.isArray(data) ? data : []);
+            }
+        } catch (error) {
+            console.error('Error fetching departments:', error);
         }
     };
 
@@ -458,48 +477,16 @@ export default function FilesPage() {
                             </Select>
                         </div>
                         <div>
-                            <Label className="mb-1 block text-sm font-medium">Town</Label>
-                            <Select value={townFilter} onValueChange={setTownFilter}>
+                            <Label className="mb-1 block text-sm font-medium">Department</Label>
+                            <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
                                 <SelectTrigger>
-                                    <SelectValue placeholder="All towns" />
+                                    <SelectValue placeholder="All departments" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="all">All towns</SelectItem>
-                                    {filterOptions.towns.map((town) => (
-                                        <SelectItem key={town.id} value={String(town.id)}>
-                                            {town.name} {town.district_name ? `(${town.district_name})` : ''}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div>
-                            <Label className="mb-1 block text-sm font-medium">Zone</Label>
-                            <Select value={zoneFilter} onValueChange={setZoneFilter}>
-                                <SelectTrigger>
-                                    <SelectValue placeholder="All zones" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">All zones</SelectItem>
-                                    {filterOptions.zones.map((zone) => (
-                                        <SelectItem key={zone.id} value={String(zone.id)}>
-                                            {zone.name}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div>
-                            <Label className="mb-1 block text-sm font-medium">Division</Label>
-                            <Select value={divisionFilter} onValueChange={setDivisionFilter}>
-                                <SelectTrigger>
-                                    <SelectValue placeholder="All divisions" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">All divisions</SelectItem>
-                                    {filterOptions.divisions.map((division) => (
-                                        <SelectItem key={division.id} value={String(division.id)}>
-                                            {division.name}
+                                    <SelectItem value="all">All departments</SelectItem>
+                                    {departments.map((dept) => (
+                                        <SelectItem key={dept.id} value={String(dept.id)}>
+                                            {dept.name}
                                         </SelectItem>
                                     ))}
                                 </SelectContent>
@@ -534,6 +521,7 @@ export default function FilesPage() {
                                 setTownFilter('all');
                                 setZoneFilter('all');
                                 setDivisionFilter('all');
+                                setDepartmentFilter('all');
                                 setSubjectFilter('');
                                 setDateFrom('');
                                 setDateTo('');
