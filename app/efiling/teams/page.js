@@ -544,6 +544,8 @@ export default function TeamsManagement() {
                             <div className="flex justify-end space-x-2">
                                 <Button variant="outline" onClick={() => {
                                     setShowAddDialog(false);
+                                    setManagerSearch('');
+                                    setTeamMemberSearch('');
                                     setFormData({ manager_id: '', team_member_id: '', team_role: '' });
                                 }}>
                                     Cancel
