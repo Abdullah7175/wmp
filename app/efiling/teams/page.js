@@ -130,6 +130,8 @@ export default function TeamsManagement() {
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedManager, setSelectedManager] = useState('');
     const [showAddDialog, setShowAddDialog] = useState(false);
+    const [managerSearch, setManagerSearch] = useState('');
+    const [teamMemberSearch, setTeamMemberSearch] = useState('');
     const [formData, setFormData] = useState({
         manager_id: '',
         team_member_id: '',
@@ -244,6 +246,8 @@ export default function TeamsManagement() {
             });
 
             setFormData({ manager_id: '', team_member_id: '', team_role: '' });
+            setManagerSearch('');
+            setTeamMemberSearch('');
             setShowAddDialog(false);
             fetchTeams();
         } catch (error) {
@@ -302,6 +306,13 @@ export default function TeamsManagement() {
         }
         return true;
     });
+    // Filter managers list based on search term (matches name, role name, or role code)
+    const filteredManagersList = managers.filter(manager => {
+        const q = managerSearch.toLowerCase();
+        return manager.name?.toLowerCase().includes(q) ||
+            manager.role_name?.toLowerCase().includes(q) ||
+            manager.role_code?.toLowerCase().includes(q);
+    });
 
     if (loading) {
         return (
@@ -339,17 +350,36 @@ export default function TeamsManagement() {
                                     value={formData.manager_id}
                                     onValueChange={(value) => {
                                         setFormData({ ...formData, manager_id: value, team_role: '' });
+                                        setTeamMemberSearch('');
                                     }}
                                 >
                                     <SelectTrigger>
                                         <SelectValue placeholder="Select manager" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        {managers.map(manager => (
-                                            <SelectItem key={manager.id} value={String(manager.id)}>
-                                                {manager.name} - {manager.role_name} ({manager.role_code})
-                                            </SelectItem>
-                                        ))}
+                                        {/* Sticky Search Input */}
+                                        <div className="p-2 sticky top-0 bg-white z-10 border-b">
+                                            <Input
+                                                placeholder="Search manager..."
+                                                value={managerSearch}
+                                                onChange={(e) => setManagerSearch(e.target.value)}
+                                                onKeyDown={(e) => e.stopPropagation()}
+                                                className="h-8 text-sm"
+                                            />
+                                        </div>
+                                        <div className="max-h-60 overflow-y-auto">
+                                            {filteredManagersList.length > 0 ? (
+                                                filteredManagersList.map(manager => (
+                                                    <SelectItem key={manager.id} value={String(manager.id)}>
+                                                        {manager.name} - {manager.role_name} ({manager.role_code})
+                                                    </SelectItem>
+                                                ))
+                                            ) : (
+                                                <div className="p-3 text-xs text-center text-gray-500">
+                                                    No managers found
+                                                </div>
+                                            )}
+                                        </div>
                                     </SelectContent>
                                 </Select>
                                 {/* <p className="text-xs text-gray-500 mt-1">
@@ -453,7 +483,13 @@ export default function TeamsManagement() {
                                     );
                                     
                                     return matchesRoleCode || matchesRoleName;
-                                });
+                                }).filter(user => {
+                                        // Apply search input filter
+                                        const q = teamMemberSearch.toLowerCase();
+                                        return user.name?.toLowerCase().includes(q) ||
+                                            user.role_name?.toLowerCase().includes(q) ||
+                                            user.role_code?.toLowerCase().includes(q);
+                                    });
                                 
                                 return (
                                     <div>
@@ -466,17 +502,29 @@ export default function TeamsManagement() {
                                                 <SelectValue placeholder="Select team member" />
                                             </SelectTrigger>
                                             <SelectContent>
-                                                {filteredUsers.length === 0 ? (
-                                                    <div className="px-2 py-1.5 text-sm text-gray-500">
-                                                        No users found in this department with role: {formData.team_role}
-                                                    </div>
-                                                ) : (
-                                                    filteredUsers.map(user => (
-                                                        <SelectItem key={user.id} value={String(user.id)}>
-                                                            {user.name} - {user.role_name} ({user.role_code})
-                                                        </SelectItem>
-                                                    ))
-                                                )}
+                                                {/* Sticky Search Input */}
+                                                <div className="p-2 sticky top-0 bg-white z-10 border-b">
+                                                    <Input
+                                                        placeholder="Search team member..."
+                                                        value={teamMemberSearch}
+                                                        onChange={(e) => setTeamMemberSearch(e.target.value)}
+                                                        onKeyDown={(e) => e.stopPropagation()}
+                                                        className="h-8 text-sm"
+                                                    />
+                                                </div>
+                                                <div className="max-h-60 overflow-y-auto">
+                                                    {filteredUsers.length === 0 ? (
+                                                        <div className="p-3 text-xs text-center text-gray-500">
+                                                            No users found with role: {formData.team_role}
+                                                        </div>
+                                                    ) : (
+                                                        filteredUsers.map(user => (
+                                                            <SelectItem key={user.id} value={String(user.id)}>
+                                                                {user.name} - {user.role_name} ({user.role_code})
+                                                            </SelectItem>
+                                                        ))
+                                                    )}
+                                                </div>
                                             </SelectContent>
                                         </Select>
                                         {filteredUsers.length === 0 && (
