@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { FileText, Download, Filter, BarChart3, Calendar, Clock, CheckCircle, AlertCircle, XCircle } from 'lucide-react';
+import { FileText, Download, Filter, Clock, BarChart3 } from 'lucide-react';
 import { logEfilingUserAction, EFILING_ACTIONS } from '@/lib/efilingUserActionLogger';
 import { useSession } from 'next-auth/react';
 import { Pagination } from '@/components/ui/pagination';
@@ -18,7 +18,11 @@ export default function FileStatusReport() {
     const { toast } = useToast();
 
     const [loading, setLoading] = useState(false);
-    const [files, setFiles] = useState([]);
+    
+    // Separate state for created and marked files
+    const [createdFiles, setCreatedFiles] = useState([]);
+    const [markedFiles, setMarkedFiles] = useState([]);
+
     const [departments, setDepartments] = useState([]);
     const [fileTypes, setFileTypes] = useState([]);
     const [filters, setFilters] = useState({
@@ -27,10 +31,12 @@ export default function FileStatusReport() {
         status: 'all',
         dateRange: 'all'
     });
+
     const { efilingUserId } = useEfilingUser();
-    // Pagination state
-    const [currentPage, setCurrentPage] = useState(1);
-    const [itemsPerPage, setItemsPerPage] = useState(5);
+
+    const itemsPerPage = 4;
+    const [createdPage, setCreatedPage] = useState(1);
+    const [markedPage, setMarkedPage] = useState(1);
 
     useEffect(() => {
         if (efilingUserId) {
@@ -59,23 +65,21 @@ export default function FileStatusReport() {
     };
 
     const loadFiles = async () => {
-        if (!efilingUserId) return; // Guard clause
+        if (!efilingUserId) return;
 
         try {
             setLoading(true);
             
-            // 3. Use the efilingUserId directly from context
             const [createdRes, assignedRes] = await Promise.all([
                 fetch(`/api/efiling/files?created_by=${efilingUserId}`),
                 fetch(`/api/efiling/files?assigned_to=${efilingUserId}`)
             ]);
             
-            const created = createdRes.ok ? await createdRes.json() : { files: [] };
-            const assigned = assignedRes.ok ? await assignedRes.json() : { files: [] };
-            
-            const all = [...(created.files || []), ...(assigned.files || [])];
-            const unique = all.filter((f, i, arr) => i === arr.findIndex(x => x.id === f.id));
-            setFiles(unique);
+            const createdData = createdRes.ok ? await createdRes.json() : { files: [] };
+            const assignedData = assignedRes.ok ? await assignedRes.json() : { files: [] };
+
+            setCreatedFiles(createdData.files || []);
+            setMarkedFiles(assignedData.files || []);
         } catch (error) {
             console.error('Error loading files:', error);
         } finally {
@@ -126,93 +130,105 @@ export default function FileStatusReport() {
 
     const getStatusIcon = (status) => {
         switch (status?.toLowerCase()) {
-            case 'pending':
+            case 'draft':
                 return <Clock className="w-4 h-4" />;
             case 'in_progress':
                 return <BarChart3 className="w-4 h-4" />;
-            case 'completed':
-                return <CheckCircle className="w-4 h-4" />;
-            case 'rejected':
-                return <XCircle className="w-4 h-4" />;
-            case 'on_hold':
-                return <AlertCircle className="w-4 h-4" />;
             default:
                 return <FileText className="w-4 h-4" />;
         }
     };
 
-    const filteredFiles = files.filter(file => {
-        const matchesDepartment = filters.department === 'all' || file.department_id == filters.department;
-        const matchesFileType = filters.fileType === 'all' || file.file_type_id == filters.fileType;
-        const matchesStatus = filters.status === 'all' || file.status === filters.status;
-        
-        let matchesDate = true;
-        if (filters.dateRange !== 'all') {
-            const fileDate = new Date(file.created_at);
-            const today = new Date();
-            const yesterday = new Date(today);
-            yesterday.setDate(yesterday.getDate() - 1);
-            const lastWeek = new Date(today);
-            lastWeek.setDate(lastWeek.getDate() - 7);
-            const lastMonth = new Date(today);
-            lastMonth.setMonth(lastMonth.getMonth() - 1);
+    const filterList = (fileList) => {
+        return fileList.filter(file => {
+            const matchesDepartment = filters.department === 'all' || file.department_id == filters.department;
+            const matchesFileType = filters.fileType === 'all' || file.file_type_id == filters.fileType;
+            const matchesStatus = filters.status === 'all' || file.status_name === filters.status;
+            
+            let matchesDate = true;
+            if (filters.dateRange !== 'all') {
+                const fileDate = new Date(file.created_at);
+                const today = new Date();
+                const yesterday = new Date(today);
+                yesterday.setDate(yesterday.getDate() - 1);
+                const lastWeek = new Date(today);
+                lastWeek.setDate(lastWeek.getDate() - 7);
+                const lastMonth = new Date(today);
+                lastMonth.setMonth(lastMonth.getMonth() - 1);
 
-            switch (filters.dateRange) {
-                case 'today':
-                    matchesDate = fileDate.toDateString() === today.toDateString();
-                    break;
-                case 'yesterday':
-                    matchesDate = fileDate.toDateString() === yesterday.toDateString();
-                    break;
-                case 'lastWeek':
-                    matchesDate = fileDate >= lastWeek;
-                    break;
-                case 'lastMonth':
-                    matchesDate = fileDate >= lastMonth;
-                    break;
+                switch (filters.dateRange) {
+                    case 'today':
+                        matchesDate = fileDate.toDateString() === today.toDateString();
+                        break;
+                    case 'yesterday':
+                        matchesDate = fileDate.toDateString() === yesterday.toDateString();
+                        break;
+                    case 'lastWeek':
+                        matchesDate = fileDate >= lastWeek;
+                        break;
+                    case 'lastMonth':
+                        matchesDate = fileDate >= lastMonth;
+                        break;
+                }
             }
-        }
-        
-        return matchesDepartment && matchesFileType && matchesStatus && matchesDate;
-    });
-
-    // Calculate pagination
-    const totalPages = Math.ceil(filteredFiles.length / itemsPerPage);
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    const endIndex = startIndex + itemsPerPage;
-    const paginatedFiles = filteredFiles.slice(startIndex, endIndex);
-
-    const handlePageChange = (page) => {
-        setCurrentPage(page);
+            
+            return matchesDepartment && matchesFileType && matchesStatus && matchesDate;
+        });
     };
 
-    const handleItemsPerPageChange = (newItemsPerPage) => {
-        setItemsPerPage(newItemsPerPage);
-        setCurrentPage(1);
-    };
+    const filteredCreatedFiles = filterList(createdFiles);
+    const filteredMarkedFiles = filterList(markedFiles);
+
+    // Calculate pagination for Created Files
+    const createdTotalPages = Math.ceil(filteredCreatedFiles.length / itemsPerPage);
+    const createdStartIndex = (createdPage - 1) * itemsPerPage;
+    const paginatedCreatedFiles = filteredCreatedFiles.slice(createdStartIndex, createdStartIndex + itemsPerPage);
+
+    // Calculate pagination for Marked Files
+    const markedTotalPages = Math.ceil(filteredMarkedFiles.length / itemsPerPage);
+    const markedStartIndex = (markedPage - 1) * itemsPerPage;
+    const paginatedMarkedFiles = filteredMarkedFiles.slice(markedStartIndex, markedStartIndex + itemsPerPage);
 
     useEffect(() => {
-        setCurrentPage(1); // Reset to first page when filters change
+        setCreatedPage(1);
+        setMarkedPage(1);
     }, [filters]);
 
+    // CSV Export featuring both sections
     const exportToCSV = () => {
-        const headers = ['File Number', 'Subject', 'Department', 'File Type', 'Status', 'Created Date', 'Current Stage', 'Assigned To'];
-        const csvData = filteredFiles.map(file => [
+        const headers = ['File Number', 'File Subject', 'File Type', 'File Category', 'Last Comment Added By User', 'Currently Marked To', 'File Status'];
+
+        const formatRow = (file) => [
             file.file_number || 'N/A',
             file.subject || 'N/A',
-            file.department_name || 'N/A',
             file.file_type_name || 'N/A',
-            file.status || 'N/A',
-            new Date(file.created_at).toLocaleDateString(),
-            file.current_stage || 'N/A',
-            file.assigned_to_name || 'N/A'
-        ]);
+            file.category_name || file.category || 'N/A',
+            file.user_last_comment || file.user_last_comment || 'N/A',
+            file.current_assignee_user_name || 'N/A',
+            file.status_name || 'N/A'
+        ];
 
-        const csvContent = [headers, ...csvData]
-            .map(row => row.map(cell => `"${cell}"`).join(','))
+        const createdRows = filteredCreatedFiles.map(formatRow);
+        const markedRows = filteredMarkedFiles.map(formatRow);
+
+        let csvLines = [];
+
+        // Section 1: Files Created By Me
+        csvLines.push(['--- FILES CREATED BY ME ---']);
+        csvLines.push(headers);
+        createdRows.forEach(row => csvLines.push(row));
+        csvLines.push([]); // Blank separator line
+
+        // Section 2: Files Marked To Me
+        csvLines.push(['--- FILES MARKED TO ME ---']);
+        csvLines.push(headers);
+        markedRows.forEach(row => csvLines.push(row));
+
+        const csvContent = csvLines
+            .map(row => row.map(cell => `"${cell || ''}"`).join(','))
             .join('\n');
 
-        const blob = new Blob([csvContent], { type: 'text/csv' });
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
@@ -226,25 +242,12 @@ export default function FileStatusReport() {
         });
     };
 
-    const getStats = () => {
-        const total = filteredFiles.length;
-        const pending = filteredFiles.filter(f => f.status?.toLowerCase() === 'pending').length;
-        const inProgress = filteredFiles.filter(f => f.status?.toLowerCase() === 'in_progress').length;
-        const completed = filteredFiles.filter(f => f.status?.toLowerCase() === 'completed').length;
-        const rejected = filteredFiles.filter(f => f.status?.toLowerCase() === 'rejected').length;
-        const onHold = filteredFiles.filter(f => f.status?.toLowerCase() === 'on_hold').length;
-
-        return { total, pending, inProgress, completed, rejected, onHold };
-    };
-
-    const stats = getStats();
-
     return (
         <div className="container mx-auto px-4 py-6">
             <div className="flex justify-between items-center mb-6">
                 <div>
                     <h1 className="text-3xl font-bold text-gray-900">My File Status Report</h1>
-                    <p className="text-gray-600">Track the status and progress of my e-filing documents</p>
+                    <p className="text-gray-600">Track the status and progress of e-filing documents created by or marked to you</p>
                 </div>
                 <Button onClick={() => {
                     if (session?.user?.id) {
@@ -259,78 +262,8 @@ export default function FileStatusReport() {
                     exportToCSV();
                 }} className="flex items-center gap-2">
                     <Download className="w-4 h-4" />
-                    Export My CSV
+                    Export CSV
                 </Button>
-            </div>
-
-            {/* Statistics Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-6 gap-4 mb-6">
-                <Card>
-                    <CardContent className="p-4">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-sm font-medium text-gray-600">My Total Files</p>
-                                <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
-                            </div>
-                            <FileText className="w-8 h-8 text-gray-400" />
-                        </div>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardContent className="p-4">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-sm font-medium text-gray-600">My Pending</p>
-                                <p className="text-2xl font-bold text-yellow-600">{stats.pending}</p>
-                            </div>
-                            <Clock className="w-8 h-8 text-yellow-400" />
-                        </div>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardContent className="p-4">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-sm font-medium text-gray-600">My In Progress</p>
-                                <p className="text-2xl font-bold text-blue-600">{stats.inProgress}</p>
-                            </div>
-                            <BarChart3 className="w-8 h-8 text-blue-400" />
-                        </div>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardContent className="p-4">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-sm font-medium text-gray-600">My Completed</p>
-                                <p className="text-2xl font-bold text-green-600">{stats.completed}</p>
-                            </div>
-                            <CheckCircle className="w-8 h-8 text-green-400" />
-                        </div>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardContent className="p-4">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-sm font-medium text-gray-600">My Rejected</p>
-                                <p className="text-2xl font-bold text-red-600">{stats.rejected}</p>
-                            </div>
-                            <XCircle className="w-8 h-8 text-red-400" />
-                        </div>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardContent className="p-4">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-sm font-medium text-gray-600">My On Hold</p>
-                                <p className="text-2xl font-bold text-orange-600">{stats.onHold}</p>
-                            </div>
-                            <AlertCircle className="w-8 h-8 text-orange-400" />
-                        </div>
-                    </CardContent>
-                </Card>
             </div>
 
             {/* Filters */}
@@ -410,12 +343,12 @@ export default function FileStatusReport() {
                 </CardContent>
             </Card>
 
-            {/* Files Table */}
-            <Card>
+            {/* SECTION 1: Files Created By Me */}
+            <Card className="mb-6">
                 <CardHeader>
-                    <CardTitle>My Files ({filteredFiles.length})</CardTitle>
+                    <CardTitle>Files Created By Me ({filteredCreatedFiles.length})</CardTitle>
                     <CardDescription>
-                        Detailed view of my files with their current status
+                        List of files created by you
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -423,11 +356,10 @@ export default function FileStatusReport() {
                         <div className="text-center py-8">
                             <div className="text-lg">Loading files...</div>
                         </div>
-                    ) : filteredFiles.length === 0 ? (
+                    ) : filteredCreatedFiles.length === 0 ? (
                         <div className="text-center py-8 text-muted-foreground">
-                            <FileText className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-                            <p className="text-lg">No files found</p>
-                            <p className="text-sm">Try adjusting your filters</p>
+                            <FileText className="w-12 h-12 mx-auto mb-2 text-gray-300" />
+                            <p className="text-base">No files created by you found</p>
                         </div>
                     ) : (
                         <div className="overflow-x-auto">
@@ -435,56 +367,120 @@ export default function FileStatusReport() {
                                 <TableHeader>
                                     <TableRow>
                                         <TableHead>File Number</TableHead>
-                                        <TableHead>Subject</TableHead>
-                                        <TableHead>Department</TableHead>
+                                        <TableHead>File Subject</TableHead>
                                         <TableHead>File Type</TableHead>
-                                        <TableHead>Status</TableHead>
-                                        <TableHead>Created Date</TableHead>
-                                        <TableHead>Current Stage</TableHead>
-                                        <TableHead>Assigned To</TableHead>
+                                        <TableHead>File Category</TableHead>
+                                        <TableHead>Last Comment Added by User</TableHead>
+                                        <TableHead>Currently Marked To</TableHead>
+                                        <TableHead>File Status</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {paginatedFiles.map((file) => (
+                                    {paginatedCreatedFiles.map((file) => (
                                         <TableRow key={file.id}>
-                                            <TableCell className="font-medium">
-                                                {file.file_number || 'N/A'}
-                                            </TableCell>
-                                            <TableCell className="max-w-xs truncate">
-                                                {file.subject || 'N/A'}
-                                            </TableCell>
-                                            <TableCell>{file.department_name || 'N/A'}</TableCell>
+                                            <TableCell className="font-medium">{file.file_number || 'N/A'}</TableCell>
+                                            <TableCell className="max-w-xs truncate">{file.subject || 'N/A'}</TableCell>
                                             <TableCell>{file.file_type_name || 'N/A'}</TableCell>
+                                            <TableCell>{file.category_name || file.category || 'N/A'}</TableCell>
+                                            <TableCell className="max-w-xs truncate">{file.user_last_comment || file.user_last_comment || 'N/A'}</TableCell>
+                                            <TableCell>{file.current_assignee_user_name || 'N/A'}</TableCell>
                                             <TableCell>
-                                                <Badge className={getStatusColor(file.status)}>
+                                                <Badge className={getStatusColor(file.status_name)}>
                                                     <div className="flex items-center gap-1">
-                                                        {getStatusIcon(file.status)}
-                                                        {file.status || 'Unknown'}
+                                                        {getStatusIcon(file.status_name)}
+                                                        {file.status_name || 'Unknown'}
                                                     </div>
                                                 </Badge>
                                             </TableCell>
-                                            <TableCell>
-                                                {file.created_at ? new Date(file.created_at).toLocaleDateString() : 'N/A'}
-                                            </TableCell>
-                                            <TableCell>{file.current_stage || 'N/A'}</TableCell>
-                                            <TableCell>{file.assigned_to_name || 'N/A'}</TableCell>
                                         </TableRow>
                                     ))}
                                 </TableBody>
                             </Table>
                         </div>
                     )}
-                    
-                    {/* Pagination */}
-                    {filteredFiles.length > 0 && (
+
+                    {filteredCreatedFiles.length > 0 && (
                         <div className="mt-4">
                             <Pagination
-                                currentPage={currentPage}
-                                totalPages={totalPages}
-                                totalItems={filteredFiles.length}
+                                currentPage={createdPage}
+                                totalPages={createdTotalPages}
+                                totalItems={filteredCreatedFiles.length}
                                 itemsPerPage={itemsPerPage}
-                                onPageChange={handlePageChange}
-                                onItemsPerPageChange={handleItemsPerPageChange}
+                                onPageChange={setCreatedPage}
+                                showItemsPerPageSelector={false}
+                            />
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
+
+            {/* SECTION 2: Files Marked To Me */}
+            <Card>
+                <CardHeader>
+                    <CardTitle>Files Marked To Me ({filteredMarkedFiles.length})</CardTitle>
+                    <CardDescription>
+                        List of files currently or previously marked to you
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    {loading ? (
+                        <div className="text-center py-8">
+                            <div className="text-lg">Loading files...</div>
+                        </div>
+                    ) : filteredMarkedFiles.length === 0 ? (
+                        <div className="text-center py-8 text-muted-foreground">
+                            <FileText className="w-12 h-12 mx-auto mb-2 text-gray-300" />
+                            <p className="text-base">No files marked to you found</p>
+                        </div>
+                    ) : (
+                        <div className="overflow-x-auto">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>File Number</TableHead>
+                                        <TableHead>Created by</TableHead>
+                                        <TableHead>File Subject</TableHead>
+                                        <TableHead>File Type</TableHead>
+                                        <TableHead>File Category</TableHead>
+                                        <TableHead>Last Comment Added by User</TableHead>
+                                        <TableHead>Currently Marked To</TableHead>
+                                        <TableHead>File Status</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {paginatedMarkedFiles.map((file) => (
+                                        <TableRow key={file.id}>
+                                            <TableCell className="font-medium">{file.file_number || 'N/A'}</TableCell>
+                                            <TableCell className="font-medium">{file.creator_user_name || 'N/A'}</TableCell>
+                                            <TableCell className="max-w-xs truncate">{file.subject || 'N/A'}</TableCell>
+                                            <TableCell>{file.file_type_name || 'N/A'}</TableCell>
+                                            <TableCell>{file.category_name || file.category || 'N/A'}</TableCell>
+                                            <TableCell className="max-w-xs truncate">{file.user_last_comment || file.user_last_comment || 'N/A'}</TableCell>
+                                            <TableCell>{file.current_assignee_user_name || file.current_holder || 'N/A'}</TableCell>
+                                            <TableCell>
+                                                <Badge className={getStatusColor(file.status_name)}>
+                                                    <div className="flex items-center gap-1">
+                                                        {getStatusIcon(file.status_name)}
+                                                        {file.status_name || 'Unknown'}
+                                                    </div>
+                                                </Badge>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </div>
+                    )}
+
+                    {filteredMarkedFiles.length > 0 && (
+                        <div className="mt-4">
+                            <Pagination
+                                currentPage={markedPage}
+                                totalPages={markedTotalPages}
+                                totalItems={filteredMarkedFiles.length}
+                                itemsPerPage={itemsPerPage}
+                                onPageChange={setMarkedPage}
+                                showItemsPerPageSelector={false}
                             />
                         </div>
                     )}
