@@ -207,6 +207,57 @@ export default function FileStatusReport() {
         return isNaN(val) ? '0.00' : val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     };
 
+    // ---- Excel layout helpers -------------------------------------------------
+    const EMU_PER_PX = 9525;
+
+    // Approximate Excel column width (chars) -> pixels at 100% zoom
+    const excelColWidthToPx = (width) => Math.round((width || 8.43) * 7 + 5);
+
+    // Approximate rendered width (px) of single-line bold uppercase text
+    const estimateTitleWidthPx = (text, fontSizePt) => String(text || '').length * fontSizePt * 0.66;
+
+    // Estimate how many lines a text needs in a wrapped cell (greedy word wrap).
+    // Uppercase characters are wider, so they are weighted heavier. Slightly conservative
+    // on purpose so text is never clipped.
+    const estimateWrappedLines = (text, colWidthChars) => {
+        const value = String(text ?? '');
+        const maxUnits = Math.max(1, (colWidthChars - 2) * 0.95);
+        const unitsOf = (str) => [...str].reduce((sum, ch) => sum + (/[A-Z]/.test(ch) ? 1.25 : 1), 0);
+
+        let lines = 0;
+        value.split(/\r?\n/).forEach((paragraph) => {
+            let current = 0;
+            let paragraphLines = 1;
+            paragraph.split(/\s+/).filter(Boolean).forEach((word) => {
+                const wordUnits = unitsOf(word);
+                if (wordUnits > maxUnits) {
+                    // Very long word: starts on a new line and breaks across several
+                    if (current > 0) paragraphLines += 1;
+                    const wordLines = Math.ceil(wordUnits / maxUnits);
+                    paragraphLines += wordLines - 1;
+                    current = wordUnits - (wordLines - 1) * maxUnits;
+                } else if (current === 0) {
+                    current = wordUnits;
+                } else if (current + 1 + wordUnits <= maxUnits) {
+                    current += 1 + wordUnits;
+                } else {
+                    paragraphLines += 1;
+                    current = wordUnits;
+                }
+            });
+            lines += paragraphLines;
+        });
+        return Math.max(1, lines);
+    };
+
+    // Row height (points) needed to fully show wrapped text (Calibri 10 => ~13pt per line)
+    const MIN_ROW_HEIGHT = 24;
+    const MAX_ROW_HEIGHT = 409; // Excel hard limit
+    const calcWrappedRowHeight = (text, colWidthChars) => {
+        const lines = estimateWrappedLines(text, colWidthChars);
+        return Math.min(MAX_ROW_HEIGHT, Math.max(MIN_ROW_HEIGHT, lines * 13 + 8));
+    };
+
     // Excel Export featuring header logo, report titles, and multi-sheet structure
     const exportToExcel = async () => {
         try {
@@ -251,16 +302,45 @@ export default function FileStatusReport() {
                 subTitle.font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FF4B5563' } };
                 subTitle.alignment = { vertical: 'middle', horizontal: 'center' };
 
-                // Add Header Logo Image directly aligned with top text line
+                // Add Header Logo Image placed immediately to the left of the centered title text
                 if (imageBuffer) {
                     const imageId = workbook.addImage({
                         buffer: imageBuffer,
                         extension: 'png',
                     });
 
+                    const LOGO_SIZE_PX = 55;
+                    const LOGO_GAP_PX = 10;
+                    const colPx = columns.map((col) => excelColWidthToPx(col.width));
+
+                    // Title/subtitle are merged across columns B:H (index 1..7) and centered
+                    const mergedStartPx = colPx[0];
+                    const mergedWidthPx = colPx.slice(1, 8).reduce((sum, w) => sum + w, 0);
+                    const textWidthPx = Math.max(
+                        estimateTitleWidthPx(mainTitle.value, 16),
+                        estimateTitleWidthPx(subTitle.value, 11)
+                    );
+
+                    // Left edge of the widest heading line, minus logo width and gap
+                    let logoLeftPx = mergedStartPx + (mergedWidthPx - textWidthPx) / 2 - LOGO_SIZE_PX - LOGO_GAP_PX;
+                    logoLeftPx = Math.max(logoLeftPx, 5);
+
+                    // Convert absolute pixel offset into (column, offset-within-column)
+                    let nativeCol = 0;
+                    let remainingPx = logoLeftPx;
+                    while (nativeCol < colPx.length - 1 && remainingPx >= colPx[nativeCol]) {
+                        remainingPx -= colPx[nativeCol];
+                        nativeCol += 1;
+                    }
+
                     worksheet.addImage(imageId, {
-                        tl: { col: 0.100, row: 0.2 },
-                        ext: { width: 55, height: 55 }
+                        tl: {
+                            nativeCol,
+                            nativeColOff: Math.round(remainingPx * EMU_PER_PX),
+                            nativeRow: 0,
+                            nativeRowOff: 32000
+                        },
+                        ext: { width: LOGO_SIZE_PX, height: LOGO_SIZE_PX }
                     });
                 }
 
@@ -268,7 +348,7 @@ export default function FileStatusReport() {
 
                 // Section Header
                 const sectionRow = worksheet.addRow([sectionTitle]);
-                worksheet.mergeCells(`A${sectionRow.number}:H${sectionRow.number}`);
+                worksheet.mergeCells(sectionRow.number, 1, sectionRow.number, columns.length); // span all table columns (A -> last column)
                 const sectionCell = sectionRow.getCell(1);
                 sectionCell.font = { name: 'Calibri', size: 13, bold: true, color: { argb: 'FFFFFFFF' } };
                 sectionCell.fill = {
@@ -301,7 +381,9 @@ export default function FileStatusReport() {
                 // Data Rows with text wrapping on Subject
                 rowsData.forEach((data, index) => {
                     const row = worksheet.addRow(data);
-                    row.height = 24;
+                    // Auto-fit row height to the wrapped subject text (column width stays fixed)
+                    const subjectColWidth = columns[subjectColIndex - 1]?.width || 40;
+                    row.height = calcWrappedRowHeight(data[subjectColIndex - 1], subjectColWidth);
                     row.eachCell((cell, colNumber) => {
                         cell.font = { name: 'Calibri', size: 10 };
 
@@ -394,7 +476,7 @@ export default function FileStatusReport() {
                 file.current_assignee_user_name || file.current_holder || 'N/A',
                 file.status_name || 'N/A'
             ]);
-            buildSheet('Marked To Me', `FILES MARKED TO ME (Total: ${filteredMarkedFiles.length})`, markedCols, markedHeaders, markedRows, 4);
+            buildSheet('Marked To Me', `FILES MARKED TO ME (Total: ${filteredMarkedFiles.length})`, markedCols, markedHeaders, markedRows, 5);
 
             // Generate and Download Excel File
             const buffer = await workbook.xlsx.writeBuffer();
@@ -494,11 +576,9 @@ export default function FileStatusReport() {
                                 </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="all">All Statuses</SelectItem>
-                                    <SelectItem value="pending">Pending</SelectItem>
-                                    <SelectItem value="in_progress">In Progress</SelectItem>
-                                    <SelectItem value="completed">Completed</SelectItem>
-                                    <SelectItem value="rejected">Rejected</SelectItem>
-                                    <SelectItem value="on_hold">On Hold</SelectItem>
+                                    <SelectItem value="Draft">Draft</SelectItem>
+                                    <SelectItem value="In Progress">In Progress</SelectItem>
+                                    <SelectItem value="Closed">Closed</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
