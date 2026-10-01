@@ -215,6 +215,8 @@ export async function GET(request) {
 
                            COALESCE(ab.designation, 'Unassigned') AS assigned_to_name,
                            COALESCE(fc.proposed_estimated_cost, 0) AS costing,
+                           fc.budget_head_no as budget_head,
+
                            cr_users.name AS created_by_name,
                            cr_users.name AS creator_user_name
                     FROM efiling_files f
@@ -320,6 +322,7 @@ export async function GET(request) {
                        s.name as status_name, s.code as status_code, s.color as status_color,
                        COALESCE(ab.designation, 'Unassigned') as assigned_to_name,
                        COALESCE(fc.proposed_estimated_cost, 0) AS costing,
+                       fc.budget_head_no as budget_head,
                        r.name as assigned_to_role_name,
                        cr_users.name as creator_user_name,
                        curr_users.name as current_assignee_user_name,
