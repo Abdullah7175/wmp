@@ -51,7 +51,7 @@ export async function GET(request) {
     const date_from = searchParams.get('date_from'); // Date string
     const date_to = searchParams.get('date_to'); // Date string
     
-    let page = parseInt(searchParams.get('page') || '1');
+   
     
     // Add authentication check for general access
     try {
@@ -198,7 +198,7 @@ export async function GET(request) {
                     console.error('ACL check error:', aclErr);
                     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
                 }
-
+                
                 // Now let's try the full query with JOINs
                 const fullQuery = `
                     SELECT f.*, 
@@ -214,10 +214,9 @@ export async function GET(request) {
                            cost.revised_estimate_amount,
 
                            COALESCE(ab.designation, 'Unassigned') AS assigned_to_name,
+                           COALESCE(fc.proposed_estimated_cost, 0) AS costing,
                            cr_users.name AS created_by_name,
                            cr_users.name AS creator_user_name
-
-                           ${hasCommentsTable ? `lc.user_last_comment,` : `NULL as user_last_comment,`}
                     FROM efiling_files f
                     LEFT JOIN efiling_file_categories c ON f.category_id = c.id
                     LEFT JOIN efiling_departments d ON f.department_id = d.id
@@ -254,8 +253,6 @@ export async function GET(request) {
             let hasSlaPaused = false;
             let hasSlaAccumulatedHours = false;
             let hasSlaPauseCount = false;
-            let hasCommentsTable = false;
-
             try {
                 const [signaturesCheck, fileTypesCheck, slaDeadlineCheck, slaPausedCheck, slaAccumulatedHoursCheck, slaPauseCountCheck] = await Promise.all([
                     client.query(`
@@ -303,14 +300,7 @@ export async function GET(request) {
                             AND table_name = 'efiling_files'
                             AND column_name = 'sla_pause_count'
                         );
-                    `),
-                    client.query(`
-                    SELECT EXISTS (
-                        SELECT FROM information_schema.tables 
-                        WHERE table_schema = 'public' 
-                        AND table_name = 'efiling_document_comments'
-                    );
-                `)
+                    `)
                 ]);
                 hasDocumentSignaturesTable = signaturesCheck.rows[0]?.exists || false;
                 hasFileTypesTable = fileTypesCheck.rows[0]?.exists || false;
@@ -318,7 +308,6 @@ export async function GET(request) {
                 hasSlaPaused = slaPausedCheck.rows[0]?.exists || false;
                 hasSlaAccumulatedHours = slaAccumulatedHoursCheck.rows[0]?.exists || false;
                 hasSlaPauseCount = slaPauseCountCheck.rows[0]?.exists || false;
-                hasCommentsTable = commentsCheck.rows[0]?.exists || false;
             } catch (checkError) {
                 console.warn('Could not check for optional tables/columns:', checkError.message);
             }
@@ -330,6 +319,7 @@ export async function GET(request) {
                        d.name as department_name,
                        s.name as status_name, s.code as status_code, s.color as status_color,
                        COALESCE(ab.designation, 'Unassigned') as assigned_to_name,
+                       COALESCE(fc.proposed_estimated_cost, 0) AS costing,
                        r.name as assigned_to_role_name,
                        cr_users.name as creator_user_name,
                        curr_users.name as current_assignee_user_name,
@@ -341,7 +331,6 @@ export async function GET(request) {
                        ROUND(EXTRACT(EPOCH FROM (f.sla_deadline - NOW()))/60.0) as minutes_remaining,` : `NULL as sla_deadline,
                        false as is_sla_breached,
                        NULL as minutes_remaining,`}
-                       ${hasCommentsTable ? `lc.user_last_comment,` : `NULL as user_last_comment,`}
                        ${hasSlaPaused ? `f.sla_paused,` : `false as sla_paused,`}
                        ${hasSlaAccumulatedHours ? `f.sla_accumulated_hours,` : `0 as sla_accumulated_hours,`}
                        ${hasSlaPauseCount ? `f.sla_pause_count,` : `0 as sla_pause_count,`}
@@ -355,6 +344,7 @@ export async function GET(request) {
                 LEFT JOIN efiling_file_categories c ON f.category_id = c.id
                 LEFT JOIN efiling_departments d ON f.department_id = d.id
                 LEFT JOIN efiling_file_status s ON f.status_id = s.id
+                LEFT JOIN efiling_files_costing fc ON f.id = fc.file_id
                 ${hasFileTypesTable ? `LEFT JOIN efiling_file_types ft ON f.file_type_id = ft.id` : ''}
                 LEFT JOIN efiling_users ab ON f.assigned_to = ab.id
                 LEFT JOIN efiling_roles r ON ab.efiling_role_id = r.id
@@ -368,15 +358,6 @@ export async function GET(request) {
                     FROM efiling_document_signatures
                     ORDER BY file_id, "timestamp" DESC
                 ) ls ON ls.file_id = f.id` : ''}
-
-                ${hasCommentsTable ? `LEFT JOIN (
-                SELECT DISTINCT ON (file_id) 
-                    file_id, 
-                    text AS user_last_comment
-                FROM efiling_document_comments
-                WHERE user_id = ${parseInt(currentUserId, 10)}
-                ORDER BY file_id, timestamp DESC, id DESC
-            ) lc ON lc.file_id = f.id` : ''}
             `;
             const params = [];
             const conditions = [];
@@ -539,7 +520,7 @@ export async function GET(request) {
 
             query += ` ORDER BY f.id, f.created_at DESC`;
             
-          
+           
             
             console.log('Final query:', query);
             console.log('Query parameters:', params);
