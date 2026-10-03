@@ -1938,7 +1938,7 @@ const handleDeleteComment = async (commentId) => {
                                                     </div>
                                                 ) : null}
                                                 <div className="print-signature-details">
-                                                    <div><strong>{s.user_name}</strong> <span style={{ color: '#666', fontWeight: 'normal' }}>({s.user_role})</span></div>
+                                                    <div><strong>{s.user_name}</strong> <span style={{ color: '#666', fontWeight: 'normal' }}>({s.user_designation})</span></div>
                                                     {!shouldHideTimestamp && (
                                                         <div>{formatDate(s.timestamp)}</div>
                                                     )}
