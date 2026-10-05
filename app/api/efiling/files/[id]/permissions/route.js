@@ -174,7 +174,6 @@ export async function GET(request, { params }) {
                                  userRoleCode === 'ADLFA' ||
                                  userRoleCode === 'IAO-II' ||
                                  userRoleCode.includes('IAO-II') ||
-                                 isBudgetBilling ||
                                  userRoleCode.startsWith('SE_') || 
                                  userRoleCode.startsWith('CE_') ||
                                  userRoleCode.startsWith('DCE_') ||
