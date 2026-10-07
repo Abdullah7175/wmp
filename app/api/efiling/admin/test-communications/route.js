@@ -108,16 +108,18 @@ export async function POST(request) {
             details: {
                 channel: 'email',
                 email: trimmedEmail,
-                success: sent,
-                error: sent ? null : 'Failed to send email',
+                success: Boolean(sent?.success),
+                error: sent?.success ? null : (sent?.error || 'Failed to send email'),
             },
         }).catch(() => {});
 
-        if (!sent) {
+        if (!sent?.success) {
             return NextResponse.json(
                 {
                     success: false,
-                    error: 'Failed to send email. Check EMAIL_PASSWORD and mail server (efiling@kwsc.gos.pk).',
+                    error: sent?.error
+                        ? `Failed to send email (${sent.code || 'SMTP'}): ${sent.error}. Check EMAIL_PASSWORD and mail.kwsc.gos.pk:587.`
+                        : 'Failed to send email. Check EMAIL_PASSWORD and mail server (efiling@kwsc.gos.pk:587).',
                 },
                 { status: 500 }
             );
