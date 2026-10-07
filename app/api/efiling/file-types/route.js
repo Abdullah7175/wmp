@@ -351,7 +351,8 @@ export async function PUT(request) {
             return NextResponse.json({ error: 'Forbidden - Admin access required' }, { status: 403 });
         }
         const body = await request.json();
-        const { id, name, description, code, requires_approval, department_id, can_create_roles, sla_matrix_id, max_approval_level } = body;
+        const { id, name, description, code, category_id, categoryId, requires_approval, department_id, can_create_roles, sla_matrix_id, max_approval_level } = body;
+        const finalCategoryId = category_id || categoryId || null;
         const ipAddress = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip');
         const userAgent = request.headers.get('user-agent');
 
@@ -414,8 +415,9 @@ export async function PUT(request) {
                 can_create_roles = COALESCE($6, can_create_roles),
                 sla_matrix_id = $7,
                 max_approval_level = COALESCE($8, max_approval_level),
+                category_id = COALESCE($9, category_id),
                 updated_at = NOW()
-            WHERE id = $9
+            WHERE id = $10
             RETURNING *
         `, [
             name,
@@ -426,6 +428,7 @@ export async function PUT(request) {
             Array.isArray(can_create_roles) ? JSON.stringify(can_create_roles) : (typeof can_create_roles === 'string' ? can_create_roles : null),
             finalSlaMatrixId,
             max_approval_level,
+            finalCategoryId,
             id
         ]);
 

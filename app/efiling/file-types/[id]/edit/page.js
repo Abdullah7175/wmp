@@ -18,6 +18,7 @@ export default function EditFileType() {
     const { toast } = useToast();
     const [loading, setLoading] = useState(false);
     const [initialLoading, setInitialLoading] = useState(true);
+    const [categories, setCategories] = useState([]);
     const [departments, setDepartments] = useState([]);
     const [roles, setRoles] = useState([]);
     const [slaMatrixEntries, setSlaMatrixEntries] = useState([]);
@@ -32,6 +33,7 @@ export default function EditFileType() {
         code: '',
         description: '',
         department_id: '',
+        category_id: '',
         requires_approval: false,
         auto_assign: false,
         workflow_template_id: '',
@@ -55,7 +57,7 @@ export default function EditFileType() {
 
     const loadDependencies = async () => {
         try {
-            await Promise.all([loadDepartments(), loadRoles()]);
+            await Promise.all([loadDepartments(), loadRoles(), loadCategories()]);
         } catch (error) {
             console.error('Error loading dependencies:', error);
         }
@@ -73,6 +75,7 @@ export default function EditFileType() {
                     code: fileType.code || '',
                     description: fileType.description || '',
                     department_id: fileType.department_id || null,
+                    category_id: fileType.category_id || fileType.categoryId || null,
                     requires_approval: fileType.requires_approval || false,
                     auto_assign: fileType.auto_assign || false,
                     workflow_template_id: fileType.workflow_template_id || '',
@@ -135,6 +138,17 @@ export default function EditFileType() {
         }
     };
 
+    const loadCategories = async () => {
+    try {
+        const response = await fetch('/api/efiling/categories?is_active=true');
+        if (response.ok) {
+            const data = await response.json();
+            setCategories(Array.isArray(data) ? data : data.categories || []);
+        }
+    } catch (error) {
+        console.error('Error loading categories:', error);
+    }
+    };
     const loadSlaMatrixEntries = async (departmentId = null) => {
         try {
             let url = '/api/efiling/sla?active_only=true';
@@ -205,6 +219,7 @@ export default function EditFileType() {
             const requestBody = {
                 ...formData,
                 id: params.id,
+                category_id: formData.category_id,
                 can_create_roles: selectedCreators,
                 sla_matrix_id: validSlaIds.length > 0 ? validSlaIds : null
             };
@@ -300,9 +315,7 @@ export default function EditFileType() {
                                     onValueChange={(value) => handleInputChange('department_id', value === "none" ? null : parseInt(value, 10))}
                                 >
                                     <SelectTrigger>
-                                        <SelectValue placeholder="Select department">
-                                            {formData.department_id ? departments.find(d => d.id == formData.department_id)?.name : "No Department"}
-                                        </SelectValue>
+                                        <SelectValue placeholder="Select department" />
                                     </SelectTrigger>
                                     <SelectContent>
                                         <SelectItem value="none">No Department</SelectItem>
@@ -312,7 +325,7 @@ export default function EditFileType() {
                                             </SelectItem>
                                         ))}
                                     </SelectContent>
-                                </Select>
+                                </Select> 
                             </div>
 
                             <div>
@@ -326,6 +339,28 @@ export default function EditFileType() {
                                     <SelectContent>
                                         <SelectItem value="true">Active</SelectItem>
                                         <SelectItem value="false">Inactive</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                                <Label htmlFor="category_id">Category *</Label>
+                                <Select 
+                                    value={formData.category_id ? formData.category_id.toString() : "none"} 
+                                    onValueChange={(value) => handleInputChange('category_id', value === "none" ? null : parseInt(value, 10))}
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Select category" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="none">Select Category</SelectItem>
+                                        {categories.map((cat) => (
+                                            <SelectItem key={cat.id} value={cat.id.toString()}>
+                                                {cat.name}
+                                            </SelectItem>
+                                        ))}
                                     </SelectContent>
                                 </Select>
                             </div>
