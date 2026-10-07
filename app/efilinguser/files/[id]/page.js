@@ -105,8 +105,10 @@ export default function FileDetail() {
                 const res = await fetch(`/api/efiling/users/${targetUserId}`);
                 if (res.ok) {
                     const data = await res.json();
-                    const code = (data.role_code || data.role_name || '').toString().toUpperCase();
-                    setUserRole(data.role_name || '');
+                    // Extract actual user object from data.user or fallback to data
+                    const userObj = data.user || data;
+                    const code = (userObj.role_code || userObj.role_name || '').toString().toUpperCase();
+                    setUserRole(userObj.role_name || '');
                     setUserRoleCode(code);
                 }
             }
@@ -1767,18 +1769,16 @@ const handleDeleteComment = async (commentId) => {
                                         </div>
                                     </div>
                                 </div>
-{/* TSO / Secretary Recommendation for CEO Section */}
+                                {/* TSO / Secretary Recommendation for CEO Section */}
                                 {(() => {
                                     const activeCode = (userRoleCode || '').toString().toUpperCase();
-                                    const sessionRoleStr = (session?.user?.role || '').toString().toUpperCase();
+                                    const activeRoleName = (userRole || '').toString().toUpperCase();
                                     
-                                    // Checks role_code from user profile, permissions, or session role string
+                                    // Checks if role_code or role_name contains TSO or TSO_CEO_SEC
                                     const isTsoUser = 
-                                        activeCode === 'TSO_CEO_SEC' || 
-                                        activeCode === 'TSO_CEO' ||
-                                        activeCode.includes('TSO') ||
-                                        sessionRoleStr === '4' ||
-                                        sessionRoleStr === 'TSO_CEO_SEC';
+                                        activeCode === 'TSO_CEO_SEC' ;
+
+                                    console.log('Current user role code:', userRoleCode, '| isTsoUser:', isTsoUser);
 
                                     if (!isTsoUser) return null;
 

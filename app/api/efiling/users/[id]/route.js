@@ -63,7 +63,8 @@ export async function GET(request, { params }) {
                     eu.subtown_id,
                     eu.division_id,
                     d.name as department_name,
-                    r.name as role_name
+                    r.name as role_name,
+                    r.code as role_code
                 FROM users u
                 JOIN efiling_users eu ON u.id = eu.user_id
                 LEFT JOIN efiling_departments d ON eu.department_id = d.id
