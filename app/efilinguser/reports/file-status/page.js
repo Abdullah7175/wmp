@@ -71,16 +71,26 @@ export default function FileStatusReport() {
         try {
             setLoading(true);
             
-            const [createdRes, assignedRes] = await Promise.all([
+            const [createdRes, assignedRes, historyRes] = await Promise.all([
                 fetch(`/api/efiling/files?created_by=${efilingUserId}`),
-                fetch(`/api/efiling/files?assigned_to=${efilingUserId}`)
+                fetch(`/api/efiling/files?assigned_to=${efilingUserId}`),
+                // Every file ever marked (MARK_TO) to the logged-in user, from efiling_file_movements
+                fetch('/api/efiling/files/marked-history')
             ]);
             
             const createdData = createdRes.ok ? await createdRes.json() : { files: [] };
             const assignedData = assignedRes.ok ? await assignedRes.json() : { files: [] };
+            const historyData = historyRes.ok ? await historyRes.json() : { files: [] };
+
+            // History has one row per marking (a file marked to this user several times appears
+            // several times, each with its own Marked By / Marked On). Currently assigned files
+            // that have no MARK_TO movement are kept so nothing from the old list is lost.
+            const historyFiles = historyData.files || [];
+            const historyFileIds = new Set(historyFiles.map((f) => f.id));
+            const currentOnlyFiles = (assignedData.files || []).filter((f) => !historyFileIds.has(f.id));
 
             setCreatedFiles(createdData.files || []);
-            setMarkedFiles(assignedData.files || []);
+            setMarkedFiles([...historyFiles, ...currentOnlyFiles]);
         } catch (error) {
             console.error('Error loading files:', error);
         } finally {
@@ -140,7 +150,8 @@ export default function FileStatusReport() {
         }
     };
 
-    const filterList = (fileList) => {
+    // dateField: which date the Date Range filter applies to (created_at for created files, marked_on for marked files)
+    const filterList = (fileList, dateField = 'created_at') => {
         return fileList.filter(file => {
             const matchesDepartment = filters.department === 'all' || file.department_id == filters.department;
             const matchesFileType = filters.fileType === 'all' || file.file_type_id == filters.fileType;
@@ -148,7 +159,7 @@ export default function FileStatusReport() {
             
             let matchesDate = true;
             if (filters.dateRange !== 'all') {
-                const fileDate = new Date(file.created_at);
+                const fileDate = new Date(file[dateField]);
                 const today = new Date();
                 const yesterday = new Date(today);
                 yesterday.setDate(yesterday.getDate() - 1);
@@ -177,8 +188,8 @@ export default function FileStatusReport() {
         });
     };
 
-    const filteredCreatedFiles = filterList(createdFiles);
-    const filteredMarkedFiles = filterList(markedFiles);
+    const filteredCreatedFiles = filterList(createdFiles, 'created_at');
+    const filteredMarkedFiles = filterList(markedFiles, 'marked_on');
 
     // Total Costing sum calculation for Created Files
     const totalCreatedCosting = filteredCreatedFiles.reduce((sum, file) => {
@@ -207,6 +218,15 @@ export default function FileStatusReport() {
         return isNaN(val) ? '0.00' : val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     };
 
+    // Format a timestamp as e.g. "01 Oct 2026"
+    const formatDate = (value) => {
+        if (!value) return 'N/A';
+        const d = new Date(value);
+        return isNaN(d.getTime())
+            ? 'N/A'
+            : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+    };
+
     // ---- Excel layout helpers -------------------------------------------------
     const EMU_PER_PX = 9525;
 
@@ -216,13 +236,33 @@ export default function FileStatusReport() {
     // Approximate rendered width (px) of single-line bold uppercase text
     const estimateTitleWidthPx = (text, fontSizePt) => String(text || '').length * fontSizePt * 0.66;
 
+    // Approximate rendered width of a string in "column character units" (uppercase is wider)
+    const estimateTextUnits = (str) => [...String(str ?? '')].reduce((sum, ch) => sum + (/[A-Z]/.test(ch) ? 1.25 : 1), 0);
+
+    // Auto-fit column widths to the longest cell (header included), never narrower than the
+    // original width. MAX_COL_WIDTH keeps printouts compact: anything longer wraps onto more lines.
+    const MAX_COL_WIDTH = 36;
+    const fitColumnWidths = (baseColumns, headers, rowsData, fixedColIndexes = []) =>
+        baseColumns.map((col, i) => {
+            if (fixedColIndexes.includes(i + 1)) return col;
+            const longestCell = rowsData.reduce((max, row) => {
+                const longestLine = String(row[i] ?? '')
+                    .split(/\r?\n/)
+                    .reduce((m, line) => Math.max(m, estimateTextUnits(line)), 0);
+                return Math.max(max, longestLine);
+            }, 0);
+            const headerUnits = estimateTextUnits(headers[i]) * 1.15; // header is bold 11pt
+            const needed = Math.ceil(Math.max(longestCell, headerUnits)) + 2;
+            return { ...col, width: Math.min(MAX_COL_WIDTH, Math.max(col.width || 8.43, needed)) };
+        });
+
     // Estimate how many lines a text needs in a wrapped cell (greedy word wrap).
     // Uppercase characters are wider, so they are weighted heavier. Slightly conservative
     // on purpose so text is never clipped.
     const estimateWrappedLines = (text, colWidthChars) => {
         const value = String(text ?? '');
         const maxUnits = Math.max(1, (colWidthChars - 2) * 0.95);
-        const unitsOf = (str) => [...str].reduce((sum, ch) => sum + (/[A-Z]/.test(ch) ? 1.25 : 1), 0);
+        const unitsOf = estimateTextUnits;
 
         let lines = 0;
         value.split(/\r?\n/).forEach((paragraph) => {
@@ -282,8 +322,11 @@ export default function FileStatusReport() {
             }).toUpperCase();
 
             // Helper to build a styled sheet
-            const buildSheet = (sheetName, sectionTitle, columns, headers, rowsData, subjectColIndex) => {
+            const buildSheet = (sheetName, sectionTitle, baseColumns, headers, rowsData, subjectColIndex) => {
                 const worksheet = workbook.addWorksheet(sheetName);
+
+                // Widths grow with the longest content (subject column stays fixed; it wraps instead)
+                const columns = fitColumnWidths(baseColumns, headers, rowsData, [subjectColIndex]);
 
                 // Set Column Widths
                 worksheet.columns = columns;
@@ -381,17 +424,14 @@ export default function FileStatusReport() {
                 // Data Rows with text wrapping on Subject
                 rowsData.forEach((data, index) => {
                     const row = worksheet.addRow(data);
-                    // Auto-fit row height to the wrapped subject text (column width stays fixed)
-                    const subjectColWidth = columns[subjectColIndex - 1]?.width || 40;
-                    row.height = calcWrappedRowHeight(data[subjectColIndex - 1], subjectColWidth);
-                    row.eachCell((cell, colNumber) => {
+                    // Auto-fit row height to the tallest wrapped cell in the row
+                    row.height = Math.max(
+                        ...data.map((value, i) => calcWrappedRowHeight(value, columns[i]?.width || 10))
+                    );
+                    row.eachCell((cell) => {
                         cell.font = { name: 'Calibri', size: 10 };
 
-                        if (colNumber === subjectColIndex) {
-                            cell.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
-                        } else {
-                            cell.alignment = { vertical: 'middle', horizontal: 'left' };
-                        }
+                        cell.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
 
                         cell.fill = {
                             type: 'pattern',
@@ -452,6 +492,8 @@ export default function FileStatusReport() {
 
                 { width: 20 }, // Costing
                 { width: 28 }, // Currently Marked To
+                { width: 24 }, // Marked By
+                { width: 16 }, // Marked On
                 { width: 18 }  // File Status
             ];
             const markedHeaders = [
@@ -463,6 +505,8 @@ export default function FileStatusReport() {
                 'Budget Head',
                 'Costing',
                 'Currently Marked To',
+                'Marked To Me By',
+                'Marked To Me On',
                 'File Status'
             ];
             const markedRows = filteredMarkedFiles.map(file => [
@@ -474,6 +518,8 @@ export default function FileStatusReport() {
                 file.budget_head || 'N/A',
                 formatCurrency(file.costing || file.proposed_estimated_cost),
                 file.current_assignee_user_name || file.current_holder || 'N/A',
+                file.marked_by_name || 'N/A',
+                formatDate(file.marked_on),
                 file.status_name || 'N/A'
             ]);
             buildSheet('Marked To Me', `FILES MARKED TO ME (Total: ${filteredMarkedFiles.length})`, markedCols, markedHeaders, markedRows, 5);
@@ -712,12 +758,14 @@ export default function FileStatusReport() {
                                         <TableHead>Budget Head</TableHead>
                                         <TableHead>Costing</TableHead>
                                         <TableHead>Currently Marked To</TableHead>
+                                        <TableHead>Marked To Me By</TableHead>
+                                        <TableHead>Marked To Me On</TableHead>
                                         <TableHead>File Status</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
                                     {paginatedMarkedFiles.map((file) => (
-                                        <TableRow key={file.id}>
+                                        <TableRow key={file.movement_id ?? file.id}>
                                             <TableCell className="font-medium">{file.file_number || 'N/A'}</TableCell>
                                             <TableCell className="font-medium">{file.creator_user_name || 'N/A'}</TableCell>
                                             <TableCell>{file.department_name || 'N/A'}</TableCell>
@@ -729,6 +777,8 @@ export default function FileStatusReport() {
                                                 PKR {formatCurrency(file.costing || file.proposed_estimated_cost)}
                                             </TableCell>
                                             <TableCell>{file.current_assignee_user_name || file.current_holder || 'N/A'}</TableCell>
+                                            <TableCell>{file.marked_by_name || 'N/A'}</TableCell>
+                                            <TableCell>{formatDate(file.marked_on)}</TableCell>
                                             <TableCell>
                                                 <Badge className={getStatusColor(file.status_name)}>
                                                     <div className="flex items-center gap-1">
