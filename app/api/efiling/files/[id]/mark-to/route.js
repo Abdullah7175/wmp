@@ -52,6 +52,11 @@ function addSlaHoursSkippingWeekends(startDate, slaHours) {
 
     return current;
 }
+const isTsoRole = (roleCode) => {
+    if (!roleCode) return false;
+    const code = roleCode.toUpperCase();
+    return code === 'TSO_CEO_SEC' ;
+};
 // Role categorization functions for mark-to visibility rules (shared by POST and GET routes)
 const isGlobalRole = (roleCode) => {
     if (!roleCode) return false;
@@ -2558,7 +2563,8 @@ export async function GET(request, { params }) {
         // ========== END E-SIGNATURE FILTERING FOR EXTERNAL FLOW ==========
 
         // Filter out current user from allowed recipients - users can't mark to themselves
-        allowedRecipients = allowedRecipients.filter(r => r.id !== currentUserEfilingId);
+        allowedRecipients = allowedRecipients.filter(r => r.id !== currentUserEfilingId && !isTsoRole(r.role_code));
+       
 
         // Check if user can mark this file
         // For higher authority users who have both signature and comment (or pages), allow marking even if not strictly assigned

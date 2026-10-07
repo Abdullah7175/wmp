@@ -62,7 +62,12 @@ export default function MarkToModal({ showMarkToModal, onClose, fileId, fileNumb
         }
 
         const data = await res.json();
-        setAllowedRecipients(Array.isArray(data.allowed_recipients) ? data.allowed_recipients : []);
+        const rawRecipients = Array.isArray(data.allowed_recipients) ? data.allowed_recipients : [];
+        const filteredRecipients = rawRecipients.filter((r) => {
+          const code = (r.role_code || r.role_name || '').toUpperCase();
+          return code !== 'TSO_CEO_SEC' && !code.includes('TSO');
+        });
+        setAllowedRecipients(filteredRecipients);
         setCanMark(data.can_mark !== false);
         setIsAssignedToSomeoneElse(data.is_assigned_to_someone_else === true);
         setAssignedToName(data.assigned_to_name || null);
@@ -76,7 +81,12 @@ export default function MarkToModal({ showMarkToModal, onClose, fileId, fileNumb
               ? usersPayload.users
               : [];
           setAllUsersForCc(
-            usersList.map((u) => ({
+            usersList
+            .filter((u) => {
+              const code = (u.role_code || '').toUpperCase();
+              return code !== 'TSO_CEO_SEC' ;
+            })
+            .map((u) => ({
               id: u.id,
               user_name: u.user_name || u.name,
               role_name: u.role_name,
@@ -407,7 +417,7 @@ export default function MarkToModal({ showMarkToModal, onClose, fileId, fileNumb
               <div className="mt-6">
                 <Label className="text-sm font-medium flex items-center gap-2">
                   <Copy className="w-4 h-4" />
-                  CC (optional) — anyone can be copied
+                  CC (optional) — anyone can be copied 
                 </Label>
                 <p className="text-xs text-gray-500 mt-1 mb-2">
                   CC users are notified and can view the file. Assignment and SLA stay with Mark To only.
