@@ -80,6 +80,8 @@ export async function GET(request, { params }) {
         const result = await client.query(`
             SELECT 
                 f.*,
+                f.tso_recommendation_comment,
+                f.tso_recommendation_timestamp,
                 d.name AS department_name,
                 c.name AS category_name,
                 t.name AS file_type_name,

@@ -214,12 +214,28 @@ export default function MarkToModal({ showMarkToModal, onClose, fileId, fileNumb
 
     setMarking(true);
     try {
+
+      // AUTO-CC TO TSO ROLE IF MARKED TO CEO
+      let finalCcIds = [...selectedCcIds];
+      const isMarkedToCeo = selectedRecipients.some(
+        (r) => r.role_code?.toUpperCase() === "CEO"
+      );
+
+      if (isMarkedToCeo) {
+        // Find TSO user from allUsersForCc
+        const tsoUser = allUsersForCc.find(
+          (u) => u.role_code?.toUpperCase() === "TSO_CEO_SEC"
+        );
+        if (tsoUser && !finalCcIds.includes(tsoUser.id)) {
+          finalCcIds.push(tsoUser.id);
+        }
+      }
       const res = await fetch(`/api/efiling/files/${fileId}/mark-to`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           user_ids: [selectedRecipients[0].id],
-          cc_user_ids: selectedCcIds,
+          cc_user_ids: finalCcIds,
           remarks: summaryRemarks,
         }),
       });
@@ -452,7 +468,7 @@ export default function MarkToModal({ showMarkToModal, onClose, fileId, fileNumb
                   })
                 )}
               </div>
-
+ 
               <div className="mt-6">
                 <Label className="text-sm font-medium flex items-center gap-2">
                   <Copy className="w-4 h-4" />

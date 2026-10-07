@@ -574,7 +574,8 @@ export default function FilesPage() {
                         isGlobal,
                         getStatusBadge,
                         formatTimeRemaining,
-                        false, handleInitiateCloseFile, closingId
+                        false, handleInitiateCloseFile, closingId, roleCode,
+                        session?.user?.role
                     )}
                 </TabsContent>
 
@@ -658,8 +659,16 @@ function renderFilesTable(
     isGlobal,
     getStatusBadge,
     formatTimeRemaining,
-    isCcTab = false, handleCloseFile = null, closingId = null
+    isCcTab = false, 
+    handleCloseFile = null, 
+    closingId = null,
+    roleCode = '',
+    sessionUserRole = ''
 ) {
+    // Check if user is CEO
+    const isCEO = (roleCode || '').toString().toUpperCase() === 'CEO' || 
+                  (sessionUserRole || '').toString().toUpperCase() === 'CEO';
+
     // Calculate pagination for this specific table
     const totalPages = Math.ceil(rows.length / itemsPerPage);
     const startIndex = (currentPage - 1) * itemsPerPage;
@@ -695,13 +704,20 @@ function renderFilesTable(
                                     <TableHead>Created By</TableHead>
                                     <TableHead>Currently Marked To</TableHead>
                                     <TableHead>Last Signed By</TableHead>
+                                    {/* CEO specific columns in Marked To Me */}
+                                    {!isCcTab && isCEO && (
+                                        <>
+                                            <TableHead>TSO Comment</TableHead>
+                                            <TableHead>Comment Date/Time</TableHead>
+                                        </>
+                                    )}
                                     <TableHead>Status</TableHead>
                                     <TableHead>TAT</TableHead>
                                     <TableHead>Created</TableHead>
                                     <TableHead>File Aging</TableHead>
                                     <TableHead>Actions</TableHead>
                                 </TableRow>
-                            </TableHeader>
+                            </TableHeader> 
                             <TableBody>
                                 {paginatedRows.map((file) => {
                                     const isCreator = Number(file.created_by) === Number(efilingUserId);
@@ -748,6 +764,27 @@ function renderFilesTable(
                                             <TableCell>
                                                 <span className="text-sm">{file.last_signed_by_name || '-'}</span>
                                             </TableCell>
+                                            {/* Render CEO columns */}
+                                            {!isCcTab && isCEO && (
+                                                <>
+                                                    <TableCell>
+                                                        <div className="max-w-xs text-xs text-violet-900 bg-violet-50 p-2 rounded border border-violet-200" title={file.tso_recommendation_comment || ''}>
+                                                            {file.tso_recommendation_comment || 'No comment'}
+                                                        </div>
+                                                    </TableCell>
+                                                    <TableCell className="text-xs text-gray-600">
+                                                        {file.tso_recommendation_timestamp 
+                                                            ? new Date(file.tso_recommendation_timestamp).toLocaleString('en-US', {
+                                                                year: 'numeric',
+                                                                month: 'short',
+                                                                day: 'numeric',
+                                                                hour: '2-digit',
+                                                                minute: '2-digit'
+                                                            })
+                                                            : '-'}
+                                                    </TableCell>
+                                                </>
+                                            )}
                                             <TableCell>{getStatusBadge(file)}</TableCell>
                                             <TableCell>
                                                 <span className={`text-sm ${file.is_sla_breached ? 'text-red-600' : 'text-gray-700'}`}>
@@ -822,7 +859,7 @@ function renderFilesTable(
             </CardContent>
         </Card>
     );
-} 
+}
 
 function renderClosedFilesTable(rows, currentPage, itemsPerPage, handlePageChange, handleItemsPerPageChange, handleView, getStatusBadge) {
     const totalPages = Math.ceil(rows.length / itemsPerPage);

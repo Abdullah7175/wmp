@@ -1,5 +1,6 @@
 "use client";
 // print file
+import { Textarea } from "@/components/ui/textarea";
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter, useParams } from "next/navigation";
@@ -35,6 +36,7 @@ export default function FileDetail() {
     const [newComment, setNewComment] = useState("");
     const [postingComment, setPostingComment] = useState(false);
     const [beforeContent, setBeforeContent] = useState([]);
+    const [userRoleCode, setUserRoleCode] = useState(''); 
     const [userRole, setUserRole] = useState('');
     const [hasUserSigned, setHasUserSigned] = useState(false);
 
@@ -65,7 +67,9 @@ export default function FileDetail() {
     const [attachmentName, setAttachmentName] = useState("");
     const [selectedFiles, setSelectedFiles] = useState([]);
     const [timeLeft, setTimeLeft] = useState("");
-    const [isAllAttachmentsModalOpen, setIsAllAttachmentsModalOpen] = useState(false); // <--- ADD THIS LINE
+    const [isAllAttachmentsModalOpen, setIsAllAttachmentsModalOpen] = useState(false); 
+    const [tsoComment, setTsoComment] = useState("");
+    const [isSavingTsoComment, setIsSavingTsoComment] = useState(false);
 
     // Page-by-page images rendered from PDF attachments, keyed by attachment id:
     // { [attachmentId]: { status: 'loading' | 'ready' | 'error', pages: string[] } }
@@ -96,11 +100,14 @@ export default function FileDetail() {
     };
     const fetchUserRole = async () => {
         try {
-            if (efilingUserId) {
-                const res = await fetch(`/api/efiling/users/${efilingUserId}`);
+            const targetUserId = efilingUserId || session?.user?.id;
+            if (targetUserId) {
+                const res = await fetch(`/api/efiling/users/${targetUserId}`);
                 if (res.ok) {
                     const data = await res.json();
-                    setUserRole(data.role_name || data.role_code || '');
+                    const code = (data.role_code || data.role_name || '').toString().toUpperCase();
+                    setUserRole(data.role_name || '');
+                    setUserRoleCode(code);
                 }
             }
         } catch (e) {
@@ -127,6 +134,11 @@ export default function FileDetail() {
         }
     }, [file?.work_request_id]);
 
+    useEffect(() => {
+            if (file?.tso_recommendation_comment) {
+                setTsoComment(file.tso_recommendation_comment);
+            }
+        }, [file]);
 
 
     const shouldHideTimestamp = Boolean(
@@ -204,6 +216,36 @@ export default function FileDetail() {
                 <p>Loading PDF preview...</p>
             </div>
         );
+    };
+
+    const handleSaveTsoComment = async () => {
+        if (checkFileClosed()) return;
+        setIsSavingTsoComment(true);
+        try {
+            const res = await fetch(`/api/efiling/files/${params.id}/tso-comment`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ comment: tsoComment })
+            });
+
+            if (res.ok) {
+                toast({
+                    title: "Success",
+                    description: "Recommendation comment for CEO saved successfully."
+                });
+                await fetchFile();
+            } else {
+                throw new Error("Failed to save recommendation");
+            }
+        } catch (error) {
+            toast({
+                title: "Error",
+                description: error.message,
+                variant: "destructive"
+            });
+        } finally {
+            setIsSavingTsoComment(false);
+        }
     };
 
     // Render every PDF attachment into one image per page. This is what makes
@@ -436,15 +478,18 @@ export default function FileDetail() {
         }
     };
 
-    const fetchPermissions = async () => {
+const fetchPermissions = async () => {
         try {
             const permRes = await fetch(`/api/efiling/files/${params.id}/permissions`);
             if (permRes.ok) {
                 const permData = await permRes.json();
                 const permissions = permData.permissions;
-                console.log('Permissions data:', permissions);
-                console.log('isHigherAuthority:', permissions?.isHigherAuthority);
-                console.log('isCreator:', permissions?.isCreator);
+                
+                // Set role_code directly if returned
+                if (permData.role_code || permissions?.role_code) {
+                    setUserRoleCode(String(permData.role_code || permissions?.role_code).toUpperCase());
+                }
+
                 setIsHigherAuthority(permissions?.isHigherAuthority || false);
                 setIsCreator(permissions?.isCreator || false);
                 setCanAddAttachment(permissions?.canAddAttachment || false);
@@ -1601,7 +1646,7 @@ const handleDeleteComment = async (commentId) => {
                     </div>
                 </div>
 
-                {isCcOnly && (
+                {isCcOnly && ( 
                     <div className="mb-4 p-4 bg-violet-50 border border-violet-200 rounded-lg no-print flex-shrink-0">
                         <div className="flex items-start gap-2">
                             <Eye className="w-5 h-5 text-violet-600 mt-0.5" />
@@ -1722,7 +1767,50 @@ const handleDeleteComment = async (commentId) => {
                                         </div>
                                     </div>
                                 </div>
+{/* TSO / Secretary Recommendation for CEO Section */}
+                                {(() => {
+                                    const activeCode = (userRoleCode || '').toString().toUpperCase();
+                                    const sessionRoleStr = (session?.user?.role || '').toString().toUpperCase();
+                                    
+                                    // Checks role_code from user profile, permissions, or session role string
+                                    const isTsoUser = 
+                                        activeCode === 'TSO_CEO_SEC' || 
+                                        activeCode === 'TSO_CEO' ||
+                                        activeCode.includes('TSO') ||
+                                        sessionRoleStr === '4' ||
+                                        sessionRoleStr === 'TSO_CEO_SEC';
 
+                                    if (!isTsoUser) return null;
+
+                                    return (
+                                        <div className="mt-4 pt-4 border-t border-violet-200 bg-violet-50 p-4 rounded-lg space-y-3 no-print">
+                                            <div className="flex items-center gap-2">
+                                                <Eye className="w-5 h-5 text-violet-700" />
+                                                <Label className="text-base font-bold text-violet-900 block">
+                                                    TSO / Secretary Comment for CEO
+                                                </Label>
+                                            </div>
+                                            <p className="text-xs text-violet-700">
+                                                This file is marked to CEO so please add a comment / note here. This will be directly visible to the CEO on their file dashboard and detail view.
+                                            </p>
+                                            <Textarea
+                                                value={tsoComment}
+                                                onChange={(e) => setTsoComment(e.target.value)}
+                                                placeholder="e.g. Reviewed all documents. Safe to sign and approve."
+                                                rows={3}
+                                                className="mb-2 text-sm text-gray-900 bg-white border-violet-300 focus:border-violet-600"
+                                            />
+                                            <Button
+                                                size="sm"
+                                                onClick={handleSaveTsoComment}
+                                                disabled={isSavingTsoComment}
+                                                className="bg-violet-700 hover:bg-violet-800 text-white"
+                                            >
+                                                {isSavingTsoComment ? "Saving..." : "Save Recommendation for CEO"}
+                                            </Button>
+                                        </div>
+                                    );
+                                })()}
                                 {/* SLA Status Section */}
                                 {file.sla_deadline && (
                                     <div className="border-t pt-4">
