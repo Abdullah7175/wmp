@@ -24,6 +24,9 @@ export function EfilingRouteGuard({ children, allowedRoles = [] }) {
   
   // Track if we've already shown a toast to prevent infinite loops
   const toastShownRef = useRef(false);
+  // Once the page has been authorized, never unmount children on tab-focus session refetch.
+  // Unmounting destroyed the OTP modal and burned extra OTP sends.
+  const authorizedOnceRef = useRef(false);
 
   const roleNumber = useMemo(() => {
     if (typeof contextRoleNumber === "number" && !Number.isNaN(contextRoleNumber)) {
@@ -35,9 +38,12 @@ export function EfilingRouteGuard({ children, allowedRoles = [] }) {
   }, [contextRoleNumber, session?.user?.role]);
 
   useEffect(() => {
-    // Wait for session and profile to finish loading
+    // Wait for session and profile to finish loading — but do not tear down an
+    // already-authorized page (OTP / signature modals live in children).
     if (status === "loading" || profileLoading) {
-      setChecking(true);
+      if (!authorizedOnceRef.current) {
+        setChecking(true);
+      }
       return;
     }
 
@@ -167,6 +173,15 @@ export function EfilingRouteGuard({ children, allowedRoles = [] }) {
     efilingUserId,
     isGlobal,
   ]);
+
+  if (authorized) {
+    authorizedOnceRef.current = true;
+  }
+
+  // Keep the existing page (and OTP modal) mounted after the first successful check.
+  if (authorizedOnceRef.current) {
+    return children;
+  }
 
   if (status === "loading" || profileLoading || checking) {
     return (

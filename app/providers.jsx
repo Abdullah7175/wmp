@@ -7,7 +7,7 @@ import { UserProvider } from "@/context/UserContext";
 
 export function Providers({ children }) {
   return (
-    <SessionProvider>
+    <SessionProvider refetchOnWindowFocus={false}>
       <UserProvider>
         <ToastProvider>
           {children}
