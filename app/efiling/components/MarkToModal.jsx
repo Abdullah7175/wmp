@@ -65,7 +65,8 @@ export default function MarkToModal({ showMarkToModal, onClose, fileId, fileNumb
         const rawRecipients = Array.isArray(data.allowed_recipients) ? data.allowed_recipients : [];
         const filteredRecipients = rawRecipients.filter((r) => {
           const code = (r.role_code || r.role_name || '').toUpperCase();
-          return code !== 'TSO_CEO_SEC' && !code.includes('TSO');
+          return code !== 'TSO_CEO_SEC' ;
+          
         });
         setAllowedRecipients(filteredRecipients);
         setCanMark(data.can_mark !== false);
@@ -73,6 +74,7 @@ export default function MarkToModal({ showMarkToModal, onClose, fileId, fileNumb
         setAssignedToName(data.assigned_to_name || null);
         setFileCreatorId(data.created_by || null);
 
+        // B. CC Filter (around line 72)
         if (usersRes.ok) {
           const usersPayload = await usersRes.json().catch(() => []);
           const usersList = Array.isArray(usersPayload)
@@ -80,26 +82,36 @@ export default function MarkToModal({ showMarkToModal, onClose, fileId, fileNumb
             : Array.isArray(usersPayload?.users)
               ? usersPayload.users
               : [];
+
           setAllUsersForCc(
             usersList
-            .filter((u) => {
-              const code = (u.role_code || '').toUpperCase();
-              return code !== 'TSO_CEO_SEC' ;
-            })
-            .map((u) => ({
-              id: u.id,
-              user_name: u.user_name || u.name,
-              role_name: u.role_name,
-              role_code: u.role_code,
-              department_name: u.department_name,
-              district_name: u.district_name,
-              town_name: u.town_name,
-              division_name: u.division_name,
-            }))
+              .filter((u) => {
+                const roleCode = (u.role_code || '').toString().trim().toUpperCase();
+                const roleName = (u.role_name || u.designation || '').toString().trim().toUpperCase();
+
+                // Match exact role code TSO_CEO_SEC OR exact role name CEO SECRETARY STAFF
+                const isTsoCeoSec = 
+                  roleCode === 'TSO_CEO_SEC' || 
+                  roleName === 'CEO SECRETARY STAFF';
+
+                return !isTsoCeoSec;
+              })
+              .map((u) => ({
+                id: u.id,
+                user_name: u.user_name || u.name,
+                role_name: u.role_name,
+                role_code: u.role_code,
+                designation: u.designation,
+                department_name: u.department_name,
+                district_name: u.district_name,
+                town_name: u.town_name,
+                division_name: u.division_name,
+              }))
           );
         } else {
           setAllUsersForCc([]);
         }
+
       } catch (err) {
         if (!active) return;
         console.error("Failed to load mark-to recipients:", err);
@@ -170,22 +182,36 @@ export default function MarkToModal({ showMarkToModal, onClose, fileId, fileNumb
     });
   }, [allUsersForCc, selectedIds, fileCreatorId]);
 
-  const filteredCcUsers = useMemo(() => {
-    const term = ccSearchTerm.toLowerCase().trim();
-    if (!term) return ccCandidates;
-    return ccCandidates.filter((user) => {
-      const fields = [
-        user.user_name,
-        user.role_name,
-        user.role_code,
-        user.department_name,
-        user.district_name,
-        user.town_name,
-        user.division_name,
-      ];
-      return fields.some((field) => field && field.toLowerCase().includes(term));
-    });
-  }, [ccCandidates, ccSearchTerm]);
+const filteredCcUsers = useMemo(() => {
+  const term = ccSearchTerm.toLowerCase().trim();
+
+  const cleanCandidates = ccCandidates.filter((u) => {
+    const roleCode = (u.role_code || '').toString().toUpperCase();
+    const roleName = (u.role_name || u.designation || '').toString().toUpperCase();
+
+    // Check roleCode, roleName, AND name string for TSO / CEO Secretary
+    const isTsoCeoSec = 
+      roleCode === 'TSO_CEO_SEC' || 
+      roleName.includes('CEO SECRETARY');
+
+    return !isTsoCeoSec;
+  });
+
+  if (!term) return cleanCandidates;
+
+  return cleanCandidates.filter((user) => {
+    const fields = [
+      user.user_name,
+      user.role_name,
+      user.role_code,
+      user.department_name,
+      user.district_name,
+      user.town_name,
+      user.division_name,
+    ];
+    return fields.some((field) => field && field.toLowerCase().includes(term));
+  });
+}, [ccCandidates, ccSearchTerm]);
 
   const selectedRecipients = useMemo(
     () => allowedRecipients.filter((recipient) => selectedIds.includes(recipient.id)),
@@ -282,7 +308,7 @@ export default function MarkToModal({ showMarkToModal, onClose, fileId, fileNumb
           <div>
             <h2 className="text-xl font-semibold">Mark File To Users</h2>
             <p className="text-sm text-gray-600 mt-1">
-              {fileNumber} - {subject}
+              {fileNumber} 
             </p>
           </div>
           <Button variant="ghost" size="sm" onClick={onClose}>
