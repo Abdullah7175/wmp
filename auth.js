@@ -6,7 +6,7 @@ import bcrypt from "bcryptjs";
 import { connectToDatabase } from '@/lib/db';
 import { eFileActionLogger } from '@/lib/efilingActionLogger';
 
-import { isDualPortalUser } from '@/lib/dualPortalAuth';
+import { isDualPortalUser, shouldBypassCeoOtp } from '@/lib/dualPortalAuth';
 
 // Ensure Auth.js trusts incoming Host headers for local IPs, LAN & multi-host setups
 if (!process.env.AUTH_TRUST_HOST) {
@@ -271,11 +271,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (user) {
         token.user = {
           ...user,
-          isDualPortal: isDualPortalUser(user.email)
+          isDualPortal: isDualPortalUser(user.email),
+          // CEO_OTP_VERIFICATION=false → e-ceo only may skip e-sign OTP
+          bypassCeoOtp: shouldBypassCeoOtp(user.email),
         };
       } else if (token.user) {
-        // Keep isDualPortal updated in case .env changes dynamically
+        // Keep flags updated in case .env changes dynamically
         token.user.isDualPortal = isDualPortalUser(token.user.email);
+        token.user.bypassCeoOtp = shouldBypassCeoOtp(token.user.email);
       }
       return token;
     },
@@ -283,7 +286,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (token.user) {
         session.user = {
           ...token.user,
-          isDualPortal: isDualPortalUser(token.user.email)
+          isDualPortal: isDualPortalUser(token.user.email),
+          bypassCeoOtp: shouldBypassCeoOtp(token.user.email),
         };
       }
       return session;

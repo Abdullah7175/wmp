@@ -71,6 +71,11 @@ export function OTPVerificationModal({ show, onClose, onVerify, efilingUserId = 
     const [verificationMethod, setVerificationMethod] = useState(stored?.method || "whatsapp");
     const [userContact, setUserContact] = useState({ phone: null, email: null });
     const expiresAtRef = useRef(stored?.expiresAt || 0);
+    const ceoBypassDoneRef = useRef(false);
+    const onVerifyRef = useRef(onVerify);
+    const onCloseRef = useRef(onClose);
+    onVerifyRef.current = onVerify;
+    onCloseRef.current = onClose;
     const isOpen = Boolean(show || heldOpen);
 
     const persist = useCallback((overrides = {}) => {
@@ -96,15 +101,32 @@ export function OTPVerificationModal({ show, onClose, onVerify, efilingUserId = 
         setCountdown(0);
         expiresAtRef.current = 0;
         setVerificationMethod("whatsapp");
-        onClose?.();
-    }, [onClose]);
+        onCloseRef.current?.();
+    }, []);
 
+    // e-ceo only: when CEO_OTP_VERIFICATION=false, skip OTP and run the action immediately
     useEffect(() => {
-        if (show) {
-            setHeldOpen(true);
-            persist({ open: true });
+        if (!show) {
+            ceoBypassDoneRef.current = false;
+            return;
         }
-    }, [show, persist]);
+        if (session?.user?.bypassCeoOtp) {
+            if (ceoBypassDoneRef.current) return;
+            ceoBypassDoneRef.current = true;
+            clearOtpSession();
+            storedRef.current = { open: false };
+            setHeldOpen(false);
+            setOtpSent(false);
+            setOtpCode("");
+            setCountdown(0);
+            expiresAtRef.current = 0;
+            onVerifyRef.current?.();
+            onCloseRef.current?.();
+            return;
+        }
+        setHeldOpen(true);
+        persist({ open: true });
+    }, [show, session?.user?.bypassCeoOtp, persist]);
 
     // Countdown — wall-clock based so tab sleep does not skip it incorrectly
     useEffect(() => {
