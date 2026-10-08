@@ -491,9 +491,10 @@ export default function FileStatusReport() {
                 { width: 20 }, // Budget 
 
                 { width: 20 }, // Costing
+                { width: 24 }, // Marked To Me By
+                { width: 16 }, // Marked To Me On
+                { width: 24 }, // Marked By Me To
                 { width: 28 }, // Currently Marked To
-                { width: 24 }, // Marked By
-                { width: 16 }, // Marked On
                 { width: 18 }  // File Status
             ];
             const markedHeaders = [
@@ -504,9 +505,10 @@ export default function FileStatusReport() {
                 'File Type',
                 'Budget Head',
                 'Costing',
-                'Currently Marked To',
                 'Marked To Me By',
                 'Marked To Me On',
+                'Marked By Me To',
+                'Currently Marked To',
                 'File Status'
             ];
             const markedRows = filteredMarkedFiles.map(file => [
@@ -517,9 +519,10 @@ export default function FileStatusReport() {
                 file.file_type_name || 'N/A',
                 file.budget_head || 'N/A',
                 formatCurrency(file.costing || file.proposed_estimated_cost),
-                file.current_assignee_user_name || file.current_holder || 'N/A',
                 file.marked_by_name || 'N/A',
                 formatDate(file.marked_on),
+                file.marked_by_me_to_name || 'N/A',
+                file.current_assignee_user_name || file.current_holder || 'N/A',
                 file.status_name || 'N/A'
             ]);
             buildSheet('Marked To Me', `FILES MARKED TO ME (Total: ${filteredMarkedFiles.length})`, markedCols, markedHeaders, markedRows, 5);
@@ -757,9 +760,10 @@ export default function FileStatusReport() {
                                         <TableHead>File Type</TableHead>
                                         <TableHead>Budget Head</TableHead>
                                         <TableHead>Costing</TableHead>
-                                        <TableHead>Currently Marked To</TableHead>
                                         <TableHead>Marked To Me By</TableHead>
                                         <TableHead>Marked To Me On</TableHead>
+                                        <TableHead>Marked By Me To</TableHead>
+                                        <TableHead>Currently Marked To</TableHead>
                                         <TableHead>File Status</TableHead>
                                     </TableRow>
                                 </TableHeader>
@@ -776,9 +780,10 @@ export default function FileStatusReport() {
                                             <TableCell className="font-semibold text-gray-900">
                                                 PKR {formatCurrency(file.costing || file.proposed_estimated_cost)}
                                             </TableCell>
-                                            <TableCell>{file.current_assignee_user_name || file.current_holder || 'N/A'}</TableCell>
                                             <TableCell>{file.marked_by_name || 'N/A'}</TableCell>
                                             <TableCell>{formatDate(file.marked_on)}</TableCell>
+                                            <TableCell>{file.marked_by_me_to_name || 'N/A'}</TableCell>
+                                            <TableCell>{file.current_assignee_user_name || file.current_holder || 'N/A'}</TableCell>
                                             <TableCell>
                                                 <Badge className={getStatusColor(file.status_name)}>
                                                     <div className="flex items-center gap-1">

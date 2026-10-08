@@ -64,6 +64,7 @@ export async function GET() {
                 cu.name  AS creator_user_name,
                 au.name  AS current_assignee_user_name,
                 bu.name  AS marked_by_name,
+                nu.name  AS marked_by_me_to_name,
                 m.created_at AS marked_on
             FROM efiling_file_movements m
             JOIN efiling_files f                 ON f.id = m.file_id
@@ -77,6 +78,29 @@ export async function GET() {
             LEFT JOIN users au                   ON au.id = aeu.user_id
             LEFT JOIN efiling_users beu          ON beu.id = m.from_user_id
             LEFT JOIN users bu                   ON bu.id = beu.user_id
+                        LEFT JOIN LATERAL (
+                SELECT n.to_user_id
+                FROM efiling_file_movements n
+                WHERE n.file_id = m.file_id
+                  AND n.from_user_id = $1
+                  AND n.to_user_id IS NOT NULL
+                  AND (n.created_at, n.id) > (m.created_at, m.id)
+                  -- stop at the next time this file was marked to me again,
+                  -- so each marking only picks up the entry that belongs to it
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM efiling_file_movements m2
+                      WHERE m2.file_id = m.file_id
+                        AND m2.to_user_id = $1
+                        AND m2.action_type = 'MARK_TO'
+                        AND (m2.created_at, m2.id) > (m.created_at, m.id)
+                        AND (m2.created_at, m2.id) <= (n.created_at, n.id)
+                  )
+                ORDER BY n.created_at ASC, n.id ASC
+                LIMIT 1
+            ) nxt ON true
+            LEFT JOIN efiling_users neu          ON neu.id = nxt.to_user_id
+            LEFT JOIN users nu                   ON nu.id = neu.user_id
             WHERE m.to_user_id = $1
               AND m.action_type = 'MARK_TO'
             ORDER BY m.created_at DESC, m.id DESC

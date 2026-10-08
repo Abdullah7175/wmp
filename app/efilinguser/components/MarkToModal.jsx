@@ -166,9 +166,22 @@ export default function MarkToModal({ showMarkToModal, onClose, fileId, fileNumb
   }, [allUsersForCc, selectedIds, currentEfilingUserId, fileCreatorId]);
 
   const filteredCcUsers = useMemo(() => {
-    const term = ccSearchTerm.trim().toLowerCase();
-    if (!term) return ccCandidates;
-    return ccCandidates.filter((user) => {
+    const term = ccSearchTerm.toLowerCase().trim();
+
+    const cleanCandidates = ccCandidates.filter((u) => {
+      const roleCode = (u.role_code || '').toString().toUpperCase();
+      const roleName = (u.role_name || u.designation || '').toString().toUpperCase();
+
+      // Check roleCode, roleName, AND name string for TSO / CEO Secretary
+      const isTsoCeoSec = 
+        roleCode === 'TSO_CEO_SEC' ;
+
+      return !isTsoCeoSec;
+    });
+
+    if (!term) return cleanCandidates;
+
+    return cleanCandidates.filter((user) => {
       const fields = [
         user.user_name,
         user.role_name,
@@ -292,7 +305,7 @@ export default function MarkToModal({ showMarkToModal, onClose, fileId, fileNumb
           <div>
             <h2 className="text-xl font-semibold">Mark File To Users</h2>
             <p className="text-sm text-gray-600 mt-1">
-              {fileNumber} - {subject}
+              {fileNumber} 
             </p>
           </div>
           <Button variant="ghost" size="sm" onClick={onClose}>
