@@ -15,7 +15,7 @@ import { FileText, ArrowLeft, Save, AlertCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 const validationSchema = Yup.object({
-    subject: Yup.string().required('Subject is required').min(10, 'Subject must be at least 10 characters').max(500, 'Subject must not exceed 500 characters'),
+    subject: Yup.string().required('Subject is required').min(10, 'Subject must be at least 10 characters').max(1000, 'Subject must not exceed 1000 characters'),
     category_id: Yup.number().required('Category is required').min(1, 'Please select a category'),
     department_id: Yup.number().required('Department is required').min(1, 'Please select a department'),
     file_type_id: Yup.number().required('File type is required').min(1, 'Please select a file type'),

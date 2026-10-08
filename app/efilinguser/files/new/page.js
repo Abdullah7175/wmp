@@ -35,7 +35,7 @@ const validationSchema = Yup.object({
     subject: Yup.string()
         .required('Subject is required')
         .min(10, 'Subject must be at least 10 characters')
-        .max(500, 'Subject must not exceed 500 characters'),
+        .max(1000, 'Subject must not exceed 1000 characters'),
     category_id: Yup.number()
         .required('Category is required')
         .min(1, 'Please select a category'),
