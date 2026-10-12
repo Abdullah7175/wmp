@@ -635,7 +635,7 @@ export async function POST(request) {
         }
         
         // Department ownership check: prefer the file type's department when provided
-        const effectiveDeptId = fileTypeMeta?.ft_department_id ?? parseInt(department_id);
+        const effectiveDeptId = parseInt(department_id) || userDept;
         // if (effectiveDeptId !== userDept) {
         //     return NextResponse.json({ 
         //         error: `You can only create files for your department. Required: ${effectiveDeptId}, Yours: ${userDept}` 
