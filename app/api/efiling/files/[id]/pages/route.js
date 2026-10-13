@@ -376,11 +376,13 @@ export async function PUT(request, { params }) {
             }, { status: 403 });
         }
 
-        // Check page exists, belongs to file, AND was created by the current user
+// Check page exists, belongs to file, and get creator's name
         const pageCheck = await client.query(`
-            SELECT id, page_title, created_by 
-            FROM efiling_document_pages 
-            WHERE id = $1 AND file_id = $2 AND is_active = true
+            SELECT p.id, p.page_title, p.created_by, u.name as creator_name 
+            FROM efiling_document_pages p
+            LEFT JOIN efiling_users eu ON p.created_by = eu.id
+            LEFT JOIN users u ON eu.user_id = u.id
+            WHERE p.id = $1 AND p.file_id = $2 AND p.is_active = true
         `, [page_id, id]);
 
         if (pageCheck.rows.length === 0) {
@@ -394,7 +396,7 @@ export async function PUT(request, { params }) {
         if (parseInt(page.created_by) !== parseInt(currentUser.id) && !isAdmin) {
             await client.query('ROLLBACK');
             return NextResponse.json({
-                error: 'You can only edit notesheets created by you',
+                error: `Failed to update notesheet: you are not the creator. This notesheet was created by ${page.creator_name }.`,
                 code: 'OWNERSHIP_REQUIRED'
             }, { status: 403 });
         }
@@ -505,7 +507,7 @@ export async function DELETE(request, { params }) {
                 error: 'Only authorized roles can delete pages on this file',
                 code: 'PERMISSION_DENIED'
             }, { status: 403 });
-        }
+        } 
 
         // STRICT OWNERSHIP CHECK: Fetch page first and verify creator
         const pageCheck = await client.query(`

@@ -117,19 +117,21 @@ const fetchFileAndTargetPage = async () => {
         if (!file || !targetPageId) return;
 
         setSaving(true);
-        try {
-            // Change the fetch URL: remove /${targetPageId} from the end
+        try { 
             const response = await fetch(`/api/efiling/files/${params.id}/pages`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    page_id: targetPageId, // targetPageId is sent here in the body
+                    page_id: targetPageId,
                     page_title: pageTitle,
                     page_content: pageContent,
                 }),
             });
 
-            if (!response.ok) throw new Error('Failed to update page (you might not be the creator of notesheet)');
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Failed to update notesheet page');
+            }
 
             toast({ title: "Success", description: "Notesheet page updated successfully" });
             router.push(`/efilinguser/files/${params.id}`);
