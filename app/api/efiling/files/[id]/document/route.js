@@ -25,6 +25,21 @@ export async function POST(request, { params }) {
         const ccBlock = await rejectCcOnlyMutation(client, parseInt(id), session.user.id, isAdmin);
         if (ccBlock) return ccBlock;
         
+
+// Always fetch the efilingUserId for the current session user
+        let efilingUserId = null;
+        const userRes = await client.query(`
+            SELECT eu.id
+            FROM efiling_users eu
+            JOIN users u ON eu.user_id = u.id
+            WHERE u.id = $1 AND eu.is_active = true
+        `, [session.user.id]);
+        
+        if (userRes.rows.length > 0) {
+            efilingUserId = userRes.rows[0].id;
+        } else if (!isAdmin) {
+            return NextResponse.json({ error: 'User not found in e-filing system' }, { status: 403 });
+        }
         // Check if user can edit (workflow state check)
         if (!isAdmin) {
             // Get user's efiling ID
@@ -153,7 +168,7 @@ export async function POST(request, { params }) {
                     page.title || `Page ${i + 1}`,
                     page.content ?? {},
                     page.type || 'MAIN',
-                    null
+                    efilingUserId
                 ]);
             }
         }

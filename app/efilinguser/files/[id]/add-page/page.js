@@ -92,9 +92,10 @@ export default function AddPageEditor() {
                     const userMappingRes = await fetch(`/api/efiling/users/profile?userId=${session.user.id}`);
                     if (userMappingRes.ok) {
                         const userMapping = await userMappingRes.json();
-                        const efilingUserId = userMapping.efiling_user_id;
+                        const targetUser = userMapping.user || userMapping;
+                        const efilingUserId = targetUser.efiling_user_id || targetUser.id || targetUser.efilingUserId;
                         setUserEfilingId(efilingUserId);
-                        
+                         
                         // Fetch permissions to check if higher authority
                         const permRes = await fetch(`/api/efiling/files/${params.id}/permissions`);
                         if (permRes.ok) {

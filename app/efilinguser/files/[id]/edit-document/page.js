@@ -191,7 +191,10 @@ export default function DocumentEditor() {
                     const userMappingRes = await fetch(`/api/efiling/users/profile?userId=${session.user.id}`);
                     if (userMappingRes.ok) {
                         const userMapping = await userMappingRes.json();
-                        const efilingUserId = userMapping.efiling_user_id;
+                        // Support both nested `user` object and top-level fields
+                        const targetUser = userMapping.user || userMapping;
+                        const efilingUserId = targetUser.efiling_user_id || targetUser.id || targetUser.efilingUserId;
+                        setUserEfilingId(efilingUserId);
 
                         // Fetch permissions (includes workflow state check)
                         const permRes = await fetch(`/api/efiling/files/${params.id}/permissions`);
