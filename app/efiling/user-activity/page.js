@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Search, Filter, Clock, User, FileText, Calendar, Download } from "lucide-react";
+import { Search, Filter, Clock, User, FileText, Calendar, Download, Eye, X } from "lucide-react";
 import Link from "next/link";
 
 export default function UserActivityPage() {
@@ -28,6 +28,13 @@ export default function UserActivityPage() {
     const [limit, setLimit] = useState(25);
     const [totalPages, setTotalPages] = useState(1);
 
+    // States for all available users and actions across the system
+    const [allUsers, setAllUsers] = useState([]);
+    const [allActions, setAllActions] = useState([]);
+
+    // State for viewing full details modal popup
+    const [selectedDetail, setSelectedDetail] = useState(null);
+
     useEffect(() => {
         if (status === "loading") return;
         
@@ -36,8 +43,13 @@ export default function UserActivityPage() {
             return;
         }
 
-        loadActivities();
+        loadFilterOptions();
     }, [session, status, router]);
+
+    useEffect(() => {
+        if (status === "loading" || !session) return;
+        loadActivities();
+    }, [page, limit]);
 
     const loadActivities = async () => {
         try {
@@ -62,6 +74,21 @@ export default function UserActivityPage() {
         }
     };
 
+    // Fetch all records once with a high limit to populate all existing filter dropdown options globally
+    const loadFilterOptions = async () => {
+        try {
+            const response = await fetch(`/api/efiling/user-actions?page=1&limit=1000`);
+            if (response.ok) {
+                const data = await response.json();
+                const allData = data?.data || [];
+                setAllUsers([...new Set(allData.map(a => a.user_name).filter(Boolean))]);
+                setAllActions([...new Set(allData.map(a => a.action_type).filter(Boolean))]);
+            }
+        } catch (error) {
+            console.error('Error loading filter options:', error);
+        }
+    };
+
     const filteredActivities = activities.filter(activity => {
         const matchesSearch = activity.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                             activity.user_name?.toLowerCase().includes(searchTerm.toLowerCase());
@@ -70,9 +97,6 @@ export default function UserActivityPage() {
         
         return matchesSearch && matchesUser && matchesAction;
     });
-
-    const users = [...new Set(activities.map(a => a.user_name).filter(Boolean))];
-    const actions = [...new Set(activities.map(a => a.action_type).filter(Boolean))];
 
     const formatDate = (dateString) => {
         return new Date(dateString).toLocaleString();
@@ -113,7 +137,7 @@ export default function UserActivityPage() {
                     </p>
                 </div>
                 <div className="flex gap-2">
-                    <Button variant="outline" onClick={loadActivities}>
+                    <Button variant="outline" onClick={() => { loadActivities(); loadFilterOptions(); }}>
                         <Clock className="w-4 h-4 mr-2" />
                         Refresh
                     </Button>
@@ -144,7 +168,7 @@ export default function UserActivityPage() {
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="all">All Users</SelectItem>
-                                {users.map(user => (
+                                {allUsers.map(user => (
                                     <SelectItem key={user} value={user}>
                                         {user}
                                     </SelectItem>
@@ -158,7 +182,7 @@ export default function UserActivityPage() {
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="all">All Actions</SelectItem>
-                                {actions.map(action => (
+                                {allActions.map(action => (
                                     <SelectItem key={action} value={action}>
                                         {action.replace(/_/g, ' ')}
                                     </SelectItem>
@@ -219,8 +243,21 @@ export default function UserActivityPage() {
                                                 {activity.action_type?.replace(/_/g, ' ') || 'Unknown'}
                                             </Badge>
                                         </TableCell>
-                                        <TableCell className="max-w-xs truncate">
-                                            {activity.description || 'No details'}
+                                        <TableCell className="max-w-xs">
+                                            <div className="flex items-center justify-between gap-2">
+                                                <span className="truncate">{activity.description || 'No details'}</span>
+                                                {activity.description && (
+                                                    <Button 
+                                                        variant="ghost" 
+                                                        size="sm" 
+                                                        className="h-7 px-2 text-blue-600 hover:text-blue-800 shrink-0"
+                                                        onClick={() => setSelectedDetail(activity.description)}
+                                                        title="View full details"
+                                                    >
+                                                        <Eye className="w-4 h-4" />
+                                                    </Button>
+                                                )}
+                                            </div>
                                         </TableCell>
                                         <TableCell>
                                             <div className="flex items-center gap-2">
@@ -263,7 +300,31 @@ export default function UserActivityPage() {
                     )}
                 </CardContent>
             </Card>
+
+            {/* View Details Popup Modal */}
+            {selectedDetail && (
+                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+                    <div className="bg-white rounded-lg shadow-xl max-w-lg w-full p-6 relative">
+                        <div className="flex items-center justify-between mb-4 border-b pb-3">
+                            <h3 className="text-lg font-bold text-gray-900">Activity Details</h3>
+                            <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                className="h-8 w-8 p-0 rounded-full" 
+                                onClick={() => setSelectedDetail(null)}
+                            >
+                                <X className="w-4 h-4" />
+                            </Button>
+                        </div>
+                        <div className="max-h-96 overflow-y-auto text-sm text-gray-700 whitespace-pre-wrap bg-gray-50 p-4 rounded-md border">
+                            {selectedDetail}
+                        </div>
+                        <div className="mt-6 flex justify-end">
+                            <Button onClick={() => setSelectedDetail(null)}>Close</Button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
-
