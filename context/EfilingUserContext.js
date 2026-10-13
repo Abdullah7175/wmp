@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 
 const GLOBAL_ROLE_CODES = new Set(["CEO", "COO"]);
@@ -13,6 +13,7 @@ export function EfilingUserProvider({ children }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [refreshToken, setRefreshToken] = useState(0);
+  const hasLoadedRef = useRef(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -32,7 +33,8 @@ export function EfilingUserProvider({ children }) {
         return;
       }
 
-      setLoading(true);
+      // Do not flip loading=true on tab-focus session refetch if a profile is already shown.
+      setLoading(!hasLoadedRef.current);
       setError(null);
 
       try {
@@ -50,6 +52,7 @@ export function EfilingUserProvider({ children }) {
         if (!isMounted) return;
         // Handle both response formats: { success: true, user: {...} } or direct user object
         const profileData = data.success ? data.user : data;
+        hasLoadedRef.current = true;
         setProfile(profileData);
         setError(null);
       } catch (err) {

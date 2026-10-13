@@ -118,8 +118,8 @@ export async function POST(request) {
                 {
                     success: false,
                     error: sent?.error
-                        ? `Failed to send email (${sent.code || 'SMTP'}): ${sent.error}. Check EMAIL_PASSWORD and mail.kwsc.gos.pk:587.`
-                        : 'Failed to send email. Check EMAIL_PASSWORD and mail server (efiling@kwsc.gos.pk:587).',
+                        ? `Failed to send email (${sent.code || 'SMTP'}): ${sent.error}. Check EMAIL_PASSWORD quoting and mail.kwsc.gos.pk:587.`
+                        : 'Failed to send email. Check EMAIL_PASSWORD quoting (must include #) and mail.kwsc.gos.pk:587.',
                 },
                 { status: 500 }
             );
