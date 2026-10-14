@@ -16,7 +16,6 @@ export async function GET(request) {
         const fromRole = searchParams.get('from_role_code');
         const toRole = searchParams.get('to_role_code');
         const departmentId = searchParams.get('department_id');
-        const activeOnly = searchParams.get('active_only') !== 'false';
 
         let query = `
             SELECT sm.id, sm.from_role_code, sm.to_role_code, sm.from_role_id, sm.to_role_id, sm.level_scope, sm.sla_hours, 
@@ -29,11 +28,7 @@ export async function GET(request) {
         const params = [];
         let paramIndex = 1;
 
-        if (activeOnly) {
-            query += ` AND sm.is_active = $${paramIndex}`;
-            params.push(true);
-            paramIndex++;
-        }
+        
 
         if (fromRole) {
             query += ` AND sm.from_role_code = $${paramIndex}`;

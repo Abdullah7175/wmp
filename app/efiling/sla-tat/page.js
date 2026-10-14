@@ -49,14 +49,14 @@ export default function SLAMatrixPage() {
         if (session?.user) {
             loadSLAMatrix();
             loadDepartments();
-            loadRoles();
+            loadRoles(); 
         }
     }, [session]);
 
     const loadSLAMatrix = async () => {
         setLoading(true);
         try {
-            const response = await fetch('/api/efiling/sla?active_only=true');
+            const response = await fetch('/api/efiling/sla');
             if (response.ok) {
                 const data = await response.json();
                 setSlaEntries(data.data || []);
