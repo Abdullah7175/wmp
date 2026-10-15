@@ -40,8 +40,9 @@ export async function GET(request) {
                 COUNT(CASE WHEN s.code = 'COMPLETED' THEN 1 END) as completed,
                 COUNT(CASE WHEN s.code = 'COMPLETED' AND f.work_request_id IS NOT NULL THEN 1 END) as completed_work_related,
 
-                COUNT(CASE WHEN f.sla_breached = true THEN 1 END) as overdue,
-                COUNT(CASE WHEN f.sla_breached = true AND f.work_request_id IS NOT NULL THEN 1 END) as overdue_work_related
+                COUNT(CASE WHEN (f.sla_breached = true OR (f.sla_deadline IS NOT NULL AND f.sla_deadline < CURRENT_TIMESTAMP)) THEN 1 END) as overdue,
+                COUNT(CASE WHEN (f.sla_breached = true OR (f.sla_deadline IS NOT NULL AND f.sla_deadline < CURRENT_TIMESTAMP)) AND f.work_request_id IS NOT NULL THEN 1 END) as overdue_work_related
+                
             FROM efiling_files f
             LEFT JOIN efiling_file_status s ON f.status_id = s.id
             WHERE split_part(f.file_number, '/', 2) = $1 
@@ -62,6 +63,7 @@ export async function GET(request) {
                 f.sla_breached,
                 f.created_at,
                 EXTRACT(DAY FROM (CURRENT_TIMESTAMP - f.created_at)) as aging
+                
             FROM efiling_files f
             LEFT JOIN efiling_file_categories c ON f.category_id = c.id
             LEFT JOIN efiling_departments d ON f.department_id = d.id

@@ -102,7 +102,7 @@ export async function GET(request) {
                 COUNT(CASE WHEN f.status_id = (SELECT id FROM efiling_file_status WHERE code = 'PENDING_APPROVAL') THEN 1 END) as pending_approval_files,
                 COUNT(CASE WHEN f.status_id = (SELECT id FROM efiling_file_status WHERE code = 'APPROVED') THEN 1 END) as approved_files,
                 COUNT(CASE WHEN f.status_id = (SELECT id FROM efiling_file_status WHERE code = 'COMPLETED') THEN 1 END) as completed_files,
-                COUNT(CASE WHEN f.sla_breached = true THEN 1 END) as overdue_files,
+                COUNT(CASE WHEN (f.sla_breached = true OR (f.sla_deadline IS NOT NULL AND f.sla_deadline < CURRENT_TIMESTAMP)) THEN 1 END) as overdue_files,
                 COUNT(CASE WHEN f.sla_deadline IS NOT NULL AND f.sla_deadline < NOW() AND f.sla_breached = false THEN 1 END) as at_risk_files
             FROM efiling_files f
             ${whereClause}
@@ -598,7 +598,7 @@ export async function GET(request) {
                     division_name: row.division_name,
                     division_code: row.division_code,
                     total: parseInt(row.count || 0),
-                    in_progress: parseInt(row.in_progress || 0)
+                    in_progress: parseInt(row.in_progress || 0) 
                 })),
                 by_district: districtStats.rows.map(row => ({
                     id: row.id,
