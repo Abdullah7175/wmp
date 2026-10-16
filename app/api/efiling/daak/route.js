@@ -171,6 +171,7 @@ export async function GET(request) {
             `;
             whereConditions.push(`dr.efiling_user_id = $${paramCount}`);
             params.push(efilingUserId);
+            whereConditions.push(`d.status = 'SENT'`);
         } else if (myDaak === 'true' && efilingUserId) {
             // Only daak I created
             paramCount++;
@@ -304,6 +305,7 @@ export async function GET(request) {
 
         // Get acknowledgment status for each daak if user is recipient
         const daakList = await Promise.all(result.rows.map(async (daak) => {
+            daak.is_creator = !!efilingUserId && Number(daak.created_by) === Number(efilingUserId);
             if (efilingUserId) {
                 const ack = await client.query(
                     'SELECT * FROM efiling_daak_acknowledgments WHERE daak_id = $1 AND recipient_id = $2',
@@ -375,17 +377,9 @@ export async function POST(request) {
             );
         }
 
-        if (toRecipients.length === 0 && allAddressed.length === 0) {
+        if (toRecipients.length === 0 && ccRecipients.length === 0) {
             return NextResponse.json(
-                { error: 'At least one TO recipient is required' },
-                { status: 400 }
-            );
-        }
-
-        // Prefer explicit TO; if only legacy recipients with CC somehow, require TO
-        if (toRecipients.length === 0) {
-            return NextResponse.json(
-                { error: 'At least one TO recipient is required (CC alone is not enough)' },
+                { error: 'At least one recipient (TO or CC) is required' },
                 { status: 400 }
             );
         }
@@ -400,12 +394,13 @@ export async function POST(request) {
 
         // Generate daak number
         const year = new Date().getFullYear();
-        const countResult = await client.query(
-            `SELECT COUNT(*) FROM efiling_daak WHERE daak_number LIKE $1`,
-            [`DAAK-${year}-%`]
+        const seqResult = await client.query(
+            `SELECT COALESCE(MAX(CAST(SUBSTRING(daak_number FROM '(\\d+)$') AS INTEGER)), 0) + 1 AS next_seq
+            FROM efiling_daak
+            WHERE daak_number LIKE $1`,
+                    [`DAAK-${year}-%`]
         );
-        const count = parseInt(countResult.rows[0].count) + 1;
-        const daakNumber = `DAAK-${year}-${String(count).padStart(4, '0')}`;
+        const daakNumber = `DAAK-${year}-${String(seqResult.rows[0].next_seq).padStart(4, '0')}`;
 
         // Create daak (letter fields are additive)
         const daakResult = await client.query(

@@ -10,18 +10,20 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { 
-    FileText, 
-    Search, 
-    Plus, 
-    Eye, 
-    CheckCircle, 
-    Clock, 
+import {
+    FileText,
+    Search,
+    Plus,
+    Eye,
+    CheckCircle,
+    Clock,
     AlertCircle,
     Calendar,
     Users,
     Filter,
-    X
+    X,
+    Trash2,
+    Pencil
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -38,6 +40,7 @@ export default function DaakPage() {
     const [activeTab, setActiveTab] = useState("all");
     const [currentPage, setCurrentPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
+    const [deletingId, setDeletingId] = useState(null);
     const itemsPerPage = 20;
 
     useEffect(() => {
@@ -103,6 +106,33 @@ export default function DaakPage() {
         }
     };
 
+    const handleDeleteDaak = async (item) => {
+    if (!window.confirm(`Delete daak ${item.daak_number}? It will be permanently deleted along with its recipients and attachments. This cannot be undone.`)) {
+        return;
+    }
+    setDeletingId(item.id);
+    try {
+        const res = await fetch(`/api/efiling/daak/${item.id}`, { method: "DELETE" });
+        const data = await res.json().catch(() => ({}));
+
+        if (res.ok) {
+            toast({ title: "Deleted", description: `Daak ${item.daak_number} deleted successfully` });
+            if (daak.length === 1 && currentPage > 1) {
+                setCurrentPage(currentPage - 1);
+            } else {
+                fetchDaak();
+            }
+        } else {
+            toast({ title: "Error", description: data.error || "Failed to delete daak", variant: "destructive" });
+        }
+    } catch (error) {
+        console.error("Error deleting daak:", error);
+        toast({ title: "Error", description: "Failed to delete daak", variant: "destructive" });
+    } finally {
+        setDeletingId(null);
+    }
+};
+
     const getPriorityColor = (priority) => {
         switch (priority) {
             case "URGENT":
@@ -132,7 +162,7 @@ export default function DaakPage() {
     };
 
     const filteredDaak = daak.filter((item) => {
-        const matchesSearch = 
+        const matchesSearch =
             item.subject?.toLowerCase().includes(searchTerm.toLowerCase()) ||
             item.daak_number?.toLowerCase().includes(searchTerm.toLowerCase());
         return matchesSearch;
@@ -263,15 +293,35 @@ export default function DaakPage() {
                                                 {new Date(item.created_at).toLocaleDateString()}
                                             </TableCell>
                                             <TableCell>
-                                                <Button
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    onClick={() =>
-                                                        router.push(`/efiling/daak/${item.id}`)
-                                                    }
-                                                >
-                                                    <Eye className="w-4 h-4" />
-                                                </Button>
+                                                <div className="flex items-center gap-1/2">
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        onClick={() => router.push(`/efiling/daak/${item.id}`)}
+                                                    >
+                                                        <Eye className="w-2 h-2" />
+                                                    </Button>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                                            onClick={() => handleDeleteDaak(item)}
+                                                            disabled={deletingId === item.id}
+                                                            title="Delete daak"
+                                                        >
+                                                            <Trash2 className="w-2 h-2" />
+                                                        </Button>
+                                                    {item.status === "DRAFT" && item.is_creator &&(
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            onClick={() => router.push(`/efiling/daak/${item.id}/edit`)}
+                                                            title="Edit daak"
+                                                        >
+                                                            <Pencil className="w-2 h-2" />
+                                                        </Button>
+                                                    )}
+                                                </div>
                                             </TableCell>
                                         </TableRow>
                                     ))}

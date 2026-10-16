@@ -32,14 +32,14 @@ export default function CreateDaakPage() {
     const [fetching, setFetching] = useState(true);
     const [availableTemplates, setAvailableTemplates] = useState([]);
     const [selectedTemplateId, setSelectedTemplateId] = useState("");
-    
+
     // Data states
     const [categories, setCategories] = useState([]);
     const [departments, setDepartments] = useState([]);
     const [roles, setRoles] = useState([]);
     const [roleGroups, setRoleGroups] = useState([]);
     const [users, setUsers] = useState([]);
-    
+
     // Form data
     const [formData, setFormData] = useState({
         subject: "",
@@ -56,10 +56,10 @@ export default function CreateDaakPage() {
         organization_name: "KW&SC",
         letter_date: new Date().toISOString().slice(0, 10),
     });
-    
+
     // Form validation errors
     const [errors, setErrors] = useState({});
-    
+
     // Recipients — TO (required) and CC (optional)
     const [toRecipients, setToRecipients] = useState([]);
     const [ccRecipients, setCcRecipients] = useState([]);
@@ -250,21 +250,21 @@ export default function CreateDaakPage() {
 
     const validateForm = () => {
         const newErrors = {};
-        
+
         if (!formData.subject || formData.subject.trim().length === 0) {
             newErrors.subject = "Subject is required";
         } else if (formData.subject.trim().length < 5) {
             newErrors.subject = "Subject must be at least 5 characters";
         }
-        
+
         if (!formData.content || formData.content.trim().length === 0) {
             newErrors.content = "Content is required";
         }
-        
-        if (toRecipients.length === 0) {
-            newErrors.to_recipients = "At least one TO recipient is required";
+
+        if (toRecipients.length === 0 && ccRecipients.length === 0) {
+            newErrors.to_recipients = "Add at least one recipient in TO or CC";
         }
-        
+
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
     };
@@ -319,7 +319,7 @@ export default function CreateDaakPage() {
                     ]);
                     setShowRecipientModal(false);
                     setSelectedRecipientId("");
-                    if (errors.to_recipients && addressingMode === "TO") {
+                    if (errors.to_recipients) {
                         setErrors((prev) => {
                             const next = { ...prev };
                             delete next.to_recipients;
@@ -709,7 +709,7 @@ export default function CreateDaakPage() {
                 <CardHeader>
                     <div className="flex justify-between items-center">
                         <div>
-                            <CardTitle>TO <span className="text-red-500">*</span></CardTitle>
+                            <CardTitle>TO</CardTitle>
                             <CardDescription>Primary addressees for this daak</CardDescription>
                         </div>
                         <Button onClick={() => { setAddressingMode("TO"); setShowRecipientModal(true); }}>

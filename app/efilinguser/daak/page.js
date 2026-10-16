@@ -21,7 +21,8 @@ import {
     Calendar,
     Users,
     Filter,
-    X
+    X,
+    Pencil
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useEfilingUser } from "@/context/EfilingUserContext";
@@ -167,7 +168,6 @@ export default function DaakPage() {
                             <TabsList>
                                 <TabsTrigger value="received">Received</TabsTrigger>
                                 <TabsTrigger value="my_daak">My Daak</TabsTrigger>
-                                <TabsTrigger value="all">All</TabsTrigger>
                             </TabsList>
                         </Tabs>
 
@@ -274,15 +274,27 @@ export default function DaakPage() {
                                                 {new Date(item.created_at).toLocaleDateString()}
                                             </TableCell>
                                             <TableCell>
-                                                <Button
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    onClick={() =>
-                                                        router.push(`/efilinguser/daak/${item.id}`)
-                                                    }
-                                                >
-                                                    <Eye className="w-4 h-4" />
-                                                </Button>
+                                                <div className="flex items-center gap-1/2">
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        onClick={() =>
+                                                            router.push(`/efilinguser/daak/${item.id}`)
+                                                        }
+                                                    >
+                                                        <Eye className="w-2 h-2" />
+                                                    </Button>
+                                                    {item.status === "DRAFT" && item.is_creator &&(
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                onClick={() => router.push(`/efilinguser/daak/${item.id}/edit`)}
+                                                                title="Edit daak"
+                                                            >
+                                                                <Pencil className="w-2 h-2" />
+                                                            </Button>
+                                                        )}
+                                                </div>
                                             </TableCell>
                                         </TableRow>
                                     ))}

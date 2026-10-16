@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/db';
 import { auth } from '@/auth';
-import { ensureDaakLetterSchema } from '@/lib/efilingDaakHelpers';
+import { ensureDaakLetterSchema, normalizeDaakRecipients } from '@/lib/efilingDaakHelpers';
+import { replaceDaakRecipients } from '@/lib/efilingDaakRecipients';
 
 async function getEfilingUserId(session, client) {
     if (session?.user && [1, 2].includes(parseInt(session.user.role))) {
@@ -11,16 +12,16 @@ async function getEfilingUserId(session, client) {
         );
         return adminEfiling.rows[0]?.id || null;
     }
-    
+
     if (session?.user) {
         const efilingUser = await client.query(
             'SELECT id FROM efiling_users WHERE user_id = $1 AND is_active = true',
             [session.user.id]
         );
-        
+
         return efilingUser.rows[0]?.id || null;
     }
-    
+
     return null;
 }
 
@@ -74,7 +75,7 @@ export async function GET(request, { params }) {
                 'SELECT 1 FROM efiling_daak_recipients WHERE daak_id = $1 AND efiling_user_id = $2',
                 [id, efilingUserId]
             );
-            
+
             if (isRecipient.rows.length === 0) {
                 return NextResponse.json({ error: 'Access denied' }, { status: 403 });
             }
@@ -179,7 +180,7 @@ export async function PUT(request, { params }) {
         }
 
         const daak = daakCheck.rows[0];
-        
+
         // Only creator or admin can update
         if (daak.created_by !== efilingUserId && ![1, 2].includes(parseInt(session.user.role))) {
             return NextResponse.json({ error: 'Access denied' }, { status: 403 });
@@ -209,11 +210,20 @@ export async function PUT(request, { params }) {
             to_header,
             organization_name,
             letter_date,
+            to_recipients,
+            cc_recipients,
         } = body;
 
         const updateFields = [];
         const updateValues = [];
         let paramCount = 1;
+        const recipientsProvided = Array.isArray(to_recipients) || Array.isArray(cc_recipients);
+        const recipientCount =
+            (Array.isArray(to_recipients) ? to_recipients.length : 0) +
+            (Array.isArray(cc_recipients) ? cc_recipients.length : 0);
+        if (recipientsProvided && recipientCount === 0) {
+            return NextResponse.json({ error: 'At least one recipient (TO or CC) is required' }, { status: 400 });
+        }
 
         if (subject !== undefined) {
             updateFields.push(`subject = $${paramCount++}`);
@@ -268,25 +278,43 @@ export async function PUT(request, { params }) {
             updateValues.push(letter_date || null);
         }
 
-        if (updateFields.length === 0) {
+        if (updateFields.length === 0 && !recipientsProvided) {
             return NextResponse.json({ error: 'No fields to update' }, { status: 400 });
         }
 
-        updateValues.push(id);
-        const updateQuery = `
-            UPDATE efiling_daak 
-            SET ${updateFields.join(', ')}, updated_at = CURRENT_TIMESTAMP
-            WHERE id = $${paramCount}
-            RETURNING *
-        `;
+        await client.query('BEGIN');
+        let result;
+        if (updateFields.length > 0) {
+            updateValues.push(id);
+            result = await client.query(
+                `UPDATE efiling_daak
+         SET ${updateFields.join(', ')}, updated_at = CURRENT_TIMESTAMP
+         WHERE id = $${paramCount}
+         RETURNING *`,
+                updateValues
+            );
+        } else {
+            result = await client.query(
+                `UPDATE efiling_daak SET updated_at = CURRENT_TIMESTAMP WHERE id = $1 RETURNING *`,
+                [id]
+            );
+        }
 
-        const result = await client.query(updateQuery, updateValues);
-        
+        if (recipientsProvided) {
+            const { toRecipients, ccRecipients } = normalizeDaakRecipients(body);
+            if (toRecipients.length + ccRecipients.length === 0) {
+                throw new Error('At least one recipient (TO or CC) is required');
+            }
+            await replaceDaakRecipients(client, id, toRecipients, ccRecipients);
+        }
+        await client.query('COMMIT');
+
         return NextResponse.json({
             success: true,
             daak: result.rows[0]
         });
     } catch (error) {
+        try { if (client) await client.query('ROLLBACK'); } catch (_) {}
         console.error('Error updating daak:', error);
         return NextResponse.json(
             { error: 'Failed to update daak', details: error.message },
@@ -321,23 +349,23 @@ export async function DELETE(request, { params }) {
         }
 
         const daak = daakCheck.rows[0];
-        
+
         // Only creator or admin can delete
         if (daak.created_by !== efilingUserId && ![1, 2].includes(parseInt(session.user.role))) {
             return NextResponse.json({ error: 'Access denied' }, { status: 403 });
         }
 
         // Can't delete if already sent (should cancel instead)
-        if (daak.status === 'SENT') {
-            return NextResponse.json(
-                { error: 'Cannot delete daak that has been sent. Cancel it instead.' },
-                { status: 400 }
-            );
-        }
+        // if (daak.status === 'SENT') {
+        //     return NextResponse.json(
+        //         { error: 'Cannot delete daak that has been sent. Cancel it instead.' },
+        //         { status: 400 }
+        //     );
+        // }
 
         // Delete daak (cascade will delete recipients, acknowledgments, attachments)
         await client.query('DELETE FROM efiling_daak WHERE id = $1', [id]);
-        
+
         return NextResponse.json({ success: true, message: 'Daak deleted successfully' });
     } catch (error) {
         console.error('Error deleting daak:', error);

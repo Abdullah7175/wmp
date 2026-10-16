@@ -15,6 +15,7 @@ import {
     FileText,
     ArrowLeft,
     Check,
+    Send,
     PenLine
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -32,6 +33,7 @@ export default function DaakDetailPage({ params: paramsPromise }) {
     const { efilingUserId } = useEfilingUser();
     const [loading, setLoading] = useState(true);
     const [acknowledging, setAcknowledging] = useState(false);
+    const [sending, setSending] = useState(false);
     const [signing, setSigning] = useState(false);
     const [uploading, setUploading] = useState(false);
     const [daak, setDaak] = useState(null);
@@ -106,6 +108,41 @@ export default function DaakDetailPage({ params: paramsPromise }) {
             });
         } finally {
             setAcknowledging(false);
+        }
+    };
+
+    const handleSend = async () => {
+        if (!daak || daak.status === "SENT") return;
+
+        setSending(true);
+        try {
+            const res = await fetch(`/api/efiling/daak/${params.id}/send`, {
+                method: "POST",
+            });
+
+            if (res.ok) {
+                toast({
+                    title: "Success",
+                    description: "Daak sent successfully",
+                });
+                fetchDaak();
+            } else {
+                const error = await res.json();
+                toast({
+                    title: "Error",
+                    description: error.error || "Failed to send daak",
+                    variant: "destructive",
+                });
+            }
+        } catch (error) {
+            console.error("Error sending daak:", error);
+            toast({
+                title: "Error",
+                description: "Failed to send daak",
+                variant: "destructive",
+            });
+        } finally {
+            setSending(false);
         }
     };
 
@@ -206,6 +243,14 @@ export default function DaakDetailPage({ params: paramsPromise }) {
                         <p className="text-gray-600 text-sm mt-0.5">{daak.daak_number}</p>
                     </div>
                 </div>
+                {daak.status === "DRAFT" && Number(daak.created_by) === Number(efilingUserId) && (
+                    <div className="flex gap-2">
+                        <Button onClick={handleSend} disabled={sending}>
+                            <Send className="w-4 h-4 mr-2" />
+                            {sending ? "Sending..." : "Send Daak"}
+                        </Button>
+                    </div>
+                )}
             </div>
 
             <DaakLetterDocument daak={daak} />

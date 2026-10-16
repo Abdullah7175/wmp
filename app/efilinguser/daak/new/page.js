@@ -288,10 +288,10 @@ export default function CreateDaakPage() {
             return;
         }
 
-        if (toRecipients.length === 0) {
+        if (toRecipients.length === 0 && ccRecipients.length === 0) {
             toast({
                 title: "Error",
-                description: "Please add at least one TO recipient",
+                description: "Add at least one recipient in TO or CC",
                 variant: "destructive",
             });
             return;
