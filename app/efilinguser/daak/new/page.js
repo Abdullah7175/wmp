@@ -664,7 +664,7 @@ export default function CreateDaakPage() {
                                 <div>
                                     <CardTitle className="text-lg flex items-center gap-2">
                                         <Users className="w-4 h-4 text-slate-500" />
-                                        TO <span className="text-rose-500">*</span>
+                                        TO
                                     </CardTitle>
                                     <CardDescription>
                                         Primary addressees of this daak
