@@ -3,7 +3,7 @@ import { connectToDatabase } from '@/lib/db';
 import { auth } from '@/auth';
 
 export async function GET(request, { params }) {
-    let client;
+    let client; 
     try {
         // SECURITY: Require authentication
         const session = await auth();
@@ -73,15 +73,17 @@ export async function GET(request, { params }) {
                 LEFT JOIN users u ON eu.user_id = u.id
             ) fu ON fu.id = m.from_user_id
             LEFT JOIN (
-                SELECT eu.id, u.name, eu.designation 
+                SELECT eu.id, u.name, eu.designation, eu.efiling_role_id 
                 FROM efiling_users eu 
                 LEFT JOIN users u ON eu.user_id = u.id
             ) tu ON tu.id = m.to_user_id
+            LEFT JOIN efiling_roles tr ON tu.efiling_role_id = tr.id
             LEFT JOIN town t_from ON m.from_user_town_id = t_from.id
             LEFT JOIN divisions d_from ON m.from_user_division_id = d_from.id
             LEFT JOIN town t_to ON m.to_user_town_id = t_to.id
             LEFT JOIN divisions d_to ON m.to_user_division_id = d_to.id
             WHERE m.file_id = $1
+              AND (tr.code IS NULL OR UPPER(tr.code) != 'TSO_CEO_SEC')
             ORDER BY m.created_at ASC
         `, [id]);
 
