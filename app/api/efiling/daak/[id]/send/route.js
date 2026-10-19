@@ -124,40 +124,40 @@ export async function POST(request, { params }) {
                 }
 
                 // WhatsApp to registered contact number
-                const phone = (recipient.contact_number || '').trim();
-                if (!phone) {
-                    whatsappSkipped += 1;
-                    console.warn(
-                        `[Daak WhatsApp] No contact_number for user ${recipient.efiling_user_id} (${recipient.user_name || 'unknown'})`
-                    );
-                    continue;
-                }
+                // const phone = (recipient.contact_number || '').trim();
+                // if (!phone) {
+                //     whatsappSkipped += 1;
+                //     console.warn(
+                //         `[Daak WhatsApp] No contact_number for user ${recipient.efiling_user_id} (${recipient.user_name || 'unknown'})`
+                //     );
+                //     continue;
+                // }
 
-                const addressing = (recipient.addressing || 'TO').toUpperCase() === 'CC' ? 'CC' : 'TO';
-                const whatsappMessage =
-                    `*KW&SC E-Posted (Daak)*\n\n` +
-                    `Assalam-o-Alaikum${recipient.user_name ? ` ${recipient.user_name}` : ''},\n\n` +
-                    `You have received a new Daak (${addressing}).\n\n` +
-                    `*Daak No:* ${daak_number}\n` +
-                    (displayRef && displayRef !== daak_number ? `*Reference:* ${displayRef}\n` : '') +
-                    `*Subject:* ${subject || 'N/A'}\n\n` +
-                    `Please log in to E-Filing to view and acknowledge.`;
+                // const addressing = (recipient.addressing || 'TO').toUpperCase() === 'CC' ? 'CC' : 'TO';
+                // const whatsappMessage =
+                //     `*KW&SC E-Posted (Daak)*\n\n` +
+                //     `Assalam-o-Alaikum${recipient.user_name ? ` ${recipient.user_name}` : ''},\n\n` +
+                //     `You have received a new Daak (${addressing}).\n\n` +
+                //     `*Daak No:* ${daak_number}\n` +
+                //     (displayRef && displayRef !== daak_number ? `*Reference:* ${displayRef}\n` : '') +
+                //     `*Subject:* ${subject || 'N/A'}\n\n` +
+                //     `Please log in to E-Filing to view and acknowledge.`;
 
-                try {
-                    const waResult = await sendWhatsAppMessage(phone, whatsappMessage);
-                    if (waResult?.success) {
-                        whatsappSent += 1;
-                    } else {
-                        whatsappFailed += 1;
-                        console.error('[Daak WhatsApp] Failed:', {
-                            userId: recipient.efiling_user_id,
-                            error: waResult?.error || waResult?.message,
-                        });
-                    }
-                } catch (waError) {
-                    whatsappFailed += 1;
-                    console.error('[Daak WhatsApp] Error:', waError.message);
-                }
+                // try {
+                //     const waResult = await sendWhatsAppMessage(phone, whatsappMessage);
+                //     if (waResult?.success) {
+                //         whatsappSent += 1;
+                //     } else {
+                //         whatsappFailed += 1;
+                //         console.error('[Daak WhatsApp] Failed:', {
+                //             userId: recipient.efiling_user_id,
+                //             error: waResult?.error || waResult?.message,
+                //         });
+                //     }
+                // } catch (waError) {
+                //     whatsappFailed += 1;
+                //     console.error('[Daak WhatsApp] Error:', waError.message);
+                // }
             }
         }
 
