@@ -2205,6 +2205,14 @@ const handleDeleteComment = async (commentId) => {
                                             description: "Your signature has been successfully added to the document.",
                                         });
                                     }}
+                                    onSignatureDeleted={() => {
+                                        fetchExtras();
+                                        fetchPermissions();
+                                        toast({
+                                            title: "Signature Deleted",
+                                            description: "Your signature has been removed from the document.",
+                                        });
+                                    }}
                                     onCommentAdded={(comment) => {
                                         if (checkFileClosed()) return;
                                         

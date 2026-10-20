@@ -4,6 +4,43 @@ import { logAction } from '@/lib/actionLogger';
 import { eFileActionLogger, EFILING_ACTION_TYPES, EFILING_ENTITY_TYPES } from '@/lib/efilingActionLogger';
 import { auth } from '@/auth';
 
+// ---- Signature delete rules --------------------------------------------
+async function getSignatureDeleteContext(client, fileId, userId) {
+    const res = await client.query(`
+        SELECT f.assigned_to, f.created_by, f.status_id,
+               LOWER(COALESCE(s.name, '')) AS status_name,
+               eu.id AS my_efiling_id,
+               (SELECT MAX(m.created_at)
+                  FROM efiling_file_movements m
+                 WHERE m.file_id = f.id AND m.to_user_id = eu.id) AS last_marked_to_me_at
+        FROM efiling_files f
+        LEFT JOIN efiling_file_status s ON s.id = f.status_id
+        LEFT JOIN efiling_users eu ON eu.user_id = $2 AND eu.is_active = true
+        WHERE f.id = $1
+        ORDER BY eu.id DESC
+        LIMIT 1
+    `, [fileId, userId]);
+    return res.rows[0] || null;
+}
+
+function canDeleteSignature(ctx, signature, activeSignatures, userId) {
+    if (!ctx || !ctx.my_efiling_id) return false;
+    // closed files: no deletion
+    if (ctx.status_id === 7 || ctx.status_name === 'closed' || ctx.status_id === 9 || ctx.status_name === 'discarded') return false;
+    // file must be with me: marked to me, or still unassigned with me as the creator (draft)
+    const fileIsWithMe =
+        Number(ctx.assigned_to) === Number(ctx.my_efiling_id) ||
+        (!ctx.assigned_to && Number(ctx.created_by) === Number(ctx.my_efiling_id));
+    if (!fileIsWithMe) return false;
+    // only my own signature
+    if (Number(signature.user_id) !== Number(userId)) return false;
+    // someone else signed after this one -> it is an older signature
+    if (activeSignatures.some((o) => o.id > signature.id && Number(o.user_id) !== Number(signature.user_id))) return false;
+    // signed before the file last reached me -> older signature
+    if (ctx.last_marked_to_me_at && new Date(signature.timestamp) < new Date(ctx.last_marked_to_me_at)) return false;
+    return true;
+}
+
 // GET - Fetch signatures for a file
 export async function GET(request, { params }) {
     const { id } = await params;
@@ -64,7 +101,12 @@ export async function GET(request, { params }) {
             ORDER BY timestamp ASC
         `, [id]);
 
-        return NextResponse.json(result.rows);
+        const deleteCtx = await getSignatureDeleteContext(client, id, userId);
+        const signaturesWithFlags = result.rows.map((sig) => ({
+            ...sig,
+            can_delete: canDeleteSignature(deleteCtx, sig, result.rows, userId),
+        }));
+        return NextResponse.json(signaturesWithFlags);
     } catch (error) {
         console.error('Error fetching signatures:', error);
         return NextResponse.json(
@@ -385,6 +427,72 @@ export async function POST(request, { params }) {
             { error: 'Failed to add signature' },
             { status: 500 }
         );
+    } finally {
+        if (client) {
+            client.release();
+        }
+    }
+}
+
+// DELETE - Remove (deactivate) one of the current user's signatures
+export async function DELETE(request, { params }) {
+    const { id } = await params;
+    let client;
+
+    try {
+        const session = await auth();
+        if (!session?.user?.id) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
+        const signatureId = parseInt(new URL(request.url).searchParams.get('signature_id'), 10);
+        if (!signatureId) {
+            return NextResponse.json({ error: 'signature_id is required' }, { status: 400 });
+        }
+
+        client = await connectToDatabase();
+        const userId = parseInt(session.user.id);
+
+        const sigsRes = await client.query(
+            `SELECT * FROM efiling_document_signatures
+             WHERE file_id = $1 AND is_active = TRUE
+             ORDER BY id ASC`,
+            [id]
+        );
+        const signature = sigsRes.rows.find((s) => s.id === signatureId);
+        if (!signature) {
+            return NextResponse.json({ error: 'Signature not found' }, { status: 404 });
+        }
+
+        const ctx = await getSignatureDeleteContext(client, id, userId);
+        if (!canDeleteSignature(ctx, signature, sigsRes.rows, userId)) {
+            return NextResponse.json(
+                { error: 'You can no longer delete this signature.' },
+                { status: 403 }
+            );
+        }
+
+        await client.query(
+            `DELETE FROM efiling_document_signatures WHERE id = $1 AND file_id = $2`,
+            [signatureId, id]
+        );
+
+        try {
+            await logAction({
+                user_id: userId,
+                file_id: id,
+                action_type: 'DELETE_SIGNATURE',
+                details: `Deleted ${signature.type} signature from document`,
+                ip_address: request.headers.get('x-forwarded-for') || 'unknown'
+            });
+        } catch (logError) {
+            console.error('Error logging signature deletion:', logError);
+        }
+
+        return NextResponse.json({ success: true });
+    } catch (error) {
+        console.error('Error deleting signature:', error);
+        return NextResponse.json({ error: 'Failed to delete signature' }, { status: 500 });
     } finally {
         if (client) {
             client.release();
