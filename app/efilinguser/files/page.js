@@ -913,8 +913,8 @@ function renderFilesTable(
                                                     </Button>
                                                 )}
                                                 {/* Discard File button for Creator when status is DRAFT or IN_PROGRESS and assigned to them */}
-                                                    {isCreator && isAssignee && (isDraft || isInProgress) && !isClosed && handleDiscardFile && (
-                                                        <Button 
+                                                {isCreator && ((isDraft && !file.assigned_to) || (isInProgress && isAssignee)) && !isClosed && handleDiscardFile && (                                                        
+                                                    <Button 
                                                             variant="outline" 
                                                             size="sm" 
                                                             className="text-gray-600 border-gray-300 hover:bg-gray-100"
