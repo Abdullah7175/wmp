@@ -16,6 +16,7 @@ import { buildSignatureCommentTimeline } from "@/lib/efilingSignatureCommentTime
 export default function DocumentSignatureSystem({
     fileId,
     onSignatureAdded,
+    onSignatureDeleted,
     onCommentAdded,
     userRole,
     canEditDocument,
@@ -244,6 +245,32 @@ const handleDeleteComment = async (commentId) => {
         }
     };
 
+    const handleDeleteSignature = async (sig) => {
+        if (!window.confirm("Are you sure you want to delete this signature? This cannot be undone.")) return;
+
+        try {
+            const response = await fetch(
+                `/api/efiling/files/${fileId}/signatures?signature_id=${sig.id}`,
+                { method: "DELETE" }
+            );
+            const data = await response.json().catch(() => ({}));
+
+            if (!response.ok) {
+                throw new Error(data.error || "Failed to delete signature");
+            }
+
+            await loadSignatures();
+            onSignatureDeleted && onSignatureDeleted(sig);
+        } catch (error) {
+            console.error("Error deleting signature:", error);
+            toast({
+                title: "Error",
+                description: error.message || "Failed to delete signature",
+                variant: "destructive",
+            });
+        }
+    };
+
     const loadComments = async () => {
         try {
             const response = await fetch(`/api/efiling/files/${fileId}/comments`);
@@ -307,7 +334,7 @@ const handleDeleteComment = async (commentId) => {
             });
 
             if (response.ok) {
-                setSignatures(prev => [...prev, newSignature]);
+                await loadSignatures();
                 onSignatureAdded && onSignatureAdded(newSignature);
                 setShowSignatureModal(false); // Close signature modal after successful application
                 setShowAuthModal(false); // Ensure auth modal is also closed
@@ -853,14 +880,27 @@ const addCommentToDocument = async () => {
                                 </div>
                             </div>
                         </div>
-                        {comment ? renderCommentActions(comment) : null}
+                            {!viewOnly && signature.can_delete && (
+                                <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="text-red-600 hover:text-red-700 hover:bg-red-50 flex-shrink-0"
+                                    title="Delete signature"
+                                    onClick={() => handleDeleteSignature(signature)}
+                                >
+                                    <Trash2 className="w-4 h-4" />
+                                </Button>
+                            )}
                     </div>
                     {comment ? (
                         <div className="mt-3 pt-2 border-t border-gray-200">
                             {comment.edited && (
                                 <span className="text-xs text-gray-400 mb-1 block">(edited)</span>
                             )}
-                            {renderCommentBody(comment)}
+                            <div className="flex items-start justify-between gap-2">
+                                <div className="flex-1 min-w-0">{renderCommentBody(comment)}</div>
+                                {renderCommentActions(comment)}
+                            </div>
                         </div>
                     ) : null}
                 </div>
