@@ -31,14 +31,12 @@ export async function GET(request) {
                 COUNT(CASE WHEN s.code = 'IN_PROGRESS' THEN 1 END) as in_progress,
                 COUNT(CASE WHEN s.code = 'IN_PROGRESS' AND f.work_request_id IS NOT NULL THEN 1 END) as in_progress_work_related,
 
-                COUNT(CASE WHEN s.code = 'APPROVED' THEN 1 END) as approved,
-                COUNT(CASE WHEN s.code = 'APPROVED' AND f.work_request_id IS NOT NULL THEN 1 END) as approved_work_related,
 
-                COUNT(CASE WHEN s.code = 'REJECTED' THEN 1 END) as rejected,
-                COUNT(CASE WHEN s.code = 'REJECTED' AND f.work_request_id IS NOT NULL THEN 1 END) as rejected_work_related,
+                COUNT(CASE WHEN s.code = 'DISCARDED' THEN 1 END) as discarded,
+                COUNT(CASE WHEN s.code = 'DISCARDED' AND f.work_request_id IS NOT NULL THEN 1 END) as discarded_work_related,
 
-                COUNT(CASE WHEN s.code = 'COMPLETED' THEN 1 END) as completed,
-                COUNT(CASE WHEN s.code = 'COMPLETED' AND f.work_request_id IS NOT NULL THEN 1 END) as completed_work_related,
+                COUNT(CASE WHEN s.code = 'CLOSED' THEN 1 END) as closed,
+                COUNT(CASE WHEN s.code = 'CLOSED' AND f.work_request_id IS NOT NULL THEN 1 END) as closed_work_related,
 
                 COUNT(CASE WHEN (f.sla_breached = true OR (f.sla_deadline IS NOT NULL AND f.sla_deadline < CURRENT_TIMESTAMP)) THEN 1 END) as overdue,
                 COUNT(CASE WHEN (f.sla_breached = true OR (f.sla_deadline IS NOT NULL AND f.sla_deadline < CURRENT_TIMESTAMP)) AND f.work_request_id IS NOT NULL THEN 1 END) as overdue_work_related
@@ -85,10 +83,11 @@ export async function GET(request) {
                 c.id,
                 c.name as category_name,
                 COUNT(f.id) as total_files,
-                -- Exclude DRAFT files from estimated cost calculation
+                -- Exclude DRAFT and DISCARDED files from estimated cost calculation
                 SUM(
                     CASE 
-                        WHEN UPPER(s.code) != 'DRAFT' AND UPPER(s.name) != 'DRAFT' 
+                        WHEN UPPER(s.code) NOT IN ('DRAFT', 'DISCARDED') 
+                             AND UPPER(s.name) NOT IN ('DRAFT', 'DISCARDED') 
                         THEN COALESCE(fc.proposed_estimated_cost, 0) 
                         ELSE 0 
                     END
@@ -110,7 +109,8 @@ export async function GET(request) {
                             COUNT(f_sub.id) as total_files,
                             SUM(
                                 CASE 
-                                    WHEN UPPER(s_sub.code) != 'DRAFT' AND UPPER(s_sub.name) != 'DRAFT' 
+                                    WHEN UPPER(s_sub.code) NOT IN ('DRAFT', 'DISCARDED') 
+                                         AND UPPER(s_sub.name) NOT IN ('DRAFT', 'DISCARDED') 
                                     THEN COALESCE(fc_sub.proposed_estimated_cost, 0) 
                                     ELSE 0 
                                 END

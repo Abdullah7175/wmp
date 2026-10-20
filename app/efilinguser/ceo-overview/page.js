@@ -95,14 +95,14 @@ export default function CEOOverview() {
             </div>
 
             {/* Main KPI Cards - Tighter gap */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
                 <KPICard 
                     title="Total Files Created" 
                     value={stats?.total_files} 
                     workRelated={stats?.total_work_related}
                     icon={<FileText className="h-4 w-4 text-blue-600" />} 
                     color="blue"
-                    loading={loading}
+                    loading={loading} 
                 />
                 <KPICard 
                     title="In Progress" 
@@ -113,30 +113,42 @@ export default function CEOOverview() {
                     loading={loading}
                 />
                 <KPICard 
-                    title="Approved" 
-                    value={stats?.approved} 
-                    workRelated={stats?.approved_work_related}
-                    icon={<CheckCircle2 className="h-4 w-4 text-emerald-600" />} 
-                    color="emerald"
+                    title="Drafts" 
+                    value={stats?.draft} 
+                    workRelated={stats?.draft_work_related}
+                    icon={<FileEdit className="h-4 w-4 text-gray-500" />} 
+                    color="gray"
                     loading={loading}
                 />
                 <KPICard 
-                    title="SLA Breached" 
-                    value={stats?.overdue} 
-                    workRelated={stats?.overdue_work_related}
-                    icon={<AlertCircle className="h-4 w-4 text-red-600" />} 
+                    title="Closed" 
+                    value={stats?.closed} 
+                    workRelated={stats?.closed_work_related}
+                    icon={<CheckCircle2 className="h-4 w-4 text-green-500" />} 
+                    color="green"
+                    loading={loading}
+                />
+
+                <KPICard 
+                    title="Discarded" 
+                    value={stats?.discarded} 
+                    workRelated={stats?.discarded_work_related}
+                    icon={<XCircle className="h-4 w-4 text-red-500" />} 
                     color="red"
                     loading={loading}
                 />
+
+                <KPICard 
+                    title="Currently SLA Breached" 
+                    value={stats?.overdue} 
+                    workRelated={stats?.overdue_work_related}
+                    icon={<XCircle className="h-4 w-4 text-purple-500" />} 
+                    color="purple"
+                    loading={loading}
+                />
+           
             </div>
 
-            {/* Mini Stats - Smaller text and padding */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <MiniStat title="Drafts" value={stats?.draft} workRelated={stats?.draft_work_related} loading={loading} icon={<FileEdit className="h-4 w-4 text-gray-500" />} />
-                <MiniStat title="Pending" value={stats?.pending} workRelated={stats?.pending_work_related} loading={loading} icon={<Clock className="h-4 w-4 text-amber-500" />} />
-                <MiniStat title="Rejected" value={stats?.rejected} workRelated={stats?.rejected_work_related} loading={loading} icon={<XCircle className="h-4 w-4 text-red-500" />} />
-                <MiniStat title="Completed" value={stats?.completed} workRelated={stats?.completed_work_related} loading={loading} icon={<CheckCircle2 className="h-4 w-4 text-purple-500" />} />
-            </div>
 
             {/* Category Wise Analytics Section */} 
             <Card className="border shadow-sm">
@@ -459,7 +471,12 @@ function KPICard({ title, value, workRelated, icon, color, loading }) {
         blue: "bg-blue-50 border-blue-100",
         amber: "bg-amber-50 border-amber-100",
         emerald: "bg-emerald-50 border-emerald-100",
-        red: "bg-red-50 border-red-100"
+        red: "bg-red-50 border-red-100",
+        gray: "bg-gray-50 border-gray-100",
+        green: "bg-green-50 border-green-100",
+        purple: "bg-purple-50 border-purple-100"
+
+
     };
 
     return (

@@ -66,7 +66,7 @@ export async function POST(request) {
         const statusRes = await client.query(`SELECT id FROM efiling_file_status WHERE code = 'CLOSED' OR id = 7 LIMIT 1`);
         if (statusRes.rows.length > 0) {
             closedStatusId = statusRes.rows[0].id;
-        }
+        } 
 
         // 4. Update status and closed_at timestamp
         const updateRes = await client.query(`

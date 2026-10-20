@@ -68,6 +68,10 @@ export default function FilesPage() {
     const [subjectFilter, setSubjectFilter] = useState('');
     const [dateFrom, setDateFrom] = useState('');
     const [dateTo, setDateTo] = useState('');
+    const [discardedFiles, setDiscardedFiles] = useState([]);
+    const [discardingId, setDiscardingId] = useState(null);
+    const [showDiscardOtpModal, setShowDiscardOtpModal] = useState(false);
+    const [fileToDiscard, setFileToDiscard] = useState(null);
 
 
     
@@ -142,6 +146,9 @@ export default function FilesPage() {
             if (activeTab === 'closed') {
                 params.append('created_by', efilingUserId);
                 params.append('status_id', '7');
+            } else if (activeTab === 'discarded') {
+                params.append('created_by', efilingUserId);
+                params.append('status_id', '9');
             } else if (isExternal) {
                 params.append('assigned_to', efilingUserId);
             } else if (activeTab === 'mine') {
@@ -175,6 +182,8 @@ export default function FilesPage() {
                 setCcFiles(fileList);
             } else if (activeTab === 'closed') {
                 setClosedFiles(fileList);
+            } else if (activeTab === 'discarded') {
+                setDiscardedFiles(fileList);
             } else {
                 setAssignedToMe(fileList);
             }
@@ -309,6 +318,45 @@ export default function FilesPage() {
         setCurrentPage(1);
     };
 
+
+
+    const filteredDiscardedFiles = useMemo(() => filterRows(discardedFiles), [discardedFiles, searchTerm]);
+
+    const handleInitiateDiscardFile = (file) => {
+        setFileToDiscard(file);
+        setShowDiscardOtpModal(true);
+    };
+
+    const executeDiscardFile = async () => {
+        if (!fileToDiscard) return;
+
+        setDiscardingId(fileToDiscard.id);
+        try {
+            const res = await fetch('/api/efiling/files/discard', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ file_id: fileToDiscard.id })
+            });
+
+            const data = await res.json();
+
+            if (res.ok) {
+                toast({ title: "Success", description: data.message });
+                fetchFiles();
+            } else {
+                toast({
+                    title: "Discard Failed",
+                    description: data.error || "Failed to discard file",
+                    variant: "destructive"
+                });
+            }
+        } catch (err) {
+            toast({ title: "Error", description: "Discard request failed", variant: "destructive" });
+        } finally {
+            setDiscardingId(null);
+            setFileToDiscard(null);
+        }
+    };
     const getStatusBadge = (file) => {
         const status = file.status_code;
         const statusConfig = {
@@ -539,6 +587,7 @@ export default function FilesPage() {
                     <TabsTrigger value="assigned">Marked To Me</TabsTrigger>
                     {!isExternal && <TabsTrigger value="cc">CC Files</TabsTrigger>}
                     {!isExternal && <TabsTrigger value="closed">Files Closed by You</TabsTrigger>}
+                    {!isExternal && <TabsTrigger value="discarded">Files Discarded by You</TabsTrigger>}
 
                 </TabsList>
 
@@ -556,7 +605,13 @@ export default function FilesPage() {
                         isGlobal,
                         getStatusBadge,
                         formatTimeRemaining,
-                        false, handleInitiateCloseFile, closingId
+                        false, 
+                        handleInitiateCloseFile, 
+                        handleInitiateDiscardFile, 
+                        closingId, 
+                        discardingId,
+                        roleCode,
+                        session?.user?.role
                     )}
                 </TabsContent>
 
@@ -574,7 +629,12 @@ export default function FilesPage() {
                         isGlobal,
                         getStatusBadge,
                         formatTimeRemaining,
-                        false, handleInitiateCloseFile, closingId, roleCode,
+                        false, 
+                        handleInitiateCloseFile, 
+                        handleInitiateDiscardFile, 
+                        closingId, 
+                        discardingId,
+                        roleCode,
                         session?.user?.role
                     )}
                 </TabsContent>
@@ -593,13 +653,26 @@ export default function FilesPage() {
                         isGlobal,
                         getStatusBadge,
                         formatTimeRemaining,
-                        true, handleInitiateCloseFile, closingId
+                        true, 
+                        handleInitiateCloseFile, 
+                        handleInitiateDiscardFile, 
+                        closingId, 
+                        discardingId,
+                        roleCode,
+                        session?.user?.role
                     )}
                 </TabsContent>
                 <TabsContent value="closed">
                     {renderClosedFilesTable(
                         filteredClosedFiles, currentPage, itemsPerPage, handlePageChange, handleItemsPerPageChange,
                         (fileId) => router.push(`/efilinguser/files/${fileId}`), getStatusBadge
+                    )}
+                </TabsContent>
+
+                <TabsContent value="discarded">
+                    {renderClosedFilesTable(
+                        filteredDiscardedFiles, currentPage, itemsPerPage, handlePageChange, handleItemsPerPageChange,
+                        (fileId) => router.push(`/efilinguser/files/${fileId}`), getStatusBadge, "Discarded Files Archive"
                     )}
                 </TabsContent>
             </Tabs>
@@ -625,6 +698,18 @@ export default function FilesPage() {
                 onVerify={executeCloseFile}
                 efilingUserId={efilingUserId}
                 purpose="close_file"
+            />
+
+            {/* OTP Verification Modal for Discarding File */}
+            <OTPVerificationModal
+                show={showDiscardOtpModal}
+                onClose={() => {
+                    setShowDiscardOtpModal(false);
+                    setFileToDiscard(null);
+                }}
+                onVerify={executeDiscardFile}
+                efilingUserId={efilingUserId}
+                purpose="discard_file"
             />
         </div>
     );
@@ -661,7 +746,9 @@ function renderFilesTable(
     formatTimeRemaining,
     isCcTab = false, 
     handleCloseFile = null, 
+    handleDiscardFile = null,
     closingId = null,
+    discardingId = null,
     roleCode = '',
     sessionUserRole = ''
 ) {
@@ -726,6 +813,9 @@ function renderFilesTable(
                                     const canMark = !isCcTab && handleMark && (isCreator || isAssignee || isGlobal);
                                     const isClosed = file.status_code === 'CLOSED' || Number(file.status_id) === 7;
                                     const isInProgress = file.status_code === 'IN_PROGRESS' || Number(file.status_id) === 3;
+                                    const isDraft = file.status_code === 'DRAFT' || Number(file.status_id) === 1;
+
+                                    const isDiscardable = isCreator && isAssignee && (isDraft || isInProgress) && !isClosed;
                                     return (
                                         <TableRow key={file.id} className="hover:bg-gray-50">
                                             <TableCell className="font-medium">
@@ -807,7 +897,7 @@ function renderFilesTable(
                                                     <Button variant="outline" size="sm" onClick={() => handleView(file.id)}>
                                                         <Eye className="w-4 h-4 mr-1" />
                                                         View
-                                                    </Button>
+                                                    </Button> 
 
                                                 {/* Close File button for Creator when status is IN_PROGRESS and assigned to them */}
                                                 {isCreator && isAssignee && isInProgress && !isClosed && handleCloseFile && (
@@ -822,6 +912,19 @@ function renderFilesTable(
                                                         {closingId === file.id ? "Closing..." : "Close File"}
                                                     </Button>
                                                 )}
+                                                {/* Discard File button for Creator when status is DRAFT or IN_PROGRESS and assigned to them */}
+                                                    {isCreator && isAssignee && (isDraft || isInProgress) && !isClosed && handleDiscardFile && (
+                                                        <Button 
+                                                            variant="outline" 
+                                                            size="sm" 
+                                                            className="text-gray-600 border-gray-300 hover:bg-gray-100"
+                                                            disabled={discardingId === file.id}
+                                                            onClick={() => handleDiscardFile(file)}
+                                                        >
+                                                            <Lock className="w-4 h-4 mr-1" />
+                                                            {discardingId === file.id ? "Discarding..." : "Discard File"}
+                                                        </Button>
+                                                    )}
                                                     {canEdit && !isClosed && (
                                                         <Button variant="outline" size="sm" onClick={() => handleEdit(file.id)}>
                                                             <FileEdit className="w-4 h-4 mr-1" />

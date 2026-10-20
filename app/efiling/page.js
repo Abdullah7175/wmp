@@ -222,7 +222,7 @@ export default function EFileDashboard() {
             </div>
 
             {/* Overall Statistics */}
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
                 <Card>
                     <CardContent className="p-4">
                         <div className="flex flex-col items-center text-center">
@@ -241,24 +241,27 @@ export default function EFileDashboard() {
                             </div>
                     </CardContent>
                 </Card>
+
                 <Card>
                     <CardContent className="p-4">
                         <div className="flex flex-col items-center text-center">
-                            <AlertCircle className="w-6 h-6 text-orange-600 mb-2" />
-                            <p className="text-2xl font-bold">{overall.pending_approval_files || 0}</p>
-                            <p className="text-xs text-gray-600">Pending</p>
-                        </div>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardContent className="p-4">
-                        <div className="flex flex-col items-center text-center">
-                            <CheckCircle className="w-6 h-6 text-green-600 mb-2" />
-                            <p className="text-2xl font-bold">{overall.approved_files || 0}</p>
-                            <p className="text-xs text-gray-600">Approved</p>
+                            <FileText className="w-6 h-6 text-blue-600 mb-2" />
+                            <p className="text-2xl font-bold">{overall.discarded_files || 0}</p>
+                            <p className="text-xs text-gray-600">Discarded Files</p>
                             </div>
                     </CardContent>
                 </Card>
+
+                <Card>
+                    <CardContent className="p-4">
+                        <div className="flex flex-col items-center text-center">
+                            <FileText className="w-6 h-6 text-blue-600 mb-2" />
+                            <p className="text-2xl font-bold">{overall.closed_files || 0}</p>
+                            <p className="text-xs text-gray-600">closed Files</p>
+                            </div>
+                    </CardContent>
+                </Card>
+
                 <Card>
                     <CardContent className="p-4">
                         <div className="flex flex-col items-center text-center">
@@ -274,15 +277,6 @@ export default function EFileDashboard() {
                             <Activity className="w-6 h-6 text-purple-600 mb-2" />
                             <p className="text-2xl font-bold">{overall.at_risk_files || 0}</p>
                             <p className="text-xs text-gray-600">At Risk</p>
-                        </div>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardContent className="p-4">
-                        <div className="flex flex-col items-center text-center">
-                            <Zap className="w-6 h-6 text-indigo-600 mb-2" />
-                            <p className="text-2xl font-bold">{overall.completed_files || 0}</p>
-                            <p className="text-xs text-gray-600">Completed</p>
                         </div>
                     </CardContent>
                 </Card>

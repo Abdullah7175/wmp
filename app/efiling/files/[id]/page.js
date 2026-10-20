@@ -63,10 +63,10 @@ export default function FileDetail() {
         loadData();
     }, [session?.user?.id, params.id]);
     const checkFileClosed = () => {
-        if (file?.status_id === 7 || file?.status_name?.toLowerCase() === 'closed') {
+        if (file?.status_id === 7 || file?.status_name?.toLowerCase() === 'closed' || file?.status_id === 9 || file?.status_name?.toLowerCase() === 'discarded') {
             toast({
                 title: "Action Restricted",
-                description: "This file is closed. No edits, additions, or modifications can be made.",
+                description: "This file is closed or Discarded. No edits, additions, or modifications can be made.",
                 variant: "destructive"
             });
             return true; // File is closed

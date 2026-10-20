@@ -65,7 +65,9 @@ export default function DocumentSignatureSystem({
         { value: "Bookman", label: "Bookman" }
     ];
 
-    const isFileClosed = fileData?.status_id === 7;
+    const isFileClosed = fileData?.status_id === 7 ;
+    const isFileDiscarded = fileData?.status_id === 9 ;
+
 
     // Fetch user role if not provided
     useEffect(() => {
@@ -100,7 +102,7 @@ export default function DocumentSignatureSystem({
 
 // Ensure canEditComment evaluates both session user id and efilingUserId
 const canEditComment = (comment) => {
-    if (isFileClosed) return false;
+    if (isFileClosed || isFileDiscarded) return false;
     if (['superadmin', 'CEO', 'Chief IT Officer'].includes(userRole || actualUserRole)) {
         return true;
     }
@@ -126,10 +128,10 @@ const canEditComment = (comment) => {
 };
 
 const handleEditComment = async (commentId) => {
-    if (isFileClosed) {
+    if (isFileClosed || isFileDiscarded) {
             toast({
                 title: "Error",
-                description: "Cannot delete comments on a closed file.",
+                description: "Cannot delete comments on a closed or Discarded file.",
                 variant: "destructive",
             });
             return;
@@ -275,10 +277,10 @@ const handleDeleteComment = async (commentId) => {
 
     // Add signature to document
     const addSignatureToDocument = async (signatureData) => {
-        if (isFileClosed) {
+        if (isFileClosed || isFileDiscarded) {
             toast({
                 title: "Error",
-                description: "Cannot sign a closed file.",
+                description: "Cannot sign a closed or Discarded file.",
                 variant: "destructive",
             });
             return;
@@ -327,10 +329,10 @@ const handleDeleteComment = async (commentId) => {
 
 // Add comment to document
 const addCommentToDocument = async () => {
-    if (isFileClosed) {
+    if (isFileClosed || isFileDiscarded) {
             toast({
                 title: "Error",
-                description: "Cannot add comments to a closed file.",
+                description: "Cannot add comments to a closed or Discarded file.",
                 variant: "destructive",
             });
             return;
@@ -380,10 +382,10 @@ const addCommentToDocument = async () => {
 
     // Handle signature creation
     const handleCreateSignature = (signatureData) => {
-        if (isFileClosed) {
+        if (isFileClosed || isFileDiscarded) {
             toast({
                 title: "Error",
-                description: "Cannot sign a closed file.",
+                description: "Cannot sign a closed or Discarded file.",
                 variant: "destructive",
             });
             return;
@@ -905,10 +907,10 @@ const addCommentToDocument = async () => {
                     {!hasUserSigned && canEditDocument && (
                         <Button
                             onClick={() => {
-                                if (isFileClosed) {
+                                if (isFileClosed || isFileDiscarded) {
                                     toast({
                                         title: "File Closed",
-                                        description: "This file is closed. Signatures cannot be added.",
+                                        description: "This file is either closed or Discarded. Signatures cannot be added.",
                                         variant: "destructive",
                                     });
                                     return;
@@ -934,10 +936,10 @@ const addCommentToDocument = async () => {
                     {canEditDocument && (
                         <Button
                             onClick={() => {
-                                if (isFileClosed) {
+                                if (isFileClosed || isFileDiscarded) {
                                     toast({
                                         title: "File Closed",
-                                        description: "This file is closed. Comments cannot be added.",
+                                        description: "This file is either closed or Discarded. Comments cannot be added.",
                                         variant: "destructive",
                                     });
                                     return;

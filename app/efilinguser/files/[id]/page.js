@@ -88,10 +88,10 @@ export default function FileDetail() {
     const [editCommentText, setEditCommentText] = useState("");
     const [updatingComment, setUpdatingComment] = useState(false);
     const checkFileClosed = () => {
-        if (file?.status_id === 7 || file?.status_name?.toLowerCase() === 'closed') {
+        if (file?.status_id === 7 || file?.status_name?.toLowerCase() === 'closed' || file?.status_id === 9 || file?.status_name?.toLowerCase() === 'discarded') {
             toast({
                 title: "Action Restricted",
-                description: "This file is closed. No edits, additions, or modifications can be made.",
+                description: "Clsoed or Discarded file does not allow edits, additions, or modifications.",
                 variant: "destructive"
             });
             return true; // File is closed

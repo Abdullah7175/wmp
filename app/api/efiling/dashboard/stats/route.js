@@ -99,9 +99,11 @@ export async function GET(request) {
                 COUNT(*) as total_files,
                 COUNT(CASE WHEN f.status_id = (SELECT id FROM efiling_file_status WHERE code = 'DRAFT') THEN 1 END) as draft_files,
                 COUNT(CASE WHEN f.status_id = (SELECT id FROM efiling_file_status WHERE code = 'IN_PROGRESS') THEN 1 END) as in_progress_files,
-                COUNT(CASE WHEN f.status_id = (SELECT id FROM efiling_file_status WHERE code = 'PENDING_APPROVAL') THEN 1 END) as pending_approval_files,
-                COUNT(CASE WHEN f.status_id = (SELECT id FROM efiling_file_status WHERE code = 'APPROVED') THEN 1 END) as approved_files,
-                COUNT(CASE WHEN f.status_id = (SELECT id FROM efiling_file_status WHERE code = 'COMPLETED') THEN 1 END) as completed_files,
+                
+                COUNT(CASE WHEN f.status_id = (SELECT id FROM efiling_file_status WHERE code = 'CLOSED') THEN 1 END) as closed_files,
+
+                COUNT(CASE WHEN f.status_id = (SELECT id FROM efiling_file_status WHERE code = 'DISCARDED') THEN 1 END) as discarded_files,
+
                 COUNT(CASE WHEN (f.sla_breached = true OR (f.sla_deadline IS NOT NULL AND f.sla_deadline < CURRENT_TIMESTAMP)) THEN 1 END) as overdue_files,
                 COUNT(CASE WHEN f.sla_deadline IS NOT NULL AND f.sla_deadline < NOW() AND f.sla_breached = false THEN 1 END) as at_risk_files
             FROM efiling_files f
@@ -498,9 +500,8 @@ export async function GET(request) {
                     total_files: parseInt(overall.total_files || 0),
                     draft_files: parseInt(overall.draft_files || 0),
                     in_progress_files: parseInt(overall.in_progress_files || 0),
-                    pending_approval_files: parseInt(overall.pending_approval_files || 0),
-                    approved_files: parseInt(overall.approved_files || 0),
-                    completed_files: parseInt(overall.completed_files || 0),
+                    closed_files: parseInt(overall.closed_files || 0),
+                    discarded_files: parseInt(overall.discarded_files || 0),
                     overdue_files: parseInt(overall.overdue_files || 0),
                     at_risk_files: parseInt(overall.at_risk_files || 0)
                 },
