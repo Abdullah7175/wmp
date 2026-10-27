@@ -155,6 +155,20 @@ export default function DocumentEditor() {
 
     const fetchFile = async () => {
         try {
+
+
+            // 1. Fetch user mapping / efilingUserId FIRST so we have it ready for filtering
+            let currentEfilingUserId = null;
+            if (session?.user?.id) {
+                const userMappingRes = await fetch(`/api/efiling/users/profile?userId=${session.user.id}`);
+                if (userMappingRes.ok) {
+                    const userMapping = await userMappingRes.json();
+                    const targetUser = userMapping.user || userMapping;
+                    currentEfilingUserId = targetUser.efiling_user_id || targetUser.id || targetUser.efilingUserId;
+                    setUserEfilingId(currentEfilingUserId);
+                }
+            }
+
             const response = await fetch(`/api/efiling/files/${params.id}`);
             if (response.ok) {
                 const fileData = await response.json();
@@ -167,12 +181,18 @@ export default function DocumentEditor() {
 
                     // Load pages if they exist
                     if (docData.pages && docData.pages.length > 0) {
-                        const loadedPages = docData.pages.map(page => ({
+
+                        const userPages = docData.pages.filter(page => {
+                            // Show page if zit has no createdBy (legacy) or was created by the current user
+                            return !page.createdBy || Number(page.createdBy) === Number(currentEfilingUserId);
+                        });
+                        const loadedPages = (userPages.length > 0 ? userPages : docData.pages).map(page => ({
                             id: page.id,
                             pageNumber: page.pageNumber,
                             title: page.title,
                             content: page.content,
-                            type: page.type
+                            type: page.type,
+                            createdBy: page.createdBy
                         }));
                         setPages(loadedPages);
                         setCurrentPageId(loadedPages[0].id);

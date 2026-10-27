@@ -152,24 +152,53 @@ export async function POST(request, { params }) {
         }
 
         if (body.pages && Array.isArray(body.pages)) {
-            await client.query(`
-                DELETE FROM efiling_document_pages WHERE file_id = $1
-            `, [id]);
+            // 1. Fetch all valid existing page IDs for this file from the database
+            const existingPagesRes = await client.query(
+                `SELECT id, created_by FROM efiling_document_pages WHERE file_id = $1 AND is_active = true`,
+                [id]
+            );
+            const existingPagesMap = new Map();
+            existingPagesRes.rows.forEach(row => existingPagesMap.set(row.id, row.created_by));
 
             for (let i = 0; i < body.pages.length; i++) {
                 const page = body.pages[i];
-                await client.query(`
-                    INSERT INTO efiling_document_pages 
-                    (file_id, page_number, page_title, page_content, page_type, created_by)
-                    VALUES ($1, $2, $3, $4::jsonb, $5, $6)
-                `, [
-                    id,
-                    page.pageNumber || (i + 1),
-                    page.title || `Page ${i + 1}`,
-                    page.content ?? {},
-                    page.type || 'MAIN',
-                    efilingUserId
-                ]);
+                const pageNumber = page.pageNumber || (i + 1);
+                const pageTitle = page.title || `Page ${i + 1}`;
+                const pageContent = page.content ?? {};
+                const pageType = page.type || 'MAIN';
+
+                // Check if this is a real database ID that already exists
+                const isRealExistingId = typeof page.id === 'number' && existingPagesMap.has(page.id);
+
+                if (isRealExistingId) {
+                    const originalCreator = existingPagesMap.get(page.id);
+
+                    // SECURITY CHECK: Do not allow non-admins to overwrite pages created by others
+                    if (originalCreator && Number(originalCreator) !== Number(efilingUserId) && !isAdmin) {
+                        continue; 
+                    }
+
+                    // Update existing page safely
+                    await client.query(`
+                        UPDATE efiling_document_pages 
+                        SET page_title = $1, page_content = $2::jsonb, page_number = $3, updated_at = CURRENT_TIMESTAMP
+                        WHERE id = $4 AND file_id = $5
+                    `, [pageTitle, pageContent, pageNumber, page.id, id]);
+                } else {
+                    // Insert brand new page stamped with current user as creator
+                    await client.query(`
+                        INSERT INTO efiling_document_pages 
+                        (file_id, page_number, page_title, page_content, page_type, created_by)
+                        VALUES ($1, $2, $3, $4::jsonb, $5, $6)
+                    `, [
+                        id,
+                        pageNumber,
+                        pageTitle,
+                        pageContent,
+                        pageType,
+                        efilingUserId
+                    ]);
+                }
             }
         }
 
@@ -230,7 +259,7 @@ export async function GET(request, { params }) {
         const file = result.rows[0];
 
         const pagesResult = await client.query(`
-            SELECT id, page_number, page_title, page_content, page_type, is_active, created_at, updated_at
+            SELECT id, page_number, page_title, page_content, page_type, is_active, created_by, created_at, updated_at
             FROM efiling_document_pages 
             WHERE file_id = $1 AND is_active = true
             ORDER BY page_number ASC
@@ -243,6 +272,7 @@ export async function GET(request, { params }) {
             content: typeof row.page_content === 'string' ? JSON.parse(row.page_content) : (row.page_content || {}),
             type: row.page_type,
             isActive: row.is_active,
+            createdBy: row.created_by,
             createdAt: row.created_at,
             updatedAt: row.updated_at
         }));
