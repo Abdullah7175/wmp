@@ -73,7 +73,8 @@ export async function POST(request) {
             UPDATE efiling_files 
             SET status_id = $1, 
                 closed_at = NOW(),
-                updated_at = NOW()
+                updated_at = NOW(),
+                sla_deadline = null
             WHERE id = $2
             RETURNING id, file_number, subject, closed_at
         `, [closedStatusId, file_id]);

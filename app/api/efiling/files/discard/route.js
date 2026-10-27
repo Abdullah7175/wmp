@@ -76,7 +76,8 @@ export async function POST(request) {
         const updateRes = await client.query(`
             UPDATE efiling_files 
             SET status_id = $1, 
-                updated_at = NOW()
+                updated_at = NOW(),
+                sla_deadline = null
             WHERE id = $2
             RETURNING id, file_number, subject, updated_at
         `, [discardedStatusId, file_id]);
