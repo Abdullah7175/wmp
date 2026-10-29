@@ -23,6 +23,7 @@ export async function GET(request) {
                     i.created_at,
                     i.creator_id,
                     i.creator_type,
+                    i.is_certificate,
                     COALESCE(u.name, ag.name, sm.name) as creator_name
                 FROM images i
                 LEFT JOIN users u ON i.creator_type = 'user' AND i.creator_id = u.id

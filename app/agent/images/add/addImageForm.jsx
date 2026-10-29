@@ -248,7 +248,7 @@ const ImageForm = ({ workRequestId: propWorkRequestId, onClose }) => {
                                                 className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
                                             />
                                             <label htmlFor={`isCertificate-${idx}`} className="text-sm font-medium text-gray-700">
-                                                Is Certificate
+                                                Is Work Completion Certificate
                                             </label>
                                         </div>
                                         <div>

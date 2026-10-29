@@ -36,6 +36,7 @@ export default function FileDetail() {
     const [newComment, setNewComment] = useState("");
     const [postingComment, setPostingComment] = useState(false);
     const [beforeContent, setBeforeContent] = useState([]);
+    const [workCertificates, setWorkCertificates] = useState([]); 
     const [userRoleCode, setUserRoleCode] = useState(''); 
     const [userRole, setUserRole] = useState('');
     const [hasUserSigned, setHasUserSigned] = useState(false);
@@ -133,6 +134,7 @@ export default function FileDetail() {
     useEffect(() => {
         if (file?.work_request_id) {
             fetchBeforeContent();
+            fetchWorkCertificates();
         }
     }, [file?.work_request_id]);
 
@@ -758,6 +760,21 @@ const handleDeleteAttachment = async (attachmentId, e) => {
             }
         } catch (e) {
             console.error('Before content load error', e);
+        }
+    }; 
+
+    const fetchWorkCertificates = async () => {
+        try {
+            const res = await fetch(`/api/images/work-request?work_request_id=${file.work_request_id}`);
+            if (res.ok) {
+                const data = await res.json();
+                const imagesArray = Array.isArray(data) ? data : (data.data || []);
+                // Frontend check: filter only items where is_certificate is true
+                const certs = imagesArray.filter(item => item.is_certificate === true);
+                setWorkCertificates(certs);
+            }
+        } catch (e) {
+            console.error('Work certificates load error', e);
         }
     };
 
@@ -2307,6 +2324,67 @@ const handleDeleteComment = async (commentId) => {
                             </Card>
                         )}
 
+
+                        {/* ================= WORK COMPLETION CERTIFICATE SECTION ================= */}
+                        {workCertificates.length > 0 && (
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle className="text-lg">Work Completion Certificate ({workCertificates.length})</CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                    <div className="space-y-3">
+                                        {workCertificates.map((item) => {
+                                            const getImageUrl = (url) => {
+                                                if (!url) return '';
+                                                if (url.startsWith('/uploads/')) {
+                                                    return url.replace('/uploads/', '/api/uploads/');
+                                                }
+                                                if (url.startsWith('/api/')) return url;
+                                                try {
+                                                    const urlObj = new URL(url);
+                                                    const pathname = urlObj.pathname;
+                                                    if (pathname.startsWith('/uploads/')) {
+                                                        return pathname.replace('/uploads/', '/api/uploads/');
+                                                    }
+                                                    return pathname;
+                                                } catch {
+                                                    return url;
+                                                }
+                                            };
+                                            const imageUrl = getImageUrl(item.link);
+
+                                            return (
+                                                <div key={item.id} className="border rounded-lg p-3">
+                                                    <div className="relative">
+                                                        <img
+                                                            src={imageUrl}
+                                                            alt={item.description || 'Work completion certificate'}
+                                                            className="w-full h-32 object-cover rounded"
+                                                            onError={(e) => {
+                                                                if (e.target.src !== item.link) {
+                                                                    e.target.src = item.link;
+                                                                }
+                                                            }}
+                                                        />
+                                                        <div className="absolute top-2 left-2">
+                                                            <Badge variant="secondary" className="text-xs">
+                                                                📜 Certificate
+                                                            </Badge>
+                                                        </div>
+                                                    </div>
+                                                    {item.description && (
+                                                        <p className="text-xs text-gray-500 mt-2 line-clamp-2">
+                                                            {item.description}
+                                                        </p>
+                                                    )}
+                                                    
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        )}
                         <Card>
                             <CardHeader>
                                 <div className="flex items-center justify-between">
