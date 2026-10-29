@@ -52,7 +52,7 @@ export async function POST(request) {
         }
 
         // Condition Check 2: Current assignee authorization
-        if (Number(file.assigned_to) !== Number(currentUser.efiling_user_id)) {
+        if ((Number(file.assigned_to) !== Number(currentUser.efiling_user_id)) && (file.assigned_to != null)) {
             return NextResponse.json({ 
                 error: 'The file is currently marked to another user. It must be marked back to you before you can discard it.' 
             }, { status: 403 });
