@@ -1076,6 +1076,17 @@ const handleDeleteComment = async (commentId) => {
 
     const openMarkModal = () => {
         if (checkFileClosed()) return;
+        
+        // Restriction check: If work-related file and beforeContent is empty
+        if (file?.work_request_id && beforeContent.length === 0) {
+            toast({
+                title: "Action Not Allowed",
+                description: "To mark file forward, you need to first add before content in the file.",
+                variant: "destructive",
+            });
+            return;
+        }
+
         setShowMarkModal(true);
     };
 

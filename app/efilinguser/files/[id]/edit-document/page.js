@@ -63,6 +63,7 @@ export default function DocumentEditor() {
     const [isFileAtHigherLevel, setIsFileAtHigherLevel] = useState(false);
     const [isHigherAuthority, setIsHigherAuthority] = useState(false);
     const [wasMarkedBackByHigherAuthority, setWasMarkedBackByHigherAuthority] = useState(false);
+    const [beforeContent, setBeforeContent] = useState([]);
 
     // Helper function to convert HTML to plain text
     const htmlToText = (html) => {
@@ -145,6 +146,22 @@ export default function DocumentEditor() {
         }
     }, [session?.user?.id, canEditDocument]);
 
+    const fetchBeforeContent = async () => {
+        try {
+            const res = await fetch(`/api/before-content?workRequestId=${file.work_request_id}`);
+            if (res.ok) {
+                const data = await res.json();
+                setBeforeContent(Array.isArray(data) ? data : []);
+            }
+        } catch (e) {
+            console.error('Before content load error', e);
+        }
+    };
+    useEffect(() => {
+            if (file?.work_request_id) {
+                fetchBeforeContent();
+            }
+        }, [file?.work_request_id]);
     // Check user permissions - Only file creators can edit in efilinguser
     useEffect(() => {
         if (session?.user) {
@@ -390,6 +407,15 @@ export default function DocumentEditor() {
     };
 
     const handleMarkTo = () => {
+                // Restriction check: If work-related file and beforeContent is empty
+        if (file?.work_request_id && beforeContent.length === 0) {
+            toast({
+                title: "Action Not Allowed",
+                description: "To mark file forward, you need to first add before content in the file.",
+                variant: "destructive",
+            });
+            return;
+        }
         setShowMarkToModal(true);
     };
 

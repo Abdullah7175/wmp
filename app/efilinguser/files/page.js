@@ -931,12 +931,12 @@ function renderFilesTable(
                                                             Edit
                                                         </Button>
                                                     )}
-                                                    {canMark && !isClosed && (
+                                                    {/* {canMark && !isClosed && (
                                                         <Button variant="outline" size="sm" onClick={() => handleMark(file)}>
                                                             <Send className="w-4 h-4 mr-1" />
                                                             Mark To
                                                         </Button>
-                                                    )}
+                                                    )} */}
                                                 </div>
                                             </TableCell>
                                         </TableRow>
