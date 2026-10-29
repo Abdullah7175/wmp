@@ -220,6 +220,7 @@ export async function POST(request) {
             categoryId, 
             code, 
             requiresApproval, 
+            is_work_related,
             createdBy, 
             can_create_roles,
             department_id,
@@ -259,21 +260,22 @@ export async function POST(request) {
 
         // 2. Insert main file type record
         const result = await client.query(`
-            INSERT INTO efiling_file_types (
-                name, description, category_id, code, requires_approval, 
-                created_at, can_create_roles, department_id, sla_matrix_id, max_approval_level
-            ) VALUES ($1, $2, $3, $4, $5, NOW(), $6, $7, $8, $9)
-            RETURNING *
-        `, [
-            name,
-            description,
-            categoryId,
-            code,
-            requiresApproval !== false,
-            Array.isArray(can_create_roles) ? JSON.stringify(can_create_roles) : (typeof can_create_roles === 'string' ? can_create_roles : null),
-            department_id || null,
-            primarySlaId,
-            max_approval_level || null
+                INSERT INTO efiling_file_types (
+                    name, description, category_id, code, requires_approval, is_work_related, 
+                    created_at, can_create_roles, department_id, sla_matrix_id, max_approval_level
+                ) VALUES ($1, $2, $3, $4, $5, $6, NOW(), $7, $8, $9, $10)
+                RETURNING *
+            `, [
+                name,
+                description,
+                categoryId,
+                code,
+                requiresApproval !== false,
+                is_work_related || false, // <--- ADD THIS VALUE ($6) and shift subsequent indices accordingly:
+                Array.isArray(can_create_roles) ? JSON.stringify(can_create_roles) : (typeof can_create_roles === 'string' ? can_create_roles : null),
+                department_id || null,
+                primarySlaId,
+                max_approval_level || null
         ]);
 
         const fileType = result.rows[0];
@@ -351,7 +353,7 @@ export async function PUT(request) {
             return NextResponse.json({ error: 'Forbidden - Admin access required' }, { status: 403 });
         }
         const body = await request.json();
-        const { id, name, description, code, category_id, categoryId, requires_approval, department_id, can_create_roles, sla_matrix_id, max_approval_level } = body;
+        const { id, name, description, code, category_id, categoryId, requires_approval,is_work_related, department_id, can_create_roles, sla_matrix_id, max_approval_level } = body;
         const finalCategoryId = category_id || categoryId || null;
         const ipAddress = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip');
         const userAgent = request.headers.get('user-agent');
@@ -406,30 +408,32 @@ export async function PUT(request) {
             : parseInt(sla_matrix_id);
         
         const result = await client.query(`
-            UPDATE efiling_file_types SET
-                name = $1,
-                description = $2,
-                code = $3,
-                requires_approval = $4,
-                department_id = $5,
-                can_create_roles = COALESCE($6, can_create_roles),
-                sla_matrix_id = $7,
-                max_approval_level = COALESCE($8, max_approval_level),
-                category_id = COALESCE($9, category_id),
-                updated_at = NOW()
-            WHERE id = $10
-            RETURNING *
-        `, [
-            name,
-            description,
-            code,
-            requires_approval,
-            department_id,
-            Array.isArray(can_create_roles) ? JSON.stringify(can_create_roles) : (typeof can_create_roles === 'string' ? can_create_roles : null),
-            finalSlaMatrixId,
-            max_approval_level,
-            finalCategoryId,
-            id
+                UPDATE efiling_file_types SET
+                    name = $1,
+                    description = $2,
+                    code = $3,
+                    requires_approval = $4,
+                    is_work_related = $5,
+                    department_id = $6,
+                    can_create_roles = COALESCE($7, can_create_roles),
+                    sla_matrix_id = $8,
+                    max_approval_level = COALESCE($9, max_approval_level),
+                    category_id = COALESCE($10, category_id),
+                    updated_at = NOW()
+                WHERE id = $11
+                RETURNING *
+            `, [
+                name,
+                description,
+                code,
+                requires_approval,
+                is_work_related || false, 
+                department_id,
+                Array.isArray(can_create_roles) ? JSON.stringify(can_create_roles) : (typeof can_create_roles === 'string' ? can_create_roles : null),
+                finalSlaMatrixId,
+                max_approval_level,
+                finalCategoryId,
+                id
         ]);
 
         if (result.rows.length === 0) {
@@ -570,3 +574,4 @@ export async function DELETE(request) {
         }
     }
 }
+ 

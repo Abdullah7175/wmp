@@ -34,6 +34,7 @@ export default function CreateFileType() {
         categoryId: '',
         code: '',
         requiresApproval: true,
+        is_work_related: false,
         department_id: '',
         max_approval_level: ''
     });
@@ -142,7 +143,7 @@ export default function CreateFileType() {
             return;
         }
 
-        try {
+        try { 
             setLoading(true);
             
             const response = await fetch('/api/efiling/file-types', {
@@ -434,6 +435,18 @@ export default function CreateFileType() {
                             />
                             <Label htmlFor="requiresApproval">Requires approval workflow</Label>
                         </div>
+
+                        {/* ---> ADD THIS NEW BLOCK BELOW <--- */}
+                        <div className="flex items-center space-x-2">
+                            <Checkbox
+                                id="is_work_related"
+                                checked={formData.is_work_related}
+                                onCheckedChange={(checked) => handleInputChange('is_work_related', checked)}
+                            />
+                            <Label htmlFor="is_work_related">Is work related file</Label>
+                        </div>
+
+
                     </CardContent>
                 </Card>
 

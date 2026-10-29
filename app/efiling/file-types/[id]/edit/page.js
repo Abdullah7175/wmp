@@ -35,6 +35,7 @@ export default function EditFileType() {
         department_id: '',
         category_id: '',
         requires_approval: false,
+        is_work_related: false,
         auto_assign: false,
         workflow_template_id: '',
         is_active: true
@@ -77,6 +78,7 @@ export default function EditFileType() {
                     department_id: fileType.department_id || null,
                     category_id: fileType.category_id || fileType.categoryId || null,
                     requires_approval: fileType.requires_approval || false,
+                    is_work_related: fileType.is_work_related || false,
                     auto_assign: fileType.auto_assign || false,
                     workflow_template_id: fileType.workflow_template_id || '',
                     is_active: fileType.is_active !== undefined ? fileType.is_active : true
@@ -365,6 +367,15 @@ export default function EditFileType() {
                                 </Select>
                             </div>
                         </div>
+
+                    <div className="flex items-center space-x-2">
+                        <Checkbox
+                            id="is_work_related"
+                            checked={formData.is_work_related}
+                            onCheckedChange={(checked) => handleInputChange('is_work_related', checked)}
+                        />
+                        <Label htmlFor="is_work_related">Is work related file</Label>
+                    </div>
 
                         {/* Sequential SLA Matrix Configuration */}
                         <div className="space-y-3 border p-4 rounded-md bg-muted/20">
