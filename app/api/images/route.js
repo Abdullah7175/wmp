@@ -239,6 +239,7 @@ export async function POST(req) {
         const descriptions = formData.getAll('description');
         const latitudes = formData.getAll('latitude');
         const longitudes = formData.getAll('longitude');
+        const isCertificates = formData.getAll('is_certificate');
 
         if (!workRequestId || files.length === 0) {
             return createErrorResponse('Work Request ID and at least one image are required', 400);
@@ -282,6 +283,7 @@ export async function POST(req) {
                 const description = descriptions[i];
                 const latitude = latitudes[i] || '0';
                 const longitude = longitudes[i] || '0';
+                const isCertificate = isCertificates[i] === 'true' || isCertificates[i] === true;
                 
                 if (!description) {
                     continue;
@@ -298,8 +300,8 @@ export async function POST(req) {
                 
                 const geoTag = `SRID=4326;POINT(${longitude} ${latitude})`;
                 const query = `
-                    INSERT INTO images (work_request_id, description, link, geo_tag, created_at, updated_at, creator_id, creator_type, file_name, file_size, file_type, creator_name)
-                    VALUES ($1, $2, $3, ST_GeomFromText($4, 4326), NOW(), NOW(), $5, $6, $7, $8, $9, $10)
+                    INSERT INTO images (work_request_id, description, link, geo_tag, created_at, updated_at, creator_id, creator_type, file_name, file_size, file_type, creator_name, is_certificate)
+                    VALUES ($1, $2, $3, ST_GeomFromText($4, 4326), NOW(), NOW(), $5, $6, $7, $8, $9, $10 , $11)
                     RETURNING *;
                 `;
                 const { rows } = await client.query(query, [
@@ -312,7 +314,8 @@ export async function POST(req) {
                     file.name,
                     file.size,
                     file.type,
-                    session.user.name || 'Unknown'
+                    session.user.name || 'Unknown',
+                    isCertificate
                 ]);
                 uploadedImages.push(rows[0]);
             }
@@ -373,6 +376,7 @@ export async function PUT(req) {
             const latitude = formData.get('latitude');
             const longitude = formData.get('longitude');
             const file = formData.get('file');
+            const isCertificate = formData.get('is_certificate') === 'true' || formData.get('is_certificate') === true;
 
             if (!id) {
                 return NextResponse.json({ error: 'Image ID is required' }, { status: 400 });
@@ -467,6 +471,7 @@ export async function PUT(req) {
                         THEN ST_SetSRID(ST_MakePoint($5::numeric, $4::numeric), 4326)
                         ELSE geo_tag
                     END,
+                    is_certificate = $6,
                     updated_at = NOW()
                 WHERE id = $6
                 RETURNING *;
@@ -499,7 +504,7 @@ export async function PUT(req) {
         } else {
             // Handle JSON update (no file upload)
             const body = await req.json();
-            const { id, description, workRequestId, latitude, longitude } = body;
+            const { id, description, workRequestId, latitude, longitude, is_certificate } = body;
 
             if (!id) {
                 return NextResponse.json({ error: 'Image ID is required' }, { status: 400 });
@@ -515,6 +520,7 @@ export async function PUT(req) {
                         THEN ST_SetSRID(ST_MakePoint($4::numeric, $3::numeric), 4326)
                         ELSE geo_tag
                     END,
+                    is_certificate = $5,
                     updated_at = NOW()
                 WHERE id = $5
                 RETURNING *;
