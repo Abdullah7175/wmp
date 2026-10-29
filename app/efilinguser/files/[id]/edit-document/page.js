@@ -634,7 +634,7 @@ export default function DocumentEditor() {
         });
     };
 
-    const deletePage = (pageId) => {
+    const deletePage = async (pageId) => {
         if (pages.length <= 1) {
             toast({
                 title: "Cannot Delete",
@@ -645,18 +645,46 @@ export default function DocumentEditor() {
         }
 
         const pageToDelete = pages.find(p => p.id === pageId);
-        setPages(prev => prev.filter(p => p.id !== pageId));
-
-        // If we're deleting the current page, switch to the first remaining page
-        if (currentPageId === pageId) {
-            const remainingPages = pages.filter(p => p.id !== pageId);
-            setCurrentPageId(remainingPages[0].id);
+        
+        if (!confirm(`Are you sure you want to permanently delete "${pageToDelete?.title || 'this page'}"?`)) {
+            return;
         }
 
-        toast({
-            title: "Page Deleted",
-            description: `${pageToDelete.title} has been removed from the document`,
-        });
+        try {
+            // Check if pageId is a numeric database ID (not a newly added client-side dummy ID)
+            if (typeof pageId === 'number' || !isNaN(pageId)) {
+                const res = await fetch(`/api/efiling/files/${params.id}/pages?page_id=${pageId}`, {
+                    method: 'DELETE'
+                });
+
+                if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.error || 'Failed to delete page from server');
+                }
+            }
+
+            // Remove page from UI state
+            setPages(prev => prev.filter(p => p.id !== pageId));
+
+            // If deleting current page, switch to the first remaining page
+            if (currentPageId === pageId) {
+                const remainingPages = pages.filter(p => p.id !== pageId);
+                setCurrentPageId(remainingPages[0].id);
+            }
+
+            toast({
+                title: "Page Deleted",
+                description: `${pageToDelete?.title || 'Page'} has been permanently removed.`,
+            });
+
+        } catch (error) {
+            console.error('Error deleting page:', error);
+            toast({
+                title: "Error Deleting Page",
+                description: error.message || "Failed to delete page",
+                variant: "destructive",
+            });
+        }
     };
 
     const updatePageTitle = (pageId, newTitle) => {

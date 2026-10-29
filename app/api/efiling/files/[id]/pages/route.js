@@ -500,20 +500,12 @@ export async function DELETE(request, { params }) {
 
         const currentUser = currentUserRes.rows[0];
 
-        const canAdd = await canAddPages(client, id, currentUser.id);
-        if (!canAdd) {
-            await client.query('ROLLBACK');
-            return NextResponse.json({
-                error: 'Only authorized roles can delete pages on this file',
-                code: 'PERMISSION_DENIED'
-            }, { status: 403 });
-        } 
-
-        // STRICT OWNERSHIP CHECK: Fetch page first and verify creator
+// 1. Fetch page first and verify ownership / file info
         const pageCheck = await client.query(`
-            SELECT id, page_title, created_by 
-            FROM efiling_document_pages 
-            WHERE id = $1 AND file_id = $2 AND is_active = true
+            SELECT p.id, p.page_title, p.created_by, f.created_by as file_created_by
+            FROM efiling_document_pages p
+            JOIN efiling_files f ON p.file_id = f.id
+            WHERE p.id = $1 AND p.file_id = $2
         `, [page_id, id]);
 
         if (pageCheck.rows.length === 0) {
@@ -523,6 +515,24 @@ export async function DELETE(request, { params }) {
 
         const page = pageCheck.rows[0];
 
+        // 2. Flexible Authorization Check:
+        // Allow deletion if:
+        // - User is System Admin (roles 1 or 2)
+        // - User created this specific page
+        // - User created the parent file
+        // - OR user passes the general canAddPages check
+        const canAdd = await canAddPages(client, id, currentUser.id);
+        const isPageCreator = parseInt(page.created_by) === parseInt(currentUser.id);
+        const isFileCreator = parseInt(page.file_created_by) === parseInt(currentUser.id);
+
+        if (!canAdd && !isPageCreator && !isFileCreator && !isAdmin) {
+            await client.query('ROLLBACK');
+            return NextResponse.json({
+                error: 'Only authorized roles, admins, or the page/file creator can delete pages on this file',
+                code: 'PERMISSION_DENIED'
+            }, { status: 403 });
+        }
+
         if (parseInt(page.created_by) !== parseInt(currentUser.id) && !isAdmin) {
             await client.query('ROLLBACK');
             return NextResponse.json({
@@ -531,11 +541,10 @@ export async function DELETE(request, { params }) {
             }, { status: 403 });
         }
 
-        // Soft delete page
+// HARD DELETE PAGE FROM DATABASE
         const pageRes = await client.query(`
-            UPDATE efiling_document_pages
-            SET is_active = false, updated_at = CURRENT_TIMESTAMP
-            WHERE id = $1 AND file_id = $2 AND is_active = true
+            DELETE FROM efiling_document_pages
+            WHERE id = $1 AND file_id = $2
             RETURNING id, page_title, page_number
         `, [page_id, id]);
 
