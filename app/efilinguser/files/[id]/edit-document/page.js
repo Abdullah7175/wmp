@@ -385,6 +385,7 @@ export default function DocumentEditor() {
                     description: "Document saved successfully",
                 });
                 console.log('Document saved:', result);
+                router.replace(`/efilinguser/files/${params.id}`);
             } else {
                 const errorData = await response.json();
                 console.error('Save error:', errorData);
