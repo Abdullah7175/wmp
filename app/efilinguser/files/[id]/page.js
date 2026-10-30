@@ -1108,7 +1108,7 @@ const handleDeleteComment = async (commentId) => {
         }
         
         // Restriction check: If work request id exists and beforeContent is empty
-        if (isWorkRelated && beforeContent.length === 0) {
+        if (isWorkRelated && isCreator && beforeContent.length === 0) {
             toast({
                 title: "Action Not Allowed",
                 description: "To mark file forward, you need to first add before content in the file.",
