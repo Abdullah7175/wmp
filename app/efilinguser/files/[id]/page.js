@@ -40,7 +40,8 @@ export default function FileDetail() {
     const [userRoleCode, setUserRoleCode] = useState(''); 
     const [userRole, setUserRole] = useState('');
     const [hasUserSigned, setHasUserSigned] = useState(false);
-
+    const [showEditWorkRequestModal, setShowEditWorkRequestModal] = useState(false); 
+    const [savingWorkRequest, setSavingWorkRequest] = useState(false);
     const [showMarkModal, setShowMarkModal] = useState(false);
     const [selectedAttachment, setSelectedAttachment] = useState(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -411,6 +412,61 @@ export default function FileDetail() {
         setShowEditFileInfo(true);
     };
 
+
+    const handleOpenEditWorkRequest = () => {
+        if (checkFileClosed()) return;
+        setSelectedWorkRequestId(file?.work_request_id?.toString() || 'none');
+        fetchWorkRequests();
+        setShowEditWorkRequestModal(true);
+    };
+
+    const handleSaveWorkRequest = async () => {
+        if (checkFileClosed()) return;
+        if (!file) return;
+
+        setSavingWorkRequest(true);
+        try {
+            const workRequestId = selectedWorkRequestId === 'none' ? null : parseInt(selectedWorkRequestId);
+
+            const res = await fetch(`/api/efiling/files/${file.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    work_request_id: workRequestId
+                })
+            });
+
+            if (res.ok) {
+                const updatedFile = await res.json();
+                setFile(updatedFile);
+                setShowEditWorkRequestModal(false);
+                toast({
+                    title: "Success",
+                    description: "Video archiving request ID updated successfully"
+                });
+
+                if (updatedFile.work_request_id) {
+                    fetchBeforeContent();
+                }
+            } else {
+                const error = await res.json();
+                toast({
+                    title: "Error",
+                    description: error.error || "Failed to update video archiving request ID",
+                    variant: "destructive"
+                });
+            }
+        } catch (error) {
+            console.error('Error updating video archiving request ID:', error);
+            toast({
+                title: "Error",
+                description: "Failed to update video archiving request ID",
+                variant: "destructive"
+            });
+        } finally {
+            setSavingWorkRequest(false);
+        }
+    };
     const handleSaveFileInfo = async () => {
         if (checkFileClosed()) return;
         if (!file) return;
@@ -423,7 +479,6 @@ export default function FileDetail() {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    work_request_id: workRequestId,
                     budget_head_no: budgetHeadNo,
                     proposed_estimated_cost: proposedCost === "" ? 0 : parseFloat(proposedCost),
                     contractor_premium: contractorPremium === "" ? 0 : parseFloat(contractorPremium),
@@ -1107,7 +1162,7 @@ const handleDeleteComment = async (commentId) => {
             return;
         }
         
-        // Restriction check: If work request id exists and beforeContent is empty
+        // Restriction check: If work related and creator and before content is empty 
         if (isWorkRelated && isCreator && beforeContent.length === 0) {
             toast({
                 title: "Action Not Allowed",
@@ -1724,6 +1779,7 @@ const handleDeleteComment = async (commentId) => {
                                             Edit File Information 
                                         </Button>
                                     )}
+
                                 </div>
                             </CardHeader>
                             <CardContent className="space-y-4">
@@ -1917,6 +1973,19 @@ const handleDeleteComment = async (commentId) => {
                                     ) : (
                                         <p className="text-sm text-gray-500 italic">No video request linked</p>
                                     )}
+
+                                    {isCreator && !isCcOnly && (
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={handleOpenEditWorkRequest}
+                                            className="mt-2 flex items-center"
+                                        >
+                                            <Edit className="w-3.5 h-3.5 mr-1.5" />
+                                            Edit Video Archiving ID
+                                        </Button>
+                                    )}
+
                                 </div>
                                 {file.remarks && (
                                     <div>
@@ -2990,30 +3059,7 @@ const handleDeleteComment = async (commentId) => {
                             <DialogTitle>Edit File Information</DialogTitle>
                         </DialogHeader>
                         <div className="space-y-4">
-                            <div>
-                                <Label htmlFor="work_request_id">Video Archiving Request ID</Label>
-                                <Select
-                                    value={selectedWorkRequestId || 'none'}
-                                    onValueChange={setSelectedWorkRequestId}
-                                >
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Select Video Request ID (Optional)" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="none">No Video Request</SelectItem>
-                                        {workRequests.map((req) => (
-                                            <SelectItem key={req.id} value={req.id.toString()}>
-                                                #{req.id} - {req.address || 'No address'} ({req.complaint_type || 'No type'})
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                                <p className="text-sm text-gray-500 mt-1">
-                                    Link this file to a specific video archiving request for reference
-                                </p>
-                            </div>
-
-
+                           
                             <div className="border-t pt-4">
                                 <h4 className="text-sm font-semibold mb-4">Costing & Budget Information</h4>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -3077,6 +3123,55 @@ const handleDeleteComment = async (commentId) => {
                                     disabled={savingFileInfo}
                                 >
                                     {savingFileInfo ? 'Saving...' : 'Save Changes'}
+                                </Button>
+                            </div>
+                        </div>
+                    </DialogContent>
+                </Dialog>
+
+                {/* Dedicated Edit Video Archiving ID Dialog */}
+                <Dialog open={showEditWorkRequestModal} onOpenChange={setShowEditWorkRequestModal}>
+                    <DialogContent className="max-w-md">
+                        <DialogHeader>
+                            <DialogTitle>Edit Video Archiving ID</DialogTitle>
+                        </DialogHeader>
+                        <div className="space-y-4">
+                            <div>
+                                <Label htmlFor="work_request_id">Video Archiving Request ID</Label>
+                                <Select
+                                    value={selectedWorkRequestId || 'none'}
+                                    onValueChange={setSelectedWorkRequestId}
+                                >
+                                    <SelectTrigger className="mt-1">
+                                        <SelectValue placeholder="Select Video Request ID (Optional)" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="none">No Video Request</SelectItem>
+                                        {workRequests.map((req) => (
+                                            <SelectItem key={req.id} value={req.id.toString()}>
+                                                #{req.id} - {req.address || 'No address'} ({req.complaint_type || 'No type'})
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                <p className="text-sm text-gray-500 mt-1">
+                                    Link this file to a specific video archiving request for reference
+                                </p>
+                            </div>
+
+                            <div className="flex justify-end space-x-2 pt-4 border-t">
+                                <Button
+                                    variant="outline"
+                                    onClick={() => setShowEditWorkRequestModal(false)}
+                                    disabled={savingWorkRequest}
+                                >
+                                    Cancel
+                                </Button>
+                                <Button
+                                    onClick={handleSaveWorkRequest}
+                                    disabled={savingWorkRequest}
+                                >
+                                    {savingWorkRequest ? 'Saving...' : 'Save Changes'}
                                 </Button>
                             </div>
                         </div>
