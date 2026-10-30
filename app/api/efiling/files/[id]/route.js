@@ -25,7 +25,7 @@ export async function GET(request, { params }) {
             return NextResponse.json(
                 { error: 'Forbidden - You do not have access to this file' },
                 { status: 403 }
-            );
+            ); 
         }
 
         // Check if SLA columns exist (check each column individually)
@@ -86,6 +86,7 @@ export async function GET(request, { params }) {
                 c.name AS category_name,
                 t.name AS file_type_name,
                 t.code AS file_type_code,
+                t.is_work_related AS is_work_related,
                 s.name AS status_name,
                 s.code AS status_code,
                 s.color AS status_color,

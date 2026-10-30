@@ -467,7 +467,7 @@ export default function FileDetail() {
 
     const fetchFile = async () => {
         setLoading(true);
-        try {
+        try { 
             const fileRes = await fetch(`/api/efiling/files/${params.id}`);
             if (!fileRes.ok) {
                 throw new Error(`File not found: ${fileRes.status}`);
@@ -1094,7 +1094,20 @@ const handleDeleteComment = async (commentId) => {
     const openMarkModal = () => {
         if (checkFileClosed()) return;
         
-        // Restriction check: If work-related file and beforeContent is empty
+        // Determine if file is work-related (has work_request_id OR file type is work-related)
+        const isWorkRelated = Boolean(file?.work_request_id || file?.is_work_related);
+
+        // Check for DIR_CIA role restriction on work-related files
+        if (userRoleCode === 'DIR_CIA' && isWorkRelated && workCertificates.length === 0) {
+            toast({
+                title: "Action Not Allowed",
+                description: "CIA can not mark file forward without completion certificate on work related files.",
+                variant: "destructive",
+            });
+            return;
+        }
+        
+        // Restriction check: If work request id exists and beforeContent is empty
         if (file?.work_request_id && beforeContent.length === 0) {
             toast({
                 title: "Action Not Allowed",
