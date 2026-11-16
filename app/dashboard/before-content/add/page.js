@@ -9,7 +9,7 @@ export default function AddBeforeContentPage() {
     <div className="p-4 lg:p-6">
       <div className="flex items-center justify-between mb-6 lg:mb-8">
         <div className="flex items-center space-x-4">
-          <Link href="/dashboard/before-content">
+          <Link href="/dashboard/before-images">
             <Button variant="outline" size="sm">
               <ArrowLeft className="mr-2 h-4 w-4" />
               Back to Before Content

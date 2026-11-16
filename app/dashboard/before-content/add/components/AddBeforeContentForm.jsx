@@ -54,6 +54,16 @@ const AddBeforeContentForm = () => {
     },
     validationSchema,
     onSubmit: async (values) => {
+      const selectedFiles = fileInputs.filter((input) => input.file);
+      if (selectedFiles.length === 0) {
+        toast({
+          title: "Missing file",
+          description: "Please select at least one image or video file.",
+          variant: "destructive",
+        });
+        return;
+      }
+
       setLoading(true);
       try {
         const formData = new FormData();
@@ -61,13 +71,11 @@ const AddBeforeContentForm = () => {
         formData.append('description', values.description);
         formData.append('content_type', values.contentType);
 
-        fileInputs.forEach((input, index) => {
-          if (input.file) {
-            formData.append('files', input.file);
-            formData.append(`descriptions`, input.description);
-            formData.append(`latitudes`, input.latitude);
-            formData.append(`longitudes`, input.longitude);
-          }
+        selectedFiles.forEach((input) => {
+          formData.append('files', input.file);
+          formData.append('descriptions', input.description || values.description || '');
+          formData.append('latitudes', input.latitude || '0');
+          formData.append('longitudes', input.longitude || '0');
         });
 
         const response = await fetch('/api/before-content', {
@@ -80,12 +88,12 @@ const AddBeforeContentForm = () => {
             title: "Success",
             description: "Before content uploaded successfully",
           });
-          router.push('/dashboard');
+          router.push('/dashboard/before-images');
         } else {
-          const errorData = await response.json();
+          const errorData = await response.json().catch(() => ({}));
           toast({
             title: "Error",
-            description: errorData.message || "Failed to upload before content",
+            description: errorData.error || errorData.message || "Failed to upload before content",
             variant: "destructive",
           });
         }
@@ -108,8 +116,19 @@ const AddBeforeContentForm = () => {
 
   const removeFileInput = (index) => {
     if (fileInputs.length > 1) {
-      setFileInputs(fileInputs.filter((_, i) => i !== index));
+      const next = fileInputs.filter((_, i) => i !== index);
+      setFileInputs(next);
+      syncFilesToFormik(next);
     }
+  };
+
+  const syncFilesToFormik = (inputs) => {
+    // Yup validates formik.values.files — keep it in sync with the file picker state
+    formik.setFieldValue(
+      'files',
+      inputs.filter((input) => input.file).map((input) => input.file),
+      true
+    );
   };
 
   const handleFileChange = (index, file) => {
@@ -132,6 +151,7 @@ const AddBeforeContentForm = () => {
     const newFileInputs = [...fileInputs];
     newFileInputs[index].file = file;
     setFileInputs(newFileInputs);
+    syncFilesToFormik(newFileInputs);
   };
 
   return (
@@ -216,6 +236,10 @@ const AddBeforeContentForm = () => {
                   Add File
                 </Button>
               </div>
+
+              {formik.errors.files && (
+                <div className="text-red-600 text-sm">{formik.errors.files}</div>
+              )}
 
               {fileInputs.map((input, index) => (
                 <div key={index} className="border rounded-lg p-4 space-y-3">
