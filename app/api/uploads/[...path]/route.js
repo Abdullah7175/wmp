@@ -1,10 +1,36 @@
 import { NextResponse } from 'next/server';
-import { join, resolve } from 'path';
-import { existsSync, readFileSync } from 'fs';
+import { join, resolve, relative } from 'path';
+import { existsSync, readFileSync, readdirSync, statSync } from 'fs';
 import { auth } from '@/auth';
 import { connectToDatabase } from '@/lib/db';
 import { checkFileAccess } from '@/lib/authMiddleware';
 import { getMobileUserToken } from '@/lib/mobileAuthHelper';
+
+/** Shallow recursive lookup by exact filename (legacy misplaced before-content files). */
+function findFileByName(rootDir, fileName, depth = 0, maxDepth = 3) {
+  if (depth > maxDepth || !existsSync(rootDir)) return null;
+  let entries;
+  try {
+    entries = readdirSync(rootDir);
+  } catch {
+    return null;
+  }
+  for (const entry of entries) {
+    const full = join(rootDir, entry);
+    let st;
+    try {
+      st = statSync(full);
+    } catch {
+      continue;
+    }
+    if (st.isFile() && entry === fileName) return full;
+    if (st.isDirectory()) {
+      const found = findFileByName(full, fileName, depth + 1, maxDepth);
+      if (found) return found;
+    }
+  }
+  return null;
+}
 
 /**
  * SECURE FILE DOWNLOAD USING X-ACCEL-REDIRECT
@@ -152,22 +178,66 @@ export async function GET(request, { params }) {
     let fullPath = null;
     let uploadsDir = null;
     let baseDirUsed = null;
+    let servedRelativePath = normalizedPath;
+
+    // Primary path + legacy fallbacks (before-content used flat / before-images folders historically)
+    const fileName = normalizedPath[normalizedPath.length - 1];
+    const pathVariants = [normalizedPath];
+    if (normalizedPath[0] === 'before-content' && normalizedPath.length >= 2) {
+      pathVariants.push(['before-content', fileName]);
+      pathVariants.push(['before-content', 'image', fileName]);
+      pathVariants.push(['before-content', 'video', fileName]);
+      pathVariants.push(['before-images', fileName]);
+      pathVariants.push(['before-images', 'image', fileName]);
+      pathVariants.push(['images', fileName]);
+    }
+
+    // Prefer public/uploads (efiling/nginx), then nested public/public/uploads (legacy AWS-synced tree)
+    const uploadRootSuffixes = [
+      ['public', 'uploads'],
+      ['public', 'public', 'uploads'],
+    ];
 
     for (const baseDir of candidateBaseDirs) {
-      const dir = resolve(join(baseDir, 'public', 'uploads'));
-      const candidatePath = resolve(join(dir, ...normalizedPath));
-      if (!candidatePath.startsWith(dir)) continue;
-      if (existsSync(candidatePath)) {
-        fullPath = candidatePath;
-        uploadsDir = dir;
-        baseDirUsed = baseDir;
-        console.log(`[Uploads API] Found file at: ${fullPath} (baseDir: ${baseDir})`);
-        break;
+      for (const suffix of uploadRootSuffixes) {
+        const dir = resolve(join(baseDir, ...suffix));
+        for (const variant of pathVariants) {
+          const candidatePath = resolve(join(dir, ...variant));
+          if (!candidatePath.startsWith(dir)) continue;
+          if (existsSync(candidatePath)) {
+            fullPath = candidatePath;
+            uploadsDir = dir;
+            baseDirUsed = baseDir;
+            servedRelativePath = variant;
+            console.log(`[Uploads API] Found file at: ${fullPath} (baseDir: ${baseDir}, root: ${suffix.join('/')})`);
+            break;
+          }
+        }
+        if (fullPath) break;
+
+        // Last resort for before-content: locate by filename under uploads/before-content
+        if (!fullPath && normalizedPath[0] === 'before-content') {
+          const searchRoot = join(dir, 'before-content');
+          const found = findFileByName(searchRoot, fileName);
+          if (found && found.startsWith(dir)) {
+            fullPath = found;
+            uploadsDir = dir;
+            baseDirUsed = baseDir;
+            servedRelativePath = relative(dir, found).split(/[/\\]/).filter(Boolean);
+            console.log(`[Uploads API] Found file by name at: ${fullPath} (baseDir: ${baseDir})`);
+          }
+        }
+        if (fullPath) break;
       }
+      if (fullPath) break;
     }
 
     if (!fullPath || !existsSync(fullPath)) {
-      const tried = candidateBaseDirs.map((b) => join(b, 'public', 'uploads', ...normalizedPath)).join(', ');
+      const tried = candidateBaseDirs.flatMap((b) =>
+        uploadRootSuffixes.flatMap((suffix) =>
+          pathVariants.map((v) => join(b, ...suffix, ...v))
+        )
+      ).join(', ');
       console.error(`[Uploads API] File not found. Tried: ${tried}`);
       return new NextResponse('File not found', {
         status: 404,
@@ -234,17 +304,21 @@ export async function GET(request, { params }) {
 
     const filename = filePath[filePath.length - 1];
     const contentDisposition =
-      extension === 'pdf' || ['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(extension)
+      extension === 'pdf' ||
+      ['png', 'jpg', 'jpeg', 'gif', 'webp', 'mp4', 'webm', 'mov'].includes(extension)
         ? `inline; filename="${filename}"`
         : `attachment; filename="${filename}"`;
 
-    // Use X-Accel-Redirect only when Nginx can serve the file (alias points at APP_BASE_DIR or /opt/wmp16/public/uploads)
+    // X-Accel only for primary public/uploads (nginx alias). Nested public/public/uploads is streamed by Node.
     const nginxServedRoot = process.env.APP_BASE_DIR || '/opt/wmp16';
     const nginxUploadsDir = resolve(join(nginxServedRoot, 'public', 'uploads'));
-    const canNginxServe = fullPath.startsWith(nginxUploadsDir);
+    const canNginxServe =
+      fullPath === nginxUploadsDir ||
+      fullPath.startsWith(nginxUploadsDir + '/') ||
+      fullPath.startsWith(nginxUploadsDir + '\\');
 
     if (canNginxServe) {
-      const internalPath = `/protected/uploads/${normalizedPath.join('/')}`;
+      const internalPath = `/protected/uploads/${servedRelativePath.join('/')}`;
       console.log(`[Uploads API] Serving via X-Accel-Redirect: ${internalPath}`);
       return new NextResponse(null, {
         status: 200,

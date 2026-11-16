@@ -14,7 +14,7 @@ export default function AddBeforeContentPageClient() {
     if (workRequestId) {
       router.push('/dashboard/requests');
     } else {
-      router.push('/dashboard/before-content');
+      router.push('/dashboard/before-images');
     }
   };
 

@@ -6,7 +6,6 @@ import { Video, Download, Trash2, Plus, Edit } from "lucide-react";
 import Link from "next/link";
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-
 export default function FinalVideosPage() {
   const { data: session } = useSession();
   const [finalVideos, setFinalVideos] = useState([]);

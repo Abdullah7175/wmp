@@ -277,8 +277,12 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Content type must be either "image" or "video"' }, { status: 400 });
     }
 
-    // Process file uploads
-    const uploadDir = join(process.cwd(), 'public', 'uploads', 'before-content', contentTypeValue);
+    // Process file uploads — always under APP_BASE_DIR (or project root), not standalone cwd
+    let baseDir = process.env.APP_BASE_DIR || process.cwd();
+    if (baseDir.includes('.next/standalone') || baseDir.includes('.next\\standalone')) {
+      baseDir = join(baseDir, '..', '..');
+    }
+    const uploadDir = join(baseDir, 'public', 'uploads', 'before-content', contentTypeValue);
     await mkdir(uploadDir, { recursive: true });
 
     const uploadedFiles = [];
