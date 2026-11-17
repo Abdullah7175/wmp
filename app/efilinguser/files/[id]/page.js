@@ -435,15 +435,22 @@ export default function FileDetail() {
         if (checkFileClosed()) return;
         if (!file) return;
 
+        const newWorkRequestId = selectedWorkRequestId === 'none' ? null : parseInt(selectedWorkRequestId);
+        const currentWorkRequestId = file.work_request_id ? parseInt(file.work_request_id) : null;
+
+        // Prevent unnecessary API call if nothing changed
+        if (newWorkRequestId === currentWorkRequestId) {
+            setShowEditWorkRequestModal(false);
+            return;
+        }
+
         setSavingWorkRequest(true);
         try {
-            const workRequestId = selectedWorkRequestId === 'none' ? null : parseInt(selectedWorkRequestId);
-
             const res = await fetch(`/api/efiling/files/${file.id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    work_request_id: workRequestId
+                    work_request_id: newWorkRequestId
                 })
             });
 
@@ -458,6 +465,8 @@ export default function FileDetail() {
 
                 if (updatedFile.work_request_id) {
                     fetchBeforeContent();
+                } else {
+                    setBeforeContent([]); // Clear before content if unlinked
                 }
             } else {
                 const error = await res.json();
@@ -1160,7 +1169,7 @@ const handleDeleteComment = async (commentId) => {
     const openMarkModal = () => {
         if (checkFileClosed()) return;
         
-        // Determine if file is work-related (has work_request_id OR file type is work-related)
+        // Strictly check database-backed work request ID or file type flag
         const isWorkRelated = Boolean(file?.work_request_id || file?.is_work_related);
 
         // Check for DIR_CIA role restriction on work-related files
