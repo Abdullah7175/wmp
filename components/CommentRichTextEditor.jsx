@@ -57,17 +57,23 @@ export function sanitizeCommentHtml(html) {
           child.removeAttribute(attr.name);
         }
 
-        // Restore highlight on MARK / highlighted SPAN/FONT
+        // Restore highlight on MARK / highlighted SPAN/FONT (inline styles help print/PDF)
         if (hadHighlight) {
-          child.style.backgroundColor = isHighlightBackground(bgBefore)
-            ? bgBefore
-            : HIGHLIGHT_BG;
+          const bg = isHighlightBackground(bgBefore) ? bgBefore : HIGHLIGHT_BG;
+          child.style.backgroundColor = bg;
+          child.style.setProperty("-webkit-print-color-adjust", "exact");
+          child.style.setProperty("print-color-adjust", "exact");
+          child.style.setProperty("box-shadow", `inset 0 0 0 1000px ${bg}`);
         }
 
         // Normalize highlighted SPAN/FONT to MARK for consistent display
         if ((tag === "SPAN" || tag === "FONT") && hadHighlight) {
           const mark = doc.createElement("mark");
-          mark.style.backgroundColor = child.style.backgroundColor || HIGHLIGHT_BG;
+          const bg = child.style.backgroundColor || HIGHLIGHT_BG;
+          mark.style.backgroundColor = bg;
+          mark.style.setProperty("-webkit-print-color-adjust", "exact");
+          mark.style.setProperty("print-color-adjust", "exact");
+          mark.style.setProperty("box-shadow", `inset 0 0 0 1000px ${bg}`);
           while (child.firstChild) {
             mark.appendChild(child.firstChild);
           }
