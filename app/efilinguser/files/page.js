@@ -23,6 +23,7 @@ import {
     CheckCircle
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { CommentHtmlDisplay, commentHtmlToPlainText } from "@/components/CommentRichTextEditor";
 import { logEfilingUserAction, EFILING_ACTIONS } from '@/lib/efilingUserActionLogger';
 import {
     Select,
@@ -858,8 +859,15 @@ function renderFilesTable(
                                             {!isCcTab && isCEO && (
                                                 <>
                                                     <TableCell>
-                                                        <div className="max-w-xs text-xs text-violet-900 bg-violet-50 p-2 rounded border border-violet-200" title={file.tso_recommendation_comment || ''}>
-                                                            {file.tso_recommendation_comment || 'No comment'}
+                                                        <div
+                                                            className="max-w-xs text-xs text-violet-900 bg-violet-50 p-2 rounded border border-violet-200 line-clamp-4"
+                                                            title={commentHtmlToPlainText(file.tso_recommendation_comment || '') || 'No comment'}
+                                                        >
+                                                            {file.tso_recommendation_comment ? (
+                                                                <CommentHtmlDisplay html={file.tso_recommendation_comment} />
+                                                            ) : (
+                                                                'No comment'
+                                                            )}
                                                         </div>
                                                     </TableCell>
                                                     <TableCell className="text-xs text-gray-600">

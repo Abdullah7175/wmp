@@ -17,18 +17,25 @@ export async function PUT(request, context) {
 
         client = await connectToDatabase();
 
-        // Verify user role code is TSO (or check user ID against session)
+        // Verify user role is TSO or CSO (or legacy role id 4)
         const userCheck = await client.query(`
-            SELECT r.code as role_code 
+            SELECT r.code as role_code, r.name as role_name
             FROM efiling_users u 
             JOIN efiling_roles r ON u.efiling_role_id = r.id 
             WHERE u.user_id = $1
         `, [session.user.id]);
 
-        const roleCode = userCheck.rows[0]?.role_code?.toUpperCase();
+        const roleCode = (userCheck.rows[0]?.role_code || '').toString().toUpperCase();
+        const roleName = (userCheck.rows[0]?.role_name || '').toString().toUpperCase();
+        const isAllowed =
+            roleCode === 'TSO_CEO_SEC' ||
+            roleCode === 'CSO' ||
+            roleName === 'CSO' ||
+            roleName.includes('CSO') ||
+            String(session.user.role) === '4';
 
-        if (roleCode !== 'TSO_CEO_SEC' && String(session.user.role) !== '4') {
-            return NextResponse.json({ error: 'Forbidden: Only TSO can add CEO recommendation comments' }, { status: 403 });
+        if (!isAllowed) {
+            return NextResponse.json({ error: 'Forbidden: Only TSO/CSO can add CEO recommendation comments' }, { status: 403 });
         }
 
         // Update tso_recommendation_comment AND tso_recommendation_timestamp in database

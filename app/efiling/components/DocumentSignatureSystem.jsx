@@ -11,6 +11,10 @@ import { Pen, MessageSquare, User, Calendar, X, Edit, Trash2, Shield, Settings, 
 import SignatureCanvas from "react-signature-canvas";
 import { useSession } from "next-auth/react";
 import { buildSignatureCommentTimeline } from "@/lib/efilingSignatureCommentTimeline";
+import CommentRichTextEditor, {
+    CommentHtmlDisplay,
+    commentHtmlToPlainText,
+} from "@/components/CommentRichTextEditor";
 
 export default function DocumentSignatureSystem({ 
     fileId, 
@@ -397,7 +401,7 @@ export default function DocumentSignatureSystem({
 
     // Handle comment creation
     const handleAddComment = async () => {
-        if (!commentText.trim()) {
+        if (!commentHtmlToPlainText(commentText)) {
             toast({
                 title: "No Comment",
                 description: "Please enter a comment.",
@@ -536,13 +540,29 @@ export default function DocumentSignatureSystem({
     const renderCommentBody = (comment) => (
         editingCommentId === comment.id ? (
             <div className="space-y-2">
-                <Input
+                <CommentRichTextEditor
                     value={editCommentText}
-                    onChange={(e) => setEditCommentText(e.target.value)}
+                    onChange={setEditCommentText}
                     placeholder="Edit your comment..."
+                    minHeight={100}
                 />
                 <div className="flex gap-2">
-                    <Button size="sm" onClick={() => handleEditComment(comment.id)}>Save</Button>
+                    <Button
+                        size="sm"
+                        onClick={() => {
+                            if (!commentHtmlToPlainText(editCommentText)) {
+                                toast({
+                                    title: "No Comment",
+                                    description: "Please enter a comment.",
+                                    variant: "destructive",
+                                });
+                                return;
+                            }
+                            handleEditComment(comment.id);
+                        }}
+                    >
+                        Save
+                    </Button>
                     <Button
                         size="sm"
                         variant="outline"
@@ -556,7 +576,7 @@ export default function DocumentSignatureSystem({
                 </div>
             </div>
         ) : (
-            <div className="text-sm text-gray-700">{comment.text}</div>
+            <CommentHtmlDisplay html={comment.text} className="text-sm text-gray-700" />
         )
     );
 
@@ -855,13 +875,11 @@ export default function DocumentSignatureSystem({
                         <CardContent className="space-y-4">
                             <div>
                                 <Label htmlFor="commentText">Comment</Label>
-                                <textarea
-                                    id="commentText"
+                                <CommentRichTextEditor
                                     value={commentText}
-                                    rows={10}
-                                    onChange={(e) => setCommentText(e.target.value)}
+                                    onChange={setCommentText}
                                     placeholder="Enter your comment..."
-                                    className="w-full border rounded-md p-2 text-sm"
+                                    minHeight={180}
                                 />
                             </div>
                             <div className="flex justify-end gap-2">

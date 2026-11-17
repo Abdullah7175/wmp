@@ -1,6 +1,5 @@
 "use client";
 // print file
-import { Textarea } from "@/components/ui/textarea";
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter, useParams } from "next/navigation";
@@ -19,6 +18,10 @@ import MarkToModal from "../../components/MarkToModal";
 import { useEfilingUser } from "@/context/EfilingUserContext";
 import { sanitizeHtml } from "@/lib/sanitizeHtml";
 import { loadPdfJs, fetchPdfArrayBuffer } from "@/lib/setupPdfJs";
+import CommentRichTextEditor, {
+    commentHtmlToPlainText,
+    sanitizeCommentHtml,
+} from "@/components/CommentRichTextEditor";
 
 export default function FileDetail() {
     const { data: session } = useSession();
@@ -1871,36 +1874,39 @@ const handleDeleteComment = async (commentId) => {
                                     const activeCode = (userRoleCode || '').toString().toUpperCase();
                                     const activeRoleName = (userRole || '').toString().toUpperCase();
                                     
-                                    // Checks if role_code or role_name contains TSO or TSO_CEO_SEC
-                                    const isTsoUser = 
-                                        activeCode === 'TSO_CEO_SEC' ;
+                                    // TSO secretary and CSO can add CEO recommendation notes
+                                    const isTsoOrCsoUser =
+                                        activeCode === 'TSO_CEO_SEC' ||
+                                        activeCode === 'CSO' ||
+                                        activeRoleName === 'CSO' ||
+                                        activeRoleName.includes('CSO');
 
-                                    console.log('Current user role code:', userRoleCode, '| isTsoUser:', isTsoUser);
+                                    console.log('Current user role code:', userRoleCode, '| isTsoOrCsoUser:', isTsoOrCsoUser);
 
-                                    if (!isTsoUser) return null;
+                                    if (!isTsoOrCsoUser) return null;
 
                                     return (
                                         <div className="mt-4 pt-4 border-t border-violet-200 bg-violet-50 p-4 rounded-lg space-y-3 no-print">
                                             <div className="flex items-center gap-2">
                                                 <Eye className="w-5 h-5 text-violet-700" />
                                                 <Label className="text-base font-bold text-violet-900 block">
-                                                    TSO / Secretary Comment for CEO
+                                                    TSO / CSO Comment for CEO
                                                 </Label>
                                             </div>
                                             <p className="text-xs text-violet-700">
                                                 This file is marked to CEO so please add a comment / note here. This will be directly visible to the CEO on their file dashboard and detail view.
                                             </p>
-                                            <Textarea
+                                            <CommentRichTextEditor
                                                 value={tsoComment}
-                                                onChange={(e) => setTsoComment(e.target.value)}
+                                                onChange={setTsoComment}
                                                 placeholder="e.g. Reviewed all documents. Safe to sign and approve."
-                                                rows={3}
-                                                className="mb-2 text-sm text-gray-900 bg-white border-violet-300 focus:border-violet-600"
+                                                minHeight={110}
+                                                className="mb-2 border-violet-300"
                                             />
                                             <Button
                                                 size="sm"
                                                 onClick={handleSaveTsoComment}
-                                                disabled={isSavingTsoComment}
+                                                disabled={isSavingTsoComment || !commentHtmlToPlainText(tsoComment)}
                                                 className="bg-violet-700 hover:bg-violet-800 text-white"
                                             >
                                                 {isSavingTsoComment ? "Saving..." : "Save Recommendation for CEO"}
@@ -2230,7 +2236,10 @@ const handleDeleteComment = async (commentId) => {
                                             {!shouldHideTimestamp && (
                                                 <div style={{ color: '#666', fontSize: '7pt', marginBottom: '2mm' }}>{formatDate(c.timestamp)}</div>
                                             )}
-                                            <div className="print-comment-content">{c.text}</div>
+                                            <div
+                                                className="print-comment-content"
+                                                dangerouslySetInnerHTML={{ __html: sanitizeCommentHtml(c.text || "") }}
+                                            />
                                         </div>
                                     ))}
                                 </div>
