@@ -82,6 +82,7 @@ export async function GET(request, { params }) {
                 f.*,
                 f.tso_recommendation_comment,
                 f.tso_recommendation_timestamp,
+                f.tso_flag,
                 d.name AS department_name,
                 c.name AS category_name,
                 t.name AS file_type_name,

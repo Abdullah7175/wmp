@@ -59,7 +59,7 @@ export default function FilesPage() {
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage, setItemsPerPage] = useState(10);
     const [markModalFile, setMarkModalFile] = useState(null);
-
+    const [flaggedFiles, setFlaggedFiles] = useState([])
     // New filter states
     const [fileIdFilter, setFileIdFilter] = useState('');
     const [townFilter, setTownFilter] = useState('all');
@@ -156,6 +156,9 @@ export default function FilesPage() {
                 params.append('created_by', efilingUserId);
             } else if (activeTab === 'cc') {
                 params.append('cc_to', efilingUserId);
+            } else if (activeTab === 'flagged_by_tso') { 
+                params.append('tso_flag', 'true');
+                params.append('assigned_to', efilingUserId);
             } else {
                 params.append('assigned_to', efilingUserId);
             }
@@ -185,6 +188,8 @@ export default function FilesPage() {
                 setClosedFiles(fileList);
             } else if (activeTab === 'discarded') {
                 setDiscardedFiles(fileList);
+            } else if (activeTab === 'flagged_by_tso') { 
+                setFlaggedFiles(fileList);
             } else {
                 setAssignedToMe(fileList);
             }
@@ -270,7 +275,10 @@ export default function FilesPage() {
     const filteredAssignedFiles = useMemo(() => filterRows(assignedToMe), [assignedToMe, searchTerm]);
     const filteredCcFiles = useMemo(() => filterRows(ccFiles), [ccFiles, searchTerm]);
     const filteredClosedFiles = useMemo(() => filterRows(closedFiles), [closedFiles, searchTerm]);
-
+    const filteredFlaggedFiles = useMemo(() => {
+            const baseFiltered = filterRows(flaggedFiles);
+            return baseFiltered.filter(file => file.tso_flag === true || file.tso_flag === 'true');
+    }, [flaggedFiles, searchTerm]);
 
         // Triggers OTP Modal
     const handleInitiateCloseFile = (file) => {
@@ -586,6 +594,9 @@ export default function FilesPage() {
                 <TabsList>
                     {!isExternal && <TabsTrigger value="mine">My Files</TabsTrigger>}
                     <TabsTrigger value="assigned">Marked To Me</TabsTrigger>
+                    {((roleCode || '').toString().toUpperCase() === 'CEO' || (session?.user?.role || '').toString().toUpperCase() === 'CEO') && (
+                        <TabsTrigger value="flagged_by_tso">Files Flagged by TSO</TabsTrigger>
+                    )}
                     {!isExternal && <TabsTrigger value="cc">CC Files</TabsTrigger>}
                     {!isExternal && <TabsTrigger value="closed">Files Closed by You</TabsTrigger>}
                     {!isExternal && <TabsTrigger value="discarded">Files Discarded by You</TabsTrigger>}
@@ -637,6 +648,31 @@ export default function FilesPage() {
                         discardingId,
                         roleCode,
                         session?.user?.role
+                    )}
+                </TabsContent>
+
+                <TabsContent value="flagged_by_tso">
+                    {renderFilesTable(
+                        filteredFlaggedFiles,
+                        currentPage,
+                        itemsPerPage,
+                        handlePageChange,
+                        handleItemsPerPageChange,
+                        (fileId) => router.push(`/efilinguser/files/${fileId}`),
+                        (fileId) => router.push(`/efilinguser/files/${fileId}/edit-document`),
+                        setMarkModalFile,
+                        efilingUserId,
+                        isGlobal,
+                        getStatusBadge,
+                        formatTimeRemaining,
+                        false, 
+                        handleInitiateCloseFile, 
+                        handleInitiateDiscardFile, 
+                        closingId, 
+                        discardingId,
+                        roleCode,
+                        session?.user?.role,
+                        true 
                     )}
                 </TabsContent>
 
@@ -751,11 +787,17 @@ function renderFilesTable(
     closingId = null,
     discardingId = null,
     roleCode = '',
-    sessionUserRole = ''
+    sessionUserRole = '',
+    forceShowTsoColumns = false
 ) {
     // Check if user is CEO
     const isCEO = (roleCode || '').toString().toUpperCase() === 'CEO' || 
                   (sessionUserRole || '').toString().toUpperCase() === 'CEO';
+
+    const isTSO = (roleCode || '').toString().toUpperCase() === 'TSO_CEO_SEC'; 
+
+    // Determine whether to display TSO recommendation columns & flags
+    const showTsoColumns = forceShowTsoColumns || isCEO || (isCcTab && isTSO);
 
     // Calculate pagination for this specific table
     const totalPages = Math.ceil(rows.length / itemsPerPage);
@@ -793,10 +835,11 @@ function renderFilesTable(
                                     <TableHead>Currently Marked To</TableHead>
                                     <TableHead>Last Signed By</TableHead>
                                     {/* CEO specific columns in Marked To Me */}
-                                    {!isCcTab && isCEO && (
+                                    {showTsoColumns && (
                                         <>
                                             <TableHead>TSO Comment</TableHead>
                                             <TableHead>Comment Date/Time</TableHead>
+                                            <TableHead>TSO Flag Status</TableHead>
                                         </>
                                     )}
                                     <TableHead>Status</TableHead>
@@ -855,8 +898,9 @@ function renderFilesTable(
                                             <TableCell>
                                                 <span className="text-sm">{file.last_signed_by_name || '-'}</span>
                                             </TableCell>
+
                                             {/* Render CEO columns */}
-                                            {!isCcTab && isCEO && (
+                                            {showTsoColumns && (
                                                 <>
                                                     <TableCell>
                                                         <div
@@ -880,6 +924,17 @@ function renderFilesTable(
                                                                 minute: '2-digit'
                                                             })
                                                             : '-'}
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        {file.tso_flag ? (
+                                                            <Badge className="bg-red-600 text-white font-semibold">
+                                                                ⚠️ Important Flagged by TSO
+                                                            </Badge>
+                                                        ) : (
+                                                            <Badge variant="outline" className="text-gray-500 border-gray-300">
+                                                                Normal
+                                                            </Badge>
+                                                        )}
                                                     </TableCell>
                                                 </>
                                             )}

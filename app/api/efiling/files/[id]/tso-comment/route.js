@@ -13,7 +13,7 @@ export async function PUT(request, context) {
         // Next.js 15 requirement: params must be awaited
         const params = await context.params;
         const { id } = params;
-        const { comment } = await request.json();
+        const { comment, tso_flag } = await request.json();
 
         client = await connectToDatabase();
 
@@ -37,16 +37,16 @@ export async function PUT(request, context) {
         if (!isAllowed) {
             return NextResponse.json({ error: 'Forbidden: Only TSO/CSO can add CEO recommendation comments' }, { status: 403 });
         }
-
-        // Update tso_recommendation_comment AND tso_recommendation_timestamp in database
+ 
         const result = await client.query(`
             UPDATE efiling_files 
             SET tso_recommendation_comment = $1, 
+                tso_flag = $2,
                 tso_recommendation_timestamp = NOW(),
                 updated_at = NOW() 
-            WHERE id = $2 
-            RETURNING tso_recommendation_comment, tso_recommendation_timestamp
-        `, [comment, id]);
+            WHERE id = $3 
+            RETURNING tso_recommendation_comment, tso_flag, tso_recommendation_timestamp
+        `, [comment, !!tso_flag, id]);
 
         if (result.rowCount === 0) {
             return NextResponse.json({ error: 'File not found or update failed' }, { status: 404 });
@@ -55,6 +55,7 @@ export async function PUT(request, context) {
         return NextResponse.json({
             success: true,
             comment: result.rows[0]?.tso_recommendation_comment,
+            tso_flag: result.rows[0]?.tso_flag,
             timestamp: result.rows[0]?.tso_recommendation_timestamp
         });
 

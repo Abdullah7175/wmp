@@ -74,7 +74,9 @@ export default function FileDetail() {
     const [timeLeft, setTimeLeft] = useState("");
     const [isAllAttachmentsModalOpen, setIsAllAttachmentsModalOpen] = useState(false); 
     const [tsoComment, setTsoComment] = useState("");
+    const [tsoFlag, setTsoFlag] = useState(false);
     const [isSavingTsoComment, setIsSavingTsoComment] = useState(false);
+    
 
     // Page-by-page images rendered from PDF attachments, keyed by attachment id:
     // { [attachmentId]: { status: 'loading' | 'ready' | 'error', pages: string[] } }
@@ -145,6 +147,9 @@ export default function FileDetail() {
     useEffect(() => {
             if (file?.tso_recommendation_comment) {
                 setTsoComment(file.tso_recommendation_comment);
+            }
+            if (file?.tso_flag !== undefined) {
+            setTsoFlag(file.tso_flag || false); 
             }
         }, [file]);
 
@@ -233,13 +238,16 @@ export default function FileDetail() {
             const res = await fetch(`/api/efiling/files/${params.id}/tso-comment`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ comment: tsoComment })
+                body: JSON.stringify({ 
+                    comment: tsoComment,
+                    tso_flag: tsoFlag 
+                })
             });
 
             if (res.ok) {
                 toast({
                     title: "Success",
-                    description: "Recommendation comment for CEO saved successfully."
+                    description: "Recommendation comment for CEO and flag saved successfully."
                 });
                 await fetchFile();
             } else {
@@ -758,7 +766,7 @@ const handleDeleteAttachment = async (attachmentId, e) => {
             });
         }
     };
-
+ 
 
     const handleOpenEditPage = (pageId) => {
         router.push(`/efilinguser/files/${params.id}/add-page?pageId=${pageId}&mode=edit`);
@@ -1903,6 +1911,24 @@ const handleDeleteComment = async (commentId) => {
                                                 minHeight={110}
                                                 className="mb-2 border-violet-300"
                                             />
+
+                                            {/* --- ADD THIS CHECKBOX INPUT ELEMENT HERE --- */}
+                                            <div className="flex items-center space-x-2 py-1">
+                                                <input
+                                                    type="checkbox"
+                                                    id="tsoFlagCheckbox"
+                                                    checked={tsoFlag}
+                                                    onChange={(e) => setTsoFlag(e.target.checked)}
+                                                    className="w-4 h-4 text-violet-600 border-violet-300 rounded focus:ring-violet-500"
+                                                />
+                                                <label 
+                                                    htmlFor="tsoFlagCheckbox" 
+                                                    className="text-sm font-semibold text-violet-900 cursor-pointer select-none"
+                                                >
+                                                    Flag Important
+                                                </label>
+                                            </div>
+                                            {/* ------------------------------------------- */}
                                             <Button
                                                 size="sm"
                                                 onClick={handleSaveTsoComment}
