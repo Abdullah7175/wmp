@@ -1238,9 +1238,10 @@ const handleDeleteComment = async (commentId) => {
                         margin: 0 !important;
                         padding: 0 !important;
                     }
-                    body {
-                        print-color-adjust: exact;
-                        -webkit-print-color-adjust: exact;
+                    html, body, .print-section, .print-comment-content, .print-comment-content * {
+                        print-color-adjust: exact !important;
+                        -webkit-print-color-adjust: exact !important;
+                        color-adjust: exact !important;
                     }
                     
                     .no-print {
@@ -1694,6 +1695,22 @@ const handleDeleteComment = async (commentId) => {
                         font-size: 7pt !important;
                         color: #000 !important;
                         line-height: 1.2 !important;
+                    }
+
+                    /* Highlight must survive print/PDF (browsers often drop backgrounds) */
+                    .print-comment-content mark,
+                    .print-comment-content span[style*="background"] {
+                        background-color: #fef08a !important;
+                        background-image: linear-gradient(#fef08a, #fef08a) !important;
+                        box-shadow: inset 0 0 0 1000px #fef08a !important;
+                        border-bottom: 2.5pt solid #ca8a04 !important;
+                        padding: 0 1.5pt !important;
+                        border-radius: 1pt !important;
+                        -webkit-box-decoration-break: clone !important;
+                        box-decoration-break: clone !important;
+                        -webkit-print-color-adjust: exact !important;
+                        print-color-adjust: exact !important;
+                        color-adjust: exact !important;
                     }
                     
                     .print-attachment-item img {
