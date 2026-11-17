@@ -1686,6 +1686,13 @@ const handleDeleteComment = async (commentId) => {
                         color: #000 !important;
                         line-height: 1.2 !important;
                     }
+
+                    .print-comment-content mark,
+                    .print-comment-content span[style*="background"] {
+                        background-color: #fef08a !important;
+                        -webkit-print-color-adjust: exact !important;
+                        print-color-adjust: exact !important;
+                    }
                     
                     .print-attachment-item img {
                         max-height: 70mm;

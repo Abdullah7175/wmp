@@ -8,6 +8,17 @@ const ALLOWED_TAGS = new Set([
   "B", "STRONG", "I", "EM", "U", "MARK", "SPAN", "BR", "DIV", "P", "FONT",
 ]);
 
+const HIGHLIGHT_BG = "#fef08a";
+
+function isHighlightBackground(value) {
+  if (!value) return false;
+  const v = String(value).toLowerCase().replace(/\s+/g, "");
+  if (!v || v === "transparent" || v === "rgba(0,0,0,0)" || v === "initial" || v === "inherit") {
+    return false;
+  }
+  return true;
+}
+
 /** Keep only formatting tags used by the comment toolbar. */
 export function sanitizeCommentHtml(html) {
   if (!html || typeof html !== "string") return "";
@@ -33,25 +44,36 @@ export function sanitizeCommentHtml(html) {
           continue;
         }
 
-        // Strip all attributes except safe highlight styles on SPAN/MARK/FONT
+        const bgBefore =
+          child.style?.backgroundColor ||
+          child.style?.background ||
+          "";
+        const hadHighlight =
+          tag === "MARK" || isHighlightBackground(bgBefore);
+
+        // Strip unsafe attributes first
         const attrs = Array.from(child.attributes || []);
         for (const attr of attrs) {
-          const name = attr.name.toLowerCase();
-          if (name === "style" && (tag === "SPAN" || tag === "MARK" || tag === "FONT")) {
-            const bg =
-              child.style.backgroundColor ||
-              child.style.background ||
-              "";
-            child.removeAttribute("style");
-            if (bg) {
-              child.style.backgroundColor = bg;
-            }
-          } else if (name === "color" && tag === "FONT") {
-            // ignore text color
-            child.removeAttribute(attr.name);
-          } else {
-            child.removeAttribute(attr.name);
+          child.removeAttribute(attr.name);
+        }
+
+        // Restore highlight on MARK / highlighted SPAN/FONT
+        if (hadHighlight) {
+          child.style.backgroundColor = isHighlightBackground(bgBefore)
+            ? bgBefore
+            : HIGHLIGHT_BG;
+        }
+
+        // Normalize highlighted SPAN/FONT to MARK for consistent display
+        if ((tag === "SPAN" || tag === "FONT") && hadHighlight) {
+          const mark = doc.createElement("mark");
+          mark.style.backgroundColor = child.style.backgroundColor || HIGHLIGHT_BG;
+          while (child.firstChild) {
+            mark.appendChild(child.firstChild);
           }
+          node.replaceChild(mark, child);
+          clean(mark);
+          continue;
         }
 
         clean(child);
@@ -79,10 +101,37 @@ export function CommentHtmlDisplay({ html, className = "" }) {
   const safe = sanitizeCommentHtml(html || "");
   return (
     <div
-      className={`comment-rich-html whitespace-pre-wrap break-words ${className}`}
+      className={`comment-rich-html whitespace-pre-wrap break-words [&_mark]:bg-[#fef08a] [&_mark]:px-0.5 [&_mark]:rounded-sm ${className}`}
       dangerouslySetInnerHTML={{ __html: safe }}
     />
   );
+}
+
+function wrapSelectionWithMark(editor) {
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return false;
+  const range = sel.getRangeAt(0);
+  if (!editor.contains(range.commonAncestorContainer)) return false;
+
+  const mark = document.createElement("mark");
+  mark.style.backgroundColor = HIGHLIGHT_BG;
+
+  try {
+    range.surroundContents(mark);
+  } catch {
+    // Selection crosses element boundaries — extract + wrap
+    const frag = range.extractContents();
+    mark.appendChild(frag);
+    range.insertNode(mark);
+  }
+
+  // Keep caret after the mark
+  sel.removeAllRanges();
+  const after = document.createRange();
+  after.setStartAfter(mark);
+  after.collapse(true);
+  sel.addRange(after);
+  return true;
 }
 
 /**
@@ -120,10 +169,12 @@ export default function CommentRichTextEditor({
     el.focus();
     try {
       if (command === "highlight") {
-        // Prefer hiliteColor; fall back to backColor
-        const ok = document.execCommand("hiliteColor", false, "#fef08a");
-        if (!ok) {
-          document.execCommand("backColor", false, "#fef08a");
+        // Manual <mark> wrap — execCommand hiliteColor is unreliable across browsers
+        const wrapped = wrapSelectionWithMark(el);
+        if (!wrapped) {
+          // Fallback if no selection / surround failed
+          document.execCommand("hiliteColor", false, HIGHLIGHT_BG);
+          document.execCommand("backColor", false, HIGHLIGHT_BG);
         }
       } else {
         document.execCommand(command, false, commandValue);
@@ -197,7 +248,7 @@ export default function CommentRichTextEditor({
         role="textbox"
         aria-multiline="true"
         data-placeholder={placeholder}
-        className="w-full p-2 text-sm outline-none empty:before:content-[attr(data-placeholder)] empty:before:text-gray-400"
+        className="w-full p-2 text-sm outline-none empty:before:content-[attr(data-placeholder)] empty:before:text-gray-400 [&_mark]:bg-[#fef08a] [&_mark]:px-0.5 [&_mark]:rounded-sm"
         style={{ minHeight }}
         onInput={emitChange}
         onBlur={emitChange}
