@@ -204,7 +204,13 @@ export default function EditEfilingUser() {
 
     // Auto-populate geographic fields when department is selected
     const handleDepartmentChange = async (departmentId) => {
-        handleInputChange('department_id', departmentId ? parseInt(departmentId) : '');
+        const nextDepartmentId = departmentId ? parseInt(departmentId) : '';
+        handleInputChange('department_id', nextDepartmentId);
+
+        const selectedRole = roles.find((role) => Number(role.id) === Number(formData.efiling_role_id));
+        if (!selectedRole || Number(selectedRole.department_id) !== Number(nextDepartmentId)) {
+            handleInputChange('efiling_role_id', '');
+        }
 
         // Clear existing geographic fields when changing department
         handleInputChange('division_id', '');
@@ -554,11 +560,19 @@ export default function EditEfilingUser() {
                                         </SelectValue>
                                     </SelectTrigger>
                                     <SelectContent>
-                                        {roles.map((role) => (
-                                            <SelectItem key={role.id} value={role.id.toString()}>
-                                                {role.name}
+                                        {roles.some((role) => Number(role.department_id) === Number(formData.department_id)) ? (
+                                            roles
+                                                .filter((role) => Number(role.department_id) === Number(formData.department_id))
+                                                .map((role) => (
+                                                <SelectItem key={role.id} value={role.id.toString()}>
+                                                    {role.name}
+                                                </SelectItem>
+                                            ))
+                                        ) : (
+                                            <SelectItem value="none" disabled>
+                                                {formData.department_id ? "No roles for this department" : "Select a department first"}
                                             </SelectItem>
-                                        ))}
+                                        )}
                                     </SelectContent>
                                 </Select>
                             </div>

@@ -158,7 +158,13 @@ export default function CreateEfilingUser() {
 
     // Auto-populate geographic fields when department is selected
     const handleDepartmentChange = async (departmentId) => {
-        handleInputChange('department_id', parseInt(departmentId));
+        const nextDepartmentId = parseInt(departmentId);
+        handleInputChange('department_id', nextDepartmentId);
+
+        const selectedRole = roles.find((role) => Number(role.id) === Number(formData.efiling_role_id));
+        if (!selectedRole || Number(selectedRole.department_id) !== nextDepartmentId) {
+            handleInputChange('efiling_role_id', '');
+        }
         
         // Clear existing geographic fields
         handleInputChange('division_id', '');
@@ -560,15 +566,19 @@ export default function CreateEfilingUser() {
                                             <SelectValue placeholder={Array.isArray(roles) && roles.length > 0 ? "Select role" : "Loading roles..."} />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            {Array.isArray(roles) && roles.length > 0 ? (
-                                                roles.map((role) => (
+                                            {Array.isArray(roles) && roles.some((role) => Number(role.department_id) === Number(formData.department_id)) ? (
+                                                roles
+                                                    .filter((role) => Number(role.department_id) === Number(formData.department_id))
+                                                    .map((role) => (
                                                     <SelectItem key={role.id} value={role.id.toString()}>
                                                         {role.name}
                                                     </SelectItem>
                                                 ))
                                             ) : (
                                                 <SelectItem value="loading" disabled>
-                                                    {Array.isArray(roles) && roles.length === 0 ? "No roles available" : "Loading..."}
+                                                    {!formData.department_id
+                                                        ? "Select a department first"
+                                                        : (Array.isArray(roles) && roles.length === 0 ? "Loading..." : "No roles for this department")}
                                                 </SelectItem>
                                             )}
                                         </SelectContent>

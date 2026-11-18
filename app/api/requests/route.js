@@ -41,7 +41,10 @@ export async function GET(request) {
         client = await connectToDatabase();
         console.log('Database connected successfully for requests API');
         
-        const scopeInfo = await resolveEfilingScope(request, client, { scopeKeys: ['scope', 'efiling', 'efilingScoped'] });
+        const scopeInfo = await resolveEfilingScope(request, client, {
+            scopeKeys: ['scope', 'efiling', 'efilingScoped'],
+            preferRoleLocations: true,
+        });
         if (scopeInfo.apply && scopeInfo.error) {
             // If user doesn't have e-filing profile, return error
             return NextResponse.json({ error: scopeInfo.error.message }, { status: scopeInfo.error.status });
