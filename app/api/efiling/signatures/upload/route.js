@@ -125,119 +125,126 @@ export async function POST(request) {
         // Save signature info to database with signature management
         const client = await connectToDatabase();
         
-        // Check if user already has a signature of this type
-        const existingSignature = await client.query(
-            `SELECT id FROM efiling_user_signatures 
-             WHERE user_id = $1 AND signature_type = $2`,
-            [userId, signatureType]
-        );
-
-        let result;
-        if (existingSignature.rows.length > 0) {
-            // Update existing signature
-            if (signatureType === 'typed') {
-                result = await client.query(
-                    `UPDATE efiling_user_signatures 
-                     SET signature_name = $1, signature_text = $2, signature_font = $3, 
-                         signature_color = $4, created_at = NOW()
-                     WHERE user_id = $5 AND signature_type = $6
-                     RETURNING id`,
-                    [
-                        `${signatureType}_signature`,
-                        signatureText,
-                        signatureFont || 'Arial',
-                        signatureColor || 'black',
-                        userId,
-                        signatureType
-                    ]
-                );
-            } else {
-                result = await client.query(
-                    `UPDATE efiling_user_signatures 
-                     SET signature_name = $1, file_name = $2, file_size = $3, file_type = $4, 
-                         file_url = $5, signature_data = $6, signature_color = $7, created_at = NOW()
-                     WHERE user_id = $8 AND signature_type = $9
-                     RETURNING id`,
-                    [
-                        `${signatureType}_signature`,
-                        filename,
-                        buffer?.length || 0,
-                        fileType || 'image/png',
-                        publicUrl,
-                        signatureData,
-                        signatureColor || 'black',
-                        userId,
-                        signatureType
-                    ]
-                );
-            }
-        } else {
-            // Check if user already has 3 signatures
+        try {
+            // First, check how many signatures the user has total
             const signatureCount = await client.query(
                 `SELECT COUNT(*) FROM efiling_user_signatures WHERE user_id = $1`,
                 [userId]
             );
 
-            if (parseInt(signatureCount.rows[0].count) >= 3) {
-                return NextResponse.json(
-                    { error: 'Maximum 3 signatures allowed per user. Please update an existing signature.' },
-                    { status: 400 }
-                );
-            }
+            // Check if user already has a signature of this specific type
+            const existingSignature = await client.query(
+                `SELECT id FROM efiling_user_signatures 
+                 WHERE user_id = $1 AND signature_type = $2`,
+                [userId, signatureType]
+            ); 
 
-            // Deactivate all other signatures for this user
+            // Deactivate ALL other signatures for this user to make the newly edited/created one active
             await client.query(
                 `UPDATE efiling_user_signatures SET is_active = false WHERE user_id = $1`,
                 [userId]
             );
 
-            // Insert new signature as active
-            if (signatureType === 'typed') {
-                result = await client.query(
-                    `INSERT INTO efiling_user_signatures 
-                     (id, user_id, signature_name, signature_type, signature_text, signature_font, signature_color, is_active, created_at) 
-                     VALUES ($1, $2, $3, $4, $5, $6, $7, true, NOW()) 
-                     RETURNING id`,
-                    [
-                        `sig_${Date.now()}`,
-                        userId,
-                        `${signatureType}_signature`,
-                        signatureType,
-                        signatureText,
-                        signatureFont || 'Arial',
-                        signatureColor || 'black'
-                    ]
-                );
+            let result;
+            if (existingSignature.rows.length > 0) {
+                // Update existing signature of this type and set it active = true
+                if (signatureType === 'typed') {
+                    result = await client.query(
+                        `UPDATE efiling_user_signatures 
+                         SET signature_name = $1, signature_text = $2, signature_font = $3, 
+                             signature_color = $4, is_active = true, created_at = NOW()
+                         WHERE user_id = $5 AND signature_type = $6
+                         RETURNING id`,
+                        [
+                            `${signatureType}_signature`,
+                            signatureText,
+                            signatureFont || 'Arial',
+                            signatureColor || 'black',
+                            userId,
+                            signatureType
+                        ]
+                    );
+                } else {
+                    result = await client.query(
+                        `UPDATE efiling_user_signatures 
+                         SET signature_name = $1, file_name = $2, file_size = $3, file_type = $4, 
+                             file_url = $5, signature_data = $6, signature_color = $7, is_active = true, created_at = NOW()
+                         WHERE user_id = $8 AND signature_type = $9
+                         RETURNING id`,
+                        [
+                            `${signatureType}_signature`,
+                            filename,
+                            buffer?.length || 0,
+                            fileType || 'image/png',
+                            publicUrl,
+                            signatureData,
+                            signatureColor || 'black',
+                            userId,
+                            signatureType
+                        ]
+                    );
+                }
             } else {
-                result = await client.query(
-                    `INSERT INTO efiling_user_signatures 
-                     (id, user_id, signature_name, signature_type, file_name, file_size, file_type, file_url, signature_data, signature_color, is_active, created_at) 
-                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, true, NOW()) 
-                     RETURNING id`,
-                    [
-                        `sig_${Date.now()}`,
-                        userId,
-                        `${signatureType}_signature`,
-                        signatureType,
-                        filename,
-                        buffer?.length || 0,
-                        fileType || 'image/png',
-                        publicUrl,
-                        signatureData,
-                        signatureColor || 'black'
-                    ]
-                );
+                // Enforce limit of 3 distinct signatures max per user
+                if (parseInt(signatureCount.rows[0].count) >= 3) {
+                    return NextResponse.json(
+                        { error: 'Maximum 3 signatures allowed per user. Please update an existing signature type.' },
+                        { status: 400 }
+                    );
+                }
+
+                // Insert new signature as active = true
+                if (signatureType === 'typed') {
+                    result = await client.query(
+                        `INSERT INTO efiling_user_signatures 
+                         (id, user_id, signature_name, signature_type, signature_text, signature_font, signature_color, is_active, created_at) 
+                         VALUES ($1, $2, $3, $4, $5, $6, $7, true, NOW()) 
+                         RETURNING id`,
+                        [
+                            `sig_${Date.now()}`,
+                            userId,
+                            `${signatureType}_signature`,
+                            signatureType,
+                            signatureText,
+                            signatureFont || 'Arial',
+                            signatureColor || 'black'
+                        ]
+                    );
+                } else {
+                    result = await client.query(
+                        `INSERT INTO efiling_user_signatures 
+                         (id, user_id, signature_name, signature_type, file_name, file_size, file_type, file_url, signature_data, signature_color, is_active, created_at) 
+                         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, true, NOW()) 
+                         RETURNING id`,
+                        [
+                            `sig_${Date.now()}`,
+                            userId,
+                            `${signatureType}_signature`,
+                            signatureType,
+                            filename,
+                            buffer?.length || 0,
+                            fileType || 'image/png',
+                            publicUrl,
+                            signatureData,
+                            signatureColor || 'black'
+                        ]
+                    );
+                }
             }
+
+            await client.release();
+
+            return NextResponse.json({
+                success: true,
+                signatureId: result.rows[0].id,
+                fileUrl: publicUrl,
+                message: 'Signature saved successfully'
+            });
+
+        } catch (dbError) {
+            if (client) await client.release();
+            throw dbError;
         }
-
-        await client.release();
-
-        return NextResponse.json({
-            success: true,
-            signatureId: result.rows[0].id,
-            fileUrl: publicUrl,
-            message: 'Signature saved successfully'
-        });
 
     } catch (error) {
         console.error('Error uploading signature:', error);
