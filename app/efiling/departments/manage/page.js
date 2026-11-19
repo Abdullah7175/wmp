@@ -173,10 +173,15 @@ export default function ManageDepartments() {
                                             <TableCell>{dept.name}</TableCell>
                                             <TableCell>{dept.parent_department_name || '-'}</TableCell>
                                             <TableCell>
-                                                <div className="flex items-center">
-                                                    <Users className="w-4 h-4 mr-1" />
-                                                    {dept.user_count || 0}
-                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => router.push(`/efiling/departments/${dept.id}/users`)}
+                                                    className="inline-flex items-center px-2.5 py-1 rounded-md text-blue-600 bg-blue-50 hover:text-blue-800 hover:bg-blue-100 font-medium transition-colors cursor-pointer"
+                                                    title={`View users in ${dept.name}`}
+                                                >
+                                                    <Users className="w-4 h-4 mr-1.5" />
+                                                    <span>{dept.user_count || 0}</span>
+                                                </button>
                                             </TableCell>
                                             <TableCell>
                                                 <Badge className={dept.is_active ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}>
