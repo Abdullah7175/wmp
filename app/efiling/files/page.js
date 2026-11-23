@@ -118,7 +118,6 @@ export default function FilesPage() {
             const response = await fetch(`/api/efiling/files?${params.toString()}`);
             if (response.ok) {
                 const data = await response.json();
-                console.log('Files fetched from API:', data);
                 setFiles(data.files || []);
                 setFilteredFiles(data.files || []);
             }

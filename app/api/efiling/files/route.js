@@ -63,10 +63,6 @@ export async function GET(request) {
             cookieStore.get('authjs.session-token') ||
             cookieStore.get('__Secure-authjs.session-token');
         
-        console.log('Files route - Cookie header present:', !!cookieHeader);
-        console.log('Files route - Session cookie present:', !!sessionCookie);
-        console.log('Files route - Request URL:', request.url);
-        
         const session = await auth();
         
         // Better error logging
@@ -84,8 +80,6 @@ export async function GET(request) {
             console.error('Files route - No user ID in session:', JSON.stringify(session.user, null, 2));
             return NextResponse.json({ error: 'Unauthorized - No user ID' }, { status: 401 });
         }
-        
-        console.log('Files route - Session found for user:', session.user.id);
         
         // Allow access for admin/manager roles (1,2) or efiling users
         if (![1,2].includes(parseInt(session.user.role))) {
@@ -107,11 +101,6 @@ export async function GET(request) {
             }
         }
 
-        // Admins should see all files by default (no server-side limit) unless a limit is explicitly provided
-        if ([1,2].includes(parseInt(session.user.role)) && !searchParams.get('limit')) {
-            limit = 0; // no limit
-            offset = 0;
-        }
     } catch (authError) {
         console.error('Authentication error:', authError);
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -142,7 +131,6 @@ export async function GET(request) {
                     AND table_name = 'efiling_files'
                 );
             `);
-            console.log('efiling_files table exists:', tableCheck.rows[0].exists);
             
             if (!tableCheck.rows[0].exists) {
                 return NextResponse.json({ error: 'efiling_files table does not exist' }, { status: 500 });
@@ -245,9 +233,6 @@ export async function GET(request) {
             }
         } else {
             // We'll compute total with filters later; also compute overall for logs
-            const overallCountQuery = await client.query('SELECT COUNT(*) as total FROM efiling_files');
-            console.log('Total files in database:', overallCountQuery.rows[0].total);
-            
             // Check if optional tables and columns exist
             let hasDocumentSignaturesTable = false;
             let hasFileTypesTable = false;
@@ -316,7 +301,32 @@ export async function GET(request) {
             
             let query = `
                 SELECT DISTINCT ON (f.id)
-                       f.*,
+                       f.id,
+                       f.file_number,
+                       f.subject,
+                       f.category_id,
+                       f.department_id,
+                       f.status_id,
+                       f.priority,
+                       f.confidentiality_level,
+                       f.work_request_id,
+                       f.created_by,
+                       f.assigned_to,
+                       f.created_at,
+                       f.updated_at,
+                       f.closed_at,
+                       f.remarks,
+                       f.file_type_id,
+                       f.sla_breached,
+                       f.page_count,
+                       f.district_id,
+                       f.town_id,
+                       f.division_id,
+                       f.workflow_state_id,
+                       f.sla_paused_at,
+                       f.tso_recommendation_comment,
+                       f.tso_recommendation_timestamp,
+                       f.tso_flag,
                        c.name as category_name,
                        d.name as department_name,
                        s.name as status_name, s.code as status_code, s.color as status_color,
@@ -355,12 +365,13 @@ export async function GET(request) {
                 LEFT JOIN users cr_users ON cr.user_id = cr_users.id
                 LEFT JOIN efiling_users curr ON curr.id = f.assigned_to
                 LEFT JOIN users curr_users ON curr.user_id = curr_users.id
-                ${hasDocumentSignaturesTable ? `LEFT JOIN (
-                    SELECT DISTINCT ON (file_id) 
-                        file_id, user_name as last_signed_by_name, "timestamp" as last_signed_at
+                ${hasDocumentSignaturesTable ? `LEFT JOIN LATERAL (
+                    SELECT user_name as last_signed_by_name, "timestamp" as last_signed_at
                     FROM efiling_document_signatures
-                    ORDER BY file_id, "timestamp" DESC
-                ) ls ON ls.file_id = f.id` : ''}
+                    WHERE file_id = f.id
+                    ORDER BY "timestamp" DESC
+                    LIMIT 1
+                ) ls ON true` : ''}
             `;
             const params = [];
             const conditions = [];
@@ -379,7 +390,6 @@ export async function GET(request) {
             }
             
             if (created_by) {
-                console.log('Adding created_by filter:', created_by);
                 conditions.push(`f.created_by = $${paramIndex}`);
                 params.push(created_by);
                 paramIndex++;
@@ -522,15 +532,14 @@ export async function GET(request) {
             const totalCount = parseInt(totalCountRes.rows[0]?.total || '0');
 
             query += ` ORDER BY f.id, f.created_at DESC`;
-            
-           
-            
-            console.log('Final query:', query);
-            console.log('Query parameters:', params);
+
+            const listLimit = parseIntegerParam(searchParams.get('limit'), 'limit');
+            if (listLimit) {
+                query += ` LIMIT $${paramIndex}`;
+                params.push(Math.min(listLimit, 500));
+            }
             
             const result = await client.query(query, params);
-            console.log('Files query result:', result.rows.length, 'files found');
-            console.log('Sample result rows:', result.rows.slice(0, 2));
             
             return NextResponse.json({
                 success: true,

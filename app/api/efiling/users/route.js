@@ -134,11 +134,7 @@ export async function GET(request) {
             
             query += ` ORDER BY eu.employee_id ASC`;
             
-            console.log('Executing users query:', query);
-            console.log('Query parameters:', params);
-            
             const result = await client.query(query, params);
-            console.log('Users query result rows:', result.rows.length);
             
             return NextResponse.json(result.rows);
         }

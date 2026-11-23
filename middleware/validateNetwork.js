@@ -180,7 +180,6 @@ export function isInternalNetwork(request) {
 
         // Automatically allow local/private network IPs (localhost, 127.0.0.1, 192.168.x.x, 10.x.x.x, 172.16-31.x.x)
         if (isLocalOrPrivateIp(cleanIp)) {
-            console.log(`[Network Validation] Client IP ${cleanIp} recognized and allowed as local/private network`);
             return true;
         }
 
@@ -215,8 +214,6 @@ export function isInternalNetwork(request) {
 
         if (!isAllowed) {
             console.warn(`[Network Validation] Client IP ${cleanIp} rejected (not in allowed EFILING_ALLOWED_IPS)`);
-        } else {
-            console.log(`[Network Validation] Client IP ${cleanIp} matched allowed E-Filing network`);
         }
 
         return isAllowed;
