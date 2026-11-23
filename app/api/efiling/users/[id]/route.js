@@ -322,40 +322,6 @@ export async function PUT(request, { params }) {
                 }
             }
 
-            // Check if CNIC already exists (if changed)
-            if (cnic && cnic !== currentCnic) {
-                console.log(`PUT /api/efiling/users/${id} - Checking CNIC uniqueness: ${cnic} (current: ${currentCnic})`);
-                const existingCnic = await client.query(
-                    'SELECT id FROM users WHERE cnic = $1 AND id != $2',
-                    [cnic, userId]
-                );
-
-                if (existingCnic.rows.length > 0) {
-                    console.error(`PUT /api/efiling/users/${id} - CNIC already exists: ${cnic}`);
-                    return NextResponse.json(
-                        { error: 'User with this CNIC already exists' },
-                        { status: 400 }
-                    );
-                }
-            }
-
-            // Check if employee_id already exists (if changed)
-            if (employee_id !== undefined && employee_id !== null && employee_id !== '' && employee_id !== currentEmployeeId) {
-                console.log(`PUT /api/efiling/users/${id} - Checking employee_id uniqueness: ${employee_id} (current: ${currentEmployeeId})`);
-                const existingEmployee = await client.query(
-                    'SELECT id FROM efiling_users WHERE employee_id = $1 AND id != $2',
-                    [employee_id, efilingUserId]
-                );
-
-                if (existingEmployee.rows.length > 0) {
-                    console.error(`PUT /api/efiling/users/${id} - Employee ID already exists: ${employee_id}`);
-                    return NextResponse.json(
-                        { error: 'Employee ID already exists' },
-                        { status: 400 }
-                    );
-                }
-            }
-
             // Start transaction
             await client.query('BEGIN');
 
