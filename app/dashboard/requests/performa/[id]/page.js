@@ -90,11 +90,9 @@ const Page = () => {
     // Helper functions to get videographer, assistant, etc. (mocked for now)
     const videographer = data.videographer_name || 'N/A'; // You may need to fetch this from related tables
     const assistant = data.assistant_name || 'N/A'; // You may need to fetch this from related tables
-    let videoLink = data.final_video_link || 'N/A'; // You may need to fetch this from final_videos
-    // Make videoLink absolute if it starts with '/'
-    if (videoLink && typeof window !== 'undefined' && videoLink.startsWith('/')) {
-        videoLink = window.location.origin + videoLink;
-    }
+    const videoLink = watchPath && typeof window !== 'undefined'
+        ? `${window.location.origin}${watchPath}`
+        : 'N/A';
 
     // Calculate fiscal year based on performa date (or request date as fallback)
     const dateForFiscalYear = performaDate ? new Date(performaDate) : (data?.request_date ? new Date(data.request_date) : new Date());
