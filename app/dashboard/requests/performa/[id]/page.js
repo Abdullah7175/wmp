@@ -16,6 +16,8 @@ const Page = () => {
     const [isSaving, setIsSaving] = useState(false);
     const [externalLink, setExternalLink] = useState('');
     const [showExternalLinkInput, setShowExternalLinkInput] = useState(true);
+    const [watchPath, setWatchPath] = useState('');
+    const [watchFailed, setWatchFailed] = useState(false);
     const { toast } = useToast();
     const params = useParams();
     const router = useRouter();
@@ -31,6 +33,19 @@ const Page = () => {
                     const data = await response.json();
                     setData(data);
                     setShootDate(data.shoot_date || '');
+                    const linkResponse = await fetch(`/api/watch/link?id=${encodeURIComponent(requestId)}`, { cache: 'no-store' });
+                    if (linkResponse.ok) {
+                        const linkData = await linkResponse.json();
+                        if (linkData?.path) setWatchPath(linkData.path);
+                        else setWatchFailed(true);
+                    } else {
+                        setWatchFailed(true);
+                        toast({
+                            title: "Secure video link could not be created",
+                            description: '',
+                            variant: 'destructive'
+                        });
+                    }
                 } catch (error) {
                     console.error('Error fetching performa data:', error);
                     toast({
@@ -219,11 +234,17 @@ const Page = () => {
                                     <div className="text-center">
                                         <p className="text-xs font-medium mb-2">Internal Link</p>
                                         <div className="flex justify-center items-center">
+                                        {watchPath ? (
                                         <QRCode
                                             style={{ height: "auto", maxWidth: "25%", width: 100, minWidth: 90, maxWidth: 110}}
                                             viewBox={`0 0 150 150`}
-                                            value={window.location.href}
+                                            value={`${window.location.origin}${watchPath}`}
                                         />
+                                        ) : (
+                                        <div className="w-[100px] h-[100px] border border-dashed border-gray-400 flex items-center justify-center text-[10px] text-center text-gray-500 px-1">
+                                            {watchFailed ? 'Secure link unavailable' : 'Preparing secure link'}
+                                        </div>
+                                        )}
                                         </div>
                                     </div>
                                     

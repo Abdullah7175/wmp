@@ -66,6 +66,21 @@ const nextConfig = {
           }
         ]
       },
+      {
+        source: '/v/:path*',
+        headers: [
+          { key: 'X-Frame-Options', value: 'DENY' },
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          { key: 'Referrer-Policy', value: 'no-referrer' },
+          { key: 'X-Robots-Tag', value: 'noindex, nofollow, noarchive' },
+          { key: 'Cache-Control', value: 'private, no-store' },
+          { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(), display-capture=(), picture-in-picture=()' },
+          {
+            key: 'Content-Security-Policy',
+            value: "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'none'; media-src 'self'; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; frame-src 'none'",
+          },
+        ],
+      },
       // Note: Security headers for pages are handled in middleware.js
       // This prevents interference with static file serving (_next/static/*)
       // Static files are automatically served with correct MIME types by Next.js
