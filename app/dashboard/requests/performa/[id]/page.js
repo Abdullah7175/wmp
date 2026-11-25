@@ -203,13 +203,15 @@ const Page = () => {
                             ]
                             ],
                             ["Status", data.status_name || 'N/A'],
-                            ["Video Link", videoLink],
+                            ["Video Link", videoLink === 'N/A' ? videoLink : (
+                                <span className="break-all">{videoLink}</span>
+                            )],
                             ["B.G #", data.budget_code || 'N/A'],
                             ["File Type", data.file_type || 'N/A'],
                         ].map(([label, value], index) => (
                             <tr key={index} className={index % 2 === 0 ? "bg-gray-100" : ""}>
                                 <td className='px-4 py-2 font-medium border border-gray-300'>{label}:</td>
-                                <td className="px-4 py-2 border border-gray-300">{Array.isArray(value) ? value.map((v, i) => <React.Fragment key={i}>{v}</React.Fragment>) : value}</td>
+                                <td className={`px-4 py-2 border border-gray-300${label === 'Video Link' ? ' break-all' : ''}`}>{Array.isArray(value) ? value.map((v, i) => <React.Fragment key={i}>{v}</React.Fragment>) : value}</td>
                             </tr>
                         ))}
                     </tbody>
