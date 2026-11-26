@@ -42,6 +42,29 @@ export async function DELETE(request, { params }) {
         }
         
         const attachment = attachmentResult.rows[0];
+        let creatorName = null;
+        if (attachment.uploaded_by) {
+            const creatorByEfiling = await client.query(
+                `SELECT u.name AS auth_name
+                FROM efiling_users eu
+                LEFT JOIN users u ON eu.user_id = u.id
+                WHERE eu.id::text = $1::text
+                LIMIT 1`,
+                [attachment.uploaded_by]
+            );
+
+            if (creatorByEfiling.rows.length > 0) {
+                creatorName = creatorByEfiling.rows[0].name || creatorByEfiling.rows[0].auth_name;
+            } else {
+                const creatorByUser = await client.query(
+                    `SELECT name FROM users WHERE id::text = $1::text LIMIT 1`,
+                    [attachment.uploaded_by]
+                );
+                if (creatorByUser.rows.length > 0) {
+                    creatorName = creatorByUser.rows[0].name;
+                }
+            }
+        }
         const fileId = attachment.file_id;
         const userId = session.user.id; // users.id from session
         const isAdmin = session.user.role && [1, 2].includes(parseInt(session.user.role));
@@ -68,8 +91,9 @@ export async function DELETE(request, { params }) {
         );
 
         if (!isAdmin && !isAttachmentCreator) {
+            const creatorLabel = creatorName ? ` (${creatorName})` : '';
             return NextResponse.json(
-                { error: 'Forbidden - Only the creator can delete this attachment' },
+                { error: `Forbidden - Only the creator${creatorLabel} can delete this attachment` },
                 { status: 403 }
             );
         }
