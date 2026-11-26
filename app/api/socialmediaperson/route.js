@@ -44,7 +44,7 @@ export async function GET(request) {
     try {
         client = await connectToDatabase();
         // Safe columns excluding password
-        const safeColumns = 'id, name, email, contact_number, address, role, image, created_at';
+        const safeColumns = 'id, name, email, contact_number, address, role, image, created_date';
 
         if (id) {
             const query = `SELECT ${safeColumns} FROM socialmediaperson WHERE id = $1`;
@@ -56,7 +56,7 @@ export async function GET(request) {
         } else if (work_request_id) {
             // Fetch social media agents assigned to a specific work request
             const query = `
-                SELECT DISTINCT sm.id, sm.name, sm.email, sm.contact_number, sm.address, sm.role, sm.image, sm.created_at
+                SELECT DISTINCT sm.id, sm.name, sm.email, sm.contact_number, sm.address, sm.role, sm.image, sm.created_date
                 FROM socialmediaperson sm
                 JOIN request_assign_smagent ras ON sm.id = ras.socialmedia_agent_id
                 WHERE ras.work_requests_id = $1
@@ -81,11 +81,11 @@ export async function GET(request) {
                 params.push(`%${filter}%`);
             }
             if (dateFrom) {
-                whereClauses.push('created_at >= $' + (params.length + 1));
+                whereClauses.push('created_date >= $' + (params.length + 1));
                 params.push(dateFrom);
             }
             if (dateTo) {
-                whereClauses.push('created_at <= $' + (params.length + 1));
+                whereClauses.push('created_date <= $' + (params.length + 1));
                 params.push(dateTo);
             }
             if (whereClauses.length > 0) {

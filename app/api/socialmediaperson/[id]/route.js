@@ -36,7 +36,7 @@ export async function GET(request, { params }) {
 
     const client = await connectToDatabase();
     try {
-        const query = 'SELECT id, name, email, contact_number, address, role, image, created_at FROM socialmediaperson WHERE id = $1';
+        const query = 'SELECT id, name, email, contact_number, address, role, image, created_date FROM socialmediaperson WHERE id = $1';
         const result = await client.query(query, [id]);
         if (result.rows.length === 0) {
             return NextResponse.json({ error: 'Videographer not found' }, { status: 404 });
